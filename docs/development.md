@@ -332,7 +332,7 @@ Contracts and focused evidence:
 - [Native background operations](development/native-background-operations.md)
 - `runtime/test/agent-pool/manual-control-retirement.test.ts`
 - `runtime/test/agent-pool/startup-session-import-boundary.test.ts`
-- `qualification/pi-durable-130/compact.test.ts` and `idle-model.test.ts`
+- `qualification/native/compact.test.ts` and `idle-model.test.ts`
 
 Run explicitly selected files through `runtime/scripts/local-test-priority.ts`; use disposable stores and synthetic providers. Old cursor markers, JSONL records and receipts remain historical data, never native execution authority.
 

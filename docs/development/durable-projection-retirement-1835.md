@@ -11,7 +11,7 @@ Implementation base: `ed0e58042e99dac27f79bb15f685ff2b351d47d8`. Its two backend
 | `durable-engine/src/host-projection.ts` | Remove. Only the private barrel re-exported it; calls belonged to the exclusive projection qualification prototype. |
 | `service-effects/current-piclaw/agent-projection-sink.ts` | Remove. Its only production importer was the unselected bridge. Contract/fake/mixed tests were the other consumers. |
 | `service-effects/contracts/agent-projection-sink.ts` | Remove the exclusive type contract. Its 71 lines receive zero implementation credit. |
-| Projection fake, contract suite, catalogue entry and `qualification/pi-durable-130/projection.test.ts` | Retire the deliberately removed prototype only. Testing/support/qualification deletion receives zero backend credit. |
+| Projection fake, contract suite, catalogue entry and `qualification/native/projection.test.ts` | Retire the deliberately removed prototype only. Testing/support/qualification deletion receives zero backend credit. |
 | Existing delivery contracts and boundaries | Keep. All five driver families retain their original 18-case contract assertions, certainty, payload, transport, cancellation and ownership checks. Mixed files lose only EF-S08 imports, helpers and cases. |
 | Native SDK observation and settlement | Keep. `HostConversationRuntime.watchSession` uses public `conversation.watch`; actual native views and committed terminal/cursor publication have current application callers. |
 

@@ -84,6 +84,6 @@ Run only changed behaviour through the central isolation/priority launcher:
 
 - `runtime/test/historical-account-retirement.test.ts`: fresh, historical empty/populated, unknown dependency/shape, approval/alias, rollback, current auth/owner/FTS, startup veto and typed/sparse-row backup cases;
 - `runtime/test/schema-ownership.test.ts`, filter `safe-integer metadata`: identical constraint fingerprints with safe-integer metadata;
-- `qualification/pi-durable-130/schema-ownership.test.ts`, filter `offline historical retirement`: real SDK family creation/read/reopen and approved add-on schema preservation.
+- `qualification/native/schema-ownership.test.ts`, filter `offline historical retirement`: real SDK family creation/read/reopen and approved add-on schema preservation.
 
 No production store was inspected or changed. Table reduction is qualified from the approved object manifest; no large byte-saving claim is made.

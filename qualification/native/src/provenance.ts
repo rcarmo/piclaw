@@ -43,7 +43,7 @@ export async function verifyProvenance() {
 // Explicit acquisition only; never called by normal tests. No subprocess inherits credentials.
 if (import.meta.main) {
   if (process.argv[2] !== "--record") throw new Error("Use --record for explicit registry acquisition");
-  const scratch = await mkdtemp(join(tmpdir(), "pi-130-provenance-"));
+  const scratch = await mkdtemp(join(tmpdir(), "native-sdk-provenance-"));
   try {
     const evidence: Evidence = { registry: "https://registry.npmjs.org", recordedAt: new Date().toISOString(), packages: [] };
     for (const name of names) {

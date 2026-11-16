@@ -66,6 +66,6 @@ TMPDIR=/workspace/tmp/piclaw/tests bun runtime/scripts/local-test-priority.ts \
   -t 'defers an exact live occurrence notice'
 
 # With the existing approved native fixture exports:
-bun runtime/scripts/local-test-priority.ts --cwd qualification/pi-durable-130 \
+bun runtime/scripts/local-test-priority.ts --cwd qualification/native \
   -- bun test ./scheduled.test.ts -t 'lost completion ACK repairs'
 ```

@@ -58,7 +58,7 @@ PICLAW_LOCAL_TEST_NICE=10 bun runtime/scripts/local-test-priority.ts \
 
 # With the existing pinned native fixture exports; no native discovery sweep:
 PICLAW_LOCAL_TEST_NICE=10 bun runtime/scripts/local-test-priority.ts \
-  --cwd qualification/pi-durable-130 -- bun test ./schema-ownership.test.ts
+  --cwd qualification/native -- bun test ./schema-ownership.test.ts
 ```
 
 When a legitimate schema changes, inspect fresh and upgraded fixture inventories, identify its existing owner/initialiser and update the exact declarations with source evidence. Keep missing-index, constraint, unknown-object, optional-component and data/receipt-preservation negatives. Do not regenerate the registry from an unknown store to make a failure disappear.
