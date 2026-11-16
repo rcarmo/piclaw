@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite";
+import { readFileSync } from "node:fs";
 import { expect, test } from "bun:test";
 import { assertSchemaInventory, canonicalSchemaSql, classifySchemaInventory, readSchemaInventory, type SchemaContract } from "../scripts/lib/schema-ownership.js";
 
@@ -113,6 +114,18 @@ test("unknown profile and incomplete owner fail closed", () => withDatabase((db,
   expect(() => assertSchemaInventory(readSchemaInventory(db), contract, "fixture")).toThrow("Incomplete owner");
 }));
 
+test("retired owners have no active writers; exact shape and retention requirements remain enforced", () => withDatabase((db, contract) => {
+  const before=db.query("SELECT * FROM sqlite_schema ORDER BY name").all();
+  contract.owners.fixture!.category="retired";contract.owners.fixture!.writers=[];
+  expect(assertSchemaInventory(readSchemaInventory(db),contract,"fixture").objects.every(object=>object.category==="retired")).toBe(true);
+  expect(db.query("SELECT * FROM sqlite_schema ORDER BY name").all()).toEqual(before);
+  contract.owners.fixture!.replayRetention="";
+  expect(()=>assertSchemaInventory(readSchemaInventory(db),contract,"fixture")).toThrow("Incomplete owner");
+  contract.owners.fixture!.replayRetention="retain original data without runtime writes";
+  db.exec("DROP INDEX records_state");
+  expect(()=>assertSchemaInventory(readSchemaInventory(db),contract,"fixture")).toThrow("Missing required object index:records_state");
+}));
+
 test("formatting, IF NOT EXISTS and column declaration order normalise; PK order and strings do not", () => {
   const canonical = (sql: string) => canonicalSchemaSql(sql, "table");
   expect(canonical("CREATE TABLE sample(a TEXT,b INTEGER,PRIMARY KEY(a,b))")).toEqual(canonical("create table if not exists sample ( b integer, a text, primary key(a,b)); -- comment"));
@@ -133,6 +146,20 @@ test("FTS virtual and exact shadow tables have owners; similarly named impostors
     db.exec("CREATE TABLE search_invented(value)");
     expect(() => assertSchemaInventory(readSchemaInventory(db), contract, "fixture")).toThrow("Unowned object table:search_invented");
   } finally { db.close(); }
+});
+
+test("retired cutover tables are absent together or retain the complete original pair", () => {
+  const contract = JSON.parse(readFileSync(new URL('../scripts/schema-ownership.json', import.meta.url), 'utf8')) as SchemaContract;
+  const keys = ['table:qualification_cutover_v1', 'table:qualification_cutover_work_v1'];
+  const rows = keys.map(key => ({ kind: 'table' as const, name: key.slice(6), table: key.slice(6), fingerprint: contract.objects[key]!.fingerprints[0]! }));
+  // Approved fingerprints isolate component presence; shape/constraint negatives
+  // remain in the source-wide inventory tests. No old DDL/creator is reintroduced.
+  const errors = (objects: typeof rows) => classifySchemaInventory(objects, contract, 'native').errors
+    .filter(error => keys.some(key => error === `Missing required object ${key}`));
+  expect(errors([])).toEqual([]);
+  expect(errors(rows)).toEqual([]);
+  expect(errors([rows[0]!])).toEqual([`Missing required object ${keys[1]}`]);
+  expect(errors([rows[1]!])).toEqual([`Missing required object ${keys[0]}`]);
 });
 
 test("safe-integer metadata produces the same derived-index fingerprints", () => {

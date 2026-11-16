@@ -69,7 +69,7 @@ export function assertNativeOutcomes(expected: string[], results: NativeResult[]
 export function nativeStages(contract: NativeContract, root = ROOT): Stage[] {
   if (contract.version !== 1
     || JSON.stringify(contract.typeProjects) !== JSON.stringify(['runtime/durable-engine', 'qualification/native'])
-    || JSON.stringify(contract.integrationTests) !== JSON.stringify(['./test/channels/web/input-source-admission.test.ts', './test/agent-pool/legacy-authority-capture.test.ts', './test/native-gate-contract.test.ts', './test/scripts/local-test-priority.test.ts'])) {
+    || JSON.stringify(contract.integrationTests) !== JSON.stringify(['./test/channels/web/input-source-admission.test.ts', './test/db/store-format.test.ts', './test/native-gate-contract.test.ts', './test/scripts/local-test-priority.test.ts'])) {
     throw Error('Native contract must retain both private type projects and required accepted-source integration');
   }
   const launcher = join(root, 'runtime/scripts/local-test-priority.ts');

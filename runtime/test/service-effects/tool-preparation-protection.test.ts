@@ -13,8 +13,8 @@ import {
 import {
   extractLiteralRegistrationParameterFields,
   extractNativeToolParameterFields,
-  inventoryRepositoryToolFamilies,
-  readRepositorySourceTree,
+  inventoryLatentToolFamilies,
+  readLatentPreparationSourceTree,
 } from "./fixtures/repository-tool-family-oracle.js";
 
 const OPAQUE_FACTORY_SCHEMA_EVIDENCE = Object.freeze([
@@ -155,8 +155,8 @@ describe("WP-3C protected trace/projection oracle", () => {
 
   // Source-wide AST audit; this is not a runtime latency assertion.
   test("source schemas are closed by protected fields or explicit safe-field exceptions", () => {
-    const sourceTree = readRepositorySourceTree();
-    const inventory = inventoryRepositoryToolFamilies(sourceTree);
+    const sourceTree = readLatentPreparationSourceTree();
+    const inventory = inventoryLatentToolFamilies(sourceTree);
     const schemaFields = new Map<string, Set<string>>();
     const unresolvedSchemas: Array<Readonly<{ file: string; registration: string }>> = [];
     const visitedSites = new Set<string>();

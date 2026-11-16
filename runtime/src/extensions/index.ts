@@ -1,9 +1,9 @@
 /**
- * extensions/index.ts – Registry of built-in extension factories.
+ * extensions/index.ts – Retained legacy extension registry.
  *
- * These factories are passed to the pi-coding-agent's DefaultResourceLoader
- * so they load automatically without needing separate files on disk.
- * Each factory registers tools and/or commands on the pi ExtensionAPI.
+ * Tests and latent preparation metadata still consume these declarations.
+ * Normal application composition uses runtime/durable-engine. The removed
+ * legacy session constructor no longer passes this registry to a loader.
  *
  * Extensions registered here:
  *   - fileAttachments: attach_file tool for delivering workspace files.
@@ -27,12 +27,8 @@
  *   - mcpTimeoutPatch: Piclaw-compatible outer timeout/abort guard for MCP tools.
  *   - localLitePromptProfile: compact prompt/tool profile for local OpenAI-compatible models.
  *
- * Note: bun_run, keychain, ssh, proxmox, and portainer now live as packaged
- * runtime extensions under runtime/extensions/integrations/* and are loaded via
- * the additionalExtensionPaths wiring in agent-pool/session.ts.
- *
- * Consumers:
- *   - agent-pool/session.ts passes builtinExtensionFactories to the resource loader.
+ * Packaged integration declarations remain under runtime/extensions/integrations.
+ * Native installed add-on admission has its own qualified public-loader profiles.
  */
 import type { ExtensionFactory, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { AttachmentRegistry } from "../agent-pool/attachments.js";

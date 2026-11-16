@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { writeFileSync } from "node:fs";
 import { createTempWorkspace, setEnv } from "../helpers.js";
 import { storeChatMetadata } from "../../src/db/messages.js";
-import { ensureChatBranch, archiveChatBranch, permanentDeleteArchivedBranch } from "../../src/db/chat-branches.js";
+import * as branchStore from "../../src/db/chat-branches.js";
+import { ensureChatBranch, archiveChatBranch } from "../../src/db/chat-branches.js";
 import { initDatabase, closeDatabase, getDb, initializeDatabaseSchema } from "../../src/db/connection.js";
 import { storeTokenUsage, getTokenUsageTotals, pruneOldTokenUsage, type TokenUsageRecord } from "../../src/db/token-usage.js";
 import { installHistoricalExpenseFixture } from "../fixtures/historical-expense.js";
@@ -189,14 +190,14 @@ test("historical usage projection: missing old event stays uncertain without fab
   expect(historicalFinance()).toEqual(history);expect(database.query('SELECT state FROM budget_request_reservations').get()).toEqual({state:'settled'});
   expect(database.query('SELECT * FROM budget_usage_events').all()).toEqual([]);expect(database.query('SELECT * FROM token_usage').all()).toEqual([]);
 });
-test("canonical usage projection: archived purge retains accounting parent and reports actual deletions", () => {
+test("canonical usage projection: retired archived purge leaves accounting parent and reports intact", () => {
   const database = seedHistoricalProjection();
   const event = historicalEvent(database, eventId), request = database.query("SELECT * FROM budget_request_reservations WHERE id=?").get(binding.id);
   storeChatMetadata("web:parent", usage().run_at); storeChatMetadata(binding.chatJid, usage().run_at);
   const parent = ensureChatBranch({ chat_jid: "web:parent", agent_name: "parent" });
   ensureChatBranch({ chat_jid: binding.chatJid, root_chat_jid: parent.chat_jid, parent_branch_id: parent.branch_id, agent_name: "child" });
   archiveChatBranch(binding.chatJid);
-  expect(permanentDeleteArchivedBranch(binding.chatJid).counts.token_usage).toBe(0);
+  expect(branchStore).not.toHaveProperty("permanentDeleteArchivedBranch");
   expect(historicalEvent(database, eventId)).toEqual(event);
   expect(database.query("SELECT * FROM budget_request_reservations WHERE id=?").get(binding.id)).toEqual(request);
   expect(database.query("SELECT id FROM token_usage").get()).toEqual({ id: event!.token_usage_id });

@@ -1,7 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { SESSIONS_DIR } from "../../src/core/config.js";
+import { SessionManager } from '@earendil-works/pi-coding-agent';
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { main } from "../../src/runtime.js";
@@ -20,13 +19,6 @@ import {
   type RuntimeBootstrapDefaultBaseServices,
 } from "../../src/runtime/bootstrap.js";
 import type { RuntimeSenders } from "../../src/runtime/wiring.js";
-import { AgentPool } from "../../src/agent-pool.js";
-import { AgentQueue } from "../../src/queue.js";
-import { WebChannel } from "../../src/channels/web.js";
-import { initDatabase, getDb, closeDatabase } from "../../src/db/connection.js";
-import { createAgentPoolModelOptions,createLegacyCapturePoolOptions } from "../model-services-fixture.js";
-import type { RuntimeBootstrapContext } from "../../src/runtime/bootstrap.js";
-import { getChatTransport, registerChatTransport, setLocalChatTransport } from "../../src/extensions/chat-transport-registry.js";
 
 function bootstrapDepsForFailure(overrides: Partial<RuntimeBootstrapDeps> = {}): RuntimeBootstrapDeps {
   const queue = { shutdown: async () => {} } as RuntimeBootstrapQueue;
@@ -60,187 +52,6 @@ function bootstrapDepsForFailure(overrides: Partial<RuntimeBootstrapDeps> = {}):
 }
 
 describe("runtime bootstrap", () => {
-  test("migration inspection refuses legacy ownership before any stop or seal", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "migration-legacy-"));
-    const owner = acquireRuntimeLock({ lockPath: join(dir, "owner"), strictOwnership: false });
-    let context!: RuntimeBootstrapContext;
-    let stops = 0;
-    try {
-      await bootstrapRuntime(bootstrapDepsForFailure({
-        migrationInspection: { onReady: value => { context = value; } },
-        stopIpcWatcher: async () => { stops++; },
-        stopSchedulerLoop: () => { stops++; },
-      }), owner);
-      await expect(context.prepareLegacyMigration("next")).rejects.toThrow("Strict runtime owner");
-      expect(stops).toBe(0);
-    } finally { owner.release(); rmSync(dir, { recursive: true, force: true }); }
-  });
-
-  for (const scenario of ["drain", "stale-owner", "unread", "nonterminal", "pending"] as const) test(`actual bootstrap migration ${scenario}: installed handles and retained lifetime`, async () => {
-    // Capture inventories every persisted chat; unrelated suite fixtures must
-    // not become additional migration authorities for this isolated case.
-    closeDatabase();
-    initDatabase();
-    getDb().exec("DELETE FROM messages; DELETE FROM chat_cursors; DELETE FROM service_effect_s01_operations; DELETE FROM service_effect_s01_sources; DELETE FROM service_effect_s01_chats;");
-    const dir = mkdtempSync(join(tmpdir(), "migration-runtime-"));
-    const owner = acquireRuntimeLock({ lockPath: join(dir, "owner"), strictOwnership: true });
-    const queue = new AgentQueue();
-    const pool = new AgentPool(createLegacyCapturePoolOptions());
-    // The suite shares SESSIONS_DIR with deliberately malformed history fixtures.
-    // Verify bootstrap's real configuration, then scope this fixture's real capture.
-    const capture = pool.captureLegacyUpgradeBindings.bind(pool);
-    const captureSpy = spyOn(pool, "captureLegacyUpgradeBindings").mockImplementation(options => {
-      expect(options.legacySessionRoot).toBe(SESSIONS_DIR);
-      return capture({ ...options, legacySessionRoot: join(dir, "sessions") });
-    });
-    const web = new WebChannel({ queue, agentPool: pool });
-    const producer = Promise.withResolvers<void>(), task = Promise.withResolvers<void>();
-    const ready = Promise.withResolvers<RuntimeBootstrapContext>();
-    let complete!: () => void;
-    let returned = false, queued = false;
-    const running = bootstrapRuntime(bootstrapDepsForFailure({
-      base: { queue, state: { lastTimestamp: "" } as RuntimeBootstrapState },
-      createAgentPool: async () => pool,
-      startWebChannel: async () => web,
-      createShutdownHandler: deps => { complete = deps.onShutdownComplete!; return async () => {}; },
-      migrationInspection: { onReady: value => ready.resolve(value) },
-      startRuntimeLoop: async deps => { await new Promise<void>(resolve => deps.signal!.addEventListener("abort", () => resolve(), { once: true })); },
-      stopSchedulerLoop: async () => { await producer.promise; queue.enqueueTask("accepted", async () => { await task.promise; queued = true; }); },
-    }), owner).then(() => { returned = true; });
-    try {
-      const context = await ready.promise;
-      const preparing = context.prepareLegacyMigration("trusted-next-writer");
-      expect(context.prepareLegacyMigration("ignored")).toBe(preparing);
-      await expect(web.runInternalDispatch(() => {})).rejects.toThrow("sealed");
-      expect(returned).toBe(false);
-      producer.resolve();
-      await Promise.resolve();
-      task.resolve();
-      if (scenario === "stale-owner") owner.release();
-      if (scenario === "unread") getDb().query("INSERT INTO messages(id,chat_jid,sender,content,timestamp,is_bot_message) VALUES ('unread','web:unread','user','accepted','2099-01-01',0)").run();
-      if (scenario === "pending" || scenario === "nonterminal") {
-        getDb().exec("INSERT INTO service_effect_s01_chats(chat_jid) VALUES ('migration-test');");
-        getDb().query("INSERT INTO service_effect_s01_sources(chat_jid,source_seq,source_id,source_hash,kind,state,payload_ref,accepted_at,provenance_ref,create_wake_intent) VALUES ('migration-test',1,'pending',?,'message',?,'payload','2026-01-01','test',0)")
-          .run("a".repeat(64), scenario === "pending" ? "pending" : "consumed");
-        if (scenario === "nonterminal") getDb().exec("INSERT INTO service_effect_s01_operations(operation_id,chat_jid,version,phase,primary_source_seq) VALUES ('migration-op','migration-test',1,'claimed',1)");
-      }
-      if (scenario !== "drain") {
-        await expect(preparing).rejects.toThrow(scenario === "stale-owner" ? "ownership lost" : scenario === "unread" ? "Unread" : scenario === "pending" ? "Pending S01" : "Nonterminal S01");
-        expect(returned).toBe(false);
-        return;
-      }
-      const result = await preparing;
-      expect(queued).toBe(true);
-      const sessionDir = join(dir, "sessions", "web_migration"); mkdirSync(sessionDir, { recursive: true });
-      const manager = SessionManager.inMemory(dir, { id: "resident-original" });
-      manager.appendMessage({ role: "system", content: "persisted baseline", timestamp: 1 });
-      manager.appendMessage({ role: "user", content: "history", timestamp: 2 });
-      const file = join(sessionDir, "resident.jsonl");
-      writeFileSync(file, [manager.getHeader(), ...manager.getEntries()].map(row => JSON.stringify(row)).join("\n") + "\n");
-      const resident = SessionManager.open(file);
-      getDb().exec("INSERT INTO chats(jid) VALUES ('web:migration'); INSERT INTO chat_branches(branch_id,chat_jid,root_chat_jid,agent_name,created_at,updated_at) VALUES ('migration-branch','web:migration','web:migration','migration','2026-01-01','2026-01-01');");
-      (pool as any).pool.set("web:migration", { lastUsed: Date.now(), runtime: { session: {
-        sessionManager: resident, systemPrompt: "persisted baseline", messages: resident.buildSessionContext().messages,
-        isStreaming: false, isCompacting: false, isRetrying: false, isBashRunning: false,
-        hasPendingBashMessages: false, pendingMessageCount: 0, dispose() {},
-      }, async dispose() {} } });
-      const bytes = readFileSync(file), before = getDb().serialize();
-      const captured = await result.capture();
-      expect(captured.inputs).toHaveLength(1);
-      expect(captured.inputs[0]!.sourceJSONL).toBe(bytes.toString());
-      expect(captured.migrationIncarnation).toBe("trusted-next-writer");
-      captured.revalidate();
-      expect(getDb().serialize()).toEqual(before);
-      expect(readFileSync(file)).toEqual(bytes);
-      rmSync(sessionDir, { recursive: true, force: true });
-      result.coordinator.assertSealedAndDrained();
-      expect(result.coordinator.migrationIncarnation()).toBe("trusted-next-writer");
-      owner.assertCurrentOwner();
-      expect(returned).toBe(false);
-      result.release();
-      expect(() => result.coordinator.assertSealedAndDrained()).toThrow("released");
-      expect(returned).toBe(false);
-    } finally {
-      producer.resolve(); task.resolve(); complete(); await running;
-      captureSpy.mockRestore();
-      await pool.shutdown(); await web.stop(); owner.release(); rmSync(dir, { recursive: true, force: true });
-      closeDatabase();
-    }
-  });
-  for (const phase of ["producer-await", "prepared"] as const) test(`late unsupported local transport rejects at ${phase}`, async () => {
-    initDatabase();
-    getDb().exec("DELETE FROM messages; DELETE FROM chat_cursors; DELETE FROM service_effect_s01_operations; DELETE FROM service_effect_s01_sources; DELETE FROM service_effect_s01_chats;");
-    const originalLocal = getChatTransport("local");
-    const dir = mkdtempSync(join(tmpdir(), "migration-local-"));
-    const owner = acquireRuntimeLock({ lockPath: join(dir, "owner"), strictOwnership: true });
-    const queue = new AgentQueue();
-    const pool = new AgentPool(createLegacyCapturePoolOptions());
-    const web = new WebChannel({ queue, agentPool: pool });
-    const producer = Promise.withResolvers<void>();
-    const ready = Promise.withResolvers<RuntimeBootstrapContext>();
-    let complete!: () => void;
-    let unregister: (() => void) | undefined;
-    let returned = false;
-    const capture = spyOn(pool, "captureLegacyUpgradeBindings");
-    // This fixture completes shutdown directly; do not retain its handles globally.
-    const shutdownRegistration = spyOn(shutdownRegistry, "registerShutdownHandler").mockImplementation(() => {});
-    setLocalChatTransport({ id: "local", send: async () => { throw new Error("Unexpected local send"); } });
-    const running = bootstrapRuntime(bootstrapDepsForFailure({
-      base: { queue, state: { lastTimestamp: "" } as RuntimeBootstrapState },
-      createAgentPool: async () => pool,
-      startWebChannel: async () => web,
-      createShutdownHandler: deps => { complete = deps.onShutdownComplete!; return async () => {}; },
-      migrationInspection: { onReady: value => ready.resolve(value) },
-      startRuntimeLoop: async deps => { await new Promise<void>(resolve => deps.signal!.addEventListener("abort", () => resolve(), { once: true })); },
-      stopSchedulerLoop: () => producer.promise,
-    }), owner).then(() => { returned = true; });
-    try {
-      const context = await ready.promise;
-      const preparing = context.prepareLegacyMigration("trusted-next-writer");
-      const before = getDb().serialize();
-      if (phase === "prepared") producer.resolve();
-      const prepared = phase === "prepared" ? await preparing : undefined;
-      prepared?.coordinator.assertSealedAndDrained();
-      setLocalChatTransport(undefined);
-      unregister = registerChatTransport({ id: "unsupported-local", kind: "local",
-        send: async () => { throw new Error("Unexpected unsupported send"); } });
-      producer.resolve();
-      if (prepared) {
-        expect(() => prepared.coordinator.assertSealedAndDrained()).toThrow("Ingress registry changed");
-        await expect(prepared.capture()).rejects.toThrow("Ingress registry changed");
-        prepared.release();
-      } else {
-        await expect(preparing).rejects.toThrow("Ingress registry changed");
-        expect(capture).not.toHaveBeenCalled();
-      }
-      expect(getDb().serialize()).toEqual(before);
-      queue.assertLegacyCaptureDrained();
-      owner.assertCurrentOwner();
-      expect(returned).toBe(false);
-    } finally {
-      producer.resolve(); complete(); await running;
-      await queue.shutdown(); await pool.shutdown(); await web.stop();
-      unregister?.(); setLocalChatTransport(originalLocal ?? undefined);
-      shutdownRegistration.mockRestore(); capture.mockRestore();
-      owner.release(); rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  test("unknown installed channel refuses before stopping producers", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "migration-unknown-"));
-    const owner = acquireRuntimeLock({ lockPath: join(dir, "owner"), strictOwnership: true });
-    let context!: RuntimeBootstrapContext, stopped = false;
-    try {
-      await bootstrapRuntime(bootstrapDepsForFailure({
-        migrationInspection: { onReady: value => { context = value; } },
-        stopIpcWatcher: async () => { stopped = true; },
-        stopSchedulerLoop: () => { stopped = true; },
-      }), owner);
-      await expect(context.prepareLegacyMigration("next")).rejects.toThrow("Unsupported installed channel");
-      owner.assertCurrentOwner(); expect(stopped).toBe(false);
-    } finally { owner.release(); rmSync(dir, { recursive: true, force: true }); }
-  });
-
   test("stop joins only its own coordinator, is stable, and cannot stop a replacement", async () => {
     const startInstance = async () => {
       const entered = Promise.withResolvers<void>();
@@ -553,8 +364,10 @@ for (const failure of ["none", "scheduler", "producer", "queue"] as const) {
           await assertHeld();
           expect(exit).not.toHaveBeenCalled();
         } else {
-          await poolEntered.promise; await assertHeld(); pool.resolve();
+          // Transport shutdown now precedes confirmed native cleanup and host
+          // registration release. Keep the global owner held through both joins.
           await webEntered.promise; await assertHeld(); web.resolve();
+          await poolEntered.promise; await assertHeld(); pool.resolve();
           await stopping;
           await running;
           expect(exit).toHaveBeenCalledWith(0);

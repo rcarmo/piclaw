@@ -1,9 +1,10 @@
 import './test-guard.js';
-import { rmSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
+import { Database } from 'bun:sqlite';
 import { assertPathWithinTestFilesystemIsolation } from '../../../runtime/scripts/test-filesystem-isolation.js';
 import { createTempWorkspace } from '../../../runtime/test/helpers.js';
 import { resolveRuntimeConfigPaths } from '../../../runtime/src/core/config-paths.js';
-import { initDatabase,getDb,closeDatabase } from '../../../runtime/src/db/connection.js';
+import { initDatabase,getDb,closeDatabase,initializeDatabaseSchema } from '../../../runtime/src/db/connection.js';
 import { storeChatMetadata,storeMessageInDatabase } from '../../../runtime/src/db/messages.js';
 import { SqliteStorage } from '../../../runtime/durable-engine/qualification/sqlite.ts';
 import { BunSqliteDatabase } from '../../../runtime/durable-engine/src/bun-sqlite.js';
@@ -27,6 +28,14 @@ export async function nativeMessageFixture(recovered?:NativeMessageFixtureIdenti
   if(recovered)for(const path of Object.values(recovered.workspace))assertPathWithinTestFilesystemIsolation(path,process.env,{allowRoot:false});
   const workspace=recovered?{...recovered.workspace,cleanup(){rmSync(recovered.workspace.base,{recursive:true,force:true});}}:createTempWorkspace('native-message-');
   const paths=resolveRuntimeConfigPaths({env:{...process.env,PICLAW_WORKSPACE:workspace.workspace,PICLAW_STORE:workspace.store,PICLAW_DATA:workspace.data,PICLAW_DB_IN_MEMORY:'0'}});
+  if (!recovered) {
+    // Materialise a fresh supported-native synthetic schema before the fixture's
+    // SQL owner table exists. Never reinterpret that table as a v3 conversion
+    // grant; exclusive ownership still precedes every SDK/Harness opening below.
+    const fresh = new Database(':memory:');
+    try { initializeDatabaseSchema(fresh); writeFileSync(paths.databasePath, fresh.serialize(), { flag: 'wx' }); }
+    finally { fresh.close(); }
+  }
   let owner=TestOwner.acquire(paths.databasePath);
   initDatabase(paths);const root=getDb();root.exec('PRAGMA foreign_keys=ON');installTerminalSettlementCompositionSchema(root);
   const assert=()=>owner.assert();

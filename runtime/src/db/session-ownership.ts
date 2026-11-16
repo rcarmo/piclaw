@@ -143,25 +143,3 @@ export function resolveAuthorisedChat(
   }
   return { ...ownership, chatJid };
 }
-
-export interface LegacyRootAssignment { rootChatJid: string; ownerUserId: string }
-
-/** Explicit offline migration operation: validate every chain/mapping, then assign all or none. */
-export function assignLegacyRootOwners(database: Database, assignments: LegacyRootAssignment[]): void {
-  database.transaction(() => {
-    const rows = database.query(`SELECT branch_id, chat_jid, root_chat_jid, parent_branch_id, archived_at FROM chat_branches`).all() as BranchRow[];
-    const roots = new Map<string, BranchRow>();
-    for (const row of rows) {
-      const root = rootForBranch(database, row, true);
-      roots.set(root.chat_jid, root);
-    }
-    const missing = database.query("SELECT jid FROM chats WHERE jid NOT IN (SELECT chat_jid FROM chat_branches) LIMIT 1").get();
-    if (missing || new Set(assignments.map(item => item.rootChatJid)).size !== assignments.length || assignments.length !== roots.size) {
-      throw new ChatAccessDenied();
-    }
-    for (const assignment of assignments) {
-      if (!roots.has(assignment.rootChatJid)) throw new ChatAccessDenied();
-      assignRootOwner(database, assignment.rootChatJid, assignment.ownerUserId);
-    }
-  }).immediate();
-}

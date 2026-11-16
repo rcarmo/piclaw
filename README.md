@@ -74,6 +74,7 @@ The [web UI guide](docs/web-ui.md#chat-and-status-surfaces) and [tools and skill
 ## Documentation
 
 - [Getting started](docs/getting-started.md) — installation, first chat, authentication, persistence and upgrades
+- [Offline session history import](docs/development/session-history-import.md) — selected v3 JSONL into a fresh separate v4 store; no in-place database migration
 - [Configuration](docs/configuration.md) — settings, paths, providers, SSH tools and environment overrides
 - [Web UI](docs/web-ui.md#chat-and-status-surfaces) — chat, workspace, editor, terminal and viewers
 - [Documentation index](docs/README.md) — operations, integrations, development and architecture

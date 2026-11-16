@@ -31,7 +31,7 @@ import { requireOwnedSessionExecution } from "./owned-session-access.js";
 import { renameOwnedSessionHandle } from "../db/session-handles.js";
 import { ChatAccessDenied } from "../db/session-ownership.js";
 import type { AuthenticatedPrincipal } from "../core/access-types.js";
-import type { PoolEntry } from "./session-manager.js";
+import type { PoolEntry } from "./contracts.js";
 
 /** Active/known chat metadata surfaced by AgentPool. */
 export interface ActiveChatAgent {

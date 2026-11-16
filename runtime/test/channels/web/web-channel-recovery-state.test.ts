@@ -1,5 +1,5 @@
 import {readFileSync} from "node:fs";
-import {initializeChatCursorStorage,legacyCursorArchive} from "../../../src/db/chat-cursor-storage.js";
+const legacyCursorArchive = "host_legacy_chat_cursor_state_v1";
 import { afterEach, expect, test } from "bun:test";
 import { createTempWorkspace, setEnv } from "../../helpers.js";
 
@@ -27,14 +27,8 @@ async function initWebChannelFixture(chatJids: string[] = ["web:default"]) {
   const db = await import("../../../src/db.js");
   db.initDatabase();
   db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors;");
-  // Build a synthetic pre-ledger cursor root inside this blank isolated fixture.
-  // The actual populated file upgrade/reopen is qualified in schema-ownership.
-  if ((db.getDb().query('SELECT COUNT(*) AS n FROM chat_cursors').get() as {n:number}).n !== 0) throw Error('Cursor fixture must be empty');
-  db.getDb().transaction(() => {
-    db.getDb().exec("DROP TABLE chat_cursors; DELETE FROM piclaw_schema_migrations WHERE owner='host.chat-cursors'");
-    db.getDb().exec(readFileSync(new URL('../../fixtures/legacy-chat-cursors.sql',import.meta.url),'utf8'));
-    initializeChatCursorStorage(db.getDb());
-  })();
+  // Construct inert historical data only; current cursor storage is unchanged.
+  db.getDb().exec(readFileSync(new URL('../../fixtures/legacy-chat-cursors.sql',import.meta.url),'utf8').replaceAll(/\bchat_cursors\b/g, legacyCursorArchive));
   const now = new Date().toISOString();
   for (const chatJid of chatJids) {
     db.storeChatMetadata(chatJid, now, "Web");

@@ -18,6 +18,7 @@
     "schema-ownership-fixture.ts",
     "installed-addons-fixture.ts",
     "host-operation-authority.test.ts",
+    "host-mcp-http.test.ts",
     "host-process-controls.test.ts",
     "host-terminal-outcome.test.ts",
     "native-process-exit.test.ts",
@@ -46,8 +47,6 @@
     "compact.test.ts",
     "native-compaction-settings.test.ts",
     "application-web.test.ts",
-    "runtime-upgrade-workflow.test.ts",
-    "host-frontier.test.ts",
     "sqlite.test.ts",
     "sqlite-fixture-policy.test.ts",
     "host-handoff.test.ts",
@@ -55,7 +54,6 @@
     "host-recovery.test.ts",
     "host-controller.test.ts",
     "controller-delegate-steering.test.ts",
-    "migration.test.ts",
     "ownership.test.ts",
     "cross-store.test.ts",
     "models.test.ts",
@@ -78,8 +76,6 @@
     "host-delegate-files.test.ts",
     "scheduled.test.ts",
     "scheduled-allocation.test.ts",
-    "cutover.test.ts",
-    "cutover-runtime.test.ts",
     "host-grep.test.ts",
     "host-fetch.test.ts",
     "task-model-boundary.test.ts",
@@ -129,6 +125,8 @@
     "native-a2a-history.test.ts",
     "scheduler-production-lifetime.test.ts",
     "sqlite-admission-workload.test.ts",
-    "sqlite-restic-restore.test.ts"
+    "sqlite-restic-restore.test.ts",
+    "session-history-import.test.ts",
+    "native-session-history-bootstrap.test.ts"
   ]
 }

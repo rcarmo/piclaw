@@ -2,9 +2,15 @@ import { expect, test } from "bun:test";
 import { withTempWorkspaceEnv, waitFor } from "../helpers.js";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { Database } from "bun:sqlite";
+import { initializeDatabaseSchema } from "../../src/db/connection.js";
 
-test("two processes initialize the same empty database without corruption", async () => {
+for (const fresh of [true, false]) test(`two processes initialize ${fresh ? "a fresh exclusive-create target" : "the same supported native database"} without corruption`, async () => {
   await withTempWorkspaceEnv("db-startup-race-", {}, async ws => {
+    if (!fresh) {
+      const native = new Database(":memory:"); native.exec("PRAGMA auto_vacuum=INCREMENTAL"); initializeDatabaseSchema(native);
+      writeFileSync(join(ws.store,"messages.db"),native.serialize(),{flag:"wx"});native.close();
+    }
     const go = join(ws.base, "go");
     const ready = [join(ws.base, "left"), join(ws.base, "right")];
     const resume = ready.map(path => path + ".resume");
@@ -12,12 +18,22 @@ test("two processes initialize the same empty database without corruption", asyn
       env: { ...process.env, PICLAW_DB_IN_MEMORY: "0" }, stdin: "ignore", stdout: "pipe", stderr: "pipe",
     }));
     const timer = setTimeout(() => { for (const child of children) child.kill("SIGKILL"); }, 20000);
-    const results = children.map(async child => ({ exit: await child.exited, stdout: await new Response(child.stdout).text(), stderr: await new Response(child.stderr).text() }));
+    const completed: { exit: number; stdout: string; stderr: string }[] = [];
+    const results = children.map(async child => {
+      const result = { exit: await child.exited, stdout: await new Response(child.stdout).text(), stderr: await new Response(child.stderr).text() };
+      completed.push(result); return result;
+    });
+    const barrier = (predicate: () => boolean) => () => {
+      if (completed.length) throw Error(`Startup child exited before its controller released the barrier: ${JSON.stringify(completed)}`);
+      return predicate();
+    };
     try {
-      await waitFor(() => ready.every(existsSync), 5000); writeFileSync(go, "go");
-      await waitFor(() => ready.every(path => existsSync(path + ".attempt")), 5000);
+      await waitFor(barrier(() => ready.every(existsSync)), 5000); writeFileSync(go, "go");
+      await waitFor(barrier(() => ready.every(path => existsSync(path + ".attempt"))), 5000);
       for (let index = 0; index < results.length; index++) {
-        expect(["ready", "busy"]).toContain(JSON.parse(readFileSync(ready[index] + ".attempt", "utf8")).outcome);
+        // A competing fresh creator may encounter the first owner's unstamped
+        // file. It must refuse, never silently adopt or stamp that existing file.
+        expect(fresh ? ["ready", "busy", "refused-unstamped"] : ["ready", "busy"]).toContain(JSON.parse(readFileSync(ready[index] + ".attempt", "utf8")).outcome);
         writeFileSync(resume[index], "go");
         const result = await results[index];
         expect(result.exit, result.stderr).toBe(0); expect(result.stdout).toContain("CONCURRENT_INIT_OK");
@@ -37,7 +53,8 @@ for (const mode of ["fresh", "empty-file", "existing", "rollback", "late-rollbac
         const [exit, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
         expect(exit, stderr).toBe(0);
         const receipt = JSON.parse(stdout.split("\n").find(line => line.startsWith('{"mode"'))!);
-        expect(receipt).toMatchObject({ mode, vacuums: 0, schemaStable: true, rowsAndFtsPreserved: true });
+        if (mode === "empty-file") expect(receipt).toEqual({mode,vacuums:0,refusedIntact:true});
+        else expect(receipt).toMatchObject({ mode, vacuums: 0, schemaStable: true, rowsAndFtsPreserved: true });
       } finally { clearTimeout(timer); if (child.exitCode === null) child.kill("SIGKILL"); await child.exited; }
     });
   }, 25_000);

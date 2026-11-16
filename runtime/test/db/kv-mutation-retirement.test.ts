@@ -4,7 +4,6 @@ import { withTempWorkspaceEnv } from '../helpers.js';
 import { getRuntimeConfigPaths } from '../../src/core/config.js';
 import * as store from '../../src/db.js';
 import * as kv from '../../src/db/extension-kv.js';
-import { admitSqliteWrite } from '../../src/db/sqlite-async-admission.js';
 
 const parent = 'web:kv-parent', child = `${parent}:child`, other = 'web:kv-other';
 const old = '2001-02-03T04:05:06.007Z';
@@ -48,32 +47,8 @@ test('Root reopen retains stale chat/global KV bytes and timestamps without auto
   expect(rows()).toHaveLength(5);
 }));
 
-for (const action of ['merge', 'purge'] as const) for (const rollback of [false, true]) {
-  test(`existing branch SQL owner preserves KV scope and atomicity: ${action}, rollback=${rollback}`, () => fixture(async () => {
-    const db = store.getDb();
-    if (action === 'purge') store.archiveChatBranch(child);
-    const before = rows();
-    const after = before.filter((row: any) => row.scope_key !== child);
-    if (action === 'merge') after.push({ ...(before.find((row: any) => row.key === 'child-only') as any), scope_key: parent });
-    const sorted = (value: unknown[]) => value.map(row => JSON.stringify(row)).sort();
-    const pending = admitSqliteWrite(db, () => {
-      if (action === 'merge') store.mergeChatBranchIntoParent(child);
-      else store.permanentDeleteArchivedBranch(child);
-      expect(sorted(rows())).toEqual(sorted(after));
-      expect(db.inTransaction).toBe(true);
-      if (rollback) throw Error('fixture rollback after branch KV change');
-      return 'committed';
-    });
-    if (rollback) {
-      await expect(pending).rejects.toThrow('fixture rollback after branch KV change');
-      expect(rows()).toEqual(before);
-      expect(store.getChatBranchByChatJid(child)).not.toBeNull();
-    } else {
-      expect(await pending).toBe('committed');
-      expect(sorted(rows())).toEqual(sorted(after));
-      expect(store.getChatBranchByChatJid(child)).toBeNull();
-    }
-    expect(db.inTransaction).toBe(false);
-    expect(db.query('PRAGMA busy_timeout').get()).toEqual({ timeout: 0 });
-  }));
-}
+test('retired branch writers cannot move or delete KV through the old public barrel', () => fixture(async () => {
+  const before = rows();
+  expect(store).not.toHaveProperty('mergeChatBranchIntoParent'); expect(store).not.toHaveProperty('permanentDeleteArchivedBranch');
+  expect(rows()).toEqual(before);
+}));

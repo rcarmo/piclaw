@@ -1,4 +1,12 @@
-# Thinking levels across model switches
+# Historical legacy thinking policy
+
+The legacy constructor and its JSONL resume/rewrite paths were removed under
+#2017. The policy utility below remains covered by isolated SDK tests. Current
+native model/thinking controls use `runtime/durable-engine/src/host-model-controls.ts`
+and persisted native state; native status returns `thinking_policy: null`.
+No legacy session is hydrated for inspection or model selection.
+
+The following sections record the old policy and its historical behaviour.
 
 Piclaw preserves a session's thinking preference when switching models. A lower
 workspace or global startup default cannot silently replace that preference.
@@ -84,16 +92,13 @@ target overrides, explicit lowering, capability clamps, concurrent sessions,
 rejected model changes, active-branch restoration, repeated cold hydration,
 compaction, rotation and default provenance.
 
-Adjacent tests cover production session creation, persistence sanitisation,
-pre-compaction trimming, branch replay, family defaults and control dispatch.
-Run through the repository's isolated test launcher:
+Constructor-bound sanitisation, trimming and deferred replay tests were retired
+with their implementation. Existing native model controls, history and compaction
+qualification remain separate. Run the retained SDK utility tests through the
+repository launcher:
 
 ```sh
-bun run test:local --cwd runtime -- bun test \
-  test/agent-pool/thinking-policy.test.ts \
-  test/agent-pool/session-persistence-sanitizer.test.ts \
-  test/agent-pool/branch-seeding-async.test.ts \
-  test/session-rotation.test.ts
+bun run test:local --cwd runtime -- bun test test/agent-pool/thinking-policy.test.ts
 ```
 
 Issue #1359 contains the anonymised operational evidence. No raw session content

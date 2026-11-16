@@ -5,8 +5,6 @@
  * persistent system prompt aligned with the delivery channel.
  *
  * Consumers:
- *   - agent-pool/session.ts appends channel-specific response-formatting rules
- *     to the session system prompt at creation time.
  *   - router.ts may still consult these hints for tests or fallback plumbing,
  *     but user-turn payloads should stay compact and avoid repeating them.
  */

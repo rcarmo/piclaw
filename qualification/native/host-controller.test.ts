@@ -2,10 +2,8 @@ import './src/test-guard.js';
 import {expect,test} from 'bun:test';
 import {join} from 'node:path';
 import {createHostController,type HostControllerOptions} from '../../runtime/durable-engine/src/host-controller.js';
-import {HostCutoverController,initializeCutoverManifest} from '../../runtime/durable-engine/src/host-cutover.js';
 import {AcceptedReplyThreadUnavailableError} from '../../runtime/durable-engine/src/host-message-thread.js';
-import {defineDoc,type Harness} from '../../runtime/durable-engine/qualification/durable.js';
-import { commitWrites } from '../../runtime/durable-engine/qualification/testing.ts';
+import {type Harness} from '../../runtime/durable-engine/qualification/durable.js';
 import {nativeMessageFixture} from './src/native-message-fixture.js';
 import {historicalIntentFixture} from './src/historical-intent-fixture.js';
 import {TestOwner} from './src/ownership.js';
@@ -58,62 +56,6 @@ for(const mode of ['known','unknown','background','missing','bootstrap-close-fai
   }finally{f.base.host.modelHold?.release();if(!uncertain)await controller?.close();else{await actualClose?.();lease.release();}await f.close();}
 },15000);
 
-for(const mode of ['idle','host-changed','candidate-document','retired-document','terminal-records','pending','inflight','held-read','held-read-close','close-first','close-fault'] as const)test(`native rollback refuses unavailable historical proof and retains owner: ${mode}`,async()=>{
-  const f=await nativeMessageFixture(),events:string[]=[],held=barrier(),entered=barrier(),providerEntered=barrier();
-  let controller:Awaited<ReturnType<typeof createHostController>>|undefined,storage:Awaited<ReturnType<typeof f.options.openStorage>>|undefined,actualClose:(()=>Promise<void>)|undefined,holdRead=false,signal:AbortSignal|undefined;
-  const lease=f.ownerLease();let released=false;
-  try{
-    await f.open();if(mode==='pending')f.base.host.modelHold=barrier();
-    const primary=f.accept('native rollback source'),id=await f.runtime.submitMessage(primary);if(mode!=='pending')await f.runtime.waitForMessage(primary,id);await f.controller.close();
-    if(mode==='terminal-records'){
-      const offline=await f.options.openStorage();try{
-        const tasks=await offline.scanTasks({status:'terminal'},1000,undefined,context),submissions=await offline.scanSubmissions({status:'done'},1000,undefined,context);expect(tasks.items.length).toBeGreaterThan(0);expect(submissions.items.length).toBeGreaterThan(0);
-        await commitWrites(offline, [{type:'task',value:{...tasks.items[0]!,memos:undefined,state:{status:'terminal',outcome:{status:'completed',result:'historical-only-change'}}}},{type:'submission',value:{...submissions.items[0]!,requestId:'historical-only-terminal'}}], context);
-      }finally{await offline.close(context);}
-    }
-    const get=f.bindings.get.bind(f.bindings);
-    controller=await createHostController({acquireOwnership:async()=>{events.push('owner');return {assertCurrentOwner:lease.assertCurrentOwner,release(){released=true;events.push('release');lease.release();}};},async createStorage(owner){owner.assertCurrentOwner();events.push('storage');storage=await f.options.openStorage();const close=storage.close.bind(storage);actualClose=()=>close(context);storage.close=async ctx=>{events.push('close');if(mode==='close-fault')throw Error('must not close without proof');await close(ctx);};return storage;},runtime:{...f.options,bindings:{...f.bindings,async get(input){const value=await get(input);if(holdRead){entered.release();await held.promise;}return value;}}},recovery:{manifest:[{chatJid:f.chat,branchId:'main',conversationId:f.base.root.id}],work:f.work,bindings:f.bindings,async readAcceptedInput(){throw Error('Native recovery must stay in the SDK');}}},context);
-    let providerCount=0;f.base.host.onModelEnter=actual=>{providerCount++;signal=actual;providerEntered.release();};
-    if(mode==='inflight'){f.base.host.modelHold=barrier();await controller.runtime.submitMessage(f.accept('fresh admitted active request'));await providerEntered.promise;expect(signal?.aborted).toBe(false);}
-    initializeCutoverManifest(f.root);const digest='a'.repeat(64),receipt={sourceDigest:digest,receiptHash:digest};
-    const cutover=new HostCutoverController(f.root,{domain:'rollback-fixture',incarnation:'historical',ownerGeneration:f.owner().generation,sourceEngineId:'legacy',candidateStoreRef:'candidate'},{assertOwner:lease.assertCurrentOwner,assertCurrentWriter:lease.assertCurrentOwner,checkDrained(){return {sourceDigest:digest,pending:0,inflight:0};}});
-    let manifest=cutover.preflight({requestKey:'rollback',sourceDigest:digest,importHash:digest});manifest=await cutover.begin(manifest.revision,{async copy(){return receipt;},async importCopied(){return receipt;}});manifest=await cutover.verify(manifest.revision,async()=>receipt);manifest=cutover.commitWriter(manifest.revision);const before=cutover.inspect();
-    await expect(controller.checkpointCutover(cutover)).rejects.toThrow('Candidate progress proof unavailable');expect(cutover.inspect()).toEqual(before);
-    if(mode==='host-changed')f.root.query('INSERT INTO router_state(key,value) VALUES (?,?)').run('changed-after-checkpoint','retained');
-    if(mode==='candidate-document'||mode==='retired-document'){
-      const h=Reflect.get(controller.runtime,'harness') as Harness,Doc=defineDoc({kind:'qualification.rollback-document',version:1,scope:'session',checkpointWhen:()=>false,initial:()=>({outcome:''})});
-      const query={scope:{kind:'session' as const},at:'current' as const},documents=await storage!.scanDocuments(query,1000,undefined,context);
-      await h.commit(async tx=>{(await tx.doc(Doc)).outcome='committed';},context);
-      if(mode==='retired-document'){await h.commit(tx=>tx.retireDoc(Doc),context);expect(await storage!.scanDocuments(query,1000,undefined,context)).toEqual(documents);}
-    }
-    let flips=0;cutover.rollback=()=>{flips++;throw Error('Historical proof cannot be guessed');};
-    let observer:Promise<unknown>|undefined,concurrent:Promise<void>|undefined;
-    if(mode.startsWith('held-read')||mode==='close-first'){holdRead=true;observer=controller.runtime.waitForMessage(primary,id);void observer.catch(()=>{});await entered.promise;}
-    if(mode==='close-first'){
-      concurrent=controller.close();await expect(controller.rollback(cutover,manifest.revision)).rejects.toThrow('Controller already closing');await expect(observer!).rejects.toThrow();await concurrent;held.release();expect(events).toEqual(['owner','storage','close','release']);expect(flips).toBe(0);return;
-    }
-    const access:string[]=[];
-    if(mode==='idle'){
-      expect(()=>controller!.rollback(undefined as never,manifest.revision)).toThrow(TypeError);
-      for(const field of ['prepareRollback','rollback'] as const)expect(()=>controller!.rollback({prepareRollback:cutover.prepareRollback,rollback:cutover.rollback,[field]:undefined} as never,manifest.revision)).toThrow(TypeError);
-      const prepare=cutover.prepareRollback,rollback=cutover.rollback;Object.defineProperties(cutover,{prepareRollback:{configurable:true,get(){access.push('prepare');return prepare;}},rollback:{configurable:true,get(){access.push('rollback');return rollback;}}});
-    }
-    const attempt=controller.rollback(cutover,manifest.revision);
-    if(mode==='idle'){expect(access).toEqual(['prepare','rollback']);Object.defineProperties(cutover,{prepareRollback:{value(){throw Error('late prepare');}},rollback:{value(){throw Error('late rollback');}}});}
-    if(observer){if(mode==='held-read-close'){concurrent=controller.close();void concurrent.catch(()=>{});}await expect(observer).rejects.toThrow();await Promise.resolve();expect(events).toEqual(['owner','storage']);lease.assertCurrentOwner();expect(flips).toBe(0);held.release();}
-    await expect(attempt).rejects.toThrow(mode==='pending'||mode==='inflight'?'Candidate not quiescent':'Candidate progress proof unavailable');expect(cutover.inspect()).toEqual(before);expect(flips).toBe(0);expect(events).toEqual(['owner','storage']);lease.assertCurrentOwner();expect(released).toBe(false);
-    await expect(controller.rollback(cutover,manifest.revision)).rejects.toThrow('Controller already closing');expect(()=>controller!.runtime.readSessionModel(f.binding)).toThrow();
-    if(mode==='pending')expect(providerCount).toBe(0);if(mode==='inflight')expect(signal?.aborted).toBe(false);if(concurrent)await expect(concurrent).rejects.toThrow('Candidate progress proof unavailable');
-  }finally{
-    held.release();f.base.host.modelHold?.release();
-    if(controller){
-      try{const closing=(Reflect.get(controller.runtime,'harness') as Harness).close(context);if(mode==='close-fault')await expect(closing).rejects.toThrow('must not close without proof');else await closing;}
-      finally{await actualClose?.();if(!released){lease.release();released=true;}}
-    }
-    await f.close();
-  }
-},15000);
-
 for(const mode of ['committed-answer','unavailable-thread','unrelated-error','cancelled'] as const)test(`historical retained SDK evidence: ${mode} never needs another provider call`,async()=>{
   const h=await historicalIntentFixture(mode==='cancelled'?true:'completed'),{f}=h;let controller:Awaited<ReturnType<typeof createHostController>>|undefined;
   try{
@@ -134,4 +76,23 @@ for(const mode of ['committed-answer','unavailable-thread','unrelated-error','ca
     }
     expect(calls).toBe(0);const final=await controller.runtime.inspectAuthority();expect(final.inspection.scheduling).toBe(mode==='cancelled'?'running':'paused');if(mode==='cancelled')expect(final.inspection.tasks).toHaveLength(0);
   }finally{await controller?.close();await f.close();}
+},15000);
+
+test('native controller has no cutover/rollback API and ordinary close detaches a held reader before releasing confirmed storage', async () => {
+  const f=await nativeMessageFixture(),held=barrier(),entered=barrier(),events:string[]=[];
+  const lease=f.ownerLease(),get=f.bindings.get.bind(f.bindings);let holding=false;
+  let controller:Awaited<ReturnType<typeof createHostController>>|undefined;
+  try {
+    await f.open();const source=f.accept('native source'),id=await f.runtime.submitMessage(source);
+    await f.runtime.waitForMessage(source,id);await f.controller.close();
+    controller=await createHostController({acquireOwnership:async()=>({assertCurrentOwner:lease.assertCurrentOwner,release(){events.push('release');lease.release();}}),
+      async createStorage(owner){owner.assertCurrentOwner();const storage=await f.options.openStorage(),close=storage.close.bind(storage);storage.close=async ctx=>{await close(ctx);events.push('close');};return storage;},
+      runtime:{...f.options,bindings:{...f.bindings,async get(input){const result=await get(input);if(holding){entered.release();await held.promise;}return result;}}},
+      recovery:{manifest:[{chatJid:f.chat,branchId:'main',conversationId:f.base.root.id}],work:f.work,bindings:f.bindings,async readAcceptedInput(){throw Error('Native recovery stays in the SDK');}}},context);
+    expect(controller).not.toHaveProperty('rollback');expect(controller).not.toHaveProperty('checkpointCutover');
+    holding=true;const observation=controller.runtime.waitForMessage(source,id);void observation.catch(()=>{});await entered.promise;
+    const closing=controller.close();expect(controller.close()).toBe(closing);
+    await expect(observation).rejects.toThrow();await closing;
+    expect(events).toEqual(['close','release']);
+  } finally {held.release();await controller?.close();await f.close();}
 },15000);

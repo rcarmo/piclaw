@@ -54,7 +54,7 @@ describe("token-usage", () => {
     expect(getLatestTokenUsage(chatJid)).toMatchObject({ input_tokens: 4, cost_provenance: "unavailable" });
   });
 
-  test("legacy token columns migrate before the covering index and repeated startup preserves rows", () => {
+  test("unsupported v3 token schema is refused without mutating recorded counts or provenance", () => {
     const db = new Database(":memory:");
     try {
       db.exec(`CREATE TABLE token_usage (
@@ -66,17 +66,9 @@ describe("token-usage", () => {
         INSERT INTO token_usage(chat_jid,run_at,input_tokens,total_tokens,cost_total)
         VALUES('test:legacy-covering','2026-01-01T00:00:00Z',NULL,7,NULL);`);
       const original = db.query("SELECT id,chat_jid,run_at,input_tokens,total_tokens,cost_total FROM token_usage").all();
-      initializeDatabaseSchema(db);
-      initializeDatabaseSchema(db);
+      expect(() => initializeDatabaseSchema(db)).toThrow("V4 never migrates a v3 store in place");
       expect(db.query("SELECT id,chat_jid,run_at,input_tokens,total_tokens,cost_total FROM token_usage").all()).toEqual(original);
-      expect((db.query("PRAGMA index_info(idx_token_usage_chat_totals_covering_v2)").all() as { name: string }[]).map(row => row.name)).toEqual([
-        "chat_jid", "run_at", "id", "input_tokens", "output_tokens", "reasoning_tokens",
-        "cache_read_tokens", "cache_write_tokens", "total_tokens", "cost_total", "cost_provenance",
-        "provider_cost_total", "provider_cost_currency", "catalogue_cost_total", "pricing_currency",
-      ]);
-      expect(db.query("SELECT name FROM sqlite_master WHERE name='idx_token_usage_chat_jid_run_at'").get()).not.toBeNull();
-      db.query("INSERT INTO token_usage(chat_jid,run_at,total_tokens) VALUES(?,?,?)").run("test:legacy-covering", "2026-01-02T00:00:00Z", 3);
-      expect(db.query("SELECT sum(total_tokens) total FROM token_usage").get()).toEqual({ total: 10 });
+      expect(db.query("SELECT 1 FROM sqlite_master WHERE name='idx_token_usage_chat_totals_covering_v2'").get()).toBeNull();
     } finally { db.close(); }
   });
 

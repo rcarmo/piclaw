@@ -77,6 +77,7 @@ docker run -d \
 以下の詳細ドキュメントは英語です。
 
 - [使い始める](docs/getting-started.md) — インストール、最初のチャット、認証、永続化、アップグレード
+- [オフラインのセッション履歴の取り込み](docs/development/session-history-import.md) — 選択した v3 JSONL を新規の独立した v4 ストアへ取り込みます。既存データベースは移行しません
 - [設定](docs/configuration.md) — 設定項目、パス、プロバイダー、SSH ツール、環境の上書き
 - [Web UI](docs/web-ui.md#chat-and-status-surfaces) — チャット、ワークスペース、エディター、ターミナル、ビューアー
 - [ドキュメント索引](docs/README.md) — 運用、連携、開発、アーキテクチャ

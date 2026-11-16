@@ -282,9 +282,6 @@ export class HostConversationRuntime {
   private closing?: Promise<void>;
   // Lifecycle joins only: not an input queue or admission/dedup authority.
   private readonly active = new Set<Promise<unknown>>();
-  // Observer detachment is not completion of an already-entered host callback.
-  // Only rollback joins these; ordinary close must keep its detach semantics.
-  private readonly underlyingWaits = new Set<Promise<unknown>>();
   private readonly observations = new AbortController();
   private observe<T>(body: () => Promise<T>): Promise<T> {
     this.fence();
@@ -2017,8 +2014,6 @@ export class HostConversationRuntime {
       // Detach observation, including an entered correlation read, without
       // cancelling accepted work. Rollback still joins the underlying callback
       // before considering storage/owner release; every late read is fenced.
-      this.underlyingWaits.add(pending);
-      void pending.finally(()=>this.underlyingWaits.delete(pending)).catch(()=>{});
       return awaitWithContext(pending,context);
     });
   }
@@ -2765,9 +2760,7 @@ export class HostConversationRuntime {
           if ((await this.checked(copy)).operation.version === operation.version) return;
         }
       })();
-      this.underlyingWaits.add(pending);
       // Observe even a synchronous host callback's abort before awaitWithContext attaches.
-      void pending.finally(() => this.underlyingWaits.delete(pending)).catch(() => {});
       // Detach the whole observer, including host authorization/lookup, not just handle.wait.
       // Late continuations are fenced above; cancellation never aborts durable work.
       return awaitWithContext(pending, observation);
@@ -2874,17 +2867,7 @@ export class HostConversationRuntime {
       ...(parseModelFailure(state.status?.status === "unanswered" ? state.status.detail : undefined) ?? { category: "unknown" }) });
     await o.onOperationSettled?.(input.operationId, state.answer?.processExit); this.fence(); return terminal;
   }
-  /** Rollback-only shutdown: seal before yielding, join host calls, then reject ANY live
-   * public task/submission before Harness.close can cancel work. Failure stays sealed.
-   * This proves quiescence, NOT absence of historical candidate-only commits. */
-  quiesceForRollback(beforeStorageClose: () => Promise<never>): Promise<never>;
-  quiesceForRollback(beforeStorageClose?: () => Promise<void>): Promise<void>;
-  quiesceForRollback(beforeStorageClose?: () => Promise<void>): Promise<void> {
-    if (this.closed) return Promise.reject(new Error("Runtime already closing"));
-    return this.shutdown(true, beforeStorageClose);
-  }
-  close(): Promise<void> { return this.shutdown(false); }
-  private shutdown(requireQuiescent: boolean, beforeStorageClose?: () => Promise<void>): Promise<void> {
+  close(): Promise<void> {
     if (this.closing) return this.closing;
     this.closed = true; // Seal admissions, preserve pending/unknown work; close does not enable scheduling.
     this.observations.abort();
@@ -2901,15 +2884,6 @@ export class HostConversationRuntime {
         const inspection = await this.harness.inspect(withoutAbortSignal(this.context));
         if (this.options.withCompactionGuard ? this.maintenanceBinding !== undefined : inspection.tasks.length || inspection.submissions.length)
           throw new Error(`Maintenance not quiescent (task ${this.maintenanceTaskId ?? "admission uncertain"}); owner retained`);
-      }
-      if (requireQuiescent) {
-        await Promise.allSettled([...this.underlyingWaits]);
-        this.options.owner.assert();
-        const inspection = await this.harness.inspect(withoutAbortSignal(this.context));
-        this.options.owner.assert();
-        if (inspection.tasks.length || inspection.submissions.length) throw new Error("Candidate not quiescent");
-        await beforeStorageClose?.();
-        this.options.owner.assert();
       }
       await this.harness.close(withoutAbortSignal(this.context));
       await this.storageEnded; // May wait for cooperative providers/tools; no bounded-close claim.

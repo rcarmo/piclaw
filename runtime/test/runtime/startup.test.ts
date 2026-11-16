@@ -280,21 +280,8 @@ export {};
       expect(payload.pid).toBeGreaterThan(0);
       expect(payload.label).toBe("post-web-start");
       expect(payload.snapshot.process_memory.rss_bytes).toBeGreaterThan(0);
-      expect(payload.snapshot.runtime_memory).toEqual({
-        cached_main_sessions: 0,
-        cached_side_sessions: 0,
-        active_fork_base_leaves: 0,
-        active_chats: 0,
-        session_entries: 0,
-        active_messages: 0,
-        persisted_session_bytes: 0,
-        loaded_skills: 0,
-        loaded_extensions: 0,
-        registered_tools: 0,
-        create_in_flight: 0,
-        branch_seed_realizations_in_flight: 0,
-        invalid_deferred_seed_errors: 0,
-      });
+      // Stale supplied resident counters cannot fabricate current native data.
+      expect(payload.snapshot.runtime_memory).toBeNull();
     } finally {
       ws.cleanup();
     }

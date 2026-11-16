@@ -1,9 +1,9 @@
 /** Isolated on-disk init contracts. Does not open an operator database. */
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
-import { initDatabase, closeDatabase, getDb } from "../../src/db/connection.js";
+import { initDatabase, closeDatabase, getDb, initializeDatabaseSchema } from "../../src/db/connection.js";
 import { assertPathWithinTestFilesystemIsolation } from "../../scripts/test-filesystem-isolation.js";
 
 const mode = process.argv[2];
@@ -12,12 +12,17 @@ assertPathWithinTestFilesystemIsolation(process.env.PICLAW_STORE!, process.env, 
 assert.equal(process.env.PICLAW_DB_IN_MEMORY, "0");
 const path = join(process.env.PICLAW_STORE!, "messages.db");
 mkdirSync(process.env.PICLAW_STORE!, { recursive: true });
-if (mode === "empty-file") writeFileSync(path, "");
+if (mode === "empty-file") {
+  writeFileSync(path, ""); const before = readFileSync(path);
+  assert.throws(initDatabase, /Unsupported|incomplete/); assert.deepEqual(readFileSync(path), before);
+  console.log(JSON.stringify({mode,vacuums:0,refusedIntact:true})); process.exit(0);
+}
+let originalSchema: unknown[] = [];
 if (mode === "existing" || mode === "existing-rollback") {
-  const legacy = new Database(path);
-  legacy.exec("CREATE TABLE fixture_legacy (value TEXT); INSERT INTO fixture_legacy VALUES ('keep-me');");
-  assert.equal((legacy.query("PRAGMA auto_vacuum").get() as any).auto_vacuum, 0);
-  legacy.close();
+  const native = new Database(":memory:"); initializeDatabaseSchema(native);
+  native.exec("CREATE TABLE fixture_legacy (value TEXT); INSERT INTO fixture_legacy VALUES ('keep-me');");
+  originalSchema = native.query("SELECT name FROM sqlite_schema").all();
+  writeFileSync(path, native.serialize(), {flag:"wx"}); native.close();
 }
 const exec = Database.prototype.exec;
 let vacuums = 0, baseCalls = 0, injectFailure = ["rollback", "late-rollback", "existing-rollback"].includes(mode);
@@ -31,7 +36,7 @@ Database.prototype.exec = function (sql: string) {
       throw new Error("Injected base-schema failure");
     }
   }
-  if (injectFailure && ["late-rollback", "existing-rollback"].includes(mode) && sql.includes('CREATE TABLE IF NOT EXISTS owned_fork_operations (')) {
+  if (injectFailure && ["late-rollback", "existing-rollback"].includes(mode) && sql.includes('CREATE TABLE IF NOT EXISTS picker_pin_scopes (')) {
     assert(this.inTransaction);exec.call(this, "CREATE TABLE fixture_partial (id INTEGER)");
     throw new Error('Injected late-schema failure');
   }
@@ -44,7 +49,7 @@ try {
     const inspect = new Database(path, { readonly: true });
     try {
       assert.equal(inspect.inTransaction, false);
-      assert.deepEqual(inspect.query("SELECT name FROM sqlite_schema").all(), mode === "existing-rollback" ? [{ name: "fixture_legacy" }] : []);
+      assert.deepEqual(inspect.query("SELECT name FROM sqlite_schema").all(), mode === "existing-rollback" ? originalSchema : []);
     } finally { inspect.close(true); }
     await closeDatabase({ shrinkMemory: false }); injectFailure = false;
   }

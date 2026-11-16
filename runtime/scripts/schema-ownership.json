@@ -23,18 +23,29 @@
     "core:background-contexts": {
       "category": "core",
       "initializer": "runtime/durable-engine/src/host-background-context.ts#publishNativeBackgroundContext",
-      "writers": ["runtime/durable-engine/src/host-background-context.ts"],
+      "writers": [
+        "runtime/durable-engine/src/host-background-context.ts"
+      ],
       "sourceOfTruth": "Single application-owned stable operation-context key to private SDK conversation/session identity. This index grants no execution and is excluded from public chat/session ingress.",
       "replayRetention": "Preserve private identities and source-keyed policy families across input epochs and ACK/reopen. Staged contexts retain their immutable payload references; no duplicate allocation, physical pruning or implicit source replay.",
-      "references": ["runtime/durable-engine/src/application-bootstrap.ts", "runtime/durable-engine/src/default-application-runtime.ts", "runtime/src/agent-pool/background-operation-contract.ts"]
+      "references": [
+        "runtime/durable-engine/src/application-bootstrap.ts",
+        "runtime/durable-engine/src/default-application-runtime.ts",
+        "runtime/src/agent-pool/background-operation-contract.ts"
+      ]
     },
     "core:background-policy": {
       "category": "core",
       "initializer": "runtime/durable-engine/src/host-background-policy.ts#bindNativeBackgroundPolicy (opt-in public SDK allocation transaction)",
-      "writers": ["runtime/durable-engine/src/host-background-policy.ts"],
+      "writers": [
+        "runtime/durable-engine/src/host-background-policy.ts"
+      ],
       "sourceOfTruth": "The immutable accepted payload owns background policy. Each source-keyed SDK document family member binds its input/hash and bounds exact public tool-task quota claims; it is not execution permission or an effect/replay receipt.",
       "replayRetention": "Preserve the binding and claimed task IDs across ACK loss/reopen. Same-policy binding never resets quota. Forks start unbound. No physical SDK pruning, policy renewal, schema migration or automatic registration.",
-      "references": ["runtime/src/agent-pool/background-operation-contract.ts", "runtime/durable-engine/src/host-background-policy.ts"]
+      "references": [
+        "runtime/src/agent-pool/background-operation-contract.ts",
+        "runtime/durable-engine/src/host-background-policy.ts"
+      ]
     },
     "core:access_state": {
       "category": "core",
@@ -89,7 +100,6 @@
         "runtime/test/fixtures/historical-expense-schema.sql"
       ]
     },
-
     "core:chat_branches": {
       "category": "core",
       "initializer": "runtime/src/db/connection.ts#createSchema",
@@ -97,7 +107,6 @@
         "runtime/src/dream.ts",
         "runtime/src/runtime/startup.ts",
         "runtime/src/db/chat-branches.ts",
-        "runtime/src/db/owned-forks.ts",
         "runtime/src/db/session-handles.ts"
       ],
       "sourceOfTruth": "Host stable branch identity, friendly handles/display names, owner namespace and archive policy. The SDK application manifest alone binds native conversation/session IDs. Native address/reparent/destructive legacy mutations are fenced; registration cannot unarchive or rename a native branch. Copied/native routing is never inferred from metadata or a first/default row.",
@@ -107,8 +116,7 @@
         "runtime/src/db/native-routing-policy.ts",
         "runtime/durable-engine/src/default-application-runtime.ts",
         "runtime/durable-engine/src/application-bootstrap.ts",
-        "runtime/src/agent-pool.ts",
-        "runtime/src/db/owned-forks.ts"
+        "runtime/src/agent-pool.ts"
       ]
     },
     "core:chat_cursors": {
@@ -120,8 +128,8 @@
         "runtime/src/db/connection.ts",
         "runtime/src/db/chat-cursors.ts"
       ],
-      "sourceOfTruth": "Host routing/delivery compatibility progress cursors; legacy seed from router_state is one-time. These cursors grant no native operation, execution or continuation authority.",
-      "replayRetention": "Polling position and queued payload/provenance survive the owned frontier migration unchanged. They grant no native execution or accepted-source frontier authority. Retired execution/recovery values are retained separately in the optional immutable historical archive; fresh roots create no archive.",
+      "sourceOfTruth": "Current native polling/delivery compatibility data only; no legacy router_state seed, execution or queued-input authority.",
+      "replayRetention": "Current exact schema/rows survive native reopen unchanged. Unsupported legacy cursor declarations are refused intact; no in-place archive/rename/DROP/backfill. Native input order and tasks belong to the SDK.",
       "references": [
         "runtime/src/db/chat-cursor-storage.ts",
         "runtime/src/db/chat-cursors.ts",
@@ -149,7 +157,6 @@
         "runtime/src/runtime/startup.ts",
         "runtime/src/extensions/messages-crud.ts",
         "runtime/src/db/chat-branches.ts",
-        "runtime/src/db/owned-forks.ts",
         "runtime/src/db/messages.ts",
         "runtime/src/service-effects/current-piclaw/terminal-settlement-timeline-statements.ts",
         "runtime/src/service-effects/current-piclaw/timeline-draft-store.ts",
@@ -175,13 +182,11 @@
       ]
     },
     "core:core_schema_migrations": {
-      "category": "core",
-      "initializer": "runtime/src/db/connection.ts#dropObsoleteRemoteInteropSchema",
-      "writers": [
-        "runtime/src/db/connection.ts"
-      ],
+      "category": "retired",
+      "initializer": "None; obsolete resident remote-schema DROP procedure removed",
+      "writers": [],
       "sourceOfTruth": "Legacy core cleanup receipt drop-core-remote-interop-v1.",
-      "replayRetention": "Preserve; source initializer removes six named obsolete remote tables once, not a general cleanup entitlement.",
+      "replayRetention": "Old already-native receipts are retained as data only. Fresh native schemas never create this legacy cleanup ledger; supported current schema evolution uses existing owned migrations/public SDK.",
       "references": [
         "runtime/src/db/connection.ts"
       ]
@@ -312,15 +317,15 @@
       ]
     },
     "core:owned_fork_operations": {
-      "category": "core",
-      "initializer": "runtime/src/db/owned-forks.ts#initializeOwnedForkSchema",
-      "writers": [
-        "runtime/src/db/owned-forks.ts"
-      ],
+      "category": "retired",
+      "initializer": "None; obsolete owned/deferred fork initializer, mutation and seed-materialisation APIs are removed",
+      "writers": [],
       "sourceOfTruth": "Owner/request idempotency receipt plus captured fork seed.",
-      "replayRetention": "finishOwnedForkSeed clears seed_json and sets materialised_at, retaining operation identity; no receipt TTL found.",
+      "replayRetention": "Preserve original owner/request/source/target identities, raw captured seed bytes, timestamps and exact SQLite constraints on already-native stores. Fresh stores omit the table; no old seed is materialised or replayed.",
       "references": [
-        "runtime/src/db/owned-forks.ts"
+        "runtime/test/fixtures/historical-session-archive.json",
+        "qualification/native/schema-ownership-fixture.ts",
+        "qualification/native/schema-ownership.test.ts"
       ]
     },
     "core:picker_pin_imports": {
@@ -372,25 +377,21 @@
       ]
     },
     "core:portainer_configs": {
-      "category": "core",
-      "initializer": "runtime/src/db/connection.ts#createSchema",
-      "writers": [
-        "runtime/src/db/chat-branches.ts"
-      ],
-      "sourceOfTruth": "Historical config rows imported into extension_kv; branch transfer/delete remains tracked.",
-      "replayRetention": "No blanket deletion authorization; do not mistake historical/empty for dead.",
+      "category": "retired",
+      "initializer": "None; fresh native v4 uses current scoped extension KV only",
+      "writers": [],
+      "sourceOfTruth": "Inert already-native historical profile records, retained intact where present; current active configuration is scoped native KV.",
+      "replayRetention": "No obsolete table/index creation, v3 renames or address-move/merge/purge writers. Read-only native archived-session exports preserve older records; bounded current-native KV preservation never runs on a v3 store.",
       "references": [
         "runtime/src/db/connection.ts"
       ]
     },
     "core:proxmox_configs": {
-      "category": "core",
-      "initializer": "runtime/src/db/connection.ts#createSchema",
-      "writers": [
-        "runtime/src/db/chat-branches.ts"
-      ],
-      "sourceOfTruth": "Historical config rows imported by migrateProxmoxPortainerToKv into extension_kv; branch transfer/delete remains tracked.",
-      "replayRetention": "No blanket deletion authorization; do not mistake historical/empty for dead.",
+      "category": "retired",
+      "initializer": "None; fresh native v4 uses current scoped extension KV only",
+      "writers": [],
+      "sourceOfTruth": "Inert already-native historical profile records, retained intact where present; current active configuration is scoped native KV.",
+      "replayRetention": "No obsolete table/index creation, v3 renames or address-move/merge/purge writers. Read-only native archived-session exports preserve older records; bounded current-native KV preservation never runs on a v3 store.",
       "references": [
         "runtime/src/db/connection.ts"
       ]
@@ -1074,30 +1075,25 @@
       ]
     },
     "archive:copied-legacy-documents": {
-      "category": "migration-archive",
-      "initializer": "Pure LegacyImportManifest/LegacyTreeImportManifest registration; explicit copied-history preparation only",
-      "writers": [
-        "runtime/durable-engine/src/legacy-import.ts#importCopiedLegacy",
-        "runtime/durable-engine/src/legacy-import.ts#importCopiedLegacyTree"
-      ],
+      "category": "retired",
+      "initializer": "Pure definitions for already-native historical documents only; no current importer or v3 conversion",
+      "writers": [],
       "sourceOfTruth": "Imported original entry bytes, source hashes, import/binding/branch identity and source-to-durable entry mappings.",
-      "replayRetention": "conversation-scoped latest/initial documents preserve copied source provenance; current readers import pure schema only. Native startup grants no importer execution or source mutation.",
+      "replayRetention": "Preserve prior native source/entry/branch provenance for read-only history and native reopen. No execution, source discovery, account/config migration, cutover or schema creation.",
       "references": [
         "runtime/durable-engine/src/legacy-import-schema.ts"
       ]
     },
     "archive:session-store": {
-      "category": "migration-archive",
-      "initializer": "SqliteSessionStore explicit archive-tool constructor; owned piclaw-agent-sessions / 001-namespaced-session-import",
-      "writers": [
-        "runtime/scripts/lib/sqlite-session-archive.ts#SqliteSessionStore.importJsonl",
-        "runtime/scripts/lib/sqlite-session-archive.ts#SqliteSessionStore.appendRawEntry"
-      ],
+      "category": "retired",
+      "initializer": "None; original archive import/append constructors and CLI were removed. Already-native optional objects remain inert.",
+      "writers": [],
       "sourceOfTruth": "Exact imported JSONL header/raw entry bytes, source path/hash/byte/trailing-LF metadata and branch/entry identities. Archive FTS and shadows derive search text from retained imported entries.",
-      "replayRetention": "Same-path same-source-hash import replays without rewriting rows; changed source hash fails. Exact JSONL export and migration/checksum receipts are preserved. Native fresh startup does not instantiate this archive store or authorise cleanup.",
+      "replayRetention": "Preserve exact existing JSONL header/raw entry bytes, FTS/shadows, stable archive identities and original migration/checksum receipts. No archive creation/import/append, backup, conversion, cleanup or execution authority.",
       "references": [
-        "runtime/scripts/lib/sqlite-session-archive.ts",
-        "runtime/test/archive/sqlite-session-archive.test.ts"
+        "runtime/test/fixtures/historical-session-archive.json",
+        "qualification/native/schema-ownership-fixture.ts",
+        "qualification/native/schema-ownership.test.ts"
       ]
     },
     "sqlite:planner-statistics": {
@@ -1130,27 +1126,23 @@
       ]
     },
     "archive:input-authority": {
-      "category": "migration-archive",
-      "initializer": "Historical initializeMessageAuthoritySchema only; current startup does not recreate these objects",
-      "writers": [
-        "runtime/src/db/migration-input-holds.ts"
-      ],
+      "category": "retired",
+      "initializer": "None; historical input-authority producer and unused migration capture/dismissal APIs are removed",
+      "writers": [],
       "sourceOfTruth": "Original input snapshots, execution admission, dismissal and recovery receipts",
       "replayRetention": "Retain all rows and guards. This retirement neither deletes nor replays imported input/authority history.",
       "references": [
         "cdc214fcc06349dc9d315c2d17c866764e4557d5:runtime/src/db/message-authority-schema.ts",
-        "runtime/src/db/migration-input-holds.ts",
+        "runtime/test/fixtures/historical-account-schema.json",
         "docs/development/historical-account-schema-retirement.md"
       ]
     },
     "archive:chat-cursor-state": {
-      "category": "migration-archive",
-      "initializer": "runtime/src/db/chat-cursor-storage.ts#initializeChatCursorStorage",
-      "writers": [
-        "runtime/src/db/chat-cursor-storage.ts (one owned historical upgrade only)"
-      ],
-      "sourceOfTruth": "Exact original legacy cursor table: rowids, polling position, queued bytes/provenance, preflight/inflight/failed-run and compaction fields. Native dispatch neither reads nor writes its execution markers. Explicit legacy capture may refuse unsettled evidence; it never grants execution.",
-      "replayRetention": "Preserve original rows, schema and migration receipts. No pruning, rollback, restore, live DDL or legacy replay is authorised by this read-only inventory. Fresh roots omit this archive. Historical binary rollback requires a separately owned offline procedure; never recreate execution markers from native task observations.",
+      "category": "retired",
+      "initializer": "None; prior already-native archive only, never created by v4 startup",
+      "writers": [],
+      "sourceOfTruth": "Inert original cursor values already retained by older native releases. Current execution neither queries nor rewrites the obsolete markers.",
+      "replayRetention": "Preserve existing raw schema/data/receipts during native reopen and read-only forensic inspection; no current conversion, cleanup, rollback or replay.",
       "references": [
         "runtime/src/db/chat-cursor-storage.ts",
         "runtime/src/runtime/bootstrap.ts",
@@ -1169,6 +1161,31 @@
         "runtime/src/service-effects/current-piclaw/service-work-schema.ts",
         "runtime/src/service-effects/current-piclaw/service-work-store.ts",
         "runtime/durable-engine/src/host-runtime.ts"
+      ]
+    },
+    "retired:cutover-history": {
+      "category": "retired",
+      "initializer": "None; both obsolete runtime DDL definitions and cutover/rollback APIs removed under #2017",
+      "writers": [],
+      "sourceOfTruth": "Inert pre-existing native cutover rows, retained intact in existing stores; no writer or execution authority",
+      "replayRetention": "Fresh v4 stores never create these objects. Native reopening and read-only forensic inventory preserve old objects without DROP, backfill, replay or required placeholder tables.",
+      "references": [
+        "runtime/durable-engine/src/host-schema.ts",
+        "runtime/src/db/store-format.ts"
+      ]
+    },
+    "core:offline-session-history": {
+      "category": "core",
+      "initializer": "Explicit one-shot session-import CLI into a fresh separate destination through the public SDK Session kernel",
+      "writers": [
+        "runtime/durable-engine/src/session-history-import.ts#importSessionHistory"
+      ],
+      "sourceOfTruth": "Read-only selected source history, exact source hash and native source-to-entry/conversation mappings with explicit completed-import counts",
+      "replayRetention": "History only; no tasks/submissions/config/account adoption. Partial destination has no completion document and repeat invocation refuses any existing destination.",
+      "references": [
+        "runtime/durable-engine/src/session-history-import.ts",
+        "runtime/src/session-import/source.ts",
+        "runtime/src/cli.ts"
       ]
     }
   },
@@ -1586,24 +1603,18 @@
       "fingerprints": [
         "dc1ad11db948a8113bedb4ced3670ee6117e9f666a9cd58ee9f9d52d8bc24dbf"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
-      "table": "portainer_configs"
+      "requiredIn": [],
+      "table": "portainer_configs",
+      "requiredWhenOwnerPresent": false
     },
     "index:idx_proxmox_configs_updated_at": {
       "owner": "core:proxmox_configs",
       "fingerprints": [
         "616049b2db241fff3d26d980b5f048386cd7098259f7ecc777edd04864740b60"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
-      "table": "proxmox_configs"
+      "requiredIn": [],
+      "table": "proxmox_configs",
+      "requiredWhenOwnerPresent": false
     },
     "index:idx_scheduled_tasks_created_at": {
       "owner": "core:scheduled_tasks",
@@ -2308,14 +2319,11 @@
       "fingerprints": [
         "7e78d52fb5555ec7d297751a70614cb4a1adfac558073d7fcc3956eb43b19f12"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "540f9502b08715f4190b1b852902292d5332c591bd9639bdb2aaa03dcfea49ac"
-      ]
+      ],
+      "requiredWhenOwnerPresent": false
     },
     "table:extension_kv": {
       "owner": "core:extension_kv",
@@ -2479,15 +2487,17 @@
       "fingerprints": [
         "9cddbc843fee51f1a5d4eccfcefb0db7c7a93038d12bb026e17e615e7bea14cc"
       ],
-      "requiredIn": [
+      "requiredIn": [],
+      "derivedIndexes": [
+        "0901f404348d8c46220f6fb728d2a1d183127690a34264e435f1acc862a31201",
+        "288fd414b5ee592d2ea9710e2559c540eb00e32d8e5fdd1025bddfdde78d3281"
+      ],
+      "optionalIn": [
         "core",
         "native",
         "native-addons"
       ],
-      "derivedIndexes": [
-        "0901f404348d8c46220f6fb728d2a1d183127690a34264e435f1acc862a31201",
-        "288fd414b5ee592d2ea9710e2559c540eb00e32d8e5fdd1025bddfdde78d3281"
-      ]
+      "requiredWhenOwnerPresent": true
     },
     "table:picker_pin_imports": {
       "owner": "core:picker_pin_imports",
@@ -2548,28 +2558,22 @@
       "fingerprints": [
         "3716572a2e953574f796dcd770238747cb3aa9ebb8b9414eb23e4e78da7c761d"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "41298dcc3a243b5aee011307b28bcc0e977ab27635f854e4f8f2f346722c9508"
-      ]
+      ],
+      "requiredWhenOwnerPresent": false
     },
     "table:proxmox_configs": {
       "owner": "core:proxmox_configs",
       "fingerprints": [
         "a7a57d7efc84f97bd3e0042f7f8aeb1d884677a89ca1854b886f0ce396743c6b"
       ],
-      "requiredIn": [
-        "core",
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "41298dcc3a243b5aee011307b28bcc0e977ab27635f854e4f8f2f346722c9508"
-      ]
+      ],
+      "requiredWhenOwnerPresent": false
     },
     "table:router_state": {
       "owner": "core:router_state",
@@ -3820,28 +3824,22 @@
       "requiredWhenOwnerPresent": true
     },
     "table:qualification_cutover_v1": {
-      "owner": "core:native-bindings",
+      "owner": "retired:cutover-history",
       "fingerprints": [
         "081d5492fecc0d29681783ca5a498d801b2dadab48ceb4cb54fd16b925770f09"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "995fd9ed1a55a818dff4a30a9a817d6951c42e6f98787987d056805da21c13f3"
       ],
       "requiredWhenOwnerPresent": true
     },
     "table:qualification_cutover_work_v1": {
-      "owner": "core:native-bindings",
+      "owner": "retired:cutover-history",
       "fingerprints": [
         "8663405a1afc870a286ede3057c26b7940035ddad9dabfc87452007197e70bb5"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "derivedIndexes": [
         "325f7a07b4ba565734b268fc169cace040f369190ffc6e95f495738a88d916ad"
       ],
@@ -4773,6 +4771,13 @@
       "scope": "conversation",
       "history": "latest",
       "fork": "initial"
+    },
+    {
+      "kind": "app.session-history-import",
+      "owner": "core:offline-session-history",
+      "scope": "session",
+      "history": "session singleton",
+      "fork": "not applicable to session-scoped document"
     },
     {
       "kind": "* (public SDK caller-defined document)",

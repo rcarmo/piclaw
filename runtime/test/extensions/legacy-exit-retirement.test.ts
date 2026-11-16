@@ -10,7 +10,7 @@ test('native process control has no second legacy executor or restart-replay dec
   for (const platform of ['linux', 'win32'] as const) expect(getDefaultActiveToolNames(platform)).toContain('exit_process');
   const manifest = readFileSync(new URL('../../src/service-effects/tool-preparation/manifest.ts', import.meta.url), 'utf8');
   expect(manifest).not.toContain('src/extensions/exit-process.ts');
-  const capture = readFileSync(new URL('../../src/agent-pool/legacy-authority-capture.ts', import.meta.url), 'utf8');
-  expect(capture).not.toContain('tool-preparation');
-  expect(capture).not.toContain('createBuiltinExtensionFactories');
+  expect(existsSync(new URL('../../src/agent-pool/legacy-authority-capture.ts', import.meta.url))).toBe(false);
+  const bootstrap = readFileSync(new URL('../../src/runtime/bootstrap.ts', import.meta.url), 'utf8');
+  expect(bootstrap).not.toContain('prepareLegacyMigration');
 });

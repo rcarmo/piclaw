@@ -3,7 +3,6 @@ import { type Storage, type HarnessInspection } from "@earendil-works/pi-durable
 import { withoutAbortSignal, type Context } from "@earendil-works/chord/context";
 import { HostConversationRuntime, isNativeScheduledInput, type AcceptedInput, type RuntimeOptions } from "./host-runtime.js";
 import { reconstituteAcceptedWork } from "./host-recovery.js";
-import type { HostCutoverController } from "./host-cutover.js";
 import { AcceptedReplyThreadUnavailableError } from "./host-message-thread.js";
 import { createLogger } from "../../src/utils/logger.js";
 const log = createLogger("durable.controller");
@@ -44,7 +43,7 @@ export async function createHostController(config: HostControllerOptions, contex
     get: bindings.get.bind(bindings), intents: bindings.intents && Object.freeze({ ...bindings.intents,
       get: bindings.intents.get.bind(bindings.intents) }) });
   let lease: HostOwnership | undefined, storage: Storage | undefined, runtime: HostConversationRuntime | undefined;
-  let closedStorage = false, ready = false, retainOwner = false, released = false;
+  let closedStorage = false, ready = false, released = false;
   async function releaseOwner() {
     assert();
     if (!released) { await lease!.release(); released = true; }
@@ -144,7 +143,7 @@ export async function createHostController(config: HostControllerOptions, contex
   // Start Runtime.open now: its existing snapshot captures runtime ports/options before await.
   // openStorage itself waits for acquisition, so no storage or Harness can precede ownership.
   const opening = HostConversationRuntime.open({ ...r,
-    owner: { assert() { if (lease) assert(); }, async release() { assert(); if (!retainOwner) await releaseOwner(); } },
+    owner: { assert() { if (lease) assert(); }, async release() { assert(); await releaseOwner(); } },
     async openStorage() {
       const acquired = await acquire();
       lease = Object.freeze({ assertCurrentOwner: acquired.assertCurrentOwner.bind(acquired), release: acquired.release.bind(acquired) });
@@ -259,41 +258,8 @@ export async function createHostController(config: HostControllerOptions, contex
       })().finally(() => { retry = undefined; });
       return retry;
     }
-    let rollbackAttempt: Promise<ReturnType<HostCutoverController["rollback"]>> | undefined;
     let closing: Promise<void> | undefined;
-    /** No qualified public storage identity/global historical frontier exists in 1.3.0.
-     * Current history/tasks/submissions/documents are insufficient: retired latest-only
-     * documents disappear from scans. Never persist those snapshots as a rollback proof.
-     * No caller boolean/hash or host-only checkpoint can authorize this factory path. */
-    async function checkpointCutover(_cutover: HostCutoverController): Promise<never> {
-      assert();
-      throw new Error("Candidate progress proof unavailable: public storage identity and historical commit frontier required");
-    }
-    /** Explicit inactive composition, one attempt only. Seal/join/inspect under the actual
-     * owner, then fail BEFORE closing storage if historical proof is unavailable.
-     * The independent host-only controller remains usable by its existing fixtures. */
-    function rollback(cutover: Pick<HostCutoverController, "prepareRollback" | "rollback">, _revision: number) {
-      if (rollbackAttempt || closing) return Promise.reject(new Error("Controller already closing"));
-      // Preserve entry-time getter/bind validation before sealing or consuming the attempt.
-      cutover.prepareRollback.bind(cutover); cutover.rollback.bind(cutover);
-      retainOwner = true; // Synchronous: even a concurrent runtime.close cannot release the lease.
-      return rollbackAttempt = (async () => {
-        assert();
-        return activeRuntime.quiesceForRollback(async () => {
-          assert();
-          throw new Error("Candidate progress proof unavailable: public storage identity and historical commit frontier required");
-        });
-      })();
-    }
-    function close(): Promise<void> {
-      return closing ??= (async () => {
-        // Explicit abort after a failed SQL rollback may release only confirmed closed storage.
-        // Unknown/pending work or failed cleanup retains the owner and the cached failure.
-        if (rollbackAttempt) await rollbackAttempt.catch(() => {});
-        await activeRuntime.close();
-        if (retainOwner && !released && closedStorage) await releaseOwner();
-      })();
-    }
+    function close(): Promise<void> { return closing ??= activeRuntime.close(); }
     let maintenanceAttempt: Promise<{ compacted: boolean }> | undefined;
     function resumeRecoveredMaintenance() {
       assert();
@@ -302,7 +268,7 @@ export async function createHostController(config: HostControllerOptions, contex
       return maintenanceAttempt = activeRuntime.recoverMaintenance({ ...maintenance.binding, incarnation }, maintenance.taskId)
         .then(result => { maintenance = undefined; return result; });
     }
-    return Object.freeze({ runtime, recovered, reconcileRecovered, get recoveredMaintenanceChat() { return maintenance?.binding.chatJid; }, resumeRecoveredMaintenance, checkpointCutover, rollback,
+    return Object.freeze({ runtime, recovered, reconcileRecovered, get recoveredMaintenanceChat() { return maintenance?.binding.chatJid; }, resumeRecoveredMaintenance,
       async addConversation<T extends Recovery["binding"]>(create: Parameters<typeof activeRuntime.addConversation<T>>[0], beforeCommit?: () => void) {
         assert();
         const binding = await activeRuntime.addConversation(create, beforeCommit); assert();

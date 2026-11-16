@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { collectModuleSpecifiers } from "./fixtures/typescript-syntax-oracle.js";
 import { readRepositorySourceTree } from "./fixtures/repository-tool-family-oracle.js";
@@ -43,6 +43,6 @@ describe("1.0.1 runtime / retired Harness boundary", () => {
     const dependencies = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
     expect(JSON.stringify(dependencies.dependencies)).not.toContain("pi-durable");
     expect(JSON.stringify(dependencies.dependencies)).not.toContain("0.99.1");
-    expect(readFileSync(resolve(root, "runtime/src/agent-pool/session.ts"), "utf8")).not.toMatch(/AgentHarness|Pico3/);
+    expect(existsSync(resolve(root, "runtime/src/agent-pool/session.ts"))).toBe(false);
   });
 });

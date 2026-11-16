@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, writeFileSync } from "node:fs";
 import { initDatabase, getDb, closeDatabase, getDatabaseBinding } from "../../src/db/connection.js";
 import { isSqliteContention } from "../../src/db/sqlite-async-admission.js";
+import { UnsupportedStoreFormat } from "../../src/db/store-format.js";
 import { assertPathWithinTestFilesystemIsolation } from "../../scripts/test-filesystem-isolation.js";
 const [ready, go, resume] = process.argv.slice(2);
 for (const path of [ready, go, resume]) assertPathWithinTestFilesystemIsolation(path, process.env, { allowRoot: false });
@@ -22,8 +23,9 @@ writeFileSync(ready, "ready"); await wait(go);
 let outcome = "ready";
 try { initDatabase(); verify(); }
 catch (error) {
-  if (!isSqliteContention(error)) throw error;
-  outcome = "busy";
+  if (error instanceof UnsupportedStoreFormat) outcome = "refused-unstamped";
+  else if (isSqliteContention(error)) outcome = "busy";
+  else throw error;
   assert.throws(() => getDb(), /not initialized/); assert.equal(getDatabaseBinding(), null);
 } finally { await closeDatabase({ shrinkMemory: false }); }
 writeFileSync(ready + ".attempt", JSON.stringify({ outcome }));

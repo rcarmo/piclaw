@@ -9,9 +9,6 @@ import { BunSqliteDatabase } from "../../runtime/durable-engine/src/bun-sqlite.j
 import { createSession, defineDocFamily } from "../../runtime/durable-engine/qualification/durable.ts";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
 import { BACKGROUND_CONTEXT } from "../../runtime/durable-engine/qualification/context.ts";
-import { prepareHistoricalAccountCopy, applyHistoricalAccountCopy } from "../../runtime/scripts/lib/historical-account-copies.js";
-import { snapshotHistoricalDatabase } from "../../runtime/scripts/lib/historical-account-retirement.js";
-import historicalAccounts from "../../runtime/test/fixtures/historical-account-schema.json";
 import { join } from "node:path";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
 import { assertSchemaInventory, readSchemaInventory, type SchemaContract } from "../../runtime/scripts/lib/schema-ownership.js";
@@ -41,6 +38,7 @@ applicationTest("fresh core inventory owns every object and exact FTS shadow wit
     expect(db.query("SELECT * FROM piclaw_schema_migrations ORDER BY owner,migration_order").all()).toEqual(receipts);
     expect(readSchemaInventory(db)).toEqual(readSchemaInventory(db));
     expect(db.query("SELECT name FROM main.sqlite_schema WHERE name GLOB 'budget_*'").all()).toEqual([]);
+    expect(db.query("SELECT name FROM main.sqlite_schema WHERE name IN ('message_input_snapshots','message_execution_authorities','migration_input_holds','migration_input_dismissals','access_input_migration','owned_fork_operations')").all()).toEqual([]);
     // Classify preserved historical objects without recreating them at startup.
     installHistoricalExpenseFixture(db);
     const historicalSchema=db.query('SELECT * FROM sqlite_schema ORDER BY type,name').all();
@@ -87,7 +85,7 @@ for (const addons of [false, true]) applicationTest(`complete native startup inv
   } finally { await fixture.close(); }
 });
 
-applicationTest("historical core upgrade classifies its one approved spelling difference and retained archive", async () => {
+applicationTest("existing native schema preserves archived identities and bytes without in-place conversion", async () => {
   const before = await seedHistoricalSchemaFixture();
   process.env.PICLAW_DB_IN_MEMORY = "0";
   initDatabase();
@@ -100,10 +98,11 @@ applicationTest("historical core upgrade classifies its one approved spelling di
     expect(archive.every(object => object.presence === "optional-preserved")).toBe(true);
     expect(db.query("SELECT * FROM piclaw_agent_sessions").all()).toEqual(before.sessions);
     expect(db.query("SELECT * FROM piclaw_agent_entries ORDER BY entry_seq").all()).toEqual(before.entries);
+    expect(db.query("SELECT * FROM owned_fork_operations ORDER BY request_id").all()).toEqual(before.ownedForks);
     expect(db.query("SELECT * FROM piclaw_schema_migrations WHERE owner='piclaw-agent-sessions'").all()).toEqual(before.receipts);
     expect(db.query('SELECT rowid,* FROM host_legacy_chat_cursor_state_v1 ORDER BY rowid').all()).toEqual(before.cursors);
     expect((db.query('PRAGMA main.table_info(chat_cursors)').all() as {name:string}[]).map(row=>row.name)).toEqual(['chat_jid','cursor_ts','queued_followups_json']);
-    expect(db.query('SELECT rowid,* FROM chat_cursors ORDER BY rowid').all()).toEqual(before.cursors.map((row:any)=>({rowid:row.rowid,chat_jid:row.chat_jid,cursor_ts:row.cursor_ts,queued_followups_json:row.queued_followups_json})));
+    expect(db.query('SELECT rowid,* FROM chat_cursors ORDER BY rowid').all()).toEqual(before.polling);
     const cursorReceipts = db.query("SELECT * FROM piclaw_schema_migrations WHERE owner='host.chat-cursors'").all();
     expect(cursorReceipts).toHaveLength(1);
     expect(result.objects.filter(object=>object.owner==='archive:chat-cursor-state').every(object=>object.presence==='optional-preserved')).toBe(true);
@@ -136,10 +135,11 @@ applicationTest("historical core upgrade classifies its one approved spelling di
     expect(getDb().query("SELECT * FROM piclaw_schema_migrations WHERE owner='piclaw-agent-sessions'").all()).toEqual(before.receipts);
     expect(getDb().query("SELECT * FROM piclaw_schema_migrations WHERE owner='host.chat-cursors'").all()).toEqual(cursorReceipts);
     expect(getDb().query('SELECT rowid,* FROM host_legacy_chat_cursor_state_v1 ORDER BY rowid').all()).toEqual(before.cursors);
+    expect(getDb().query('SELECT * FROM owned_fork_operations ORDER BY request_id').all()).toEqual(before.ownedForks);
   } finally { await closeDatabase(); }
 });
 
-applicationTest("offline historical retirement preserves real SDK document families and approved add-on schemas", async () => {
+applicationTest("native reopen preserves real SDK document families, archived input records and approved add-on schemas", async () => {
   const fixture = await openNativeSchemaFixture(true);
   await fixture.close();
   const path = join(process.env.PICLAW_STORE!, "messages.db");
@@ -161,25 +161,25 @@ applicationTest("offline historical retirement preserves real SDK document famil
   await withSdk(path, async (session, db) => {
     await session.commit(async tx => { await tx.doc(Family, "retained-key", { value: "retain SDK family discriminator" }); }, BACKGROUND_CONTEXT);
     expect(await session.snapshot(Family, "retained-key", BACKGROUND_CONTEXT)).toEqual({ value: "retain SDK family discriminator" });
-    for (const batch of historicalAccounts) db.exec(batch.sql);
+    db.exec(readFileSync(new URL('../../runtime/test/fixtures/historical-input-authority.sql', import.meta.url), 'utf8'));
+    const owner = (db.query('SELECT id FROM users ORDER BY id LIMIT 1').get() as {id:string}).id;
+    db.query('INSERT INTO migration_input_holds VALUES(?,?,?,?,?,?,?,?)').run(7,'retained-input','web:default',owner,'now','hash','original source provenance','now');
   });
   const source = new Database(path, { readonly: true, strict: true, safeIntegers: true });
-  let before: string, docs: unknown[];
+  let docs: unknown[], archived: unknown[], schema: ReturnType<typeof readSchemaInventory>, receipts: unknown[];
   try {
-    before = snapshotHistoricalDatabase(source, true);
     docs = source.query("SELECT * FROM documents ORDER BY id").all();
+    archived = source.query("SELECT * FROM migration_input_holds ORDER BY message_rowid").all();
+    schema = readSchemaInventory(source);
+    receipts = source.query("SELECT * FROM piclaw_schema_migrations ORDER BY owner,id").all();
     expect(source.query("SELECT 1 FROM documents WHERE family=1").get()).not.toBeNull();
   } finally { source.close(); }
-  const directory = join(process.env.PICLAW_WORKSPACE!, "historical-retirement");
-  const plan = prepareHistoricalAccountCopy(path, directory);
-  expect(plan.blocked).toEqual([]);
-  expect(plan.expectedPhysicalTables).toBe(42);
-  const result = applyHistoricalAccountCopy(directory, plan.sha256);
-  expect(result.expectedPhysicalTables).toBe(42);
-  await withSdk(join(directory, "candidate.db"), async (session, db) => {
+  await withSdk(path, async (session, db) => {
     expect(await session.snapshot(Family, "retained-key", BACKGROUND_CONTEXT)).toEqual({ value: "retain SDK family discriminator" });
     expect(db.query("SELECT * FROM documents ORDER BY id").all()).toEqual(docs!);
-    expect(snapshotHistoricalDatabase(db, true)).toBe(before!);
+    expect(db.query("SELECT * FROM migration_input_holds ORDER BY message_rowid").all()).toEqual(archived!);
+    expect(readSchemaInventory(db)).toEqual(schema!);
+    expect(db.query("SELECT * FROM piclaw_schema_migrations ORDER BY owner,id").all()).toEqual(receipts!);
     const classified = assertSchemaInventory(readSchemaInventory(db), contract, "native-addons");
     expect(classified.errors).toEqual([]);
     expect(classified.objects.some(o => o.owner === "addon:code-review")).toBe(true);

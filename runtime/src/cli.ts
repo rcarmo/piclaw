@@ -28,7 +28,7 @@ Usage:
   piclaw [options]
   piclaw --post <chat_jid> <message>
   piclaw keychain <command> [args]
-  piclaw access-migration preview|prepare-copy|promote-copy [args]
+  piclaw session-import --source <v3.jsonl> --destination <fresh-v4.sqlite> [--leaf <entry-id>]
 
 Options:
   -h, --help                 Show this help
@@ -66,7 +66,7 @@ function getFlagValue(args: string[], flag: string): string | undefined {
   return value;
 }
 
-const CLI_SUBCOMMANDS = new Set(["keychain"]);
+const CLI_SUBCOMMANDS = new Set(["keychain", "session-import"]);
 const RUNTIME_FLAGS_WITH_VALUES = new Set([
   "-w",
   "--workspace",
@@ -232,6 +232,25 @@ async function handleKeychainCommand(args: string[]): Promise<void> {
   }
 }
 
+/** Explicit offline session history only; never starts the product runtime or
+ * selects a resident store. The importer exclusively creates the destination. */
+async function handleSessionImportCommand(args: string[]): Promise<void> {
+  let sourceFile: string | undefined, destinationFile: string | undefined;
+  const leaves: string[] = [];
+  for (let i = 0; i < args.length; i += 2) {
+    const flag = args[i], value = args[i + 1];
+    if (!value || value.startsWith('--')) throw Error('session-import requires values for --source, --destination and --leaf');
+    if (flag === '--source' && sourceFile === undefined) sourceFile = value;
+    else if (flag === '--destination' && destinationFile === undefined) destinationFile = value;
+    else if (flag === '--leaf') leaves.push(value);
+    else throw Error('Unknown or duplicate session-import option');
+  }
+  if (!sourceFile || !destinationFile) throw Error('session-import requires explicit --source and --destination');
+  const modulePath = new URL('../durable-engine/src/session-history-import.ts', import.meta.url).href;
+  const importer = await import(modulePath);
+  console.log(JSON.stringify(await importer.importSessionHistory({ sourceFile, destinationFile, ...(leaves.length ? { leaves } : {}) })));
+}
+
 /** Parse CLI args for sub-commands. Returns true if a sub-command was handled. */
 export async function handleCliOptions(args = process.argv.slice(2)): Promise<boolean> {
   if (args.includes("-h") || args.includes("--help")) {
@@ -253,6 +272,11 @@ export async function handleCliOptions(args = process.argv.slice(2)): Promise<bo
       console.error((error as Error).message);
       return true;
     }
+    return true;
+  }
+  if (commandArgs[0] === 'session-import') {
+    try { await handleSessionImportCommand(commandArgs.slice(1)); }
+    catch (error) { console.error((error as Error).message); process.exitCode = 1; }
     return true;
   }
   if (commandArgs[0] === "keychain") {

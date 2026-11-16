@@ -13,6 +13,12 @@ import type { AgentAbortCause } from "./abort-provenance.js";
 import type { PiclawCredentialStore } from "./credential-store.js";
 import type { ProtectedRecoveryHandoffMetadata } from "./protected-recovery-handoff-reason.js";
 
+/** Read-only inventory entry for already-held host resources; never a factory. */
+export interface PoolEntry {
+  runtime: AgentSessionRuntime;
+  lastUsed: number;
+}
+
 export type AgentFailureCategory =
   | "rate_limit"
   | "auth_config"
@@ -137,8 +143,6 @@ export interface NativeDreamRequest {
 
 /** Construction options for creating an AgentPool. */
 export interface AgentPoolOptions {
-  /** Trusted explicit historical resident-capture/test composition, never native fallthrough. */
-  legacyCapture?: true;
   prepareInterruptedScheduledHarness?: import("./durable-runtime-adapter.js").PrepareInterruptedScheduledHarness;
   dispatchDreamOperation?: (request:NativeDreamRequest)=>Promise<AgentOutput>;
   /** Application-owned native slash commands; never constructs a legacy session. */

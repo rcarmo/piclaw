@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import { AgentPool } from "../../src/agent-pool.js";
+import { initDatabase } from "../../src/db/connection.js";
+import { createAgentPoolModelOptions } from "../model-services-fixture.js";
 import { createShutdownHandler } from "../../src/runtime/shutdown.js";
 import { SchedulerStoreReleaseError } from "../../src/task-scheduler.js";
 import { addLogSink, removeLogSink, type LogRecord } from "../../src/utils/logger.js";
@@ -36,7 +39,7 @@ test("web admission seals synchronously and joins before pollers or queue dispos
     expect(calls).toEqual(['seal']);
     await Promise.resolve(); expect(calls).toEqual(['seal']);
     release.resolve(); await pending;
-    expect(calls).toEqual(['seal', 'message', 'scheduler', 'queue', 'pool', 'web-stop', 'certificate']);
+    expect(calls).toEqual(['seal', 'message', 'scheduler', 'queue', 'web-stop', 'pool', 'certificate']);
   } finally { release.resolve(); exit.mockRestore(); }
 });
 
@@ -74,7 +77,7 @@ test("queue join rejection stops disposal even after known post-join store failu
   } finally { timer.mockRestore(); exit.mockRestore(); }
 });
 
-test("known post-join store release failure permits disposal but never certifies completion", async () => {
+test("known post-join store release failure permits transport disposal but retains native owner registrations", async () => {
   const calls: string[] = [];
   const failure = new SchedulerStoreReleaseError(new Error("store release failed"));
   const shutdown = createShutdownHandler({
@@ -88,7 +91,8 @@ test("known post-join store release failure permits disposal but never certifies
   const error = await shutdown("test").catch(error => error);
   expect(error).toBeInstanceOf(AggregateError);
   expect(error.errors).toEqual([failure]);
-  expect(calls).toEqual(["queue", "pool", "web"]);
+  // Queue joined, but failed store release does not confirm native backend cleanup.
+  expect(calls).toEqual(["queue", "web"]);
 });
 
 test("uncertain poll join failure does not dispose potentially live resources", async () => {
@@ -186,7 +190,7 @@ test("shutdown joins scheduler admission before disposing queue or agent pool", 
     expect(calls).toEqual(["ipc", "scheduler-start"]);
     await Promise.resolve(); expect(calls).not.toContain("queue");
     release.resolve(); await shuttingDown;
-    expect(calls).toEqual(["ipc", "scheduler-start", "scheduler-joined", "providers", "queue", "agents", "web", "exit"]);
+    expect(calls).toEqual(["ipc", "scheduler-start", "scheduler-joined", "providers", "queue", "web", "agents", "exit"]);
   } finally { release.resolve(); await shuttingDown; exit.mockRestore(); }
 });
 
@@ -235,7 +239,9 @@ test("registered shutdown handler arms its deadline before extensible hooks", as
   expect(forced.elapsed).toBeLessThan(9000);
   expect(result.elapsed).toBeGreaterThanOrEqual(6100);
   expect(result.elapsed).toBeLessThan(7500);
-  expect(result.calls).toEqual(["later-hook-started", "ipc", "scheduler", "providers", "queue", "agents", "web"]);
+  // Failed pre-shutdown cleanup permits transport disposal but cannot release
+  // native model/SSH registrations before confirmed application cleanup.
+  expect(result.calls).toEqual(["later-hook-started", "ipc", "scheduler", "providers", "queue", "web"]);
 }, 10_000);
 
 test('failed or hung cleanup cannot disarm the operator process deadline', async () => {
@@ -250,4 +256,29 @@ test('failed or hung cleanup cannot disarm the operator process deadline', async
     expect(backstops).toHaveLength(1);
     backstops[0]!.run();expect(exit).toHaveBeenCalledWith(0);
   }finally{clear.mockRestore();exit.mockRestore();}
+});
+
+for (const fails of [false,true]) test(`native backend ${fails ? "uncertain" : "confirmed"} close gates host registration release without legacy manager ownership`, async () => {
+  initDatabase(); const pool=new AgentPool(createAgentPoolModelOptions());
+  const bridge=(globalThis as any).__piclawRuntimeInterop, selected=bridge.getModelRegistry;
+  const entered=Promise.withResolvers<void>(), close=Promise.withResolvers<void>();
+  let closes=0, certificates=0;
+  const failure=Error("uncertain native cleanup"), exit=spyOn(process,"exit").mockImplementation((()=>{}) as any);
+  const shutdown=createShutdownHandler({stopIpcWatcher:async()=>{},stopSchedulerLoop:()=>{},stopOptionalProviders:()=>{},queue:{shutdown:async()=>{}},agentPool:pool,web:{stop:async()=>{}},
+    closeApplicationBackend:async()=>{closes++;entered.resolve();await close.promise;},onShutdownComplete:()=>{certificates++;}});
+  const pending=shutdown("test");
+  try {
+    await entered.promise; expect(bridge.getModelRegistry).toBe(selected); expect(pool).not.toHaveProperty("sessionManager");
+    if(fails){
+      close.reject(failure);await expect(pending).rejects.toBe(failure);
+      expect(bridge.getModelRegistry).toBe(selected);expect(certificates).toBe(0);expect(exit).not.toHaveBeenCalled();
+      await shutdown("repeat");expect(closes).toBe(1);expect(bridge.getModelRegistry).toBe(selected);
+    }else{
+      close.resolve();await pending;expect(bridge.getModelRegistry).toBeUndefined();expect(certificates).toBe(1);expect(exit).toHaveBeenCalledTimes(1);
+    }
+  }finally{
+    close.resolve();const [cleanup]=await Promise.allSettled([pending]);
+    await pool.shutdown();exit.mockRestore();
+    if(cleanup.status==='rejected')expect(cleanup.reason).toBe(failure);
+  }
 });

@@ -15,7 +15,7 @@ test.skipIf(pkg.dependencies['@earendil-works/pi-coding-agent']!=='1.0.3')('exac
  expect(resolved.sort()).toEqual(family.map(name=>name+'@1.0.3').sort());
  expect(parsed.workspaces[''].dependencies['@earendil-works/chord']).toBe('1.0.3');
  expect(pkg.dependencies['pi-mcp-adapter']).toBe('github:piclaw-bot/pi-mcp-adapter#dddfcf630508f42c169889c11dee94e69b746e7c');
- const session=readFileSync(resolve(root,'runtime/src/agent-pool/session.ts'),'utf8');expect(session).toContain('initializeOnLoad: false');expect(session).toContain('resolveRuntimeEnv');
+ const session=Object.values(JSON.parse(readFileSync(resolve(root,'runtime/test/fixtures/retired-session-composition.json'),'utf8'))).join('\n');expect(session).toContain('initializeOnLoad: false');expect(session).toContain('resolveRuntimeEnv');
  for(const factory of ['createMcpExtension','createToolSearchExtension','createCodemodeExtension'])expect(session).not.toContain(factory);
  expect(typeof createMcpExtension).toBe('function');expect(typeof createToolSearchExtension).toBe('function');expect(typeof createCodemodeExtension).toBe('function');
 });
@@ -35,5 +35,5 @@ test('Harness/Pico3 activation and Piclaw service-effect ownership remain unchan
  expect(historicalHarnessEvidence.authority.harnessActivation).toBe('latent_only');
  expect(historicalHarnessEvidence.experimentalPico3.productionImport).toBe(false);expect(historicalHarnessEvidence.experimentalPico3.productionActivation).toBe(false);
  expect(historicalHarnessEvidence.currentRuntime.productionImport).toBe(false);expect(historicalHarnessEvidence.currentRuntime.productionActivation).toBe(false);
- const session=readFileSync(resolve(root,'runtime/src/agent-pool/session.ts'),'utf8');expect(session).not.toMatch(/AgentHarness|Pico3/);
+ const session=Object.values(JSON.parse(readFileSync(resolve(root,'runtime/test/fixtures/retired-session-composition.json'),'utf8'))).join('\n');expect(session).not.toMatch(/AgentHarness|Pico3/);
 });

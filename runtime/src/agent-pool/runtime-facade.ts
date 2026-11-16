@@ -6,9 +6,7 @@
  */
 
 import { revokeAddonLocalAgent } from "../addons/local-context.js";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
-import type { AgentSession, ModelRegistry, ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";
+import type { ModelRegistry, ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { getSupportedThinkingLevels, type Api, type Model, type Provider } from "@earendil-works/pi-ai";
 
 import type { AgentControlCommand, AgentControlResult } from "../agent-control/index.js";
@@ -16,65 +14,24 @@ import { getNativeCommandCatalogue } from "../agent-control/native-control-capab
 import type { NativeProviderAuthContext } from "../agent-control/provider-auth-context.js";
 import type { DurableSessionPositionPort } from "./durable-runtime-adapter.js";
 import { getLatestTokenUsageModel } from "../db.js";
-import { requireOwnedSessionExecution } from "./owned-session-access.js";
-import { getSessionThinkingPolicy } from './thinking-policy.js';
+import type { getSessionThinkingPolicy } from './thinking-policy.js';
 
-import { SESSIONS_DIR } from "../core/config.js";
 import { detectChannel } from "../router.js";
 import { peekProviderUsage, peekProviderUsageForRuntime, warmProviderUsage, type ProviderUsageSnapshot } from "./provider-usage.js";
 import { resolveModelLabel } from "../utils/model-utils.js";
 import { resolveModelScope } from "../utils/scoped-models.js";
 import { withChatContext } from "../core/chat-context.js";
-import { sanitiseJid } from "./session-paths.js";
-import type { PoolEntry } from "./session-manager.js";
+import type { PoolEntry } from "./contracts.js";
 import { readAccessConfig } from "../core/config-access.js";
 import { getExecutionIdentity } from "../core/execution-context.js";
 import { createLogger } from "../utils/logger.js";
 import { requestGracefulShutdown } from "../runtime/shutdown-registry.js";
-
-const MAX_PERSISTED_MODEL_STATE_CACHE_CHATS = 512;
-const persistedModelStateCache = new Map<string, {
-  signature: string;
-  current: string | null;
-  thinkingLevel: string | null;
-}>();
 
 /** Direct session mutations have no owner-aware admission contract yet. */
 function requireSingleUserDirectExecution(label: string): void {
   const mode = readAccessConfig().mode;
   const identity = getExecutionIdentity();
   if (mode !== "single-user" || (identity && identity.mode !== "single-user")) throw new Error(`${label} is unavailable in multi-user mode.`);
-}
-
-function setPersistedModelStateCache(
-  chatJid: string,
-  value: { signature: string; current: string | null; thinkingLevel: string | null },
-): void {
-  if (persistedModelStateCache.has(chatJid)) {
-    persistedModelStateCache.delete(chatJid);
-  }
-  persistedModelStateCache.set(chatJid, value);
-  while (persistedModelStateCache.size > MAX_PERSISTED_MODEL_STATE_CACHE_CHATS) {
-    const oldestKey = persistedModelStateCache.keys().next().value as string | undefined;
-    if (!oldestKey) break;
-    persistedModelStateCache.delete(oldestKey);
-  }
-}
-
-function getMostRecentSessionFile(sessionDir: string): string | null {
-  try {
-    const files = readdirSync(sessionDir)
-      .filter((entry) => entry.endsWith(".jsonl"))
-      .map((entry) => ({ fullPath: join(sessionDir, entry), entry }))
-      .map((file) => ({
-        ...file,
-        mtimeMs: statSync(file.fullPath).mtimeMs,
-      }))
-      .sort((left, right) => right.mtimeMs - left.mtimeMs);
-    return files[0]?.fullPath ?? null;
-  } catch {
-    return null;
-  }
 }
 
 function normalizeTokenUsageModelLabel(value: string | null | undefined): string | null {
@@ -174,66 +131,6 @@ function getLatestTokenUsageModelForStatus(chatJid: string): ReturnType<typeof g
     if (error instanceof Error && (error.message === "Database not initialized" || error.message.includes("closed database"))) return null;
     throw error;
   }
-}
-
-function getPersistedSessionState(chatJid: string): { current: string | null; thinkingLevel: string | null } {
-  const sessionDir = join(SESSIONS_DIR, sanitiseJid(chatJid));
-  if (!existsSync(sessionDir)) {
-    persistedModelStateCache.delete(chatJid);
-    return { current: null, thinkingLevel: null };
-  }
-
-  const fullPath = getMostRecentSessionFile(sessionDir);
-  if (!fullPath) {
-    persistedModelStateCache.delete(chatJid);
-    return { current: null, thinkingLevel: null };
-  }
-  let signature: string;
-  try {
-    const stat = statSync(fullPath);
-    signature = `${fullPath}:${stat.size}:${Math.round(stat.mtimeMs)}`;
-  } catch {
-    persistedModelStateCache.delete(chatJid);
-    return { current: null, thinkingLevel: null };
-  }
-
-  const cached = persistedModelStateCache.get(chatJid);
-  if (cached?.signature === signature) {
-    return { current: cached.current, thinkingLevel: cached.thinkingLevel };
-  }
-
-  let current: string | null = null;
-  let thinkingLevel: string | null = null;
-  try {
-    const lines = readFileSync(fullPath, "utf8").split(/\r?\n/);
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      let entry: any;
-      try {
-        entry = JSON.parse(trimmed);
-      } catch {
-        continue;
-      }
-      if (entry?.type === "model_change" && typeof entry.provider === "string" && typeof entry.modelId === "string") {
-        current = `${entry.provider}/${entry.modelId}`;
-        continue;
-      }
-      if (entry?.type === "thinking_level_change" && typeof entry.thinkingLevel === "string") {
-        thinkingLevel = entry.thinkingLevel;
-        continue;
-      }
-      if (entry?.type === "message" && entry.message?.role === "assistant" && typeof entry.message?.provider === "string" && typeof entry.message?.model === "string") {
-        current = `${entry.message.provider}/${entry.message.model}`;
-      }
-    }
-  } catch {
-    current = null;
-    thinkingLevel = null;
-  }
-
-  setPersistedModelStateCache(chatJid, { signature, current, thinkingLevel });
-  return { current, thinkingLevel };
 }
 
 function modelCostRate(value: unknown): number | null {
@@ -681,32 +578,20 @@ export class AgentRuntimeFacade {
     chatJid: string,
     options: { includeProviderUsage?: boolean; includeProviderDiagnostics?: boolean; includeCatalogue?: boolean } = {},
   ): Promise<AvailableModelsResult> {
-    // Legacy-session metadata retains its old label projection. Native handles
-    // use the pinned SDK's canonical capability keys without aliases.
-    const legacy = this.options.getDurableSession === undefined ? await import('../agent-control/agent-control-helpers.js') : null;
-    // Passive UI refreshes should not hydrate a cold runtime just to render
-    // model state for the picker.
-    const session = this.options.getDurableSession === undefined ? this.options.pool.get(chatJid)?.runtime.session ?? null : null;
     const durable = this.getDurableSession(chatJid);
-    if (this.options.getDurableSession !== undefined && !durable?.readState && !durable?.readModel) throw new Error("Durable session model unavailable");
+    if (!durable?.readState && !durable?.readModel) throw new Error("Durable session model unavailable");
     const durableState = durable?.readState ? await durable.readState() : null;
-    const persistedState = this.options.getDurableSession !== undefined
-      ? durableState ? { current: durableState.model, thinkingLevel: durableState.thinkingLevel }
-        : { current: await durable!.readModel!(), thinkingLevel: await durable!.readThinkingLevel?.() ?? null }
-      : session ? { current: null, thinkingLevel: null } : getPersistedSessionState(chatJid);
-    const registry = (session as (AgentSession & { modelRegistry?: ModelRegistry }) | null)?.modelRegistry ?? this.options.modelRegistry;
-    const scopedModels = resolveModelScope(
-      registry.getAvailable(),
-      (session as (AgentSession & { settingsManager?: SettingsManager }) | null)?.settingsManager ?? this.options.settingsManager,
-    );
+    const persistedState = durableState ? { current: durableState.model, thinkingLevel: durableState.thinkingLevel }
+      : { current: await durable!.readModel!(), thinkingLevel: await durable!.readThinkingLevel?.() ?? null };
+    const scopedModels = resolveModelScope(this.options.modelRegistry.getAvailable(), this.options.settingsManager);
     const available = scopedModels.models;
-    const currentModel = session?.model ? `${session.model.provider}/${session.model.id}` : persistedState.current;
+    const currentModel = persistedState.current;
     // Status polling needs only the current model, not a catalogue projection.
     const selected = options.includeCatalogue === false
       ? available.filter(model => `${model.provider}/${model.id}` === currentModel)
       : available;
     const modelOptions = selected.map((model) => {
-      const thinkingLevels = legacy ? legacy.getAvailableThinkingLevelsForModel(model as Model<any>) : getSupportedThinkingLevels(model as Model<any>);
+      const thinkingLevels = getSupportedThinkingLevels(model as Model<any>);
       return {
         label: `${model.provider}/${model.id}`,
         provider: model.provider,
@@ -726,23 +611,16 @@ export class AgentRuntimeFacade {
           : null,
         reasoning: Boolean(model.reasoning),
         thinking_levels: thinkingLevels,
-        thinking_level_labels: legacy ? thinkingLevels.map(level => legacy.formatThinkingLevelForDisplay(level, model)) : thinkingLevels,
+        thinking_level_labels: thinkingLevels,
       };
     });
     const models = modelOptions.map((model) => model.label);
     const currentModelOption = currentModel ? modelOptions.find((model) => model.label === currentModel) ?? null : null;
-    const currentModelDescriptor = session?.model
-      ?? (currentModel ? available.find((model) => `${model.provider}/${model.id}` === currentModel) ?? null : null);
-    const thinkingLevel = session?.thinkingLevel ?? persistedState.thinkingLevel ?? null;
-    const supportsThinking = session && typeof (session as AgentSession & { supportsThinking?: () => boolean }).supportsThinking === "function"
-      ? (session as AgentSession & { supportsThinking: () => boolean }).supportsThinking()
-      : Boolean(currentModelDescriptor?.reasoning);
-    const baseThinkingLevels = session && typeof (session as AgentSession & { getAvailableThinkingLevels?: () => string[] }).getAvailableThinkingLevels === 'function'
-      ? (session as AgentSession & { getAvailableThinkingLevels: () => string[] }).getAvailableThinkingLevels() : undefined;
-    const availableThinkingLevels: string[] = currentModelDescriptor
-      ? legacy ? legacy.getAvailableThinkingLevelsForModel(currentModelDescriptor, baseThinkingLevels) : getSupportedThinkingLevels(currentModelDescriptor)
-      : legacy ? baseThinkingLevels ?? ['off'] : [];
-    const activeProvider = session?.model?.provider ?? currentModelOption?.provider ?? null;
+    const currentModelDescriptor = currentModel ? available.find(model => `${model.provider}/${model.id}` === currentModel) ?? null : null;
+    const thinkingLevel = persistedState.thinkingLevel ?? null;
+    const supportsThinking = Boolean(currentModelDescriptor?.reasoning);
+    const availableThinkingLevels: string[] = currentModelDescriptor ? getSupportedThinkingLevels(currentModelDescriptor) : [];
+    const activeProvider = currentModelOption?.provider ?? null;
     const includeProviderUsage = options.includeProviderUsage !== false;
     const providerUsage = includeProviderUsage && activeProvider
       ? await peekProviderUsageForRuntime(this.options.modelRuntime, activeProvider, { allowStale: true })
@@ -761,11 +639,11 @@ export class AgentRuntimeFacade {
       models,
       model_options: modelOptions,
       thinking_level: thinkingLevel,
-      thinking_level_label: legacy && thinkingLevel ? legacy.formatThinkingLevelForDisplay(thinkingLevel, currentModelDescriptor) : thinkingLevel,
-      thinking_policy: session ? getSessionThinkingPolicy(session) : null,
+      thinking_level_label: thinkingLevel,
+      thinking_policy: null,
       supports_thinking: supportsThinking,
       available_thinking_levels: availableThinkingLevels,
-      available_thinking_level_labels: legacy ? availableThinkingLevels.map(level => legacy.formatThinkingLevelForDisplay(level, currentModelDescriptor)) : availableThinkingLevels,
+      available_thinking_level_labels: availableThinkingLevels,
       provider_usage: providerUsage,
       latest_requested_model: latestRequestedModel,
       latest_response_model: latestResponseModel,
@@ -830,33 +708,19 @@ export class AgentRuntimeFacade {
     /** Unknown counts from this reader must not be replaced by stored estimates. */
     tokensAreAuthoritative?: true;
   } | null> {
-    if (this.options.getDurableSession !== undefined) {
-      const binding = this.getDurableSession(chatJid);
-      if (!binding) throw new Error("Durable application does not construct legacy sessions");
-      return this.readDurableContextUsage(binding);
-    }
-    const entry = this.options.pool.get(chatJid);
-    if (!entry) return null;
-    const session = entry.runtime.session;
-    const sessionGeneration = typeof session.sessionId === "string" ? session.sessionId.trim() : "";
-    const usage = session.getContextUsage() ?? null;
-    if (!sessionGeneration) return usage;
-    return usage
-      ? { ...usage, sessionGeneration }
-      : { tokens: null, contextWindow: session.model?.contextWindow ?? 0, percent: null, sessionGeneration };
+    const binding = this.getDurableSession(chatJid);
+    if (!binding) throw new Error("Durable application does not construct legacy sessions");
+    return this.readDurableContextUsage(binding);
   }
 
   getSessionGenerationForChat(chatJid: string): string | null {
-    const sessionId = this.options.getDurableSession !== undefined
-      ? this.getDurableSession(chatJid)?.sessionId
-      : this.options.pool.get(chatJid)?.runtime.session.sessionId;
+    const sessionId = this.getDurableSession(chatJid)?.sessionId;
     return typeof sessionId === "string" && sessionId.trim() ? sessionId.trim() : null;
   }
 
   /** Exact public head and visible node count, from the same tree reader as /tree. */
   async getSessionTreeSummaryForChat(chatJid: string): Promise<{ leafId: string | null; total: number } | null> {
     // Legacy introspection must not instantiate an idle/unknown session.
-    if (this.options.getDurableSession === undefined && !this.options.pool.has(chatJid)) return null;
     const snapshot = await this.getSessionTreeForChat(chatJid);
     return { leafId: snapshot.leafId, total: snapshot.total };
   }

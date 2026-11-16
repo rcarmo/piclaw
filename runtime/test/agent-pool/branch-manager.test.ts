@@ -1,11 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
-import { writeFileSync } from "fs";
+import { writeFileSync, readFileSync } from "fs";
 
 import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { join } from "path";
-import { ensureSessionDir } from "../../src/agent-pool/session.js";
+import { ensureSessionDir } from "../../src/agent-pool/session-paths.js";
 import { AgentBranchManager } from "../../src/agent-pool/branch-manager.js";
-import { hasDeferredBranchSeed } from "../../src/agent-pool/branch-seeding.js";
 import { createTempWorkspace, importFresh, setEnv } from "../helpers.js";
 
 let restoreEnv: (() => void) | null = null;
@@ -229,7 +228,8 @@ test("AgentBranchManager archives inactive branches without executing legacy ses
 
   const fixture = createManager();
   fixture.pool.set("web:default:branch:prune", { runtime: createRuntime(session), lastUsed: Date.now() });
-  writeFileSync(join(ensureSessionDir("web:default:branch:prune"), ".branch-seed.json"), JSON.stringify({
+  const historicalSeed=join(ensureSessionDir("web:default:branch:prune"), ".branch-seed.json");
+  writeFileSync(historicalSeed, JSON.stringify({
     version: 1,
     parentSession: null,
     sessionName: "Prune Me",
@@ -238,13 +238,12 @@ test("AgentBranchManager archives inactive branches without executing legacy ses
     mode: "rotated_context",
   }), "utf8");
 
+  const before=readFileSync(historicalSeed);
   const archived = await fixture.manager.pruneChatBranch("web:default:branch:prune");
   expect(archived.archived_at).toBeTruthy();
   expect(fixture.pool.has("web:default:branch:prune")).toBe(true);
-  // The deferred seed must survive prune — it is the only persisted copy of
-  // the forked context until the session is realized, and restoreChatBranch()
-  // must be able to pick it back up.
-  expect(hasDeferredBranchSeed("web:default:branch:prune")).toBe(true);
+  // Metadata archival preserves old file bytes without a deferred replay owner.
+  expect(readFileSync(historicalSeed)).toEqual(before);
   expect(disposed).toBe(0);
 
   ws.cleanup();

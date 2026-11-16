@@ -4,7 +4,7 @@ import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { SqliteStorage } from "@earendil-works/pi-durable/storage/sqlite";
 import type { SubmissionId } from "@earendil-works/pi-durable";
 import type { RecoverySubmissionState } from "../../scripts/lib/native-recovery-references.js";
-import { RehearsalSqliteDatabase } from "./rehearsal-sqlite.js";
+import { BunSqliteDatabase } from "./bun-sqlite.js";
 
 /** Read public Storage submission records from an owned disposable copy. No
  * Harness, scheduling, models, providers, auth or host/add-on execution exists.
@@ -15,7 +15,7 @@ export async function inspectRecoverySubmissions(snapshot: string, ids: readonly
   const temporary=mkdtempSync(join(parent,"native-submission-inspection-"));
   const candidate=join(temporary,"candidate.sqlite");
   copyFileSync(snapshot,candidate,constants.COPYFILE_EXCL);
-  const database=new RehearsalSqliteDatabase(candidate);
+  const database=new BunSqliteDatabase(candidate, undefined, { create: false, checkpoint: "builtin" });
   let storage:SqliteStorage|undefined;
   const result=new Map<number,RecoverySubmissionState>();
   try {

@@ -8,8 +8,7 @@
     "./default-application-runtime": "./src/default-application-runtime.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json",
-    "rehearse": "bun src/rehearse.ts"
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@earendil-works/chord": "1.5.2",

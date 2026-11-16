@@ -8,7 +8,11 @@ import { resolve } from "node:path";
 
 for (const native of [true, false]) test(`retired direct prompt boundary cannot execute or bookkeep (native=${native})`, async () => {
   initDatabase(); let factoryCalls=0, optionReads=0;
-  const pool=new AgentPool({...(native?createAgentPoolModelOptions():createLegacyCapturePoolOptions()),
+  if (!native) {
+    expect(() => new AgentPool({...createLegacyCapturePoolOptions(), createSession:async()=>{factoryCalls++;throw Error("Retired legacy factory reached");}})).toThrow('Resident legacy capture was removed');
+    expect(factoryCalls).toBe(0); return;
+  }
+  const pool=new AgentPool({...createAgentPoolModelOptions(),
     createSession:async()=>{factoryCalls++;throw Error("Retired legacy factory reached");}});
   try {
     const before=getDb().serialize();

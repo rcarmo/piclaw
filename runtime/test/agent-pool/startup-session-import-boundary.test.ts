@@ -23,6 +23,12 @@ function staticGraph(entry: string): Set<string> {
   return visited;
 }
 
+test("legacy execution constructor and cold-session CLI are absent; bounded source reader remains", () => {
+  for (const file of ["session-archive.ts","agent-pool/session-persistence.ts","agent-pool/session-node-modules-link.ts","agent-pool/retired-provider-selection.ts","agent-pool/session.ts","../scripts/benchmark-cold-session.ts"])
+    expect(existsSync(resolve(source, file))).toBe(false);
+  expect(existsSync(resolve(source, "session-import/source.ts"))).toBe(true);
+});
+
 // Public SDK definitions/resources remain allowed. Native startup must not
 // evaluate LOCAL retired execution/replay or lifecycle composition modules.
 // Legacy compatibility deliberately retains its separate session load fence.
@@ -48,21 +54,20 @@ for (const mode of ["durable", "legacy"] as const) {
       const { initDatabase } = await import(source + "/db.ts");
       initDatabase();
       const mode = ${JSON.stringify(mode)};
-      const pool = new AgentPool(mode === "durable" ? createAgentPoolModelOptions() : createLegacyCapturePoolOptions());
-      try {
-        if (attempts.length) throw new Error("Construction evaluated a forbidden local module");
-        if (mode === "durable") {
-          try { await pool.getSessionForIntrospection("web:load-boundary"); throw new Error("Expected durable rejection"); }
-          catch (error) { if (!String(error).includes("Durable application does not construct legacy sessions")) throw error; }
-          if ('runAgent' in pool) throw Error('Retired direct runner API remains');
-          if (attempts.length) throw new Error("Durable lookup evaluated a forbidden local module");
-        } else {
-          try { await pool.getSessionForIntrospection("web:load-boundary"); throw new Error("Expected load fence rejection"); }
-          catch (error) { if (!String(error).includes("LOCAL_CONSTRUCTION_FENCE:")) throw error; }
-          if (!attempts.includes(source + "/agent-pool/session.ts")) throw new Error("Legacy getOrCreate did not reach the live fence");
-        }
+      if (mode === "legacy") {
+        try { new AgentPool(createLegacyCapturePoolOptions()); throw Error("Retired selector unexpectedly accepted"); }
+        catch (error) { if (!String(error).includes("Resident legacy capture was removed")) throw error; }
+        if (attempts.length) throw Error("Retired selector evaluated a legacy module");
         console.log(JSON.stringify({ mode, attempts }));
-      } finally { await pool.shutdown(); }
+      } else {
+        const pool = new AgentPool(createAgentPoolModelOptions());
+        try {
+          try { await pool.getSessionForIntrospection("web:load-boundary"); throw Error("Expected native rejection"); }
+          catch (error) { if (!String(error).includes("Durable application does not construct legacy sessions")) throw error; }
+          if ('runAgent' in pool || attempts.length) throw Error("Native construction evaluated a retired execution module");
+          console.log(JSON.stringify({ mode, attempts }));
+        } finally { await pool.shutdown(); }
+      }
     `;
     try {
       const child = Bun.spawn([process.execPath, "--eval", script], {
@@ -84,9 +89,7 @@ for (const mode of ["durable", "legacy"] as const) {
       expect({ exitCode, stderr: exitCode ? stderr : "" }).toEqual({ exitCode: 0, stderr: "" });
       const result = JSON.parse(stdout.trim().split("\n").at(-1)!);
       expect(result.mode).toBe(mode);
-      expect(result.attempts).toEqual(mode === "durable" ? [] : [
-        resolve(source, "agent-pool/session.ts"),
-      ]);
+      expect(result.attempts).toEqual([]);
     } finally { rmSync(root, { recursive: true, force: true }); }
   }, 30000);
 }

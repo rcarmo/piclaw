@@ -13,7 +13,17 @@ export function projectPublicHistory(rows: readonly EntryRecord[], binding: Lega
   const nodes: RootSessionTreeNode[] = [];
   let parentId: string | null = null;
   for (const [index, row] of rows.entries()) {
-    const original = mapped.get(row.id);
+    let original = mapped.get(row.id);
+    if (row.kind === 'app.imported-history') {
+      const source = (row.data as { sourceEntry?: Record<string, unknown> } | undefined)?.sourceEntry;
+      if (!source || typeof source.id !== 'string' || typeof source.type !== 'string') throw Error('Invalid native imported history');
+      original = source;
+      if (source.type === 'message') {
+        const message = source.message as { role?: unknown } | undefined;
+        if (message?.role === 'system') { if (row.model?.length) throw Error('Historical system state must remain inert'); continue; }
+        if (row.model?.length !== 1 || !isDeepStrictEqual(row.model[0], source.message)) throw Error('Native imported history projection conflict');
+      } else if (row.model?.length) throw Error('Historical metadata must remain inert');
+    }
     const next = rows[index + 1];
     const audit = rows[index - 1];
     const nextOriginal = next && mapped.get(next.id);
@@ -50,7 +60,7 @@ export function projectPublicHistory(rows: readonly EntryRecord[], binding: Lega
       if (!supported.includes(String(original.type))) throw new Error(`Unsupported durable imported entry: ${original.type}`);
       // Metadata comes from immutable provenance; public ID remains navigation/position identity.
       entry = { ...original, ...base, type: String(original.type) };
-    } else if (["pi.user", "pi.assistant", "pi.tool-result", "app.legacy-message", "host.accepted", "host.bash"].includes(row.kind) || recentCopy) {
+    } else if (["pi.user", "pi.assistant", "pi.tool-result", "app.legacy-message", "app.imported-history", "host.accepted", "host.bash"].includes(row.kind) || recentCopy) {
       if (row.model?.length !== 1) throw new Error(`Unsupported durable message count: ${row.kind}`);
       const message = row.model[0]!;
       if (!["user", "assistant", "toolResult"].includes(message.role)) throw new Error(`Unsupported durable message role: ${message.role}`);

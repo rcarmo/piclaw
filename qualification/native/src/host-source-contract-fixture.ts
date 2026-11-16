@@ -2,13 +2,15 @@ import "./test-guard.js";
 import { createInputHandoffCompletion } from "../../../runtime/durable-engine/src/host-bindings.js";
 import check from "node:assert/strict";
 import { join, basename } from "node:path";
+import { existsSync, writeFileSync } from 'node:fs';
+import { Database } from 'bun:sqlite';
 import { STORE_DIR } from "../../../runtime/src/core/config.js";
 import { SqliteStorage, SQLITE_MIGRATIONS } from "../../../runtime/durable-engine/qualification/sqlite.ts";
 import { HostConversationRuntime, initializeHostDurableBindings, createHostDurableBindings, type AcceptedInput } from "../../../runtime/durable-engine/src/index.js";
 import { TestOwner, OwnedSqlite } from "./ownership.js";
 import { openFixture, context, barrier } from "./fixture.js";
 import { at, value } from "./host-handoff.js";
-import { initDatabase, getDb, closeDatabase } from "../../../runtime/src/db/connection.js";
+import { initDatabase, getDb, closeDatabase, initializeDatabaseSchema } from "../../../runtime/src/db/connection.js";
 import { installTerminalSettlementCompositionSchema } from "../../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js";
 import { createCurrentPiclawServiceWorkStore } from "../../../runtime/src/service-effects/current-piclaw/service-work-store.js";
 import { createCurrentPiclawTerminalSettlementStore } from "../../../runtime/src/service-effects/current-piclaw/terminal-settlement-store.js";
@@ -24,7 +26,12 @@ export async function hostSourceContractFixture(dir: string, boundary: "before-s
     const chatJid = `web:recovery:${basename(dir)}:${boundary}`;
     const hostPath = join(STORE_DIR, "messages.db");
     const path = testConfig.sharedDatabase ? hostPath : join(dir, "candidate.sqlite");
-    let owner = TestOwner.acquire(path); // Shared mode owns the root file BEFORE either runtime connection opens.
+    if (testConfig.sharedDatabase && !existsSync(path)) {
+      const fresh = new Database(':memory:');
+      try { initializeDatabaseSchema(fresh); writeFileSync(path, fresh.serialize(), { flag: 'wx' }); }
+      finally { fresh.close(); }
+    }
+    let owner = TestOwner.acquire(path); // Shared mode owns the prepared native fixture BEFORE every SDK opening.
     owner.assert();
     initDatabase();
     let db = getDb();
@@ -39,7 +46,6 @@ export async function hostSourceContractFixture(dir: string, boundary: "before-s
       // A same-file restart (or an earlier shared fixture) already has the SDK schema.
       if (!rootNames.has("durable_schema")) check.deepEqual(sdkNames.filter(name => rootNames.has(name)), [], "Public SDK default schema collides with root schema; use public SqliteStorageOptions.prefix before opening");
     }
-    const rootSchemaMigrations = db.query("SELECT * FROM core_schema_migrations ORDER BY name").all();
     let candidateDatabase: OwnedSqlite;
     const openStorage = () => {
       candidateDatabase = new OwnedSqlite(owner, { foreignKeys: testConfig.sharedDatabase });
@@ -129,7 +135,6 @@ get ports() { return ports; }, set ports(v) { ports = v; },
 get runtime() { return runtime; }, set runtime(v) { runtime = v; },
 get candidateStorage() { return candidateStorage; }, set candidateStorage(v) { candidateStorage = v; },
 get candidateDatabase() { return candidateDatabase; },
-rootSchemaMigrations,
 get providerEntries() { return providerEntries; }, set providerEntries(v) { providerEntries = v; },
 get entryObserved() { return entryObserved; }, set entryObserved(v) { entryObserved = v; },
 get ackLost() { return ackLost; }, set ackLost(v) { ackLost = v; },

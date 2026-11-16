@@ -30,19 +30,13 @@ const definitions = [
       UNIQUE(domain,incarnation,chat_jid,source_seq), UNIQUE(domain,incarnation,submission_id),
       CHECK(conversation_id > 0 AND source_seq > 0), CHECK(submission_id IS NULL OR submission_id > 0)
     )`,
-  `CREATE TABLE IF NOT EXISTS qualification_cutover_v1 (
-    domain TEXT PRIMARY KEY, identity TEXT NOT NULL, request_hash TEXT NOT NULL, manifest TEXT NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS qualification_cutover_work_v1 (
-    domain TEXT NOT NULL REFERENCES qualification_cutover_v1(domain), operation_id TEXT NOT NULL,
-    content_hash TEXT NOT NULL, PRIMARY KEY(domain,operation_id))`,
 ] as const;
-export const hostDurableTableNames = ["piclaw_durable_bindings_v1", "piclaw_durable_intent_bindings_v1",
-  "qualification_cutover_v1", "qualification_cutover_work_v1"] as const;
+export const hostDurableTableNames = ["piclaw_durable_bindings_v1", "piclaw_durable_intent_bindings_v1"] as const;
 const names = hostDurableTableNames;
 export class UnsupportedHostSchemaError extends Error {
   constructor() { super("Unsupported host schema"); this.name = "UnsupportedHostSchemaError"; }
 }
-// Deliberately bounded to these four exact v1 definitions, including PK/UNIQUE/CHECK/FK.
+// Deliberately bounded to these two exact native v1 definitions, including PK/UNIQUE/CHECK/FK.
 // A different shape requires an explicit migration, not a best-effort DDL upgrade.
 const normalized = (sql: string) => sql.toLowerCase().replace(/if\s+not\s+exists/g, "").replace(/[\s;]/g, "");
 export function assertHostSchema(db: Database, indices: readonly number[] = [0, 1]): void {
@@ -93,19 +87,20 @@ export function migrateHostAcceptedPayloadLookup(db: Database, ownerguard: () =>
   db.transaction(() => applyRecoveryIndex(db, owner)).immediate();
 }
 export function initializeHostSchemaTables(db: Database, ownerguard: () => void, indices: readonly number[]): void {
+  if (indices.some(i => i !== 0 && i !== 1)) throw new UnsupportedHostSchemaError();
   const owner = schemaOwner(db, ownerguard);
   db.transaction(() => initializeTables(db, owner, indices)).immediate();
 }
 /** Explicit OFFLINE initialization only; caller owns an FK-enabled host connection. */
 export function initializeHostSchema(db: Database, ownerguard: () => void): void {
-  initializeHostSchemaTables(db, ownerguard, [0, 1, 2, 3]);
+  initializeHostSchemaTables(db, ownerguard, [0, 1]);
 }
 /** Bootstrap yields only before writer acquisition; entered schema work is never replayed. */
 export async function prepareHostSchema(db: Database, ownerguard: () => void, offlineInitialize: boolean,
   signal?: AbortSignal, assertBinding: () => void = () => {}): Promise<void> {
   const owner = schemaOwner(db, ownerguard);
   await admitSqliteWrite(db, () => {
-    if (offlineInitialize) initializeTables(db, owner, [0, 1, 2, 3]);
+    if (offlineInitialize) initializeTables(db, owner, [0, 1]);
     else { assertHostSchema(db); applyRecoveryIndex(db, owner); }
   }, owner, signal, undefined, () => { owner(); assertSchemaConnection(db); assertBinding(); });
 }

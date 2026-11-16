@@ -58,7 +58,7 @@ export function createAgentPoolModelOptions(models: any[] = []): Pick<AgentPoolO
   return { credentialStore: createTestCredentialStore(), modelRuntime: createTestModelRuntime(models), getDurableSession:()=>undefined };
 }
 
-/** Explicit resident SDK capture/resource fixtures only; never native admission. */
-export function createLegacyCapturePoolOptions(models:any[]=[]):Pick<AgentPoolOptions,'credentialStore'|'modelRuntime'|'getDurableSession'|'legacyCapture'>{
-  return {...createAgentPoolModelOptions(models),getDurableSession:undefined,legacyCapture:true};
+/** Rejected legacy selector fixture only; never native authority or construction. */
+export function createLegacyCapturePoolOptions(models:any[]=[]): Pick<AgentPoolOptions, 'credentialStore' | 'modelRuntime' | 'getDurableSession'> & { legacyCapture: true } {
+  return {...createAgentPoolModelOptions(models), getDurableSession: undefined, legacyCapture: true};
 }

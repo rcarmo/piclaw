@@ -12,7 +12,7 @@ import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { getAttachmentRegistry } from "../../src/agent-pool/attachments.js";
 import { createTempWorkspace, getTestWorkspace, importFresh, setEnv } from "../helpers.js";
-import { createLegacyCapturePoolOptions,createAgentPoolModelOptions } from "../model-services-fixture.js";
+import { createAgentPoolModelOptions } from "../model-services-fixture.js";
 
 let restoreEnv: (() => void) | null = null;
 
@@ -69,7 +69,7 @@ test("agent pool exposes the shared model registry and active scoped models to s
 
   const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
   const model = { provider: "free", id: "zero", cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
-  const options = createLegacyCapturePoolOptions([model]);
+  const options = { ...createAgentPoolModelOptions([model]), getDurableSession: (chat: string) => chat === "web:cheapskate" ? { sessionId: "session-cheapskate", branchId: "main", readPosition: async () => null } as any : undefined };
   const physicalStream = { marker: "physical-stream" };
   (options.modelRuntime as any).streamSimple = (streamModel: unknown, context: unknown, streamOptions: unknown) => {
     expect(streamModel).toBe(model);
@@ -140,7 +140,7 @@ test("agent pool aggregates content-free session resource counts", async () => {
 
   const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
   const pool = new AgentPool({
-    ...createLegacyCapturePoolOptions(),
+    ...createAgentPoolModelOptions(),
     createSession: async () => { throw new Error("unused"); },
   });
   const sessionFile = join(ws.data, "instrumentation-session.jsonl");
@@ -181,315 +181,22 @@ test("agent pool stores SSH config for future sessions when no live SSH session 
   storeChatMetadata("web:other", "2026-10-23T00:00:00.000Z", "SSH target fixture");
   const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
 
-  let pool: any;
   let createCalls = 0;
-  let disposed = 0;
-
-  class StubSession {
-    private listeners: Array<(event: any) => void> = [];
-    isStreaming = false;
-    isBashRunning = false;
-    isCompacting = false;
-    subscribe(listener: (event: any) => void) {
-      this.listeners.push(listener);
-      return () => {};
-    }
-    async prompt() { throw Error("No legacy prompt"); }
-    async abort() {}
-    dispose() {
-      disposed += 1;
-    }
-  }
-
-  pool = new AgentPool({
-    ...createLegacyCapturePoolOptions(),
-    createSession: async () => {
-      createCalls += 1;
-      return createRuntime(new StubSession()) as any;
-    },
-  });
-
-  await pool.getSessionForIntrospection("web:default");
+  const pool = new AgentPool({ ...createAgentPoolModelOptions(), createSession: async () => { createCalls++; throw Error("Legacy session factory forbidden"); } });
+  await expect(pool.getSessionForIntrospection("web:default")).rejects.toThrow("does not construct legacy sessions");
   const result = await pool.setSshConfig("web:other", { ssh_target: "agent@example.com:/srv/project", ssh_port: 22, private_key_keychain: "ssh-prod", known_hosts_keychain: null, strict_host_key_checking: "yes" });
-  expect(result.apply_timing).toBe("next_session");
-  expect(getSshConfig("web:other")?.ssh_target).toBe("agent@example.com:/srv/project");
-  expect(disposed).toBe(0);
-  expect((pool as any).pool.has("web:default")).toBe(true);
-
-  await pool.getSessionForIntrospection("web:default");
-  expect(createCalls).toBe(1);
-
+  expect(result.apply_timing).toBe("next_session"); expect(getSshConfig("web:other")?.ssh_target).toBe("agent@example.com:/srv/project");
+  expect(createCalls).toBe(0); expect((pool as any).pool.has("web:default")).toBe(false);
   await pool.shutdown();
 });
 
-test("agent pool evicts idle sessions and recreates them", async () => {
-  const ws = getTestWorkspace();
-  restoreEnv = setEnv({
-    PICLAW_WORKSPACE: ws.workspace,
-    PICLAW_STORE: ws.store,
-    PICLAW_DATA: ws.data,
-    PICLAW_TURN_AUTO_RECOVERY_ENABLED: "0",
-  });
-
+test("native pool exposes no legacy cache/GC/session recreation owner", async () => {
   const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
-
-  let createCalls = 0;
-  let disposed = 0;
-
-  class StubSession {
-    subscribe(_listener: (event: any) => void) {
-      return () => {};
-    }
-    async prompt(_prompt: string) {}
-    async abort() {}
-    dispose() {
-      disposed += 1;
-    }
-  }
-
-  const pool = new AgentPool({
-    ...createLegacyCapturePoolOptions(),
-    createSession: async () => {
-      createCalls += 1;
-      return createRuntime(new StubSession()) as any;
-    },
-  });
-
-  await pool.getSessionForIntrospection("web:default");
-  expect(createCalls).toBe(1);
-
-  const entry = (pool as any).pool.get("web:default");
-  entry.lastUsed = Date.now() - 16 * 60 * 1000;
-  (pool as any).evictIdle();
-
-  await Bun.sleep(0); // Disposal is registered before its callback executes.
-  expect(disposed).toBe(1);
-  expect((pool as any).pool.has("web:default")).toBe(false);
-
-  await pool.getSessionForIntrospection("web:default");
-  expect(createCalls).toBe(2);
-
-  await pool.shutdown();
-});
-
-test("agent pool cleanup timer applies the shorter memory-pressure idle TTL", async () => {
-  const ws = getTestWorkspace();
-  restoreEnv = setEnv({
-    PICLAW_WORKSPACE: ws.workspace,
-    PICLAW_STORE: ws.store,
-    PICLAW_DATA: ws.data,
-    PICLAW_MAIN_SESSION_PRESSURE_RSS_BYTES: "1",
-    PICLAW_MAIN_SESSION_PRESSURE_IDLE_TTL_MS: "1",
-    PICLAW_MAIN_SESSION_PRESSURE_POOL_MAX_SIZE: "2",
-  });
-
-  const originalSetInterval = globalThis.setInterval;
-  const originalClearInterval = globalThis.clearInterval;
-  let cleanupCallback: (() => void) | null = null;
-
-  (globalThis as any).setInterval = ((handler: TimerHandler) => {
-    cleanupCallback = handler as () => void;
-    return 1 as any;
-  }) as typeof setInterval;
-  (globalThis as any).clearInterval = (() => {}) as typeof clearInterval;
-
+  const pool = new AgentPool(createAgentPoolModelOptions());
   try {
-    const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
-
-    let disposed = 0;
-    class StubSession {
-      subscribe(_listener: (event: any) => void) {
-        return () => {};
-      }
-      async prompt(_prompt: string) {}
-      async abort() {}
-      dispose() {
-        disposed += 1;
-      }
-    }
-
-    const pool = new AgentPool({
-    ...createLegacyCapturePoolOptions(),
-      createSession: async () => createRuntime(new StubSession()) as any,
-    });
-
-    expect(cleanupCallback).not.toBeNull();
-
-    (pool as any).pool.set("web:one", { runtime: createRuntime(new StubSession()) as any, lastUsed: Date.now() - 10 });
-    (pool as any).pool.set("web:two", { runtime: createRuntime(new StubSession()) as any, lastUsed: Date.now() });
-
-    cleanupCallback?.();
-    await Bun.sleep(0);
-
-    expect((pool as any).pool.has("web:one")).toBe(false);
-    expect((pool as any).pool.has("web:two")).toBe(true);
-    expect(pool.getMemoryInstrumentationSnapshot().cachedMainSessions).toBe(1);
-    expect(disposed).toBe(1);
-
-    await pool.shutdown();
-  } finally {
-    globalThis.setInterval = originalSetInterval;
-    globalThis.clearInterval = originalClearInterval;
-  }
-});
-
-test("agent pool coalesces forced GC and defers it until protected work is idle", async () => {
-  const ws = getTestWorkspace();
-  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data, PICLAW_MAIN_SESSION_PRESSURE_RSS_BYTES: "1" });
-  const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
-  const pool = new AgentPool({ ...createLegacyCapturePoolOptions(), createSession: async () => { throw Error("unused"); } });
-  const originalGc = Bun.gc;
-  let collections = 0;
-  Bun.gc = (() => { collections++; return 0; }) as typeof Bun.gc;
-  const release = (pool as any).sessionManager.acquireEvictionProtection("web:busy");
-  try {
-    (pool as any).evictIdle();
-    expect(collections).toBe(0);
-    release();
-    (pool as any).evictIdle();
-    expect(collections).toBe(1);
-    (pool as any).evictIdle();
-    (pool as any).evictIdle();
-    expect(collections).toBe(1);
-  } finally { Bun.gc = originalGc; release(); await pool.shutdown(); }
-});
-
-test("agent pool applies the pressure pool cap immediately after acquiring a second session", async () => {
-  const ws = getTestWorkspace();
-  restoreEnv = setEnv({
-    PICLAW_WORKSPACE: ws.workspace,
-    PICLAW_STORE: ws.store,
-    PICLAW_DATA: ws.data,
-    PICLAW_MAIN_SESSION_PRESSURE_RSS_BYTES: "1",
-    PICLAW_MAIN_SESSION_PRESSURE_POOL_MAX_SIZE: "1",
-    PICLAW_TURN_AUTO_RECOVERY_ENABLED: "0",
-  });
-
-  const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
-
-  let disposed = 0;
-  class StubSession {
-    subscribe(_listener: (event: any) => void) {
-      return () => {};
-    }
-    async prompt(_prompt: string) {}
-    async abort() {}
-    dispose() {
-      disposed += 1;
-    }
-  }
-
-  const pool = new AgentPool({
-    ...createLegacyCapturePoolOptions(),
-    createSession: async () => createRuntime(new StubSession()) as any,
-  });
-
-  await pool.getSessionForIntrospection("web:one");
-  expect((pool as any).pool.has("web:one")).toBe(true);
-
-  await pool.getSessionForIntrospection("web:two");
-
-  expect((pool as any).pool.has("web:one")).toBe(false);
-  expect((pool as any).pool.has("web:two")).toBe(true);
-  expect(pool.getMemoryInstrumentationSnapshot().cachedMainSessions).toBe(1);
-  expect(disposed).toBe(1);
-
-  await pool.shutdown();
-});
-
-test("agent pool enables the default pressure trim path at the 512MB threshold", async () => {
-  const ws = getTestWorkspace();
-  restoreEnv = setEnv({
-    PICLAW_WORKSPACE: ws.workspace,
-    PICLAW_STORE: ws.store,
-    PICLAW_DATA: ws.data,
-    PICLAW_MAIN_SESSION_PRESSURE_RSS_BYTES: undefined,
-    PICLAW_MAIN_SESSION_PRESSURE_POOL_MAX_SIZE: undefined,
-    PICLAW_MAIN_SESSION_POOL_MAX_SIZE: undefined,
-    PICLAW_SESSION_POOL_MAX_SIZE: undefined,
-  });
-
-  const originalMemoryUsageRss = process.memoryUsage.rss;
-  (process.memoryUsage as typeof process.memoryUsage & { rss: () => number }).rss = () => 520 * 1024 * 1024;
-
-  try {
-    const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
-
-    let disposed = 0;
-    class StubSession {
-      subscribe(_listener: (event: any) => void) {
-        return () => {};
-      }
-      async prompt(_prompt: string) {}
-      async abort() {}
-      dispose() {
-        disposed += 1;
-      }
-    }
-
-    const pool = new AgentPool({
-    ...createLegacyCapturePoolOptions(),
-      createSession: async () => createRuntime(new StubSession()) as any,
-    });
-
-    (pool as any).pool.set("web:one", { runtime: createRuntime(new StubSession()) as any, lastUsed: Date.now() - 5_000 });
-    (pool as any).pool.set("web:two", { runtime: createRuntime(new StubSession()) as any, lastUsed: Date.now() });
-
-    (pool as any).evictIdle();
-    await Bun.sleep(0);
-
-    expect((pool as any).pool.has("web:one")).toBe(false);
-    expect((pool as any).pool.has("web:two")).toBe(true);
-    expect(pool.getMemoryInstrumentationSnapshot().cachedMainSessions).toBe(1);
-    expect(disposed).toBe(1);
-
-    await pool.shutdown();
-  } finally {
-    (process.memoryUsage as typeof process.memoryUsage & { rss: typeof originalMemoryUsageRss }).rss = originalMemoryUsageRss;
-  }
-});
-
-test("agent pool trims cached main sessions more aggressively when RSS crosses the pressure threshold", async () => {
-  const ws = getTestWorkspace();
-  restoreEnv = setEnv({
-    PICLAW_WORKSPACE: ws.workspace,
-    PICLAW_STORE: ws.store,
-    PICLAW_DATA: ws.data,
-    PICLAW_MAIN_SESSION_PRESSURE_RSS_BYTES: "1",
-    PICLAW_MAIN_SESSION_PRESSURE_POOL_MAX_SIZE: "1",
-  });
-
-  const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
-
-  let disposed = 0;
-  class StubSession {
-    subscribe(_listener: (event: any) => void) {
-      return () => {};
-    }
-    async prompt(_prompt: string) {}
-    async abort() {}
-    dispose() {
-      disposed += 1;
-    }
-  }
-
-  const pool = new AgentPool({
-    ...createLegacyCapturePoolOptions(),
-    createSession: async () => createRuntime(new StubSession()) as any,
-  });
-
-  (pool as any).pool.set("web:one", { runtime: createRuntime(new StubSession()) as any, lastUsed: Date.now() - 5_000 });
-  (pool as any).pool.set("web:two", { runtime: createRuntime(new StubSession()) as any, lastUsed: Date.now() });
-
-  (pool as any).evictIdle();
-  await Bun.sleep(0);
-
-  expect((pool as any).pool.has("web:one")).toBe(false);
-  expect((pool as any).pool.has("web:two")).toBe(true);
-  expect(pool.getMemoryInstrumentationSnapshot().cachedMainSessions).toBe(1);
-  expect(disposed).toBe(1);
-
-  await pool.shutdown();
+    for (const name of ["evictIdle", "getOrCreateRuntime", "getOrCreate", "memoryReclamation", "cleanupTimer", "sessionManager"]) expect(pool).not.toHaveProperty(name);
+    await expect(pool.getSessionForIntrospection("web:default")).rejects.toThrow("does not construct legacy sessions");
+  } finally { await pool.shutdown(); }
 });
 
 test("agent pool forwards native side options without hydrating legacy sessions", async () => {
@@ -559,12 +266,8 @@ test("agent pool refuses to prune an active branch session", async () => {
     dispose() {}
   }
 
-  const pool = new AgentPool({
-    ...createLegacyCapturePoolOptions(),
-    createSession: async () => createRuntime(new ActiveBranchSession()) as any,
-  });
-
-  await (pool as any).getOrCreate("web:default:branch:active");
+  const pool = new AgentPool(createAgentPoolModelOptions());
+  (pool as any).pool.set("web:default:branch:active", { runtime: createRuntime(new ActiveBranchSession()), lastUsed: Date.now() });
 
   await expect((pool as any).pruneChatBranch("web:default:branch:active")).rejects.toThrow(
     "Cannot prune a branch while it is active."

@@ -72,6 +72,7 @@ import { createHostImapTool, type ImapNativeExports } from "./host-imap-tool.js"
 import { infrastructurePrompt, infrastructureLifecycle } from "./host-addon-prompts.js";
 import { createPlanTool } from "./plan-tool.js";
 import { readLegacyPlan } from "../../src/plan/legacy.js";
+import { readCompletedSessionImport } from "./session-history-import-record.js";
 import { parsePlanMarkdown, type SessionPlan } from "../../src/plan/markdown.js";
 import { createHostOperationAuthority } from "./host-operation-authority.js";
 import { hashCanonicalRequest } from "../../src/service-effects/contracts/common.js";
@@ -190,16 +191,15 @@ function readBackgroundPayloadText(ref:string):string|undefined {
 }
 
 /** Validate persisted SDK storage, conversation identities and execution routes. */
-export function assertFreshApplicationHistory(root: ReturnType<typeof getDb>, sessionsDir: string): void {
-  const files = existsSync(sessionsDir) ? readdirSync(sessionsDir, { recursive: true, withFileTypes: true }) : [];
-  if (files.some(file => file.isFile())) throw Error("Durable startup requires migration: legacy session files exist; no files were imported or reset");
+export function assertNativeApplicationHistory(root: ReturnType<typeof getDb>): void {
   const exists = (name: string) => !!root.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name);
   const sdkTables = ["durable_schema", "durable_metadata", "record_ids", "conversations", "entries", "tasks", "submissions", "documents", "document_revisions"];
   let mapping: ApplicationMapping | undefined;
   if (sdkTables.some(exists)) {
-    if (!sdkTables.every(exists)) throw Error("Durable startup requires migration: partial SDK storage");
+    if (!sdkTables.every(exists)) throw Error("Unsupported partial native store; use a fresh separate destination");
     const docs = root.query("SELECT id FROM documents WHERE kind='\"app.application-conversations\"' AND scope_kind='conversation' AND owner_id=1 AND retired_at IS NULL").all() as { id: number }[];
-    if (docs.length !== 1) throw Error("Invalid durable application conversation manifest: migration required");
+    if (docs.length === 0 && readCompletedSessionImport(root)) return;
+    if (docs.length !== 1) throw Error("Invalid native application manifest or incomplete import");
     const revisions = root.query("SELECT kind, version, content FROM document_revisions WHERE document_id=? ORDER BY seq").all(docs[0]!.id) as { kind: string; version: number; content: string }[];
     let materialized: unknown;
     for (const revision of revisions) {
@@ -278,7 +278,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   const ownership = applicationOwnership(owner);
   const assert = () => owner.assertCurrentOwner();
   const root = getDb();
-  assertFreshApplicationHistory(root, SESSIONS_DIR); // BEFORE SDK/schema/model construction
+  assertNativeApplicationHistory(root); // BEFORE SDK/schema/model construction
   registerRootExtensionKvStore();
   requireExtensionKvAuthority();
   const settings = SettingsManager.create(WORKSPACE_DIR, getPiclawAgentDir());
@@ -812,6 +812,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   // Validate stored choices without opening/writing SDK documents or bundle ports.
   if (root.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='documents'").get()) {
     const manifest = root.query(`SELECT id FROM documents WHERE kind='"app.application-conversations"' AND owner_id=1 AND retired_at IS NULL`).get() as { id: number };
+    if (manifest) {
     const mapping = storedDocument(root, manifest.id) as ApplicationMapping;
     const active = new Set([1, ...mapping.bindings.map(binding => binding.conversationId)]);
     // The preflight proves private metadata and historical binding provenance.
@@ -844,6 +845,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         toolUpgrades.length = 0;
         instructionUpgrades.clear();
       }
+    }
     }
   }
   // Automatic selection inherits the parent; explicit exact models use the same
@@ -1122,11 +1124,12 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   let backgroundPayloads=new Map<string,NativeBackgroundPayload>();
   // Bootstrap publishes metadata even in explicit offline maintenance. Runtime
   // creation checks execution admission separately, before and after publication.
-  async function publishApplicationBinding(tx: import("@earendil-works/pi-durable").Tx, domain: string, chatJid: string, branchId: string) {
+  async function publishApplicationBinding(tx: import("@earendil-works/pi-durable").Tx, domain: string, chatJid: string, branchId: string, importedId?: number) {
     assert(); lifetime.signal.throwIfAborted();
     const doc = await tx.doc(ApplicationConversations, 1 as ConversationId);
     if (doc.domain !== domain || doc.bindings.some(b => b.chatJid === chatJid || b.branchId === branchId)) throw Error("Application mapping conflict");
-    const conversation = await tx.createConversation({ ownership: { kind: "ownerless" } });
+    // Only validated, already-native imported history can supply an existing ID.
+    const conversation = importedId === undefined ? await tx.createConversation({ ownership: { kind: "ownerless" } }) : { id: importedId as ConversationId };
     const instructions = instructionsFor(chatJid);
     await configure(tx, conversation.id, { model: { provider: ref.provider, modelId: ref.id }, thinkingLevel: defaultThinking(selected), tools, instructions });
     (await tx.doc(HostManagedInstructions, conversation.id)).managedHash = instructionHash(instructions);
@@ -1145,7 +1148,15 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     // One application publication: root config, every initial conversation,
     // creation anchor and populated manifest share the public root-creation commit.
     const initial = !root.query("SELECT 1 FROM documents WHERE kind='\"app.application-conversations\"' AND scope_kind='conversation' AND owner_id=1 AND retired_at IS NULL").get();
-    if (initial) storeChatMetadata("web:default", new Date().toISOString());
+    const importedChats = new Map<string, number>();
+    if (initial) {
+      const imported = readCompletedSessionImport(root);
+      for (const [index, leaf] of (imported?.leaves ?? []).entries()) {
+        const chat = `web:imported:${imported!.sourceSha256.slice(0, 16)}:${createHash("sha256").update(leaf.sourceLeafId).digest("hex").slice(0, 16)}`;
+        storeChatMetadata(chat, new Date().toISOString(), `Imported session ${index + 1}`); importedChats.set(chat, leaf.conversationId);
+      }
+      storeChatMetadata("web:default", new Date().toISOString());
+    }
     const initialBranches = initial ? root.query("SELECT c.jid,b.branch_id FROM chats c JOIN chat_branches b ON b.chat_jid=c.jid WHERE b.archived_at IS NULL ORDER BY c.jid").all() as { jid: string; branch_id: string }[] : [];
     const assertInitial = () => {
       assert(); lifetime.signal.throwIfAborted();
@@ -1160,7 +1171,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       const instructions = instructionsFor();
       await configure(tx, id, { model: { provider: ref.provider, modelId: ref.id }, thinkingLevel: defaultThinking(selected), tools, instructions });
       (await tx.doc(HostManagedInstructions, id)).managedHash = instructionHash(instructions);
-      for (const branch of initialBranches) await publishApplicationBinding(tx, doc.domain, branch.jid, branch.branch_id);
+      for (const branch of initialBranches) await publishApplicationBinding(tx, doc.domain, branch.jid, branch.branch_id, importedChats.get(branch.jid));
       assertInitial();
     } }));
     const persisted = await harness.snapshot(ApplicationConversations, app.id, context);

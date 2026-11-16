@@ -1,66 +1,60 @@
-# Schema ownership and fresh/upgrade contracts
+# Schema ownership and native-format contracts
 
-`runtime/scripts/schema-ownership.json` declares the owners and approved shapes of the main application database. The developer reader checks owned fixtures without initialising or repairing them. Production startup, migration ledgers, SDK persistence and add-on initialisers retain their existing authority.
+`runtime/scripts/schema-ownership.json` declares supported application database objects and exact inert objects that may survive in already-native stores. The developer reader inspects an explicitly selected fixture without initialising or repairing it. Normal v4 startup refuses unsupported v3 stores before schema work; selected offline history uses the separate [one-shot importer](session-history-import.md).
 
 ## Read an inventory
 
-Use an explicitly selected **owned fixture**, never the running profile without separate operational authorisation:
+Use an explicitly selected owned fixture. Inspecting the running profile needs separate operational authority.
 
 ```sh
 bun runtime/scripts/schema-inventory.ts /path/to/owned-fixture.db core
 ```
 
-Profiles are `core`, `native` and `native-addons`. The command opens SQLite read-only and reports object names, fingerprints, owners, owner policies, registered document kinds, optional/required presence and errors as JSON. It returns a non-zero exit code for a failed contract. It does not select a default database, load the application, inspect credential/message/document payloads, migrate, repair, optimise or checkpoint.
+Profiles are `core`, `native` and `native-addons`. The command opens SQLite read-only and reports object names, fingerprints, owners, policies, document kinds, required/optional presence and errors as JSON. It returns non-zero on a failed contract. It does not discover a default store, load the application, read credential/message/document payloads, migrate, repair, optimise or checkpoint.
 
-`readSchemaInventory` also serves the existing test surface. It uses one read transaction, or borrows the caller's transaction without committing it. `classifySchemaInventory` reports errors; `assertSchemaInventory` fails the contract. Set `PICLAW_SCHEMA_INVENTORY_JSON=1` when running the focused fixture test to print its inventories as `SCHEMA_INVENTORY=` JSON records.
+`readSchemaInventory` uses one read transaction or borrows the caller's transaction without committing it. `classifySchemaInventory` reports errors; `assertSchemaInventory` fails the contract. `PICLAW_SCHEMA_INVENTORY_JSON=1` prints fixture results as `SCHEMA_INVENTORY=` JSON records.
 
-## Owners and differences
+## Producers and retained data
 
-Every declared owner records its category, initialiser, writer modules/APIs, source of truth, replay/retention policy and source references. Writer references identify owning modules and public entry points; they are not a complete caller graph. Core owns shared physical KV storage; each add-on/caller retains its payload semantics and lifecycle. The registry grants no new writer authority.
+Each owner records its initializer, current writer modules/APIs, source of truth, retention and references. A retired owner may have no active writer. A declaration grants no writer, cleanup or replay authority. Core owns shared physical KV storage; callers retain their payload semantics.
 
-The registry retains its original core schema source `3c66c54de0bc4826dc51655bb5f009ce6f9905d9` and add-on DDL source `e8aac2399148cbef638764ba2b5a1cd916cc5ecc`. Subsequent owned migrations add explicit source/checksum entries and exact fingerprints; those original provenance entries are not rewritten. Current qualification uses private `@earendil-works/pi-durable@1.4.0` and the native contract's approved add-on source `ad7ad0a4b63ee37090b6bee4309fa5c458ec6510`, including Code Review 0.1.11 with the same version-1 shared schema. These are source/fixture claims, not installed-runtime claims.
+The registry retains historical source/checksum entries. Those entries describe the original schema bytes and are not rewritten as current SDK receipts. Current qualification uses `@earendil-works/pi-durable@1.5.2` and the exact fixtures in `scripts/native-gate-contract.json`.
 
-| Composition | Difference from fresh core | Authority |
-| --- | --- | --- |
-| Native default factory | SDK conversations/entries/tasks/submissions/documents and metadata; host bindings/cutover receipts; terminal settlement and timeline/media effect ledgers | SDK record APIs, host binding owner and existing service-effect stores |
-| Native with all approved add-ons | Current additional main-schema objects are Code Review's saved-review tables, indexes and generated constraints | Exact approved add-on `ReviewDatabase`/`ReviewStore`; main connection is borrowed under the host owner fence |
-| Historical upgraded core | Explicit session-import archive tables, FTS/shadows, indexes and triggers; preserved archive migration receipt | `SqliteSessionStore`, owner `piclaw-agent-sessions`, migration `001-namespaced-session-import` |
-| Historical cursor and S01 mirror retirement | Exact optional archives preserve old cursor fields/rowids and S01 lane/state/watch values; active schemas keep polling/queue payloads and immutable native bindings | [Cursor owner](native-cursor-storage.md), [S01 binding owner](native-operation-binding.md) and their existing owned-ledger transitions |
-| Historical chat-branch rebuild | SQLite quotes the rebuilt table header; the approved additional fingerprint retains all current clauses and constraints | Existing chat-branch migration in `connection.ts` |
-| Reopened/optimised fixture | Optional exact `sqlite_stat1` planner-statistics table | Existing SQLite `PRAGMA optimize`/`ANALYZE` lifecycle |
+| Composition or retained component | Current disposition |
+| --- | --- |
+| Fresh native application | Current Root schemas, SDK persistence/documents, accepted-source bindings and supported service-effect/timeline/media owners. No resident legacy converter or cutover registration. |
+| One-shot import destination | Public SDK conversations, entries and data-only import provenance/completion document. Root initialization occurs only through normal supported native startup. No task/submission execution or copied account/configuration schema. |
+| Approved add-ons | Exact current add-on-owned objects, including Code Review tables/indexes/constraints. Add-on enablement and execution remain separately fenced. |
+| Already-native historical session archives | Exact optional original tables, FTS/shadows, indexes/triggers and receipts remain inert. No session archive producer or startup import is reinstated. |
+| Already-native cursor/S01 archives | Exact optional old fields, rowids and receipts remain historical. [Current cursor storage](native-cursor-storage.md) refuses unsupported active shapes; it does not rename/archive/drop them. |
+| Already-native historical chat-branch table spelling | The approved quoted-header fingerprint remains readable. The old rebuild producer is removed. |
+| Already-native input migration and owned-fork bookkeeping | Exact optional old tables/constraints and original rows/seed bytes remain inert. Their capture, backfill, initializer and fork/seed writers are removed; fresh Root omits them. |
+| Old financial/profile/cleanup objects | Exact declared historical objects may remain on already-native stores; retired creators are absent from fresh startup. They grant no native execution authority. |
+| SQLite planner statistics | Optional exact `sqlite_stat1` remains SQLite-owned derived state. |
 
-The historical fixture seeds the older chat-branch uniqueness and token-usage schema through the existing upgrade paths. It verifies retained chat labels, branch identity, legacy usage, exact imported JSONL rows and owner/checksum receipts. Fresh native startup does not recreate the session archive.
+Historical fixtures prepare supported native stores and explicit inert records. They do not convert old stores to manufacture native authority. Supported histories, stable IDs, retained profiles and receipt/data bytes survive normal reopen without old source discovery.
 
-Optional add-on/archive objects may remain when their producer is absent. Their exact declared shapes still apply. The atomic SDK/native/add-on/archive components declare `requiredWhenOwnerPresent`: any retained owned object requires all declared component tables, including FTS roots and shadows. An index or trigger declared on a retained table remains required whenever that table is present. Dropping an archive FTS root while leaving its entries/receipts therefore fails. This does not qualify a new add-on enable/disable mechanism; add-on lifecycle work remains separately scoped.
+Optional components remain exact when present. `requiredWhenOwnerPresent` requires every declared component table, including FTS roots/shadows. A declared index or trigger is required when its table exists. Removing one archive component cannot make the remaining component valid.
 
-The [offline historical account-schema retirement](historical-account-schema-retirement.md) declares its own exact removal cohort and verified archive/candidate approval. The shared registry additionally preserves the four optional input-authority/provenance tables and their guards under `archive:input-authority`; it grants no cleanup or replay authority. The offline migration's SQL checksum is recorded in `sources`. Historical access-preparation markers remain startup vetoes, and SDK `documents.family` remains SDK-owned.
-
-Remote Peer's separate store is outside this main-schema inventory. Its generic table names are not exemptions in the application database. The other approved add-ons may write existing shared storage or use separate resources; absence of additional main tables does not imply inactivity or obsolescence.
-
-SDK document persistence and logical payload ownership are separate. The registry names the SDK harness documents, native application documents and copied-legacy import manifests with their scope/history/fork policies. Caller-defined document kinds remain supported through the public SDK API in the exact SDK tables. This does not permit arbitrary physical tables or infer a host document authority from a kind prefix.
+Remote Peer's separate store is outside this main-schema inventory. Generic names in that separate store do not exempt similarly named objects in Root. SDK physical document persistence and logical caller payload ownership remain separate; public SDK document kinds do not permit arbitrary physical tables.
 
 ## Shape and failure rules
 
-- Unknown tables, indexes, triggers and views fail. There are no table-name prefix exemptions or table-count quotas.
-- Required missing objects and unapproved shapes fail. All SQL clauses remain fingerprinted, including PK/UNIQUE/CHECK/FK actions and deferral, defaults, collations, AUTOINCREMENT, partial indexes, triggers, virtual-table options and STRICT/WITHOUT ROWID.
-- Normalisation removes comments, ordinary SQL spelling case, insignificant whitespace and `IF NOT EXISTS`. It sorts top-level table declarations to accommodate column order after `ALTER ADD`; order within constraints and indexes remains exact. Quoted tokens and literal contents remain exact, including legacy double-quoted strings. This is spelling normalisation, not a proof of SQL equivalence. Additional historical spellings require an explicit reviewed fingerprint and source explanation.
-- SQLite-generated PK/UNIQUE indexes inherit a known parent only when their constraint fingerprint is approved. Their physical autoindex numbering is not an independent product identity.
-- FTS virtual tables and exact shadow objects are classified separately. Shadow storage is attributed to its projection/archive owner; it is not counted as a separate product table.
-- `sqlite_sequence` retains AUTOINCREMENT allocation authority and high-water state. It is not disposable cache. Planner statistics are optional derived state. Unknown `sqlite_*` objects still fail.
+- Unknown tables, indexes, triggers and views fail; no prefix exemptions or table-count quotas.
+- Retired cutover history is absent as a pair on fresh stores. If either original cutover table is present, both original components are required; no old DDL or writer is reinstated.
+- Required missing objects and unapproved shapes fail. PK/UNIQUE/CHECK/FK clauses, deferral/actions, defaults, collations, AUTOINCREMENT, partial indexes, triggers, virtual-table options and STRICT/WITHOUT ROWID remain fingerprinted.
+- Normalisation removes comments, ordinary SQL spelling case, insignificant whitespace and `IF NOT EXISTS`. Top-level table declaration order can be sorted; constraint/index order remains exact. Quoted tokens and literal values remain exact. Additional historical spellings need reviewed source evidence.
+- SQLite-generated PK/UNIQUE indexes inherit only an approved parent constraint fingerprint. Autoindex numbering grants no independent identity.
+- FTS tables and exact shadows remain attributed to their existing owner.
+- `sqlite_sequence` preserves allocation high-water state. Unknown `sqlite_*` objects fail.
 
 ## Maintain the contract
 
-Run only the relevant tests through the repository launchers. For the frozen issue campaign, full suites are prohibited. The new fixture test uses the existing native fixture exports, synthetic providers, network denial and isolated filesystem roots.
+Run affected tests through `test:local`; qualify a delivery with the normal exact-source host/native gates. Keep missing-index, unknown-object, constraint, optional-component, transaction/foreign-key and byte-retention negatives. Never regenerate the registry from an unknown store to accept a failure.
 
 ```sh
-PICLAW_LOCAL_TEST_NICE=10 bun runtime/scripts/local-test-priority.ts \
-  --cwd runtime --env PICLAW_DB_IN_MEMORY=1 -- bun test ./test/schema-ownership.test.ts
-
-# With the existing pinned native fixture exports; no native discovery sweep:
-PICLAW_LOCAL_TEST_NICE=10 bun runtime/scripts/local-test-priority.ts \
-  --cwd qualification/native -- bun test ./schema-ownership.test.ts
+bun run test:local --cwd runtime -- bun test test/schema-ownership.test.ts
+bun run test:local --cwd qualification/native -- bun scripts/test-isolated.ts schema-ownership.test.ts
 ```
 
-When a legitimate schema changes, inspect fresh and upgraded fixture inventories, identify its existing owner/initialiser and update the exact declarations with source evidence. Keep missing-index, constraint, unknown-object, optional-component and data/receipt-preservation negatives. Do not regenerate the registry from an unknown store to make a failure disappear.
-
-No production schema, index, writer, migration receipt or retention policy changes in this work. Empty or fresh-absent objects remain protected. The contract does not prove data integrity, power-loss behaviour, complete reconstruction or compatibility with every historical installation. It has not inspected the running database. Unknown historical differences require owner evidence before approval; the developer check performs no cleanup or fallback.
+The inventory does not establish payload integrity, power-loss recovery or compatibility with every historical installation. These source tests do not inspect or change live storage, perform in-place cleanup or authorise installation, restart or backup/restore.

@@ -18,12 +18,12 @@ test('shipped builtin factory graph no longer registers a legacy compaction life
   expect(fake.handlers.some(h=>h.event==='before_provider_request')).toBe(true);
 });
 
-test('legacy execution modules and session stream API are absent while offline session creation remains',async()=>{
+test('legacy execution modules, session constructor and stream API are absent',async()=>{
   const modules=['orchestrator','progressive','progressive-policy','progressive-checkpoint','model-execution','model-request','stream-complete','pipeline-events','pipeline-policy','pipelined','selective-execution','selective-method','selective-prompt','source','messages','files','noop','retained-context','boundary-policy','safety','summary-validation','status','config','context','compat','provider-timing'];
   expect(await Bun.file(new URL('../../src/extensions/smart-compaction.ts',import.meta.url)).exists()).toBe(false);
   for(const name of modules)expect(await Bun.file(new URL('../../src/extensions/smart-compaction/'+name+'.ts',import.meta.url)).exists()).toBe(false);
-  const session=await import('../../src/agent-pool/session.js');
-  expect(session).not.toHaveProperty('createCompactionStreamFn');expect(typeof session.createSessionInDir).toBe('function');expect(typeof session.createDefaultSession).toBe('function');
+  expect(await Bun.file(new URL('../../src/agent-pool/session.ts',import.meta.url)).exists()).toBe(false);
+  expect(await Bun.file(new URL('../../src/session-import/source.ts',import.meta.url)).exists()).toBe(true);
   const remote=await import('../../src/extensions/smart-compaction/remote-compaction.js');
   for(const name of ['attemptRemoteCompaction','injectRemoteCompactionPayload','prependRemoteCompactionPayload','resolveRemoteCompactionCapability'])expect(remote).not.toHaveProperty(name);
   expect(await import('../../src/extensions/smart-compaction/result-details.js')).not.toHaveProperty('createSmartCompactionResultDetails');

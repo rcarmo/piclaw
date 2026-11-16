@@ -14,7 +14,7 @@ test('branch executor and sync registration APIs are retired rather than wrapped
   for (const name of retired) expect(AgentBranchManager.prototype).not.toHaveProperty(name);
 });
 
-for (const operation of ['rename', 'merge', 'purge', 'restore', 'fork'] as const) test(`capture composition cannot execute retired branch ${operation}`, () =>
+for (const operation of ['rename', 'merge', 'purge', 'restore', 'fork'] as const) test(`retired selector cannot reach legacy branch ${operation}`, () =>
   withTempWorkspaceEnv('branch-capture-retired-', {}, async () => {
     db.closeDatabase(); db.initDatabase();
     const parent = `web:retired-${operation}`, child = `${parent}:child`;
@@ -25,20 +25,11 @@ for (const operation of ['rename', 'merge', 'purge', 'restore', 'fork'] as const
     const dir = join(SESSIONS_DIR, sanitiseJid(child)); mkdirSync(dir, { recursive: true });
     const bytes = 'historical JSONL and config bytes\n'; writeFileSync(join(dir, 'history.jsonl'), bytes);
     const before = db.getDb().serialize(), files = readdirSync(SESSIONS_DIR); let created = 0;
-    const pool = new AgentPool({ ...createLegacyCapturePoolOptions(), createSession: async () => { created++; throw Error('legacy runtime must not be constructed'); } });
     try {
-      let pending: Promise<unknown>;
-      switch (operation) {
-        case 'rename': pending = pool.renameChatJid(child, `${parent}:moved`); break;
-        case 'merge': pending = pool.mergeChatBranchIntoParent(child); break;
-        case 'purge': pending = pool.permanentPurgeChatBranch(child); break;
-        case 'restore': pending = pool.restoreChatBranch(child); break;
-        case 'fork': pending = pool.createForkedChatBranch(child); break;
-      }
-      await expect(pending).rejects.toThrow('unavailable');
+      expect(() => new AgentPool({ ...createLegacyCapturePoolOptions(), createSession: async () => { created++; throw Error('legacy runtime must not be constructed'); } })).toThrow('Resident legacy capture was removed');
       expect(created).toBe(0); expect(db.getDb().serialize()).toEqual(before);
       expect(readdirSync(SESSIONS_DIR)).toEqual(files); expect(readFileSync(join(dir, 'history.jsonl'), 'utf8')).toBe(bytes);
-    } finally { await pool.shutdown(); db.closeDatabase(); }
+    } finally { db.closeDatabase(); }
   }));
 
 for (const operation of ['handle', 'archive', 'root'] as const) test(`admitted ${operation} has no legacy cache, warmup or filesystem publication tail`, () =>

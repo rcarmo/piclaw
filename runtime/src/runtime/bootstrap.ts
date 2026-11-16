@@ -1,5 +1,4 @@
 import { durableAbortScopeKey } from "../agent-pool/durable-runtime-adapter.js";
-import { hasUnsettledLegacyCursorEvidence } from "../db/chat-cursor-storage.js";
 import { setTimeout as storageRetryDelay } from "node:timers/promises";
 import { RuntimePreparationError } from "./preparation-error.js";
 import type { NativeTurnViewChannel } from "../channels/web/agent/native-turn-view.js";
@@ -199,26 +198,8 @@ export async function createRecoverableRuntimeBackend(prepare: () => Promise<Run
 
 export { RuntimeStartupCleanupError } from "./shutdown.js";
 import assert from "node:assert/strict";
-import { WebChannel } from "../channels/web.js";
-import { AgentQueue } from "../queue.js";
-import { getDb, getNewMessages } from "../db.js";
-import { SESSIONS_DIR } from "../core/config.js";
-import { getInstalledAddonRuntimeEntries } from "../addons/runtime-contributions.js";
 import type { RuntimeLockHandle } from "./single-instance.js";
-import { getChatTransport } from "../extensions/chat-transport-registry.js";
-import type { LegacyCaptureCoordinator } from "../agent-pool/legacy-authority-capture.js";
 
-export interface RuntimeMigrationPreparation {
-  coordinator: LegacyCaptureCoordinator;
-  /** Transaction-safe admission/owner check; no filesystem or frontier SQL. */
-  assertAdmissionGuard(): void;
-  capture(): ReturnType<AgentPool["captureLegacyUpgradeBindings"]>;
-  /** Invalidates the capability, but never resumes the old application. */
-  release(): void;
-}
-export interface RuntimeBootstrapContext {
-  prepareLegacyMigration(migrationIncarnation: string): Promise<RuntimeMigrationPreparation>;
-}
 import { createRuntimeModelServices } from "../agent-pool/model-services.js";
 import { installRuntimeModelExecutor } from "../extensions/model-execution-runtime.js";
 import {
@@ -286,8 +267,6 @@ export interface RuntimeBootstrapDeps {
   base: RuntimeBootstrapBaseServices;
   /** Production durable preparation; absence is reserved for explicitly injected legacy test dependencies. */
   prepareApplicationBackend?: (owner: RuntimeLockHandle) => Promise<RuntimeBackend>;
-  /** Internal inspection only; absent in production composition. No source selector. */
-  migrationInspection?: { onReady(context: RuntimeBootstrapContext): void };
   assistantName: string;
   triggerPattern: RegExp;
   pollIntervalMs: number;
@@ -295,7 +274,7 @@ export interface RuntimeBootstrapDeps {
   initializeRuntimeEnvironment(state: RuntimeBootstrapState): { effectiveMode: "single-user" } | void;
   hydrateMcpCredentials(): Promise<HydratedMcpCredential[]>;
   clearMcpCredentials(entries: HydratedMcpCredential[]): void;
-  createAgentPool(sessionOptions?: RuntimeBackend["sessionOptions"], legacyCapture?: true): Promise<RuntimeBootstrapAgentPool>;
+  createAgentPool(sessionOptions?: RuntimeBackend["sessionOptions"]): Promise<RuntimeBootstrapAgentPool>;
   startWebChannel(queue: RuntimeBootstrapQueue, agentPool: RuntimeBootstrapAgentPool, bind?: RuntimeBackend["bind"]): Promise<RuntimeBootstrapWeb>;
   startBackgroundModelRefresh(agentPool: RuntimeBootstrapAgentPool): void;
   startOptionalPushoverChannel(): Promise<RuntimeBootstrapPushover | null>;
@@ -374,7 +353,7 @@ export function createDefaultRuntimeBootstrapDeps(
     initializeRuntimeEnvironment: () => initializeRuntimeEnvironment(base.state),
     hydrateMcpCredentials: () => hydrateMcpKeychainCredentials(WORKSPACE_DIR),
     clearMcpCredentials: clearHydratedMcpCredentials,
-    createAgentPool: async (sessionOptions, legacyCapture) => {
+    createAgentPool: async (sessionOptions) => {
       const modelServices = await models();
       installRuntimeModelExecutor(modelServices.modelRuntime);
       const agentPool = new AgentPool({
@@ -382,7 +361,6 @@ export function createDefaultRuntimeBootstrapDeps(
         modelRuntime: modelServices.modelRuntime,
         modelRegistry: modelServices.modelRegistry,
         ...sessionOptions,
-        ...(legacyCapture ? {legacyCapture:true} : {}),
       });
       refreshCoordinator = new ModelRefreshCoordinator({
         modelRuntime: modelServices.modelRuntime,
@@ -429,7 +407,6 @@ export async function bootstrapRuntime(deps: RuntimeBootstrapDeps, runtimeOwner?
   const messageLoopController = new AbortController();
   let messageLoop: Promise<void> | undefined;
   let messageLoopStop: Promise<void> | undefined;
-  let migrationHold = false;
   const stopMessageLoop = (): Promise<void> => {
     messageLoopController.abort();
     backend?.stop();
@@ -444,7 +421,7 @@ export async function bootstrapRuntime(deps: RuntimeBootstrapDeps, runtimeOwner?
       runtimeOwner.assertCurrentOwner();
       backend = await prepareApplicationBackend(runtimeOwner);
     }
-    const agentPool = partialPool = await deps.createAgentPool(backend?.sessionOptions, deps.migrationInspection ? true : undefined);
+    const agentPool = partialPool = await deps.createAgentPool(backend?.sessionOptions);
     deps.log("=== Piclaw - Pi Coding Agent Assistant ===");
 
     const web = partialWeb = await deps.startWebChannel(queue, agentPool, backend?.bind);
@@ -494,93 +471,10 @@ export async function bootstrapRuntime(deps: RuntimeBootstrapDeps, runtimeOwner?
       pollIntervalMs: deps.pollIntervalMs,
       signal: messageLoopController.signal,
     });
-    if (deps.migrationInspection) {
-      let preparation: Promise<RuntimeMigrationPreparation> | undefined;
-      const context: RuntimeBootstrapContext = Object.freeze({
-        prepareLegacyMigration(migrationIncarnation: string): Promise<RuntimeMigrationPreparation> {
-          if (preparation) return preparation;
-          // Preflight has no sealing effects. The owner is main's actual acquired
-          // handle, never a caller's certificate or a second ownership ledger.
-          try {
-            assert(runtimeOwner?.enabled && runtimeOwner.strictOwnership, "Strict runtime owner required");
-            runtimeOwner.assertCurrentOwner();
-            const installedChannels = [web, ...(pushover ? [pushover] : [])];
-            assert(installedChannels.every(channel => channel === web && channel instanceof WebChannel),
-              "Unsupported installed channel");
-            // Autonomous add-on writers/transports are outside Web's admission
-            // contract. Production add-on compatibility is NOT certified here.
-            assert(getInstalledAddonRuntimeEntries().length === 0, "Installed add-ons are not migration-qualified");
-            assert(!getChatTransport("bang") && (!getChatTransport("local") || getChatTransport("local")!.id === "local"),
-              "Unsupported registered transport");
-            assert(queue instanceof AgentQueue && agentPool instanceof AgentPool, "Installed capture services required");
-            assert(migrationIncarnation && migrationIncarnation.trim() === migrationIncarnation, "Missing migration controller identity");
-          } catch (error) { return Promise.reject(error); }
-          const owner = runtimeOwner!;
-          const installedQueue = queue as AgentQueue;
-          const installedPool = agentPool as AgentPool;
-          const installedWeb = web as WebChannel;
-          // Set before initiating any stop: even failed migration must keep the
-          // application lifetime/global owner held until certified shutdown.
-          migrationHold = true;
-          let valid = true, drained = false;
-          const checkOwner = () => { owner.assertCurrentOwner(); assert(valid, "Migration capability released"); };
-          const checkFrontier = () => {
-            checkOwner();
-            assert(getInstalledAddonRuntimeEntries().length === 0 && !getChatTransport("bang") &&
-              (!getChatTransport("local") || getChatTransport("local")!.id === "local"), "Ingress registry changed");
-            const root = getDb();
-            assert(!root.inTransaction, "Root DB transaction active");
-            assert(!root.query("SELECT 1 FROM service_effect_s01_sources WHERE state NOT IN ('consumed','disposed') LIMIT 1").get(), "Pending S01 sources");
-            assert(!root.query("SELECT 1 FROM service_effect_s01_operations WHERE phase <> 'terminal' LIMIT 1").get(), "Nonterminal S01 operations");
-            assert(!hasUnsettledLegacyCursorEvidence(root) && !root.query("SELECT 1 FROM main.chat_cursors WHERE queued_followups_json IS NOT NULL AND queued_followups_json <> '[]' LIMIT 1").get(), "Unsettled legacy chat cursors");
-            const jids = (root.query("SELECT jid FROM chats UNION SELECT chat_jid AS jid FROM messages").all() as { jid: string }[]).map(row => row.jid);
-            assert(getNewMessages(jids, state.lastTimestamp, deps.assistantName).messages.length === 0, "Unread accepted legacy messages");
-            installedPool.assertLegacyCaptureIdle();
-            checkOwner();
-          };
-          const coordinator: LegacyCaptureCoordinator = Object.freeze({
-            assertSealedAndDrained() { checkOwner(); assert(drained, "Migration ingress has not drained"); installedQueue.assertLegacyCaptureDrained(); checkFrontier(); },
-            migrationIncarnation() { checkOwner(); return migrationIncarnation; },
-          });
-          preparation = (async () => {
-            checkOwner();
-            // sealAdmissions closes synchronously, before any producer stops.
-            const webJoin = installedWeb.sealAdmissions();
-            const pollerJoin = stopMessageLoop();
-            const schedulerJoin = Promise.resolve(deps.stopSchedulerLoop());
-            const ipcJoin = deps.stopIpcWatcher();
-            checkOwner();
-            await Promise.all([webJoin, pollerJoin, schedulerJoin, ipcJoin]);
-            checkOwner();
-            // Accepted producer callbacks may enqueue until their joins finish.
-            const queueJoin = installedQueue.sealAndDrain();
-            checkOwner();
-            await queueJoin.joined;
-            checkOwner();
-            checkFrontier();
-            drained = true;
-            coordinator.assertSealedAndDrained();
-            return Object.freeze({ coordinator,
-              assertAdmissionGuard() {
-                checkOwner(); assert(drained, "Migration ingress has not drained");
-                assert(getInstalledAddonRuntimeEntries().length === 0 && !getChatTransport("bang") &&
-                  (!getChatTransport("local") || getChatTransport("local")!.id === "local"), "Ingress registry changed");
-                installedQueue.assertLegacyCaptureDrained(); installedPool.assertLegacyCaptureIdle(); checkOwner();
-              },
-              capture: () => installedPool.captureLegacyUpgradeBindings({ root: getDb(), legacySessionRoot: SESSIONS_DIR,
-                owner, queue: installedQueue, coordinator }),
-              release() { valid = false; },
-            });
-          })();
-          return preparation;
-        },
-      });
-      deps.migrationInspection.onReady(context);
-    }
     await messageLoop;
     // A joined producer is not a disposed application. In particular, an
     // injected process.exit may return while shutdown is still unwinding.
-    if (migrationHold || messageLoopController.signal.aborted) await shutdownCompletion.promise;
+    if (messageLoopController.signal.aborted) await shutdownCompletion.promise;
   } catch (error) {
     deps.clearMcpCredentials(hydratedMcpCredentials);
     if (backend && !published) {
@@ -597,7 +491,7 @@ export async function bootstrapRuntime(deps: RuntimeBootstrapDeps, runtimeOwner?
     }
     // Rejection here would run main's finally and release the global owner.
     // An uncertain shutdown must remain owned until certified safe cleanup.
-    if (migrationHold || messageLoopController.signal.aborted) await shutdownCompletion.promise;
+    if (messageLoopController.signal.aborted) await shutdownCompletion.promise;
     if (backend && published) throw new RuntimeStartupCleanupError([error], "Published application backend cleanup uncertain");
     throw error;
   }

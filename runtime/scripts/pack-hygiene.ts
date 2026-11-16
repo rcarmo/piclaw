@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 const BLOCKED_PREFIXES = ["coverage/", "test/", "dist/", "runtime/generated/"];
-const BLOCKED_EXACT = new Set(["coverage/lcov.info", "runtime/generated/coverage/lcov.info", "runtime/src/agent-pool/sqlite-session-store.ts"]);
+const BLOCKED_EXACT = new Set(["runtime/src/session-archive.ts","runtime/src/agent-pool/session-persistence.ts","runtime/src/agent-pool/session-node-modules-link.ts","runtime/src/agent-pool/retired-provider-selection.ts","coverage/lcov.info", "runtime/generated/coverage/lcov.info", "runtime/scripts/retire-historical-accounts.ts", "runtime/scripts/lib/historical-account-copies.ts", "runtime/scripts/lib/historical-account-retirement.ts", "runtime/scripts/lib/historical-account-schema.json", "runtime/src/agent-pool/session.ts", "runtime/scripts/benchmark-cold-session.ts", "runtime/src/agent-pool/sqlite-session-store.ts", "runtime/scripts/lib/sqlite-session-archive.ts", "runtime/scripts/import-jsonl-sessions.ts", "runtime/scripts/benchmark-sqlite-session-layouts.ts", "runtime/src/agent-pool/session-manager.ts", "runtime/src/agent-pool/branch-seeding.ts", "runtime/src/agent-pool/adopted-session-import.ts", "runtime/src/agent-pool/session-file-persistence.ts", "runtime/src/db/migration-input-holds.ts", "runtime/src/db/owned-forks.ts"]);
 export const REQUIRED_PACK_ENTRIES = [
   "scripts/install-durable-engine.ts",
   "runtime/src/runtime/durable-engine-dependencies.ts",
@@ -10,9 +10,9 @@ export const REQUIRED_PACK_ENTRIES = [
   "runtime/durable-engine/src/default-application-runtime.ts",
   "runtime/durable-engine/src/legacy-import-schema.ts",
   "runtime/scripts/pi-cli.ts",
-  "runtime/scripts/lib/sqlite-session-archive.ts",
-  "runtime/scripts/import-jsonl-sessions.ts",
-  "runtime/scripts/benchmark-sqlite-session-layouts.ts",
+  "runtime/src/session-import/source.ts",
+  "runtime/durable-engine/src/session-history-import.ts",
+  "runtime/durable-engine/src/session-history-import-record.ts",
   "runtime/src/durable-legacy-sdk.ts",
   "runtime/src/dream.ts",
   "runtime/src/agent-memory/daily-notes.ts",

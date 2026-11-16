@@ -449,9 +449,8 @@ export async function startWebChannel(
   try {
   await web.start();
   // office-viewer route removed: now registered by @rcarmo/piclaw-addon-office-viewer
-  // Do not freeze extension routes here: workspace/add-on extension factories
-  // register their HTTP routes during the first session resource reload.
-  // createSessionInDir() freezes the registry after that initial load pass.
+  // Do not freeze extension routes during web startup: add-on resource
+  // registration may follow.
 
   // Wire the first-class add-on runtime API to the web channel's in-process
   // message storage/queue/run path. Add-ons should use this instead of

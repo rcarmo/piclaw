@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { existsSync, renameSync } from 'node:fs';
+import { existsSync, renameSync, writeFileSync } from 'node:fs';
 import { Database } from 'bun:sqlite';
 import { spyOn } from 'bun:test';
 import * as checkpoints from '../../src/db/sqlite-checkpoint.js';
 import { getRuntimeConfigPaths } from '../../src/core/config-context.js';
-import { initDatabase, getDb, closeDatabase, getDatabaseBinding } from '../../src/db/connection.js';
+import { initDatabase, getDb, closeDatabase, getDatabaseBinding, initializeDatabaseSchema } from '../../src/db/connection.js';
 import { RuntimeStartupCleanupError } from '../../src/runtime/startup-cleanup-error.js';
 import { assertPathWithinTestFilesystemIsolation } from '../../scripts/test-filesystem-isolation.js';
 
@@ -36,6 +36,8 @@ function failSchema() {
 }
 try {
   if (scenario === 'schema-lock') {
+    const native = new Database(':memory:');
+    try { initializeDatabaseSchema(native); writeFileSync(file, native.serialize(), { flag: 'wx' }); } finally { native.close(); }
     const blocker = new Database(file);
     blocker.exec("PRAGMA journal_mode=WAL; CREATE TABLE legacy_sentinel(value TEXT); INSERT INTO legacy_sentinel VALUES('keep'); BEGIN IMMEDIATE");
     Database.prototype.close = function(throwOnError?: boolean) {
@@ -51,7 +53,7 @@ try {
       let failure: unknown;
       try { initDatabase(paths); } catch (error) { failure = error; if (error instanceof RuntimeStartupCleanupError) expectedCleanupFailure = error; }
       assert.equal((failure as { code?: string })?.code, 'SQLITE_BUSY');
-      assert.equal(closed, 1); assert.throws(() => getDb(), /not initialized/); assert.equal(getDatabaseBinding(), null);
+      assert.equal(closed, 2); assert.throws(() => getDb(), /not initialized/); assert.equal(getDatabaseBinding(), null);
       assert.throws(() => candidate!.query('SELECT 1'), /closed/);
     } finally {
       Database.prototype.close = close; Database.prototype.transaction = transaction;
@@ -85,10 +87,13 @@ try {
           INSERT INTO thinking_content VALUES('legacy-message','preserve legacy thought',1,'synthetic',0,'2026-10-01T00:00:00.000Z');`,
         select: 'SELECT message_id,text,lines,model,truncated,created_at FROM thinking_content' },
     }[kind as 'token' | 'scheduled' | 'thinking'];
-    const seed = new Database(file); seed.exec(legacy.sql);
+    // Synthetic supported-native pre-column window, not a v3 upgrade source.
+    const seed = new Database(':memory:'); initializeDatabaseSchema(seed);
+    for (const row of seed.query("SELECT name FROM sqlite_schema WHERE type='index' AND tbl_name=? AND sql IS NOT NULL").all(legacy.table) as {name:string}[]) seed.exec(`DROP INDEX "${row.name}"`);
+    seed.exec(`DROP TABLE ${legacy.table}`); seed.exec(legacy.sql);
     const rows = seed.query(legacy.select).all();
     const schemaSql = "SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY type,name";
-    const schema = seed.query(schemaSql).all(); seed.close(true);
+    const schema = seed.query(schemaSql).all(); writeFileSync(file, seed.serialize(), { flag: 'wx' }); seed.close(true);
     let injected = 0;
     Database.prototype.prepare = function(this: Database, sql: string, ...args: any[]) {
       if (scenario === 'thinking-inspection-failure' && sql === 'PRAGMA table_info(thinking_content)') {
