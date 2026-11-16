@@ -116,7 +116,6 @@ const ALLOWED_UNUSED_EXPORTS = new Map<string, string>([
   ["src/secure/keychain.ts - setKeyMaterialProviderForTests", "test-only API for focused secure/keychain.ts regression harnesses"],
   ["src/secure/shell-secrets.ts - buildInjectedPosixCommand", "shell secret injection builder retained for shell/keychain integration tests"],
   ["src/secure/shell-secrets.ts - buildInjectedPowerShellCommand", "shell secret injection builder retained for shell/keychain integration tests"],
-  ["src/session-recordings/session-recordings.ts - resetSessionRecordingsForTests", "test-only API for focused session-recordings/session-recordings.ts regression harnesses"],
   ["src/task-scheduler.ts - getSchedulerMetrics", "scheduler metrics helpers retained for scheduler diagnostics and tests"],
   ["src/task-scheduler.ts - resetSchedulerMetricsForTests", "test-only API for focused task-scheduler.ts regression harnesses"],
   ["src/tools/tracked-bash.ts - createTrackedPowerShellOperations", "dynamic packaged Windows PowerShell extension imports this factory from runtime/extensions/platform/windows/powershell"],
@@ -129,6 +128,7 @@ const ALLOWED_UNUSED_EXPORTS = new Map<string, string>([
   ["src/types.ts - ProxmoxConfigSetResult", "shared runtime public type contract retained for channel adapters and add-on consumers"],
   ["src/utils/ids.ts - createId", "ID helper retained for runtime/test compatibility imports"],
   ["src/utils/process-tracker.ts - listTrackedProcesses", "process tracker diagnostics API retained for process lifecycle tests"],
+  ["src/utils/secret-redaction.ts - redactSecrets", "durable-engine model-failure evidence redaction imports this helper outside src"],
   ["src/workspace-search.ts - setBackgroundWorkspaceIndexRefreshRequesterForTests", "test-only API for focused workspace-search.ts regression harnesses"],
 ]);
 

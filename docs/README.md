@@ -23,7 +23,7 @@ Start with [getting started](getting-started.md) for installation, first chat, a
 - [Reverse proxy](reverse-proxy.md) — HTTPS, tunnels, forwarded headers and passkeys
 - [Keychain](keychain.md) — encrypted secrets and bootstrap keys
 - [Storage model](storage.md) — database and file inventory
-- [Observability](observability.md) and [session recordings](session-recordings.md)
+- [Observability](observability.md)
 - [Azure VM deployment](azure/README.md)
 
 ## Connect providers and services

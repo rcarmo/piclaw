@@ -13,7 +13,6 @@ import type { ProviderUsageRefreshEvent } from "../../../agent-pool/runtime-faca
 import { SseHub } from "./sse-hub.js";
 import type { SseAuthorisation } from "./sse.js";
 import { UiBridge, type UiBridgeChannel } from "../theming/ui-bridge.js";
-import { recordSseEvent } from "../../../session-recordings/session-recordings.js";
 
 interface WebSessionBroadcastServiceOpts {
   sse?: SseHub;
@@ -51,7 +50,6 @@ export class WebSessionBroadcastService implements UiBridgeChannel {
   }
 
   broadcastEvent(eventType: string, data: unknown): void {
-    recordSseEvent(eventType, data);
     this.sse.broadcast(eventType, data);
   }
 }

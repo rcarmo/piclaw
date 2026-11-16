@@ -14,8 +14,6 @@ import { initDatabase, getDb, getMessageByRowId, deleteMessageByRowId } from "..
 import { WebSessionBroadcastService } from "../../src/channels/web/sse/session-broadcast-service.js";
 import { createInteractionBroadcaster } from "../../src/channels/web/interaction-broadcaster.js";
 import { admitWebMessage } from "../../src/channels/web/messaging/message-store.js";
-import { startSessionRecording, stopSessionRecording, getSessionRecording, recordSessionFixtureNote } from "../../src/session-recordings/session-recordings.js";
-import { handleSessionRecordingRoutes } from "../../src/channels/web/handlers/session-recordings.js";
 import { TestAgentControlSession } from "../agent-control/session-fixture.js";
 import { createTempWorkspace } from "../helpers.js";
 import { addLogSink, removeLogSink, type LogRecord } from "../../src/utils/logger.js";
@@ -49,7 +47,7 @@ beforeAll(async () => {
 
 for (const [name, engine] of Object.entries({ chromium, webkit })) {
   for (const scenario of ["success", "denial-retry", "bad-state", "cancel-prompt", "cancel-exchange"]) {
-    browserTest(`${name}: Pi 1.0.3 builtin Anthropic copy-code private UI and recording ${scenario}`, async () => {
+    browserTest(`${name}: Pi 1.0.3 builtin Anthropic copy-code private UI ${scenario}`, async () => {
       const ws = createTempWorkspace("provider-auth-ui-");
       const originalFetch = globalThis.fetch;
       let tokenRequests = 0, unexpectedNetwork = 0, transportAborted = false, privateResponses = 0;
@@ -61,16 +59,10 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
       let cleanupBrowser: (() => Promise<void>) | undefined;
       let cleanupServer: (() => void) | undefined;
       let cleanupChat: string | undefined;
-      const savedRows: number[] = [];
-      const previousRecordingsDir = process.env.PICLAW_RECORDINGS_DIR;
-      process.env.PICLAW_RECORDINGS_DIR = join(ws.base, "recordings");
       try {
       const sentinel = "PRIVATE-ANTHROPIC-UI";
       const chat = `web:auth-ui:${crypto.randomUUID()}`, id = "anthropic";
       cleanupChat = chat;
-      const recording = startSessionRecording({ chatJid: chat, title: "Auth boundary fixture", mode: "full" });
-      const publicControl = "PUBLIC-RECORDING-CONTROL";
-      recordSessionFixtureNote(chat, { marker: publicControl });
       let mode = scenario;
       const guard = (globalThis as typeof globalThis & { __anthropicUiGuard?: { unexpectedRequests: number } }).__anthropicUiGuard;
       expect(guard).toBeDefined();
@@ -116,7 +108,6 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
         const row = await admitWebMessage(projection, { chatJid: chat, content: text, isBot: true, mediaIds: [], agentId: "default", agentName: "Agent" }, { contentBlocks: blocks });
         if (!row) throw new Error("Auth fixture message was not stored");
         latestPost = row.id;
-        savedRows.push(latestPost);
         broadcaster.broadcastAgentResponse(row);
       };
       const run = (command: any) => withChatContext(chat, "web", () => handleLogin(session as any, registry, command));
@@ -240,47 +231,6 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
         expect(everyRow.length).toBeGreaterThan(0);
         for (const secret of sensitive) expect(JSON.stringify({ rows: everyRow, broadcasts })).not.toContain(secret);
         for (const secret of sensitive) expect(JSON.stringify(logs)).not.toContain(secret);
-        stopSessionRecording(chat);
-        const recorded = getSessionRecording(recording.id);
-        expect(recorded?.meta.mode).toBe("full");
-        expect(recorded?.events.some(event => event.kind === "assistant_output")).toBe(true);
-        expect(recorded?.events.some(event => event.kind === "sse_event" && (event.data as any).event_type === "interaction_updated")).toBe(true);
-        expect(recorded?.events.every(event => event.redactions === undefined)).toBe(true);
-        expect(recorded?.events.filter(event => event.kind === "assistant_output" && (event.data as any).interaction_id).map(event => (event.data as any).interaction_id).sort()).toEqual([...new Set(savedRows)].sort());
-        expect(readFileSync(recording.tracePath, "utf8")).toContain(publicControl);
-        for (const secret of sensitive) expect(readFileSync(recording.tracePath, "utf8")).not.toContain(secret);
-        const responder = (value: unknown, status = 200) => Response.json(value, { status });
-        const checkExports = async (recordingId: string) => {
-          for (const format of ["json", "jsonl", "html"]) {
-            const path = `/agent/recordings/${recordingId}/export`;
-            const response = await handleSessionRecordingRoutes(new Request(`http://fixture.invalid${path}?format=${format}`), path, responder);
-            expect(response?.status).toBe(200);
-            expect(response?.headers.get("Cache-Control")).toBe("no-store");
-            const body = await response!.text();
-            expect(body).toContain(recordingId);
-            if (recordingId === recording.id) expect(body).toContain(publicControl);
-            for (const secret of sensitive) expect(body).not.toContain(secret);
-            const events = format === "jsonl" ? body.trim().split("\n").map(line => JSON.parse(line))
-              : format === "json" ? JSON.parse(body).events
-              : JSON.parse(body.split("const embeddedTrace = ")[1].split(";\nconst fixture =")[0]).events;
-            expect(events.filter((event: any) => event.kind === "assistant_output" && event.data.interaction_id).map((event: any) => event.data.interaction_id).sort()).toEqual([...new Set(savedRows)].sort());
-            expect(events.every((event: any) => event.redactions === undefined)).toBe(true);
-          }
-        };
-        await checkExports(recording.id);
-        // Exercise the real persisted-timeline snapshot path without replaying
-        // private HTTP responses into a recorder or relying on redaction.
-        const snapshotResponse = await handleSessionRecordingRoutes(new Request("http://fixture.invalid/agent/recordings/start", {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_jid: chat, mode: "full", include_timeline_snapshot: true }),
-        }), "/agent/recordings/start", responder);
-        expect(snapshotResponse?.status).toBe(201);
-        const snapshot = (await snapshotResponse!.json()).recording;
-        stopSessionRecording(chat);
-        const snapshotEvents = getSessionRecording(snapshot.id)!.events;
-        expect(snapshotEvents.filter(event => event.kind === "assistant_output").map(event => (event.data as any).interaction_id).sort()).toEqual([...new Set(savedRows)].sort());
-        expect(snapshotEvents.every(event => event.redactions === undefined)).toBe(true);
-        for (const secret of sensitive) expect(readFileSync(snapshot.tracePath, "utf8")).not.toContain(secret);
-        await checkExports(snapshot.id);
         expect(errors).toEqual([]);
         // Observe cancellation/cleanup logging before releasing the log sink.
         cancelProviderAuthFlows(session as any);
@@ -288,7 +238,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
         for (const secret of sensitive) expect(JSON.stringify(logs)).not.toContain(secret);
         console.log("ANTHROPIC_PRIVATE_UI=" + JSON.stringify({ browser: name, scenario, version: "1.0.3", tokenRequests, unexpectedNetwork, transportAborted,
           modelActivated: session.model.id !== "gpt-test", privateHeadersChecked: privateResponses > 0, allChatRowsChecked: true,
-          fullRecordingAndExportsChecked: true, redactionFallback: false, callbackListenerObserved: false, inference: "not_invoked" }));
+          callbackListenerObserved: false, inference: "not_invoked" }));
       } finally {
         try {
           if (cleanupSession) cancelProviderAuthFlows(cleanupSession as any);
@@ -299,7 +249,6 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
           globalThis.fetch = originalFetch;
           try {
             if (cleanupChat) {
-              stopSessionRecording(cleanupChat);
               const rows = getDb().query("SELECT rowid FROM messages WHERE chat_jid=?").all(cleanupChat) as Array<{ rowid: number }>;
               for (const row of rows) deleteMessageByRowId(cleanupChat, row.rowid);
             }
@@ -308,8 +257,6 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
             finally {
               try { cleanupServer?.(); }
               finally {
-                if (previousRecordingsDir === undefined) delete process.env.PICLAW_RECORDINGS_DIR;
-                else process.env.PICLAW_RECORDINGS_DIR = previousRecordingsDir;
                 ws.cleanup();
               }
             }

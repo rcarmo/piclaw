@@ -55,7 +55,7 @@ These historical acceptance limits do not describe #1324 validation or authorise
 | Plan | original-009–012, conditional on external add-on |
 | Timeline/rendering/annotations/speech/tools | original-024–029; timeline features; thoughts/status scenarios |
 | Auth/OOBE/invitations/family privacy/sign-out | auth-001–014; owner restrictions in settings-011 and original-025 |
-| All sixteen Classic built-in Settings sections | settings-001–030, including General, Sessions, Recordings, Quick Actions, Tools, Add-ons, Compaction, Budget, Keyboard, Scheduled Tasks, Workspace, Environment, Providers, Models, Appearance and Keychain |
+| All fifteen Classic built-in Settings sections | settings-001–030, including General, Sessions, Quick Actions, Tools, Add-ons, Compaction, Budget, Keyboard, Scheduled Tasks, Workspace, Environment, Providers, Models, Appearance and Keychain |
 | Registered Editor/Developer settings | settings-031–032; local browser preferences, no server save |
 | Workspace/viewers/editor/terminal/VNC | workspace-001–018 plus editor/terminal regressions; unsupported in-pane search not invented |
 | BTW/Adaptive Cards/widgets | extra-001–005; live and persisted widget lifecycles distinguished |
@@ -194,15 +194,12 @@ Each link names the exact scenario line. Stable IDs retain their evidence packet
 | ux-settings-021 | Reveal and copy the widget token | [classic/canonical/core-settings.feature:183](../classic/canonical/core-settings.feature#L183) | [core-settings](audit/core-settings.md) |
 | ux-settings-022 | Confirm widget-token regeneration | [classic/canonical/core-settings.feature:194](../classic/canonical/core-settings.feature#L194) | [core-settings](audit/core-settings.md) |
 | ux-settings-023 | Change session lifecycle and agent behaviour settings | [classic/canonical/core-settings.feature:205](../classic/canonical/core-settings.feature#L205) | [core-settings](audit/core-settings.md) |
-| ux-settings-024 | Load and inspect session recordings | [classic/canonical/core-settings.feature:216](../classic/canonical/core-settings.feature#L216) | [core-settings](audit/core-settings.md) |
-| ux-settings-025 | Start and stop a recording for the entered chat | [classic/canonical/core-settings.feature:226](../classic/canonical/core-settings.feature#L226) | [core-settings](audit/core-settings.md) |
-| ux-settings-026 | Delete a recording and preview redaction | [classic/canonical/core-settings.feature:238](../classic/canonical/core-settings.feature#L238) | [core-settings](audit/core-settings.md) |
-| ux-settings-027 | Filter and collapse the Tools catalogue | [classic/canonical/core-settings.feature:250](../classic/canonical/core-settings.feature#L250) | [core-settings](audit/core-settings.md) |
-| ux-settings-028 | Persist search mode and tool-result compaction choices | [classic/canonical/core-settings.feature:260](../classic/canonical/core-settings.feature#L260) | [core-settings](audit/core-settings.md) |
-| ux-settings-029 | Edit Quick Actions selections before explicitly saving | [classic/canonical/core-settings.feature:270](../classic/canonical/core-settings.feature#L270) | [core-settings](audit/core-settings.md) |
-| ux-settings-030 | Inspect notification capability and instance TOTP setup | [classic/canonical/core-settings.feature:283](../classic/canonical/core-settings.feature#L283) | [core-settings](audit/core-settings.md) |
-| ux-settings-031 | Save local editor preferences from the registered pane | [classic/canonical/core-settings.feature:291](../classic/canonical/core-settings.feature#L291) | [core-settings](audit/core-settings.md) |
-| ux-settings-032 | Gate developer preferences behind local developer mode | [classic/canonical/core-settings.feature:299](../classic/canonical/core-settings.feature#L299) | [core-settings](audit/core-settings.md) |
+| ux-settings-027 | Filter and collapse the Tools catalogue | [classic/canonical/core-settings.feature:216](../classic/canonical/core-settings.feature#L216) | [core-settings](audit/core-settings.md) |
+| ux-settings-028 | Persist search mode and tool-result compaction choices | [classic/canonical/core-settings.feature:226](../classic/canonical/core-settings.feature#L226) | [core-settings](audit/core-settings.md) |
+| ux-settings-029 | Edit Quick Actions selections before explicitly saving | [classic/canonical/core-settings.feature:236](../classic/canonical/core-settings.feature#L236) | [core-settings](audit/core-settings.md) |
+| ux-settings-030 | Inspect notification capability and instance TOTP setup | [classic/canonical/core-settings.feature:249](../classic/canonical/core-settings.feature#L249) | [core-settings](audit/core-settings.md) |
+| ux-settings-031 | Save local editor preferences from the registered pane | [classic/canonical/core-settings.feature:257](../classic/canonical/core-settings.feature#L257) | [core-settings](audit/core-settings.md) |
+| ux-settings-032 | Gate developer preferences behind local developer mode | [classic/canonical/core-settings.feature:265](../classic/canonical/core-settings.feature#L265) | [core-settings](audit/core-settings.md) |
 | ux-workspace-001 | Create a new untitled markdown file in the resolved folder | [classic/canonical/workspace-flows.feature:11](../classic/canonical/workspace-flows.feature#L11) | [workspace](audit/workspace.md) |
 | ux-workspace-002 | Rename a selected non-root workspace entry | [classic/canonical/workspace-flows.feature:22](../classic/canonical/workspace-flows.feature#L22) | [workspace](audit/workspace.md) |
 | ux-workspace-003 | Delete a selected file after confirmation | [classic/canonical/workspace-flows.feature:33](../classic/canonical/workspace-flows.feature#L33) | [workspace](audit/workspace.md) |

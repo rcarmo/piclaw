@@ -134,7 +134,6 @@ The following operational settings are persisted under typed domains in `.piclaw
 
 | Typed setting | Compatibility variable | Default | Purpose |
 |---------------|------------------------|---------|---------|
-| `domains.sessionRecordings.directory` | `PICLAW_RECORDINGS_DIR` | `<PICLAW_DATA>/session-recordings` | Root directory for opt-in session trace recordings. |
 | `domains.addons.apiFailureBackoffMs` | `PICLAW_ADDON_API_FAILURE_BACKOFF_MS` | `60000` | Suppression period for repeated identical add-on API failures. |
 | `domains.agentControl.abortSettleTimeoutMs` | `PICLAW_ABORT_SETTLE_TIMEOUT_MS` | `1000` | Bounded `0..10000` ms wait for abort cleanup to settle. |
 

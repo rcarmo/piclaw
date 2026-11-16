@@ -228,47 +228,6 @@ export async function updateScheduledTask(action, id, options: ApiOptions = {}) 
     });
 }
 
-export async function getSessionRecordings() {
-    return request('/agent/recordings');
-}
-
-export async function getSessionRecording(id) {
-    return request(`/agent/recordings/${encodeURIComponent(id)}`);
-}
-
-export async function startSessionRecording(options: ApiOptions = {}) {
-    return request('/agent/recordings/start', {
-        method: 'POST',
-        body: JSON.stringify(options || {}),
-    });
-}
-
-export async function stopSessionRecording(options: ApiOptions = {}) {
-    return request('/agent/recordings/stop', {
-        method: 'POST',
-        body: JSON.stringify(options || {}),
-    });
-}
-
-export async function deleteSessionRecording(id) {
-    return request(`/agent/recordings/${encodeURIComponent(id)}`, { method: 'DELETE' });
-}
-
-export function sessionRecordingExportUrl(id, format = 'json') {
-    return `/agent/recordings/${encodeURIComponent(id)}/export?format=${encodeURIComponent(format)}`;
-}
-
-export function sessionRecordingPlaybackUrl(id) {
-    return `/recordings/playback?id=${encodeURIComponent(id)}`;
-}
-
-export async function previewSessionRecordingRedaction(payload, options: ApiOptions = {}) {
-    return request('/agent/recordings/redact-preview', {
-        method: 'POST',
-        body: JSON.stringify({ payload, ...options }),
-    });
-}
-
 export async function saveUiState(payload) {
     return request('/agent/ui-state', {
         method: 'POST',

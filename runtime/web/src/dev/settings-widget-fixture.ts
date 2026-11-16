@@ -241,7 +241,7 @@ function FixtureApp() {
   const [renderKey, setRenderKey] = useState(0);
 
   const sections = useMemo(() => [
-    'general', 'theme', 'sessions', 'recordings', 'compaction', 'keyboard', 'quick-actions', 'workspace', 'environment', 'keychain', 'providers', 'models', 'mcp', 'tools', 'authentication', 'scheduled-tasks', 'addons', 'editor', 'developer',
+    'general', 'theme', 'sessions', 'compaction', 'keyboard', 'quick-actions', 'workspace', 'environment', 'keychain', 'providers', 'models', 'mcp', 'tools', 'authentication', 'scheduled-tasks', 'addons', 'editor', 'developer',
     'fixture-b-cheapskate', 'fixture-z-observability', 'fixture-a-portainer', 'fixture-m-proxmox',
   ], []);
 

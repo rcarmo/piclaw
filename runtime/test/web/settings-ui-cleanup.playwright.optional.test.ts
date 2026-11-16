@@ -40,6 +40,15 @@ export async function openSettings(engine: string, width: number, section: strin
 }
 
 for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: Settings no longer offers a Recordings pane`, async () => {
+    const { page, errors } = await openSettings(engine, 1280, 'general');
+    try {
+      expect(await page.locator('.settings-nav-item', { hasText: 'Recordings' }).count()).toBe(0);
+      expect(await page.locator('.settings-recording-start-card, .settings-recording-preview').count()).toBe(0);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  });
+
   browserTest(`${engine}: Editor and Developer panes are listed and open by deep link or nav`, async () => {
     const { page, errors } = await openSettings(engine, 1280, 'developer');
     try {
