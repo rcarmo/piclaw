@@ -415,7 +415,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       },
     },chat);
     const watching = runtime().watchSession({ incarnation: target.domain, chatJid: chat, branchId: target.branchId, conversationId: target.conversationId },
-      view => { if (liveChannel === channel) render(view); });
+      (view, startedAt) => { if (liveChannel === channel) render(view, startedAt); });
     liveWatches.set(chat, watching);
     void watching.catch(error => { liveWatches.delete(chat); log.error("Conversation watch failed", { chatJid: chat, err: error }); });
   };

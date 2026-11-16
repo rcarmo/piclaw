@@ -26,9 +26,9 @@ runs:
           };
           if (Object.keys(contract.roots).length !== 4 ||
               Object.entries(roots).some(([key, value]) => contract.roots[key] !== value) ||
-              contract.catalogDependencies !== "qualification/pi-durable-130/node_modules" ||
+              contract.catalogDependencies !== "qualification/native/node_modules" ||
               JSON.stringify(contract.typeProjects) !== JSON.stringify([
-                "runtime/durable-engine", "qualification/pi-durable-130"
+                "runtime/durable-engine", "qualification/native"
               ])) throw new Error("Unexpected native fixture/dependency layout");
         '
 
@@ -56,7 +56,7 @@ runs:
 
     - name: Install qualification catalogue dependencies
       shell: bash
-      working-directory: qualification/pi-durable-130
+      working-directory: qualification/native
       run: bun install --frozen-lockfile --ignore-scripts
 
     - name: Install pinned native add-on dependencies

@@ -1,5 +1,7 @@
 # Native qualification
 
+The active suite is `qualification/native`. Its provenance checks and current gate target SDK **1.5.2**; the former `pi-durable-130` directory name is retired. Historical receipts retain their original paths and versions and do not qualify current source. Moving the suite earns no runtime-reduction credit.
+
 ## Current Core Plan ownership (#1991)
 
 Plan now uses the existing application Harness and a session-scoped `app.plan` document family keyed by exact chat/branch JID. Native tool and hook APIs replace the installed Plan declaration, KV writer and qualification. Existing current-native KV records are retained as read-only seeds; no v3 importer or mirror is used.
@@ -11,7 +13,7 @@ Older dated receipts below describe their original source and do not establish c
 
 `make ci-native` runs the required offline native gate; `make ci-full` requires both host and native qualification. See [Native validation](../../docs/native-validation.md) for exact preparation and all five required exports.
 
-The shared [gate contract](../../scripts/native-gate-contract.json) pins two add-on checkouts and all 109 native files, including Goal. ADDONS/CORE/GOAL use one native checkout; CONTRACT uses separate historical source. Catalogue dependencies come from frozen `qualification/pi-durable-130/node_modules`, never a live profile. Root Pi 1.2.0 and the private engine's Pi 1.3.0 graph stay isolated. The runner verifies existing provenance, runs both private type projects and required accepted-source integration, then requires terminal Bun reports for the complete native inventory. No skip, filter, empty run or missing fixture can qualify this gate. It performs no source acquisition or dependency installation.
+The shared [gate contract](../../scripts/native-gate-contract.json) pins SDK **1.5.2**, two add-on checkouts and the complete native file inventory, including Goal. ADDONS/CORE/GOAL use one native checkout; CONTRACT uses separate historical source. Catalogue dependencies come from frozen `qualification/native/node_modules`, never a live profile. Root Pi 1.5.2 and the private engine’s Pi Durable 1.5.2 graph stay physically isolated. Preflight checks the contract against both manifest pins, the installed root SDK and the recorded private package bytes. The runner verifies existing provenance, runs both private type projects and required accepted-source integration, then requires terminal Bun reports for the complete native inventory. No skip, filter, empty run or missing fixture can qualify this gate. It performs no source acquisition or dependency installation.
 
 ## Historical checkpoints
 

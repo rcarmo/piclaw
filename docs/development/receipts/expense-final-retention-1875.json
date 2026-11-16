@@ -215,7 +215,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "a64d2881c5a7e657f71e965f4beb5a581dc07e9797edd1123af3739af3f0ca63",
       "state": "retained-decoupled",
-      "currentSha256": "6d887ae0ca725062b913ba55f13dff67352d2246f600053ede5529c21d62858a",
+      "currentSha256": "48a6573066fbf6ed9ef5701891e69232936ce3f5f189ae029305b05ab5e8be9d",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": []
     },
@@ -379,7 +379,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "2f6a632f863196fccd48a3f3912c8bef407fb2ca5d07c13d32400dcef84c87cc",
       "state": "retained-decoupled",
-      "currentSha256": "fa8cc7cbda7f28275f2d2fa5c6be95ee295737d99e662291572c182d4578825f",
+      "currentSha256": "51d0ade051728fac90a35bcc5d0b88adb7d8d00e99b7a067d25c95cc805c7199",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": [
         {
@@ -2141,7 +2141,7 @@
       "deliveryOwner": "#1878",
       "originalSha256": "c7e461e26639a5d99f9ca8f9c3de6d013963f51978794b4c96e52581de243d8a",
       "state": "retained-decoupled",
-      "currentSha256": "cae1cea3930d0bfc7994b7e4365b7cbcc68007505918e78224bd90a090bda306",
+      "currentSha256": "cd5f231b9b2354305856fd97f68ada2be2d76fd208efef88f01df9a640a20ac6",
       "currentPurpose": "generic exact schema/backup/recovery/reference inspection including inert old objects; no financial initializer or repair",
       "directImportCallers": []
     },
@@ -2249,7 +2249,7 @@
       "deliveryOwner": "#1880",
       "originalSha256": "7e548623dd8753d549b783ac2245ea0252c72109194f48655b1dcbfac6c42c7d",
       "state": "retained-decoupled",
-      "currentSha256": "f4ee0aed7c83c222dea858c60b2788f86069e53f91fbc17e0442b8b0746af151",
+      "currentSha256": "db2829813651f6da208cd84c89ad2b99f79e19b3e7a3d5c9734484c202da021d",
       "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
       "directImportCallers": []
     },

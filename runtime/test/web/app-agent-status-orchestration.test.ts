@@ -81,12 +81,14 @@ test('refreshAgentStatusForChat restores draft/thought previews for active paylo
   const draftBufferRef = { current: '' };
   const activeTurns: Array<string | null | undefined> = [];
   let extensionWorkingState: any = null;
+  let restoredStatus: any = null;
+  const startedAt = '2026-11-15T12:00:00.000Z';
 
   const response = await refreshAgentStatusForChat({
     currentChatJid: 'web:chat',
     getAgentStatus: async () => ({
       status: 'active',
-      data: { turn_id: 'turn-42', type: 'thinking' },
+      data: { turn_id: 'turn-42', type: 'thinking', started_at: startedAt },
       thought: { text: 'thought text', total_lines: 1 },
       draft: { text: 'draft text', total_lines: 1 },
       extension_working: { message: 'Compacting context…', indicator: { mode: 'default' }, visible: true },
@@ -100,7 +102,7 @@ test('refreshAgentStatusForChat restores draft/thought previews for active paylo
     pendingRequestRef: { current: null },
     thoughtBufferRef,
     draftBufferRef,
-    setAgentStatus: () => undefined,
+    setAgentStatus: (status) => { restoredStatus = status; },
     setAgentDraft: (next) => {
       draftState = typeof next === 'function' ? next(draftState) : next;
     },
@@ -119,6 +121,7 @@ test('refreshAgentStatusForChat restores draft/thought previews for active paylo
 
   expect(response?.status).toBe('active');
   expect(activeTurns).toEqual(['turn-42']);
+  expect(restoredStatus.started_at).toBe(startedAt);
   expect(thoughtBufferRef.current).toBe('thought text');
   expect(draftBufferRef.current).toBe('draft text');
   expect(thoughtState.text).toBe('thought text');

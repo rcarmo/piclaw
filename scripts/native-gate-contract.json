@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "sdkVersion": "1.5.2",
   "fixtures": {
     "native": {
       "repository": "rcarmo/piclaw-addons",
@@ -16,10 +17,10 @@
     "DURABLE_GOAL_ADDON_ROOT": "native",
     "DURABLE_CONTRACT_ADDONS_ROOT": "contract"
   },
-  "catalogDependencies": "qualification/pi-durable-130/node_modules",
+  "catalogDependencies": "qualification/native/node_modules",
   "typeProjects": [
     "runtime/durable-engine",
-    "qualification/pi-durable-130"
+    "qualification/native"
   ],
   "integrationTests": [
     "./test/channels/web/input-source-admission.test.ts",

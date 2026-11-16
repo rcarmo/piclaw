@@ -21,17 +21,29 @@ describe('canonical offline native contract', () => {
 
   test('both private type projects and required engine integration precede all isolated files', () => {
     const stages = nativeStages(contract);
-    expect(stages.map(stage => stage.name)).toEqual(['type:runtime/durable-engine', 'type:qualification/pi-durable-130', 'accepted-source', 'native-isolated']);
+    expect(stages.map(stage => stage.name)).toEqual(['type:runtime/durable-engine', 'type:qualification/native', 'accepted-source', 'native-isolated']);
     for (const stage of stages.slice(0, 3)) expect(stage.command[1]).toBe(join(ROOT, 'runtime/scripts/local-test-priority.ts'));
     expect(stages[2].command).toContain('PICLAW_REQUIRE_DURABLE_ENGINE=1');
     expect(stages[2].command.slice(-contract.integrationTests.length)).toEqual(contract.integrationTests);
     expect(contract.integrationTests).toContain('./test/native-gate-contract.test.ts');
     expect(contract.integrationTests).toContain('./test/scripts/local-test-priority.test.ts');
     expect(stages[3].command).toEqual([process.execPath, './scripts/test-isolated.ts']);
-    expect(stages[3].cwd).toBe(join(ROOT, 'qualification/pi-durable-130'));
+    expect(stages[3].cwd).toBe(join(ROOT, 'qualification/native'));
     expect(() => nativeStages({ ...contract, typeProjects: [] })).toThrow('both private type projects');
     expect(() => nativeStages({ ...contract, integrationTests: [] })).toThrow('required accepted-source');
     for (const required of ['native-http-input.test.ts', 'direct-sdk-message.test.ts', 'native-source-cursor-ack.test.ts', 'native-factory-compaction.test.ts', 'runtime.test.ts', 'goal-tools.test.ts', 'goal-usage.test.ts', 'goal-settlement.test.ts', 'goal-terminal-race.test.ts', 'installed-goal-catalog.test.ts', 'native-compaction-settings.test.ts', 'routing-policy.test.ts', 'native-ui-projection.test.ts']) expect(contract.tests).toContain(required);
+  });
+
+  test('qualification targets current SDK pins and rejects historical-version drift', async () => {
+    const rootPackage=JSON.parse(readFileSync(join(ROOT,'package.json'),'utf8'));
+    const enginePackage=JSON.parse(readFileSync(join(ROOT,'runtime/durable-engine/package.json'),'utf8'));
+    expect(contract.sdkVersion).toBe('1.5.2');
+    expect(rootPackage.dependencies['@earendil-works/pi-coding-agent']).toBe(contract.sdkVersion);
+    expect(enginePackage.dependencies['@earendil-works/pi-durable']).toBe(contract.sdkVersion);
+    const provenance=JSON.parse(readFileSync(join(ROOT,'qualification/native/provenance.json'),'utf8'));
+    expect(provenance.packages.every((pkg:{version:string})=>pkg.version===contract.sdkVersion)).toBe(true);
+    await expect(nativePreflight({...contract,sdkVersion:'1.3.0'},{})).rejects.toThrow('SDK qualification target must match');
+    expect(contract.catalogDependencies).toBe('qualification/native/node_modules');
   });
 
   test('preflight requires the separately locked code-review parser graph', async () => {
@@ -127,7 +139,7 @@ describe('canonical offline native contract', () => {
     for (const file of ['host-regrets-model.test.ts','host-request-write-admission.test.ts']) expect(contract.tests).not.toContain(file);
     for (const file of ['host-regrets-tool.test.ts','newregrets-enabled-default-factory.test.ts','native-post-provider-contention.test.ts','native-goal-lifecycle.test.ts','goal-settlement.test.ts','model-failure.test.ts','threaded-queued-steering.test.ts']) expect(contract.tests).toContain(file);
     const retired = /(?:from\s+|import\s*\()\s*["'][^"'\n]*(?:host-request-accounting|host-regrets-model|budget-request-reservations|budget\/model-request-accounting|db\/budget-limits\.[jt]s|queued-followup-lifecycle-service)["']/;
-    for (const file of contract.tests) expect(readFileSync(join(ROOT,'qualification/pi-durable-130',file),'utf8'),file).not.toMatch(retired);
+    for (const file of contract.tests) expect(readFileSync(join(ROOT,'qualification/native',file),'utf8'),file).not.toMatch(retired);
   });
 
   test('discovery drift, missing suites, duplicates and filtered inventory cannot qualify', () => {
