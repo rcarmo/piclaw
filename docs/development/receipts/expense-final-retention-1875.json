@@ -379,7 +379,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "2f6a632f863196fccd48a3f3912c8bef407fb2ca5d07c13d32400dcef84c87cc",
       "state": "retained-decoupled",
-      "currentSha256": "3d17b954b8b7fd6ddddfe5d279b3f1c6537da31533c28b306746faec3b566950",
+      "currentSha256": "21352fb0ccbbcfe75e9c5700881853571f766fb4aef233197f238f52a31400f6",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": [
         {

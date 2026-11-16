@@ -4,8 +4,8 @@
   "files": [
     {
       "path": "runtime/extensions/viewers/editor/vendor/codemirror.js",
-      "bytes": 1394319,
-      "sha256": "882b4287631a5e54849c46cf0fd377857c55199a7dff7978f855ca67acba4c5a",
+      "bytes": 1394341,
+      "sha256": "cc0aa902e5992d349830faaab94bca5ed007265595587609b32b4610d3d1f713",
       "manifests": [
         "runtime/vendor-manifests/codemirror-editor.json"
       ],
@@ -300,8 +300,8 @@
     },
     {
       "path": "runtime/web/static/common/js/marked.min.js",
-      "bytes": 49282,
-      "sha256": "d63eacc203659494f551b3eb934bf2f9b75bb6a4548b748071c79e96f747caf7",
+      "bytes": 50122,
+      "sha256": "834b7696b96c7c4cdac133b1b47eaa6aeceb37eb49f6c84be6c8b038443c425a",
       "manifests": [
         "runtime/vendor-manifests/marked-global.json"
       ],
@@ -457,8 +457,8 @@
     },
     {
       "path": "runtime/web/static/common/js/vendor/preact-htm.js",
-      "bytes": 16184,
-      "sha256": "1edda980b63fbaf6e18999ffea40c5116057593e1827335193dbde36cf714514",
+      "bytes": 16055,
+      "sha256": "0329d6fda6e0b16bf6a92af4a607f00ae62d1790ff2263af36e3f7d5bcfc11ea",
       "manifests": [
         "runtime/vendor-manifests/preact-htm.json"
       ],
@@ -467,7 +467,7 @@
     {
       "path": "runtime/web/static/common/js/vendor/preact-htm.meta.json",
       "bytes": 1207,
-      "sha256": "15f6694e4493612c333993377795c2c1724b4c7ecba44c3d1c57985de77e9725",
+      "sha256": "7da70d4030782144c1ab40075a66e8bdcc16161f5125c4d240c7235b0444d853",
       "manifests": [],
       "provenance": "unrecorded"
     },
