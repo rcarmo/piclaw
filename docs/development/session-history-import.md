@@ -77,7 +77,14 @@ output contains counts/provenance/IDs, not message contents or credentials.
 
 ## Store boundary
 
-Normal Core startup checks an existing store read-only before root WAL/schema work.
+Normal Core startup attempts exclusive file creation without a prior existence
+check. If a file already exists or another creator wins, startup validates it
+read-only before root WAL/schema work. An unstamped empty winner is refused intact;
+a recognised native winner can reopen through the normal SQLite ownership and
+transaction checks. There is no creation retry, automatic adoption or reset.
+Other filesystem errors propagate unchanged. The PIC4 header also preserves a
+native creator's format intent after a failed first schema transaction; it grants
+no execution authority.
 An unsupported v3 store is refused intact and points to the explicit one-shot command.
 Fresh native stores carry the PIC4 SQLite application ID; supported pre-existing
 native application metadata remains valid. This format discriminator grants no

@@ -716,10 +716,16 @@ function openDatabase(paths: Readonly<RuntimeConfigPaths>, role: PublishedDataba
   if (pendingCleanup) throw Error("Database cleanup is pending; await closeDatabase() before reopening");
   let createdNativeFile = false, createdIdentity: string | undefined;
   if (role === "root" && !useMemory) {
-    inspectExistingStoreFormat(nextPath);
     fs.mkdirSync(path.dirname(nextPath), { recursive: true });
-    if (!fs.existsSync(nextPath)) {
-      const fd = fs.openSync(nextPath, 'wx', 0o600);
+    let fd: number | undefined;
+    try { fd = fs.openSync(nextPath, 'wx', 0o600); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      // A file already existed or another creator won. Validate it read-only
+      // before any SQLite pragmas; never adopt an unstamped winner or retry wx.
+      inspectExistingStoreFormat(nextPath);
+    }
+    if (fd !== undefined) {
       try { const identity = fs.fstatSync(fd); createdIdentity = `${identity.dev}:${identity.ino}`; createdNativeFile = true; }
       finally { fs.closeSync(fd); }
     }

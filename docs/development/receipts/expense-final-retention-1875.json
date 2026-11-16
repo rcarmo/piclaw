@@ -1380,7 +1380,7 @@
       "deliveryOwner": "#1878",
       "originalSha256": "cb401291005aabe1b6644163da800cad71a2f9e460de5c4006e0b3ec617bb54a",
       "state": "retained-decoupled",
-      "currentSha256": "e422c420f078e91212fefbaaf90b204f9bacba0b41d7a953288d6415051bacda",
+      "currentSha256": "83cb3b3225feee950088a607e1d94a66053dd7bebe80ea61cdb87b74205ad91b",
       "currentPurpose": "fresh canonical database/routing ownership, passive observations and historical data protection; no financial schema startup",
       "directImportCallers": [
         {
