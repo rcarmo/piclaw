@@ -95,7 +95,8 @@ content, exclusions, repeated/interrupted behaviour and retired constructor case
 Native schema tests reopen actual public SDK document families, archived input
 records and approved add-on schemas without copied-store cleanup. Generic adapter
 features remain outside native parity qualification. The complete native contract
-contains152files after retiring five converter/rehearsal tests; discovery, both
+contains152files: seven converter/rehearsal files were removed and two import/
+bootstrap files added against the157-file base. Discovery, both
 private type projects and required source-admission/store-format integration remain
 mandatory. Original failures and focused passes stay distinct from the full gate.
 

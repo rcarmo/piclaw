@@ -15,6 +15,7 @@ const digest = (path: string) => createHash('sha256').update(readFileSync(path))
 
 test('historical cleanup entrypoints are absent; the original object declaration remains test data', () => {
   for (const path of removed) expect(existsSync(new URL(`../scripts/${path}`, import.meta.url))).toBe(false);
+  expect(digest(new URL('./fixtures/historical-account-objects.json', import.meta.url).pathname)).toBe('78d78d4d4b8adc3587cd562e7aaa0eb0eaf60769a30091e03931543e15338b9e');
   expect(manifest.source).toBe('cdc214fcc06349dc9d315c2d17c866764e4557d5');
   expect(manifest.objects).toHaveLength(157);
   expect(manifest.names).toHaveLength(37);
