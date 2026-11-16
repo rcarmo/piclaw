@@ -553,3 +553,13 @@ test('a slow context fetch cannot overwrite newer same-generation streamed usage
  release({tokens:200,percent:2,contextWindow:10000,sessionGeneration:'same'});await pending;
  expect(usage.tokens).toBe(900);
 });
+
+test('queue refresh failure during Stop preserves pending rows until an authoritative empty response',async()=>{
+ const original=[{row_id:41,content:'Keep B'},{row_id:42,content:'Keep C'}];let rows=original,clears=0;
+ const dismissed={current:new Set<string|number>([99])};
+ const options={currentChatJid:'web:stop',queueRefreshGenRef:{current:0},activeChatJidRef:{current:'web:stop'},dismissedQueueRowIdsRef:dismissed,
+  getAgentQueueState:async():Promise<{items:QueueRow[]}>=>{throw Error('Temporary reconnect/abort status failure');},
+  setFollowupQueueItems:(next:QueueRow[]|((previous:QueueRow[])=>QueueRow[]))=>{rows=(typeof next==='function'?next(rows):next) as typeof rows;},clearQueuedSteerStateIfStale:()=>{clears++;}};
+ await refreshQueueStateForChat(options);expect(rows).toBe(original);expect(clears).toBe(0);expect([...dismissed.current]).toEqual([99]);
+ options.getAgentQueueState=async()=>({items:[]});await refreshQueueStateForChat(options);expect(rows).toEqual([]);expect(clears).toBe(1);expect(dismissed.current.size).toBe(0);
+});

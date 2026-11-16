@@ -1,3 +1,4 @@
+import { nativeMessageFixture } from "./src/native-message-fixture.js";
 import { createHostController } from "../../runtime/durable-engine/src/host-controller.js";
 import "./src/test-guard.js";
 import { expect, spyOn } from "bun:test";
@@ -276,3 +277,48 @@ for (const boundary of ["request", "yield"] as const) applicationTest(`Goal ${bo
     expect(database.query("SELECT * FROM service_effect_s01_operations").all()).toEqual([]);
   } finally {held.release();await runtime.close();await closeDatabase();lock.release();}
 },30000);
+
+for(const phase of ['generation','tool'] as const)applicationTest(`operator active-${phase} abort preserves queued/late inputs and their exact bytes across reopen`,async()=>{
+  const f=await nativeMessageFixture();let entries=0;const entered=barrier(),hold=barrier(),successorEntered=barrier(),successorHold=barrier();
+  // Task abort bypasses afterFailedRun, even when ordinary failure withdraws or
+  // automatically continues the queue. Do not change the application's policy.
+  Object.assign(f.options.harnessOptions,{settings:{...f.options.harnessOptions.settings,afterFailedRun:phase==='generation'?'withdraw':'continue'}});
+  f.base.host.onModelEnter=()=>{entries++;entered.release();};
+  if(phase==='generation')f.base.host.modelHold=hold;else f.base.host.toolHold=hold;
+  try{
+    await f.open();const active=f.accept(phase==='tool'?'use-tool':'Stop only this generation'),activeId=await f.runtime.submitMessage(active);
+    await (phase==='tool'?f.base.host.toolEntered.promise:entered.promise);
+    const follow=f.accept('Keep this queued follow-up'),followId=await f.runtime.submitMessage(follow,'followUp');
+    const steer=f.accept('Keep this queued steering input'),steerId=await f.runtime.submitMessage(steer,'steer');
+    const scope=await f.runtime.readMessageAbortScope(f.binding);if(!scope)throw Error('Expected active SDK scope');
+    const late=f.accept('Arrived after Stop captured its target'),lateId=await f.runtime.submitMessage(late,'followUp');
+    const ids=[followId,steerId,lateId];
+    const queueRecords=()=>ids.map(id=>f.root.query('SELECT * FROM submissions WHERE id=?').get(id));
+    const originalQueue=queueRecords(),sources=f.root.query('SELECT * FROM service_effect_s01_sources ORDER BY source_seq').all();
+    const messages=f.root.query('SELECT rowid,* FROM messages ORDER BY rowid').all();
+    await f.runtime.abortMessages(f.binding,scope);
+    expect(await f.runtime.messageSubmissionStatus(active)).toMatchObject({id:activeId,status:'unanswered',reason:'aborted'});
+    for(const input of [follow,steer,late])expect((await f.runtime.messageSubmissionStatus(input))?.status).toBe('queued');
+    expect(queueRecords()).toEqual(originalQueue);expect(scope.submissionIds).toEqual([activeId]);
+    expect((await f.runtime.readMessageInbox(f.binding)).map(item=>item.submissionId)).toEqual(ids);
+    expect(f.root.query('SELECT * FROM service_effect_s01_sources ORDER BY source_seq').all()).toEqual(sources);
+    expect(f.root.query('SELECT rowid,* FROM messages ORDER BY rowid').all()).toEqual(messages);
+    expect(f.base.host.effects).toBe(0);const calls=entries;
+    expect(await f.runtime.readMessageAbortScope(f.binding)).toBeNull();
+    await f.runtime.abortMessages(f.binding,scope);expect(queueRecords()).toEqual(originalQueue);expect(entries).toBe(calls);
+    const stopped=f.sdkSnapshot();await f.reopen();expect(f.sdkSnapshot()).toEqual(stopped);expect(queueRecords()).toEqual(originalQueue);expect(entries).toBe(calls);
+    expect(await f.runtime.readMessageAbortScope(f.binding)).toBeNull();
+    f.base.host.modelHold=successorHold;f.base.host.toolHold=undefined;hold.release();
+    f.base.host.onModelEnter=()=>{entries++;successorEntered.release();};
+    const resume=f.accept('New explicit user input resumes the retained queue'),resumeId=await f.runtime.submitMessage(resume);
+    await successorEntered.promise;
+    const successorScope=await f.runtime.readMessageAbortScope(f.binding),successor=f.sdkSnapshot();expect(successorScope?.submissionIds[0]).not.toBe(activeId);
+    await f.runtime.abortMessages(f.binding,scope);expect(await f.runtime.readMessageAbortScope(f.binding)).toEqual(successorScope);expect(f.sdkSnapshot()).toEqual(successor);
+    f.base.host.modelHold=undefined;successorHold.release();
+    for(const [input,id]of [[follow,followId],[steer,steerId],[late,lateId],[resume,resumeId]] as const)expect(await f.runtime.waitForMessage(input,id)).toMatchObject({status:'done'});
+    expect((await f.runtime.messageSubmissionStatus(active))?.status).toBe('unanswered');
+    for(const input of [follow,steer,late])expect(f.root.query("SELECT id FROM entries WHERE json_extract(record,'$.kind')='host.accepted' AND json_extract(record,'$.data.sourceId')=?").all(input.sourceId)).toHaveLength(1);
+    const finished=entries;expect(await f.runtime.submitMessage(active)).toBe(activeId);expect(await f.runtime.submitMessage(follow)).toBe(followId);expect(entries).toBe(finished);
+    expect(f.root.query('SELECT * FROM service_effect_s01_operations').all()).toEqual([]);expect(f.root.query('SELECT * FROM service_effect_s02_commits').all()).toEqual([]);
+  }finally{hold.release();successorHold.release();await f.close();}
+},15000);
