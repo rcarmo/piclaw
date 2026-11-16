@@ -159,7 +159,7 @@
     "sharp": "0.35.5",
     "strip-json-comments": "5.0.3",
     "typebox": "1.4.4",
-    "web-push": "3.6.7",
+    "web-push": "4.0.0",
     "@earendil-works/chord": "1.5.2"
   },
   "devDependencies": {
