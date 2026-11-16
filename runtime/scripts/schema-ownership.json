@@ -3832,7 +3832,7 @@
       "derivedIndexes": [
         "995fd9ed1a55a818dff4a30a9a817d6951c42e6f98787987d056805da21c13f3"
       ],
-      "requiredWhenOwnerPresent": false
+      "requiredWhenOwnerPresent": true
     },
     "table:qualification_cutover_work_v1": {
       "owner": "retired:cutover-history",
@@ -3843,7 +3843,7 @@
       "derivedIndexes": [
         "325f7a07b4ba565734b268fc169cace040f369190ffc6e95f495738a88d916ad"
       ],
-      "requiredWhenOwnerPresent": false
+      "requiredWhenOwnerPresent": true
     },
     "table:record_ids": {
       "owner": "sdk:storage",

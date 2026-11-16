@@ -41,6 +41,7 @@ Remote Peer's separate store is outside this main-schema inventory. Generic name
 ## Shape and failure rules
 
 - Unknown tables, indexes, triggers and views fail; no prefix exemptions or table-count quotas.
+- Retired cutover history is absent as a pair on fresh stores. If either original cutover table is present, both original components are required; no old DDL or writer is reinstated.
 - Required missing objects and unapproved shapes fail. PK/UNIQUE/CHECK/FK clauses, deferral/actions, defaults, collations, AUTOINCREMENT, partial indexes, triggers, virtual-table options and STRICT/WITHOUT ROWID remain fingerprinted.
 - Normalisation removes comments, ordinary SQL spelling case, insignificant whitespace and `IF NOT EXISTS`. Top-level table declaration order can be sorted; constraint/index order remains exact. Quoted tokens and literal values remain exact. Additional historical spellings need reviewed source evidence.
 - SQLite-generated PK/UNIQUE indexes inherit only an approved parent constraint fingerprint. Autoindex numbering grants no independent identity.

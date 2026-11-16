@@ -2141,7 +2141,7 @@
       "deliveryOwner": "#1878",
       "originalSha256": "c7e461e26639a5d99f9ca8f9c3de6d013963f51978794b4c96e52581de243d8a",
       "state": "retained-decoupled",
-      "currentSha256": "6f395c99fb19ace96d468908c1a8e6a5b3a835ba1f933c21e38e7b4d92c28057",
+      "currentSha256": "038a3dca34d15b62f63319805aeefab84acd249e199da509a9f2aa5f774277b6",
       "currentPurpose": "generic exact schema/backup/recovery/reference inspection including inert old objects; no financial initializer or repair",
       "directImportCallers": []
     },

@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite";
+import { readFileSync } from "node:fs";
 import { expect, test } from "bun:test";
 import { assertSchemaInventory, canonicalSchemaSql, classifySchemaInventory, readSchemaInventory, type SchemaContract } from "../scripts/lib/schema-ownership.js";
 
@@ -145,6 +146,20 @@ test("FTS virtual and exact shadow tables have owners; similarly named impostors
     db.exec("CREATE TABLE search_invented(value)");
     expect(() => assertSchemaInventory(readSchemaInventory(db), contract, "fixture")).toThrow("Unowned object table:search_invented");
   } finally { db.close(); }
+});
+
+test("retired cutover tables are absent together or retain the complete original pair", () => {
+  const contract = JSON.parse(readFileSync(new URL('../scripts/schema-ownership.json', import.meta.url), 'utf8')) as SchemaContract;
+  const keys = ['table:qualification_cutover_v1', 'table:qualification_cutover_work_v1'];
+  const rows = keys.map(key => ({ kind: 'table' as const, name: key.slice(6), table: key.slice(6), fingerprint: contract.objects[key]!.fingerprints[0]! }));
+  // Approved fingerprints isolate component presence; shape/constraint negatives
+  // remain in the source-wide inventory tests. No old DDL/creator is reintroduced.
+  const errors = (objects: typeof rows) => classifySchemaInventory(objects, contract, 'native').errors
+    .filter(error => keys.some(key => error === `Missing required object ${key}`));
+  expect(errors([])).toEqual([]);
+  expect(errors(rows)).toEqual([]);
+  expect(errors([rows[0]!])).toEqual([`Missing required object ${keys[1]}`]);
+  expect(errors([rows[1]!])).toEqual([`Missing required object ${keys[0]}`]);
 });
 
 test("safe-integer metadata produces the same derived-index fingerprints", () => {
