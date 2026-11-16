@@ -51,7 +51,7 @@
   },
   "current": {
     "production": {
-      "referencedNames": 133,
+      "referencedNames": 132,
       "directReaderNames": 7,
       "directReaderOccurrences": 11,
       "helperReaderNames": 10,
@@ -60,7 +60,7 @@
       "semanticReaderOccurrences": 21
     },
     "runtimeSrc": {
-      "referencedNames": 132,
+      "referencedNames": 131,
       "directReaderNames": 7,
       "directReaderOccurrences": 11,
       "helperReaderNames": 10,
@@ -78,7 +78,7 @@
       "semanticReaderOccurrences": 0
     },
     "tooling": {
-      "referencedNames": 95,
+      "referencedNames": 94,
       "directReaderNames": 42,
       "directReaderOccurrences": 64,
       "helperReaderNames": 0,
@@ -87,7 +87,7 @@
       "semanticReaderOccurrences": 64
     },
     "docsDeploy": {
-      "referencedNames": 157,
+      "referencedNames": 156,
       "directReaderNames": 18,
       "directReaderOccurrences": 42,
       "helperReaderNames": 0,
@@ -3495,53 +3495,6 @@
           "readerFiles": [
             "runtime/scripts/playwright/terminal-reopen-race.ts"
           ]
-        }
-      }
-    },
-    {
-      "name": "PICLAW_RECORDINGS_DIR",
-      "scopes": {
-        "docsDeploy": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "docs/configuration.md"
-          ],
-          "readerFiles": []
-        },
-        "tooling": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/scripts/test-filesystem-isolation.ts"
-          ],
-          "readerFiles": []
-        },
-        "production": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/core/config-runtime.ts",
-            "runtime/src/core/config-sources.ts"
-          ],
-          "readerFiles": []
-        },
-        "runtimeSrc": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/core/config-runtime.ts",
-            "runtime/src/core/config-sources.ts"
-          ],
-          "readerFiles": []
         }
       }
     },

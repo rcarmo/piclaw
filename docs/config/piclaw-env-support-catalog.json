@@ -1925,31 +1925,20 @@
       "name": "PICLAW_RECORDINGS_DIR",
       "owner": "storage",
       "type": "path",
-      "default": "<PICLAW_DATA>/session-recordings",
-      "bounds": "non-empty path",
+      "default": null,
+      "bounds": "identifier/reference only; not a supported environment input",
       "allowedValues": [],
       "secret": false,
-      "persistence": [
-        "env",
-        "dotenv"
-      ],
-      "precedence": [
-        "compat-env",
-        "persisted",
-        "default"
-      ],
-      "status": "compatibility",
-      "compatibilityAliasFor": "domains.sessionRecordings.directory",
-      "deprecation": "migrated to typed domains.sessionRecordings.directory config; compatibility environment alias remains until 3.0.0",
-      "removalVersion": "3.0.0",
+      "persistence": [],
+      "precedence": [],
+      "status": "removed",
+      "compatibilityAliasFor": null,
+      "deprecation": null,
+      "removalVersion": null,
       "bootstrapAllowed": false,
-      "source": "runtime/src/core/config-runtime.ts typed operational domain configuration (#755C)",
-      "migrationDisposition": "migrated-to-domain-config",
-      "supportedPersistence": [
-        "env",
-        "dotenv",
-        "json-config"
-      ]
+      "source": "session recordings removed; the variable is no longer read",
+      "migrationDisposition": "removed-reference-only",
+      "supportedPersistence": []
     },
     {
       "name": "PICLAW_RECOVERY_LOOP_GUARD_ENABLED",

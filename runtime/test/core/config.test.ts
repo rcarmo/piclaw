@@ -163,48 +163,40 @@ describe("core config", () => {
           web: { contentMaxChars: 200000, contentPreviewChars: 12000 },
           addons: { apiFailureBackoffMs: 45000 },
           agentControl: { abortSettleTimeoutMs: 750 },
-          sessionRecordings: { directory: "/tmp/persisted-recordings" },
         },
       });
       const persisted = runConfigSubprocess(workspace, [
         "call:getWebContentConfig",
         "call:getAddonsConfig",
         "call:getAgentControlConfig",
-        "call:getSessionRecordingsConfig",
       ], { noEnvFile: true, env: {
         PICLAW_WEB_MAX_CONTENT_CHARS: undefined,
         PICLAW_WEB_PREVIEW_CHARS: undefined,
         PICLAW_ADDON_API_FAILURE_BACKOFF_MS: undefined,
         PICLAW_ABORT_SETTLE_TIMEOUT_MS: undefined,
-        PICLAW_RECORDINGS_DIR: undefined,
       } });
       expect(persisted.snapshot["call:getWebContentConfig"]).toEqual({ maxChars: 200000, previewChars: 12000 });
       expect(persisted.snapshot["call:getAddonsConfig"]).toEqual({ apiFailureBackoffMs: 45000 });
       expect(persisted.snapshot["call:getAgentControlConfig"]).toEqual({ abortSettleTimeoutMs: 750 });
-      expect(persisted.snapshot["call:getSessionRecordingsConfig"]).toEqual({ directory: "/tmp/persisted-recordings" });
 
       const compat = runConfigSubprocess(workspace, [
         "call:getWebContentConfig",
         "call:getAddonsConfig",
         "call:getAgentControlConfig",
-        "call:getSessionRecordingsConfig",
         "env-unchanged:PICLAW_WEB_MAX_CONTENT_CHARS",
         "env-unchanged:PICLAW_WEB_PREVIEW_CHARS",
         "env-unchanged:PICLAW_ADDON_API_FAILURE_BACKOFF_MS",
         "env-unchanged:PICLAW_ABORT_SETTLE_TIMEOUT_MS",
-        "env-unchanged:PICLAW_RECORDINGS_DIR",
       ], { env: {
         PICLAW_WEB_MAX_CONTENT_CHARS: "10000",
         PICLAW_WEB_PREVIEW_CHARS: "15000",
         PICLAW_ADDON_API_FAILURE_BACKOFF_MS: "30000",
         PICLAW_ABORT_SETTLE_TIMEOUT_MS: "20000",
-        PICLAW_RECORDINGS_DIR: "/tmp/env-recordings",
       } });
       expect(compat.snapshot["call:getWebContentConfig"]).toEqual({ maxChars: 10000, previewChars: 10000 });
       expect(compat.snapshot["call:getAddonsConfig"]).toEqual({ apiFailureBackoffMs: 30000 });
       expect(compat.snapshot["call:getAgentControlConfig"]).toEqual({ abortSettleTimeoutMs: 10000 });
-      expect(compat.snapshot["call:getSessionRecordingsConfig"]).toEqual({ directory: "/tmp/env-recordings" });
-      for (const key of ["PICLAW_WEB_MAX_CONTENT_CHARS", "PICLAW_WEB_PREVIEW_CHARS", "PICLAW_ADDON_API_FAILURE_BACKOFF_MS", "PICLAW_ABORT_SETTLE_TIMEOUT_MS", "PICLAW_RECORDINGS_DIR"]) {
+      for (const key of ["PICLAW_WEB_MAX_CONTENT_CHARS", "PICLAW_WEB_PREVIEW_CHARS", "PICLAW_ADDON_API_FAILURE_BACKOFF_MS", "PICLAW_ABORT_SETTLE_TIMEOUT_MS"]) {
         expect(compat.snapshot[`env-unchanged:${key}`]).toBe(true);
         expectCompatWarningOnce(compat.stderr, key);
       }

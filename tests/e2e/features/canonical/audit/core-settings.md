@@ -34,7 +34,6 @@ All new rows were source checked; independent review covered 019–030. Rows 031
 |---|---|---|
 | ux-settings-019, ux-settings-020, ux-settings-021, ux-settings-022, ux-settings-030 | `runtime/web/src/components/settings/general.ts` — GeneralSection; resolveAvatarPreview; writeSettingsClipboardText | general-settings-ui.test.ts; general-settings-handler.test.ts |
 | ux-settings-023 | `runtime/web/src/components/settings/sessions.ts` — SessionsSection | general-settings-handler.test.ts (route coverage only) |
-| ux-settings-024, ux-settings-025, ux-settings-026 | `runtime/web/src/components/settings/recordings.ts` — RecordingsSection; load; selectRecording; start; stop; remove; runPreview | No direct browser assertions located |
 | ux-settings-027, ux-settings-028 | `runtime/web/src/components/settings/tools.ts` — ToolsSection; toggleGroup; toggleSearchMode; toggleToolCompaction | No direct browser assertions located |
 | ux-settings-029 | `runtime/web/src/components/settings/quick-actions.ts` — QuickActionsSection; load; resetDefaults; save | timeline-quick-actions-settings.test.ts |
 | ux-settings-031 | `runtime/web/src/components/settings/editor-settings.ts` — EditorSettingsSection; registerSettingsPane | No direct browser assertions located |

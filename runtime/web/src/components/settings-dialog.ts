@@ -41,7 +41,7 @@ import { GeneralSection } from './settings/general.js';
 perf('imports-done');
 
 type SettingsSectionComponent = unknown;
-type BuiltinSectionId = 'authentication' | 'general' | 'sessions' | 'recordings' | 'compaction' | 'mcp' | 'keyboard' | 'workspace' | 'environment' | 'providers' | 'models' | 'theme' | 'scheduled-tasks' | 'quick-actions' | 'keychain' | 'tools' | 'addons';
+type BuiltinSectionId = 'authentication' | 'general' | 'sessions' | 'compaction' | 'mcp' | 'keyboard' | 'workspace' | 'environment' | 'providers' | 'models' | 'theme' | 'scheduled-tasks' | 'quick-actions' | 'keychain' | 'tools' | 'addons';
 
 const builtinSectionComponentCache = new Map<BuiltinSectionId, SettingsSectionComponent>();
 const builtinSectionLoadPromiseCache = new Map<BuiltinSectionId, Promise<SettingsSectionComponent>>();
@@ -53,7 +53,6 @@ const BUILTIN_SECTION_LOADERS: Record<BuiltinSectionId, () => Promise<SettingsSe
     general: () => Promise.resolve(GeneralSection),
     authentication: () => import('./settings/authentication.js').then(mod => mod.AuthenticationSection),
     sessions: () => import('./settings/sessions.js').then(mod => mod.SessionsSection),
-    recordings: () => import('./settings/recordings.js').then(mod => mod.RecordingsSection),
     compaction: () => import('./settings/compaction.js').then(mod => mod.CompactionSection),
     mcp: () => import('./settings/mcp.js').then(mod => mod.McpSection),
     keyboard: () => import('./settings/keyboard.js').then(mod => mod.KeyboardSection),
@@ -122,7 +121,6 @@ function renderSectionLoading(label = 'Loading…') {
 // All icons: 24×24 viewBox, 16×16 rendered, stroke-based, stroke-width 2, round caps/joins.
 const iconGeneral = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M8.5 5.9L9.6 2.3h4.8l1.1 3.6 3.7-.8 2.4 4.1-2.6 2.8 2.6 2.8-2.4 4.1-3.7-.8-1.1 3.6H9.6l-1.1-3.6-3.7.8-2.4-4.1L5 12 2.4 9.2l2.4-4.1z"/></svg>`;
 const iconSessions = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`;
-const iconRecordings = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="12" r="2.2"/><path d="m13 10 4-2.5v9L13 14z"/></svg>`;
 const iconCompaction = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 10 9 10"/><path d="M12 7v5l3 3"/></svg>`;
 const iconWorkspace = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`;
 const iconEnvironment = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/><path d="M8 7v10"/><path d="M16 7v10"/></svg>`;
@@ -142,7 +140,6 @@ type SettingsSectionMeta = { id: string; label: string; icon: unknown; searchabl
 const BUILTIN_SECTIONS: SettingsSectionMeta[] = [
     { id: 'general', label: 'General', icon: iconGeneral, searchable: false, order: 10 },
     { id: 'sessions', label: 'Sessions', icon: iconSessions, searchable: false, order: 12 },
-    { id: 'recordings', label: 'Recordings', icon: iconRecordings, searchable: true, placeholder: 'Filter recordings…', order: 12.5 },
     { id: 'compaction', label: 'Compaction', icon: iconCompaction, searchable: false, order: 13 },
     { id: 'keyboard', label: 'Keyboard', icon: iconKeyboard, searchable: true, placeholder: 'Filter shortcuts…', order: 14 },
     { id: 'workspace', label: 'Workspace', icon: iconWorkspace, searchable: false, order: 15 },
@@ -365,7 +362,6 @@ export function SettingsDialogContent({ onClose = null, variant = 'dialog' }) {
             case 'authentication': return html`<${Comp} settingsData=${settingsData} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;
             case 'general': return html`<${Comp} settingsData=${settingsData} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;
             case 'sessions': return html`<${Comp} settingsData=${settingsData} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;
-            case 'recordings': return html`<${Comp} filter=${filter} setStatus=${setStatus} />`;
             case 'compaction': return html`<${Comp} settingsData=${settingsData} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;
             case 'mcp': return html`<${Comp} />`;
             case 'keyboard': return html`<${Comp} filter=${filter} setStatus=${setStatus} />`;

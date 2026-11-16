@@ -212,40 +212,6 @@ Feature: Classic Settings dialog core UX
     And a failure reports a Settings error
     # Maximum lines and compactions remain in the snapshot but have no controls in this section.
 
-  @ux-settings-024 @recordings
-  Scenario: Load and inspect session recordings
-    Given the Classic Recordings section is open
-    Then it loads recordings and active recordings with loading and error feedback
-    And selection uses the preferred recording when present or the first recording
-    When I select a recording
-    Then the section requests its details
-    And details expose metadata, event summaries, playback and JSON, JSONL and HTML exports
-    And filtering matches identifier, title, chat, status or mode without mutating recordings
-
-  @ux-settings-025 @recordings
-  Scenario: Start and stop a recording for the entered chat
-    Given Recordings has no action in progress
-    Then the initial mode is redacted and timeline snapshot inclusion is enabled
-    When I start recording
-    Then the request includes the entered chat, selected mode and snapshot choice
-    And custom redaction keys and patterns are trimmed non-empty lines
-    And success refreshes the list preferring the returned recording
-    When the entered chat has an active recording and I stop it
-    Then the stop request targets that recording identifier
-    And start or stop failure reports a Settings error and releases the busy state
-
-  @ux-settings-026 @recordings @confirmation
-  Scenario: Delete a recording and preview redaction
-    Given a recording is selected
-    When I cancel its deletion confirmation
-    Then no delete request is sent
-    When I confirm deletion
-    Then successful deletion refreshes the list and failure reports a Settings error
-    When I preview redaction with valid JSON
-    Then the preview request uses the selected mode and custom redaction options
-    When the JSON is invalid or preview fails
-    Then an error object is displayed in the preview result
-
   @ux-settings-027 @tools
   Scenario: Filter and collapse the Tools catalogue
     Given the Tools section has supplied toolsets
