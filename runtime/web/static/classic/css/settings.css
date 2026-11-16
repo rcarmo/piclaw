@@ -173,6 +173,13 @@
     padding: 20px 28px;
 }
 
+/* Registered lengths resolve em values on the pane, so an add-on that sets a
+ * compact root font cannot shrink host-owned controls, labels or help text.
+ */
+@property --settings-addon-control-size { syntax: '<length>'; inherits: true; initial-value: 13px; }
+@property --settings-addon-label-size { syntax: '<length>'; inherits: true; initial-value: 13px; }
+@property --settings-addon-help-size { syntax: '<length>'; inherits: true; initial-value: 12px; }
+
 /* Match the widget-token Regenerate control (Authentication → API access),
  * which uses the shared Settings button base: UI font, 13px, control height.
  */
@@ -186,7 +193,7 @@
     --settings-addon-control-border: var(--border-color);
     --settings-addon-control-accent: var(--accent-color);
     --settings-addon-label-size: 0.88em;
-    --settings-addon-help-size: 0.82em;
+    --settings-addon-help-size: max(12px, 0.82em);
     --settings-addon-button-min-height: var(--settings-control-height, 30px);
     --settings-addon-button-min-width: 70px;
     --settings-addon-button-font-size: var(--settings-text-sm, 13px);
@@ -997,8 +1004,9 @@
 }
 
 /* Actions flow at the end of the card header; absolute placement covered the
- * description once the card narrowed. */
-.settings-addon-actions {
+ * description once the card narrowed. Scoped to the catalogue card: add-on
+ * panes use the same class name for ordinary left-aligned action rows. */
+.settings-addon-card-header .settings-addon-actions {
     margin-left: auto;
     white-space: nowrap;
     display: flex;
@@ -3401,7 +3409,8 @@
 .settings-header-filter,
 .settings-output-pad-number { min-height: var(--settings-control-height); }
 .settings-dialog-narrow :is(.settings-dialog-close, .settings-nav-item, .model-catalogue-settings__pin) { min-width: 44px; min-height: 44px; }
-.settings-dialog-narrow .settings-content :is(summary, input[type="color"]) { min-height: 44px; }
+.settings-dialog-narrow .settings-content summary { min-height: 44px; }
+.settings-dialog-narrow .settings-content input[type="color"] { min-height: 44px; width: 44px; height: 44px; }
 .settings-content summary { min-height: var(--settings-control-height); padding-block: 6px; box-sizing: border-box; }
 .settings-dialog-narrow .settings-content :is(input[type="checkbox"], input[type="radio"]) { width: 22px; height: 22px; }
 
@@ -3468,3 +3477,17 @@ button.settings-avatar-inline:focus-visible { outline: 2px solid var(--accent-co
 .settings-dialog-narrow .settings-keychain-table td.settings-keychain-actions { padding-inline: 4px; }
 .settings-dialog-narrow .model-catalogue-settings__row { grid-template-columns: 44px minmax(0, 1fr); }
 .about-version-unknown { color: var(--text-secondary); }
+
+/* Narrow dialogs show the pane name in the header; a first heading that only
+ * repeats it is hidden visually but kept for screen readers. */
+.settings-dialog-narrow .settings-pane-title-repeat {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}

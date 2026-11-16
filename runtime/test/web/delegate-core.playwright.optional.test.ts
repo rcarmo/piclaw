@@ -72,6 +72,9 @@ for (const engine of ['chromium', 'webkit']) for (const width of [390, 1280]) fo
       }));
       for (const control of controls) { expect(control.left).toBeGreaterThanOrEqual(0); expect(control.right).toBeLessThanOrEqual(width); expect(control.label).toBe(true); }
       expect(await page.locator('.delegate-scroll').count()).toBe(2);
+      expect(await page.locator('.delegate-settings [style]').count()).toBe(0);
+      expect(await page.locator('.delegate-scroll').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).maxHeight))).toEqual(['180px', '190px']);
+      expect(await page.getByLabel('Excluded model patterns', { exact: true }).evaluate(node => getComputedStyle(node).fontFamily)).toMatch(/mono/i);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       expect(errors).toEqual([]);
     } finally { await page.close(); }
