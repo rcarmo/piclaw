@@ -24,7 +24,7 @@ The `/commands` audit reports availability from the bound native ports. `GET /ag
 Run through the repository's isolated launcher:
 
 ```sh
-bun run test:local --cwd qualification/pi-durable-130 --env PICLAW_DB_IN_MEMORY=1 -- bun test ./native-critical-controls.test.ts ./native-control-bootstrap.test.ts
+bun run test:local --cwd qualification/native --env PICLAW_DB_IN_MEMORY=1 -- bun test ./native-critical-controls.test.ts ./native-control-bootstrap.test.ts
 bun run test:local --cwd runtime --env PICLAW_DB_IN_MEMORY=1 -- bun test ./test/agent-pool/runtime-facade.test.ts ./test/agent-control/native-control-capabilities.test.ts
 ```
 

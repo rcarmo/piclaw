@@ -72,7 +72,7 @@ Queued compose input starts a new thread unless the request supplies `thread_id`
 
 [Native queue ownership](development/native-queue-boundaries.md) defines source admission, steering, exact-row cancellation and the conflict response for historical unaccepted queue items. SDK queue injection and content-based clear/replay are retired from the web queue interface.
 
-The resolver is in [`host-message-thread.ts`](../runtime/durable-engine/src/host-message-thread.ts). [`application-web.test.ts`](../qualification/pi-durable-130/application-web.test.ts) covers normal and queued publication with the real pool and channel.
+The resolver is in [`host-message-thread.ts`](../runtime/durable-engine/src/host-message-thread.ts). [`application-web.test.ts`](../qualification/native/application-web.test.ts) covers normal and queued publication with the real pool and channel.
 
 ### Tool and turn status
 

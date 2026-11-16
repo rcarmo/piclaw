@@ -18,6 +18,7 @@ import { attachHeaderAnchor } from '../ui/scroll-anchor.js';
 import { copyTextToClipboard } from './post-runtime-safety.js';
 import { highlightCodeToHtml } from '../utils/code-highlighting.js';
 import { getAvatarInfo } from '../ui/agent-utils.js';
+import { parseStatusStartedAt } from '../ui/status-duration.js';
 
 /** The server flags durable replies, whose committed turn can be read on demand. */
 export function hasTurnActivity(post) {
@@ -448,11 +449,6 @@ export function isLiveTurnActive(status, draft, thought) {
     return Boolean(previewText(draft).trim() || previewText(thought).trim());
 }
 
-function parseTime(value) {
-    const ms = typeof value === 'number' ? value : Date.parse(value || '');
-    return Number.isFinite(ms) ? ms : null;
-}
-
 // Expanded/collapsed carries across turns within this page.
 let liveExpandedPreference = false;
 
@@ -468,8 +464,6 @@ export function LiveTurnActivity({ chatJid, status, draft, thought, turnId, stat
     const [expanded, setExpanded] = useState(liveExpandedPreference);
     const [activity, setActivity] = useState(null);
     const [now, setNow] = useState(() => Date.now());
-    const firstSeen = useRef({ turn: null, at: Date.now() });
-    if (firstSeen.current.turn !== turnId) firstSeen.current = { turn: turnId, at: Date.now() };
 
     useEffect(() => { setActivity(null); }, [turnId, chatJid]);
     useEffect(() => {
@@ -498,8 +492,9 @@ export function LiveTurnActivity({ chatJid, status, draft, thought, turnId, stat
 
     if (!active && !(statusPane && statusVisible)) return null;
 
-    const startedAt = parseTime(status?.started_at) ?? firstSeen.current.at;
-    const elapsed = formatActivityDuration(Math.max(0, now - startedAt));
+    const startedAt = parseStatusStartedAt(status);
+    // A missing native timestamp is unknown, never the age of this tab.
+    const elapsed = startedAt === null ? null : formatActivityDuration(Math.max(0, now - startedAt));
     // The status line beneath carries the current tool; the header only repeats it without one.
     const current = !statusPane && typeof status?.title === 'string' && status.type !== 'thinking' ? status.title : '';
     const avatar = getAvatarInfo(agentName, agentAvatarUrl, true);
@@ -527,7 +522,7 @@ export function LiveTurnActivity({ chatJid, status, draft, thought, turnId, stat
                 ${active && html`<div class=${`turn-activity is-live${expanded ? ' is-expanded' : ''}${activity?.errors ? ' has-errors' : ''}`}>
                     <button type="button" class="turn-activity-header" onClick=${toggle} aria-expanded=${expanded ? 'true' : 'false'} aria-controls=${detailId}>
                         <span class="turn-activity-toggle" aria-hidden="true">${renderDisclosureTriangle(expanded ? 'down' : 'right')}</span>
-                        <span class="turn-activity-label">Working · ${elapsed}</span>
+                        <span class="turn-activity-label">${elapsed === null ? 'Working' : `Working · ${elapsed}`}</span>
                         ${current && html`<span class="turn-activity-meta" title=${current}>${current}</span>`}
                         ${activity?.errors > 0 && html`<span class="turn-activity-badge is-error">${activity.errors} failed</span>`}
                     </button>

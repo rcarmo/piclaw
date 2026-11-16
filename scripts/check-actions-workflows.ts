@@ -87,9 +87,9 @@ expectEqual(nativeContract.roots, {
   DURABLE_GOAL_ADDON_ROOT: "native",
   DURABLE_CONTRACT_ADDONS_ROOT: "contract",
 }, "ADDONS/CORE/GOAL must share the native checkout; historical contracts use their own checkout.");
-expectEqual(nativeContract.catalogDependencies, "qualification/pi-durable-130/node_modules",
+expectEqual(nativeContract.catalogDependencies, "qualification/native/node_modules",
   "Catalogue dependencies must use frozen qualification tooling, never a live profile.");
-expectEqual(nativeContract.typeProjects, ["runtime/durable-engine", "qualification/pi-durable-130"],
+expectEqual(nativeContract.typeProjects, ["runtime/durable-engine", "qualification/native"],
   "Both private native projects must be provisioned.");
 expectEqual(nativeSetup.runs?.using, "composite", "Native setup must be a shared composite action.");
 const nativeSteps: Workflow[] = nativeSetup.runs.steps;
@@ -124,7 +124,7 @@ for (const [index, name] of ["native", "contract"].entries()) {
 const nativeInstalls = nativeSteps.filter(step => step.run?.includes("bun install"));
 expectEqual(nativeInstalls.map(step => [step["working-directory"], step.run]), [
   ["runtime/durable-engine", "bun install --frozen-lockfile --ignore-scripts"],
-  ["qualification/pi-durable-130", "bun install --frozen-lockfile --ignore-scripts"],
+  ["qualification/native", "bun install --frozen-lockfile --ignore-scripts"],
   [".qualification-native-addons", "bun install --frozen-lockfile --ignore-scripts"],
   [".qualification-native-addons/addons/code-review", "bun install --frozen-lockfile --ignore-scripts"],
 ], "Setup must prepare the private engine, qualification, native add-on and code-review parser graphs with frozen locks and no lifecycle scripts.");

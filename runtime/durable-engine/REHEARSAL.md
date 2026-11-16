@@ -66,5 +66,5 @@ Successful repeated runs use **different new destinations**. Identical inputs pr
 Qualification (isolated local launcher):
 
 ```sh
-bun run test:local --cwd qualification/pi-durable-130 -- bun test ./rehearsal.test.ts
+bun run test:local --cwd qualification/native -- bun test ./rehearsal.test.ts
 ```
