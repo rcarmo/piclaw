@@ -18,6 +18,7 @@
     "schema-ownership-fixture.ts",
     "installed-addons-fixture.ts",
     "host-operation-authority.test.ts",
+    "host-mcp-http.test.ts",
     "host-process-controls.test.ts",
     "host-terminal-outcome.test.ts",
     "native-process-exit.test.ts",
