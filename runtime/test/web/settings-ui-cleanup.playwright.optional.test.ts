@@ -365,3 +365,142 @@ for (const engine of ['chromium', 'webkit']) {
     expect(results).toEqual(results.map((result: any) => ({ section: result.section, scheme: result.scheme, background: 'rgb(245, 217, 10)', color: 'rgb(17, 17, 17)', errors: [] })));
   }, 120000);
 }
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: phones do not repeat the pane name under the header`, async () => {
+    const repeated = ['providers', 'environment', 'keyboard', 'editor', 'developer', 'mcp', 'authentication'];
+    for (const section of [...repeated, 'general']) {
+      const { page, errors } = await openSettings(engine, 390, section);
+      try {
+        const title = (await page.locator('.settings-dialog-title').innerText()).trim();
+        const first = page.locator('.settings-content h3').first();
+        await first.waitFor({ state: 'attached' });
+        const state = await first.evaluate((h) => ({ text: h.textContent!.trim(), height: h.getBoundingClientRect().height, repeat: h.classList.contains('settings-pane-title-repeat') }));
+        if (repeated.includes(section)) {
+          expect({ section, title, ...state }).toEqual({ section, title: state.text, text: title, height: 1, repeat: true });
+          // Still part of the accessibility tree.
+          expect(await page.getByRole('heading', { name: title, exact: true }).count()).toBeGreaterThan(0);
+        } else {
+          expect(state.repeat).toBe(false);
+          expect(state.height).toBeGreaterThan(10);
+        }
+        expect(errors).toEqual([]);
+      } finally { await page.close(); }
+    }
+    const desktop = await openSettings(engine, 1280, 'providers');
+    try {
+      expect(await desktop.page.locator('.settings-pane-title-repeat').count()).toBe(0);
+    } finally { await desktop.page.close(); }
+  }, 120000);
+}
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: Appearance lists theme modes and palettes from settings data`, async () => {
+    for (const width of [390, 1280]) {
+      const { page, errors } = await openSettings(engine, width, 'theme');
+      try {
+        const rows = await page.locator('.settings-theme-table tbody tr').evaluateAll(rows => rows.map(row => ({
+          label: row.querySelector('strong')?.textContent,
+          mode: row.querySelector('.settings-theme-mode-cell')?.textContent?.trim(),
+          swatches: [...row.querySelectorAll('.settings-theme-palette > span')].map(span => getComputedStyle(span).backgroundColor),
+          inside: (() => { const p = row.querySelector('.settings-theme-palette')!.getBoundingClientRect(), c = row.closest('.settings-content')!.getBoundingClientRect(); return p.left >= c.left && p.right <= c.right; })(),
+        })));
+        expect(rows.map(row => [row.label, row.mode])).toEqual([['Solarized', 'auto'], ['Tokyo Night', 'dark'], ['Paper', 'light']]);
+        for (const row of rows) { expect(row.swatches).toHaveLength(8); expect(new Set(row.swatches).size).toBeGreaterThan(4); expect(row.inside).toBe(true); }
+        const tint = await page.locator('.settings-tint-picker input[type="color"]').boundingBox();
+        expect(Math.abs(tint!.width - tint!.height)).toBeLessThanOrEqual(1); // a square swatch, not a stretched bar
+        expect(errors).toEqual([]);
+      } finally { await page.close(); }
+    }
+  }, 60000);
+}
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: add-on kit headings, checkbox rows, badges and callouts follow the theme`, async () => {
+    for (const width of [390, 1280]) {
+      const { page, errors } = await openSettings(engine, width, 'fixture-a-portainer');
+      try {
+        await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' });
+        await page.evaluate(() => {
+          const root = document.documentElement.style;
+          root.setProperty('--success-color', 'rgb(1, 120, 60)');
+          root.setProperty('--warning-color', 'rgb(180, 100, 0)');
+        });
+        const style = await page.evaluate(() => {
+          const read = (selector: string) => { const e = document.querySelector(selector)!; const s = getComputedStyle(e); return { color: s.color, size: parseFloat(s.fontSize), border: s.borderLeftColor, height: e.getBoundingClientRect().height }; };
+          return { heading: read('.settings-addon-heading'), check: read('.settings-addon-check'), badge: read('.settings-addon-badge'), callout: read('.settings-addon-callout') };
+        });
+        expect(style.badge.color).toBe('rgb(1, 120, 60)');
+        // The callout edge mixes the warning tone with transparency; compare its RGB channels.
+        const rgb = (value: string) => { const srgb = /color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)/.exec(value); return srgb ? srgb.slice(1, 4).map(n => Math.round(Number(n) * 255)) : (value.match(/\d+/g) ?? []).slice(0, 3).map(Number); };
+        expect(rgb(style.callout.border)).toEqual([180, 100, 0]);
+        for (const part of Object.values(style)) expect(part.size).toBeGreaterThanOrEqual(12);
+        expect(style.heading.size).toBeGreaterThan(style.check.size);
+        expect(errors).toEqual([]);
+      } finally { await page.close(); }
+    }
+  }, 60000);
+}
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: add-on control and label sizes ignore a compact add-on root font`, async () => {
+    const { page, errors } = await openSettings(engine, 1280, 'fixture-a-portainer');
+    try {
+      // Restic and Remote Peer set a 13px root; host-owned controls must still match core fields.
+      const sizes = await page.evaluate(() => {
+        const pane = document.querySelector('.settings-content.settings-addon-pane')!;
+        const root = document.createElement('div');
+        root.style.fontSize = '13px';
+        root.innerHTML = '<label class="settings-addon-field"><span class="settings-addon-label">Probe</span><input class="settings-addon-control" type="text"><span class="settings-addon-help">Help</span></label>';
+        pane.append(root);
+        const size = (selector: string) => getComputedStyle(root.querySelector(selector)!).fontSize;
+        return { control: size('.settings-addon-control'), label: size('.settings-addon-label'), help: size('.settings-addon-help'), pane: getComputedStyle(pane).fontSize };
+      });
+      // Classic fields are 0.88em of the Settings content, whatever the add-on root uses.
+      const expected = parseFloat(sizes.pane) * 0.88;
+      expect(Math.abs(parseFloat(sizes.control) - expected)).toBeLessThan(0.05);
+      expect(Math.abs(parseFloat(sizes.label) - expected)).toBeLessThan(0.05);
+      expect(parseFloat(sizes.help)).toBeGreaterThanOrEqual(12);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+}
+
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: add-on kit sections, help paragraphs and checkbox rows keep vertical rhythm`, async () => {
+    const { page, errors } = await openSettings(engine, 390, 'fixture-a-portainer');
+    try {
+      const box = await page.evaluate(() => {
+        const pane = document.querySelector('.settings-content.settings-addon-pane')!;
+        const root = document.createElement('div');
+        // Code Review lays its pane out as a flex column, where an auto margin pushes a row aside.
+        root.style.cssText = 'display:flex;flex-direction:column';
+        root.innerHTML = '<style></style><h4 class="settings-addon-heading">First</h4><p class="settings-addon-help">Help</p>'
+          + '<label class="settings-addon-check"><input type="checkbox"> One</label><label class="settings-addon-check"><input type="checkbox"> Two</label>'
+          + '<h4 class="settings-addon-heading">Second</h4><div class="settings-addon-actions"><button type="button">Refresh</button></div><p class="settings-addon-help">After</p>';
+        pane.replaceChildren(root);
+        const [first, second] = [...root.querySelectorAll('h4')];
+        const help = root.querySelector('p')!;
+        const [one, two] = [...root.querySelectorAll('label')].map(element => element.getBoundingClientRect());
+        return {
+          firstTop: parseFloat(getComputedStyle(first).marginTop),
+          secondTop: parseFloat(getComputedStyle(second).marginTop),
+          helpGap: one.top - help.getBoundingClientRect().bottom,
+          stacked: two.top >= one.bottom,
+          sectionGap: second.getBoundingClientRect().top - two.bottom,
+          // The Add-ons catalogue card pushes its own actions right; pane action rows start at the left edge.
+          actionsInset: root.querySelector('.settings-addon-actions button')!.getBoundingClientRect().left - root.getBoundingClientRect().left,
+          actionsGap: root.querySelectorAll('p')[1].getBoundingClientRect().top - root.querySelector('.settings-addon-actions')!.getBoundingClientRect().bottom,
+        };
+      });
+      expect(box.firstTop).toBe(0);
+      expect(box.secondTop).toBeGreaterThanOrEqual(16);
+      expect(box.helpGap).toBeGreaterThanOrEqual(8);
+      expect(box.stacked).toBe(true);
+      expect(box.sectionGap).toBeGreaterThanOrEqual(24);
+      expect(box.actionsInset).toBeLessThanOrEqual(1);
+      expect(box.actionsGap).toBeGreaterThanOrEqual(8);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+}

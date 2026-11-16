@@ -19,7 +19,9 @@ Ordinary Classic fields define the control reference. Preserve role-specific typ
 Classic ordinary text controls currently use 6px/10px padding, a 6px radius,
 1px border, and 0.88em text. Their native input font is intentionally preserved;
 textarea/monospace roles need not use the same family. In the Chromium fixture,
-text computes to 13.2px at 1366/820px and 11.088px at 520/390px.
+text computes to 13.2px at 1366/820px and 12.32px at 520/390px. Settings text
+does not shrink on phones; small text (help, badges, table headers) floors at
+12px and narrow dialogs give controls 44px touch targets.
 Widths are bounded by their containing pane. Preserve the existing role-specific dimensions.
 
 Native number steppers, search affordances, selects, multiline text and monospace
@@ -44,9 +46,17 @@ add-ons retain host compatibility styling; new panes opt into these classes:
 | `settings-addon-control` | Text/search/password/URL/number/select/textarea shell |
 | `settings-addon-control-group` | Wrapping compound controls, such as password + Save; keep both in the same parent |
 | `settings-addon-help` | Help text; connect with `aria-describedby` when appropriate |
-| `settings-addon-actions` | Wrapping action row |
+| `settings-addon-actions` | Left-aligned wrapping action row |
 | `settings-addon-error` | Validation/error colour; use `role="alert"` for new errors |
 | `settings-addon-status` | Neutral status; use `role="status"` for asynchronous results |
+| `settings-addon-heading` | Section heading (`h3` or `h4`); headings after the first get section spacing |
+| `settings-addon-check` | `<label>` wrapping a native checkbox and its text; one row each |
+| `settings-addon-badge` | Small status label; add `data-tone="success|danger|warning|info"` |
+| `settings-addon-callout` | Notice box; `data-tone` as for badges |
+| `settings-addon-mono` | Monospace text, for identifiers such as keychain entry names |
+
+Colours come from the theme: use `data-tone` rather than fixed colour values,
+and do not set font sizes, colours, borders or spacing inline.
 
 ```html
 <section class="settings-addon-section">

@@ -30,7 +30,7 @@ function flushPerfLog() {
 let _settingsDataCache: Record<string, unknown> | null = null;
 
 perf('module-eval-start');
-import { html, useState, useEffect, useCallback, useRef } from '../vendor/preact-htm.js';
+import { html, useState, useEffect, useLayoutEffect, useCallback, useRef } from '../vendor/preact-htm.js';
 import { useTranslation } from '../utils/i18n.js';
 import { BodyPortal } from './body-portal.js';
 import { compareSettingsPanesAlphabetically, getRegisteredSettingsPanes, registerSettingsPane, notifySettingsPanesChanged } from './settings/pane-registry.js';
@@ -181,6 +181,7 @@ export function SettingsDialogContent({ onClose = null, variant = 'dialog' }) {
     const [layoutMode, setLayoutMode] = useState({ compact: false, narrow: false });
     const filterRef = useRef(null);
     const dialogRef = useRef(null);
+    const contentRef = useRef(null);
     const { t } = useTranslation();
     const sectionLabel = (s) => (s?.isExtension ? s.label : t(`settings.section.${s.id}` as any));
     const sectionPlaceholder = (s) => (s?.isExtension
@@ -317,6 +318,24 @@ export function SettingsDialogContent({ onClose = null, variant = 'dialog' }) {
         return () => { cancelled = true; };
     }, [activeSection, activeMeta?.isExtension, builtinSectionComponents]);
 
+    // Narrow dialogs name the pane in the header; visually hide a first heading
+    // that only repeats that name (it stays available to assistive technology).
+    const headerTitle = layoutMode.narrow && activeMeta ? sectionLabel(activeMeta) : '';
+    useLayoutEffect(() => {
+        const content = contentRef.current;
+        if (!content) return undefined;
+        const mark = () => {
+            const heading = content.querySelector('h3');
+            const duplicate = Boolean(headerTitle) && heading?.textContent?.trim().toLowerCase() === headerTitle.trim().toLowerCase();
+            for (const marked of content.querySelectorAll('.settings-pane-title-repeat')) if (marked !== heading || !duplicate) marked.classList.remove('settings-pane-title-repeat');
+            if (duplicate && !heading.classList.contains('settings-pane-title-repeat')) heading.classList.add('settings-pane-title-repeat');
+        };
+        mark();
+        const observer = typeof MutationObserver === 'function' ? new MutationObserver(mark) : null;
+        observer?.observe(content, { childList: true, subtree: true });
+        return () => { observer?.disconnect(); for (const marked of content.querySelectorAll('.settings-pane-title-repeat')) marked.classList.remove('settings-pane-title-repeat'); };
+    }, [headerTitle, activeSection]);
+
     const setStatus = useCallback((text, type = 'info') => {
         setStatusMessage(text ? { text, type } : null);
     }, []);
@@ -398,7 +417,7 @@ export function SettingsDialogContent({ onClose = null, variant = 'dialog' }) {
                             `;
                         })}
                     </nav>
-                    <main class=${`settings-content${activeMeta?.isExtension && !activeMeta?.isCore ? ' settings-addon-pane' : ''}`}>
+                    <main ref=${contentRef} class=${`settings-content${activeMeta?.isExtension && !activeMeta?.isCore ? ' settings-addon-pane' : ''}`}>
                         ${showRootLoading ? renderSectionLoading(t('settings.loading')) : renderSection()}
                     </main>
                 </div>

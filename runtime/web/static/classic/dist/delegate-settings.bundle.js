@@ -27,6 +27,9 @@ function ie(O){let{html:d,useState:i,useEffect:T,useCallback:_,registerSettingsP
 .delegate-settings .delegate-radio { display: inline-flex; align-items: center; gap: .25rem; }
 .delegate-settings .delegate-provider-name { font-family: var(--font-mono, monospace); overflow-wrap: anywhere; }
 .delegate-settings .delegate-scroll { overflow: auto; border: 1px solid var(--border-color); border-radius: 6px; overflow-wrap: anywhere; }
+.delegate-settings .delegate-scroll-candidates { max-height: 180px; }
+.delegate-settings .delegate-scroll-rejections { max-height: 190px; }
+.delegate-settings .delegate-exclusions { min-height: 74px; font-family: var(--font-mono, monospace); }
 .delegate-settings .delegate-candidate { display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: .5rem; padding: .4rem .5rem; border-bottom: 1px solid var(--border-color); }
 .delegate-settings .delegate-rejection { padding: .35rem .5rem; border-bottom: 1px solid var(--border-color); }
 `;async function M(t,o={}){let l=await fetch(`/agent/addons/api/delegate/${t}`,o),p=await l.json().catch(()=>({}));if(!l.ok||p?.ok===!1)throw Error(p?.error||`HTTP ${l.status}`);return p}function L(t){if(!t)return"never";try{return new Date(t).toLocaleString()}catch{return"unknown"}}function R(t){if(!Number.isFinite(t)||t<=0)return"?";if(t>=1e6)return`${(t/1e6).toFixed(t>=1e7?0:1)}M`;if(t>=1000)return`${Math.round(t/1000)}K`;return String(t)}function U(t,o){return o.has(t)?"search":"exclude"}function q(t,o,l,p){let b=[...p],u=b.filter((c)=>c!==t);if(o==="search"){let c=b.indexOf(t);if(c>=0)u.splice(Math.min(c,u.length),0,t);else u.push(t)}let S=new Set(u);return{searchable_providers:u,excluded_providers:[...l].filter((c)=>!S.has(c))}}function H(){let[t,o]=i(null),[l,p]=i([]),[b,u]=i([]),[S,c]=i(""),[P,C]=i(""),[m,J]=i({}),[E,B]=i({}),[I,K]=i([]),[W,G]=i([]),[A,Q]=i([]),[V,X]=i({providers:[],models:[]}),[y,w]=i(!1),[v,g]=i(""),[f,h]=i(!1);T(()=>{if(!v||f)return;let e=setTimeout(()=>g(""),2500);return()=>clearTimeout(e)},[v,f]);let x=_(async(e=!1,n=!1)=>{w(!0),h(!1),g(e?"Refreshing models…":"");try{let s=e?await M("models",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({refresh:!0})}):await M("models"),a=s.config||{searchable_providers:null,excluded_providers:null,excluded_models:[]};o(a),C(Array.isArray(a.excluded_models)?a.excluded_models.join(`
@@ -61,6 +64,9 @@ function ie(O){let{html:d,useState:i,useEffect:T,useCallback:_,registerSettingsP
 .delegate-settings .delegate-radio { display: inline-flex; align-items: center; gap: .25rem; }
 .delegate-settings .delegate-provider-name { font-family: var(--font-mono, monospace); overflow-wrap: anywhere; }
 .delegate-settings .delegate-scroll { overflow: auto; border: 1px solid var(--border-color); border-radius: 6px; overflow-wrap: anywhere; }
+.delegate-settings .delegate-scroll-candidates { max-height: 180px; }
+.delegate-settings .delegate-scroll-rejections { max-height: 190px; }
+.delegate-settings .delegate-exclusions { min-height: 74px; font-family: var(--font-mono, monospace); }
 .delegate-settings .delegate-candidate { display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: .5rem; padding: .4rem .5rem; border-bottom: 1px solid var(--border-color); }
 .delegate-settings .delegate-rejection { padding: .35rem .5rem; border-bottom: 1px solid var(--border-color); }
 `}</style>
@@ -97,6 +103,9 @@ function ie(O){let{html:d,useState:i,useEffect:T,useCallback:_,registerSettingsP
 .delegate-settings .delegate-radio { display: inline-flex; align-items: center; gap: .25rem; }
 .delegate-settings .delegate-provider-name { font-family: var(--font-mono, monospace); overflow-wrap: anywhere; }
 .delegate-settings .delegate-scroll { overflow: auto; border: 1px solid var(--border-color); border-radius: 6px; overflow-wrap: anywhere; }
+.delegate-settings .delegate-scroll-candidates { max-height: 180px; }
+.delegate-settings .delegate-scroll-rejections { max-height: 190px; }
+.delegate-settings .delegate-exclusions { min-height: 74px; font-family: var(--font-mono, monospace); }
 .delegate-settings .delegate-candidate { display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: .5rem; padding: .4rem .5rem; border-bottom: 1px solid var(--border-color); }
 .delegate-settings .delegate-rejection { padding: .35rem .5rem; border-bottom: 1px solid var(--border-color); }
 `}</style>
@@ -151,7 +160,7 @@ function ie(O){let{html:d,useState:i,useEffect:T,useCallback:_,registerSettingsP
       <p class="settings-addon-help" id="delegate-exclusions-help">
         Hard model exclusions, one per line or comma-separated. Supports exact ids, substrings, or <code>*</code> wildcards. Matching models are blocked from automatic selection, fallback, and explicit model selection. Effective provider exclusions: ${V.providers?.join(", ")||"none"}.
       </p>
-      <textarea id="delegate-exclusions" class="settings-addon-control" aria-describedby="delegate-exclusions-help" style="min-height:74px;font-family:var(--font-mono, monospace)" value=${P} disabled=${y} placeholder="gpt-4o\n*/experimental-*" onInput=${(e)=>C(e.target.value)} />
+      <textarea id="delegate-exclusions" class="settings-addon-control delegate-exclusions" aria-describedby="delegate-exclusions-help" value=${P} disabled=${y} placeholder="gpt-4o\n*/experimental-*" onInput=${(e)=>C(e.target.value)} />
       </div>
       <div class="settings-addon-actions">
         <button type="button" disabled=${y} onClick=${Z}>Save exclusions</button>
@@ -163,7 +172,7 @@ function ie(O){let{html:d,useState:i,useEffect:T,useCallback:_,registerSettingsP
       <p class="settings-addon-help">
         Delegate can launch only these ${b.length} models, whether selected automatically, requested explicitly by an agent, or used as a fallback. Each model is from an approved provider, matches the ordered model policy, is available in the native runtime, and does not match an exclusion.
       </p>
-      <div class="delegate-scroll" style="max-height:180px">
+      <div class="delegate-scroll delegate-scroll-candidates">
         ${b.slice(0,80).map((e)=>d`
           <div key=${e.id} title=${e.classificationReason} class="delegate-candidate">
             <span class="settings-addon-help">T${e.tier}</span>
@@ -181,7 +190,7 @@ function ie(O){let{html:d,useState:i,useEffect:T,useCallback:_,registerSettingsP
       <p class="settings-addon-help">
         Rejected models cannot be used by Delegate because their provider is unapproved, the model is excluded, or the model is unclassified. Native execution never falls back to a child CLI.
       </p>
-      <div class="delegate-scroll" style="max-height:190px">
+      <div class="delegate-scroll delegate-scroll-rejections">
         ${I.length===0&&A.length===0&&d`<p class="settings-addon-help">No catalog differences or rejected models.</p>`}
         ${I.slice(0,50).map((e)=>d`
           <div key=${`runtime:${e.fullId}`} class="delegate-rejection settings-addon-help">
@@ -196,5 +205,5 @@ function ie(O){let{html:d,useState:i,useEffect:T,useCallback:_,registerSettingsP
       ${v&&d`<div class=${f?"settings-addon-error":"settings-addon-status"} role=${f?"alert":"status"}>${v}</div>`}
     </div>`}z({id:"delegate",label:"Delegate",icon:d`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7h10v10H7z"/><path d="M4 4h4m8 0h4M4 20h4m8 0h4"/></svg>`,component:H,order:169}),F()}export{ie as registerDelegateSettings};
 
-//# debugId=164817BEFF73BB5964756E2164756E21
+//# debugId=324B7B629900FEE664756E2164756E21
 //# sourceMappingURL=delegate-settings.bundle.js.map

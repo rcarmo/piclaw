@@ -74,10 +74,63 @@
     align-items: center;
     gap: 8px;
     min-width: 0;
+    margin: 0 0 12px;
 }
 .settings-addon-pane .settings-addon-error { color: var(--danger-color, var(--error, #e55)); }
 .settings-addon-pane .settings-addon-status { color: var(--text-secondary); }
 .settings-addon-pane :is(.settings-addon-help, .settings-addon-error, .settings-addon-status) { overflow-wrap: anywhere; }
+/* Section heading, checkbox row, status badge and callout: all colours come
+ * from theme tokens; tones are semantic (success, danger, warning, info). */
+.settings-addon-pane .settings-addon-heading {
+    margin: 24px 0 10px;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.settings-addon-pane .settings-addon-heading:first-of-type { margin-top: 0; }
+/* Block-level help paragraphs separate themselves from the next row. */
+.settings-addon-pane p.settings-addon-help { margin: 0 0 12px; }
+.settings-addon-pane .settings-addon-check {
+    display: flex;
+    width: fit-content;
+    max-width: 100%;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+    margin-bottom: 12px;
+    font-size: var(--settings-addon-label-size);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+.settings-addon-pane .settings-addon-check > input { margin: 0; accent-color: var(--accent-color); }
+.settings-addon-pane .settings-addon-badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--tone, var(--text-secondary)) 40%, transparent);
+    background: color-mix(in srgb, var(--tone, var(--text-secondary)) 12%, transparent);
+    color: var(--tone, var(--text-secondary));
+    font-size: var(--settings-addon-help-size);
+    font-weight: 600;
+    white-space: nowrap;
+}
+.settings-addon-pane .settings-addon-callout {
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    border: 1px solid color-mix(in srgb, var(--tone, var(--border-color)) 45%, transparent);
+    border-left-width: 3px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--tone, var(--bg-secondary)) 8%, var(--bg-primary));
+    color: var(--text-primary);
+    font-size: var(--settings-addon-label-size);
+}
+.settings-addon-pane .settings-addon-control.settings-addon-mono,
+.settings-addon-pane .settings-addon-mono { font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); }
+.settings-addon-pane [data-tone="success"] { --tone: var(--success-color, #2da44e); }
+.settings-addon-pane [data-tone="danger"] { --tone: var(--danger-color, #dc2626); }
+.settings-addon-pane [data-tone="warning"] { --tone: var(--warning-color, #d97706); }
+.settings-addon-pane [data-tone="info"] { --tone: var(--accent-color); }
 @media (max-width: 640px) {
     .settings-addon-pane .settings-addon-control { width: 100%; }
     .settings-addon-pane .settings-addon-field { align-items: stretch; }

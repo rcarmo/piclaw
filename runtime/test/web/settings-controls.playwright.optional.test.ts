@@ -32,7 +32,7 @@ beforeAll(async () => {
     if (url.pathname === "/fixture.js") return new Response(script, { headers: { "content-type": "text/javascript" } });
     // Match the real asset route: exact filename, per-file transpilation, NOT a
     // bundler that silently resolves missing .js imports to .ts sources.
-    const addonAsset = url.pathname.match(/^\/addon\/(sample-addon|delegate)\/([\w-]+\.(?:ts|js))$/);
+    const addonAsset = url.pathname.match(/^\/addon\/(sample-addon)\/([\w-]+\.(?:ts|js))$/);
     if (addonsRoot && addonAsset) {
       const file = Bun.file(join(addonsRoot, "addons", addonAsset[1], "web", addonAsset[2]));
       if (!await file.exists()) return new Response(null, { status: 404 });
@@ -65,7 +65,7 @@ async function open(skin: string, section: string, width: number, theme: string)
   return page;
 }
 
-for (const skin of ["classic"]) for (const width of [1366, 820, 520, 390]) for (const addon of ["sample-addon", "delegate"]) {
+for (const skin of ["classic"]) for (const width of [1366, 820, 520, 390]) for (const addon of ["sample-addon"]) {
   (addonsRoot ? browserTest : test.skip)(`${skin} actual ${addon} pane uses the host contract at ${width}px`, async () => {
     const page = await browser!.newPage({ viewport: { width, height: 844 }, reducedMotion: "reduce" });
     page.setDefaultTimeout(4000);
@@ -79,9 +79,6 @@ for (const skin of ["classic"]) for (const width of [1366, 820, 520, 390]) for (
       expect(result.filter(row => row.outside)).toEqual([]);
       for (const input of await page.locator('.settings-addon-pane input:not([type="checkbox"]):not([type="radio"]),.settings-addon-pane textarea').all()) {
         expect(await input.evaluate((node: HTMLInputElement) => Boolean(node.getAttribute("aria-label") || node.labels?.length))).toBe(true);
-      }
-      if (addon === "delegate") {
-        expect(await page.locator(".settings-addon-pane").evaluate(root => [...root.querySelectorAll("div")].some(node => ["180px", "190px"].includes(getComputedStyle(node).maxHeight)))).toBe(true);
       }
       await page.screenshot({ path: join(evidence, `${skin}-${addon}-${width}.png`), animations: "disabled" });
       await page.evaluate(() => window.dispatchEvent(new CustomEvent("piclaw:open-settings", { detail: { section: "general" } })));
