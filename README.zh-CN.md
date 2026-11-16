@@ -77,6 +77,7 @@ docker run -d \
 以下详细文档为英文：
 
 - [入门指南](docs/getting-started.md) — 安装、首次聊天、认证、数据持久化和升级
+- [离线会话历史导入](docs/development/session-history-import.md) — 将选定的 v3 JSONL 导入全新、独立的 v4 存储；不进行原地数据库迁移
 - [配置](docs/configuration.md) — 设置、路径、模型提供商、SSH 工具和环境覆盖
 - [Web UI](docs/web-ui.md#chat-and-status-surfaces) — 聊天、工作区、编辑器、终端和查看器
 - [文档索引](docs/README.md) — 运维、集成、开发和架构

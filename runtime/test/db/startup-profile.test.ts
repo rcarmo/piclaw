@@ -18,10 +18,18 @@ for (const fresh of [true, false]) test(`two processes initialize ${fresh ? "a f
       env: { ...process.env, PICLAW_DB_IN_MEMORY: "0" }, stdin: "ignore", stdout: "pipe", stderr: "pipe",
     }));
     const timer = setTimeout(() => { for (const child of children) child.kill("SIGKILL"); }, 20000);
-    const results = children.map(async child => ({ exit: await child.exited, stdout: await new Response(child.stdout).text(), stderr: await new Response(child.stderr).text() }));
+    const completed: { exit: number; stdout: string; stderr: string }[] = [];
+    const results = children.map(async child => {
+      const result = { exit: await child.exited, stdout: await new Response(child.stdout).text(), stderr: await new Response(child.stderr).text() };
+      completed.push(result); return result;
+    });
+    const barrier = (predicate: () => boolean) => () => {
+      if (completed.length) throw Error(`Startup child exited before its controller released the barrier: ${JSON.stringify(completed)}`);
+      return predicate();
+    };
     try {
-      await waitFor(() => ready.every(existsSync), 5000); writeFileSync(go, "go");
-      await waitFor(() => ready.every(path => existsSync(path + ".attempt")), 5000);
+      await waitFor(barrier(() => ready.every(existsSync)), 5000); writeFileSync(go, "go");
+      await waitFor(barrier(() => ready.every(path => existsSync(path + ".attempt"))), 5000);
       for (let index = 0; index < results.length; index++) {
         // A competing fresh creator may encounter the first owner's unstamped
         // file. It must refuse, never silently adopt or stamp that existing file.

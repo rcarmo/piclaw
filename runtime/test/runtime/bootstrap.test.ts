@@ -364,8 +364,10 @@ for (const failure of ["none", "scheduler", "producer", "queue"] as const) {
           await assertHeld();
           expect(exit).not.toHaveBeenCalled();
         } else {
-          await poolEntered.promise; await assertHeld(); pool.resolve();
+          // Transport shutdown now precedes confirmed native cleanup and host
+          // registration release. Keep the global owner held through both joins.
           await webEntered.promise; await assertHeld(); web.resolve();
+          await poolEntered.promise; await assertHeld(); pool.resolve();
           await stopping;
           await running;
           expect(exit).toHaveBeenCalledWith(0);

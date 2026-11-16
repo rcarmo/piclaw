@@ -20,7 +20,7 @@ for (const strict of [false, true]) {
         expect(acquired).toBeTruthy();
         const calls = rows.find(row => row.calls)?.calls;
         if (mode === "success") {
-          expect(calls).toEqual(["pool", "web"]);
+          expect(calls).toEqual(["web", "pool"]);
           expect(existsSync(lockPath)).toBe(false);
           acquireRuntimeLock({ lockPath, strictOwnership: strict, disabled: false }).release();
         } else {
