@@ -9,9 +9,6 @@ import { BunSqliteDatabase } from "../../runtime/durable-engine/src/bun-sqlite.j
 import { createSession, defineDocFamily } from "../../runtime/durable-engine/qualification/durable.ts";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
 import { BACKGROUND_CONTEXT } from "../../runtime/durable-engine/qualification/context.ts";
-import { prepareHistoricalAccountCopy, applyHistoricalAccountCopy } from "../../runtime/scripts/lib/historical-account-copies.js";
-import { snapshotHistoricalDatabase } from "../../runtime/scripts/lib/historical-account-retirement.js";
-import historicalAccounts from "../../runtime/test/fixtures/historical-account-schema.json";
 import { join } from "node:path";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
 import { assertSchemaInventory, readSchemaInventory, type SchemaContract } from "../../runtime/scripts/lib/schema-ownership.js";
@@ -142,7 +139,7 @@ applicationTest("existing native schema preserves archived identities and bytes 
   } finally { await closeDatabase(); }
 });
 
-applicationTest("offline historical retirement preserves real SDK document families and approved add-on schemas", async () => {
+applicationTest("native reopen preserves real SDK document families, archived input records and approved add-on schemas", async () => {
   const fixture = await openNativeSchemaFixture(true);
   await fixture.close();
   const path = join(process.env.PICLAW_STORE!, "messages.db");
@@ -164,25 +161,25 @@ applicationTest("offline historical retirement preserves real SDK document famil
   await withSdk(path, async (session, db) => {
     await session.commit(async tx => { await tx.doc(Family, "retained-key", { value: "retain SDK family discriminator" }); }, BACKGROUND_CONTEXT);
     expect(await session.snapshot(Family, "retained-key", BACKGROUND_CONTEXT)).toEqual({ value: "retain SDK family discriminator" });
-    for (const batch of historicalAccounts) db.exec(batch.sql);
+    db.exec(readFileSync(new URL('../../runtime/test/fixtures/historical-input-authority.sql', import.meta.url), 'utf8'));
+    const owner = (db.query('SELECT id FROM users ORDER BY id LIMIT 1').get() as {id:string}).id;
+    db.query('INSERT INTO migration_input_holds VALUES(?,?,?,?,?,?,?,?)').run(7,'retained-input','web:default',owner,'now','hash','original source provenance','now');
   });
   const source = new Database(path, { readonly: true, strict: true, safeIntegers: true });
-  let before: string, docs: unknown[];
+  let docs: unknown[], archived: unknown[], schema: ReturnType<typeof readSchemaInventory>, receipts: unknown[];
   try {
-    before = snapshotHistoricalDatabase(source, true);
     docs = source.query("SELECT * FROM documents ORDER BY id").all();
+    archived = source.query("SELECT * FROM migration_input_holds ORDER BY message_rowid").all();
+    schema = readSchemaInventory(source);
+    receipts = source.query("SELECT * FROM piclaw_schema_migrations ORDER BY owner,id").all();
     expect(source.query("SELECT 1 FROM documents WHERE family=1").get()).not.toBeNull();
   } finally { source.close(); }
-  const directory = join(process.env.PICLAW_WORKSPACE!, "historical-retirement");
-  const plan = prepareHistoricalAccountCopy(path, directory);
-  expect(plan.blocked).toEqual([]);
-  expect(plan.expectedPhysicalTables).toBe(42);
-  const result = applyHistoricalAccountCopy(directory, plan.sha256);
-  expect(result.expectedPhysicalTables).toBe(42);
-  await withSdk(join(directory, "candidate.db"), async (session, db) => {
+  await withSdk(path, async (session, db) => {
     expect(await session.snapshot(Family, "retained-key", BACKGROUND_CONTEXT)).toEqual({ value: "retain SDK family discriminator" });
     expect(db.query("SELECT * FROM documents ORDER BY id").all()).toEqual(docs!);
-    expect(snapshotHistoricalDatabase(db, true)).toBe(before!);
+    expect(db.query("SELECT * FROM migration_input_holds ORDER BY message_rowid").all()).toEqual(archived!);
+    expect(readSchemaInventory(db)).toEqual(schema!);
+    expect(db.query("SELECT * FROM piclaw_schema_migrations ORDER BY owner,id").all()).toEqual(receipts!);
     const classified = assertSchemaInventory(readSchemaInventory(db), contract, "native-addons");
     expect(classified.errors).toEqual([]);
     expect(classified.objects.some(o => o.owner === "addon:code-review")).toBe(true);

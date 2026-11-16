@@ -1,9 +1,7 @@
 import { afterAll, afterEach, expect, test } from 'bun:test';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { createAgentSession, DefaultResourceLoader, ModelRegistry, ModelRuntime, SessionManager, SettingsManager, type AgentSession, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { InMemoryCredentialStore, type Model } from '@earendil-works/pi-ai';
-import { createTempWorkspace, setEnv } from '../helpers.js';
+import { createTempWorkspace } from '../helpers.js';
 import { getSessionThinkingPolicy, getThinkingDefaults, installSessionThinkingPolicy, readThinkingPreference } from '../../src/agent-pool/thinking-policy.js';
 
 const ws = createTempWorkspace('thinking-policy-');
@@ -25,14 +23,6 @@ async function fixture(options: { install?: boolean; settings?: SettingsManager;
   sessions.push(session);
   if (options.install !== false) installSessionThinkingPolicy(session, preference);
   return { session, settings, runtime };
-}
-
-function productionWorkspace() {
-  const workspace = createTempWorkspace('thinking-production-');
-  mkdirSync(join(workspace.workspace, '.piclaw'), { recursive: true });
-  writeFileSync(join(workspace.workspace, '.piclaw/config.json'), JSON.stringify({ domains: { access: { mode: 'single-user' } } }), { mode: 0o600 });
-  const restore = setEnv({ PICLAW_WORKSPACE: workspace.workspace, PICLAW_STORE: workspace.store, PICLAW_DATA: workspace.data });
-  return { workspace: workspace.workspace, cleanup() { restore(); workspace.cleanup(); } };
 }
 
 test('upstream default-first selection reproduces high to low; installed policy preserves high', async () => {
@@ -152,27 +142,20 @@ test('extension model-select thinking override is explicit, not mistaken for int
   expect(getSessionThinkingPolicy(session)?.last_transition?.operation).toBe('thinking_set');
 });
 
-test('offline legacy policy is not promoted into native status metadata or defaults', async () => {
-  const { createSessionInDir } = await import('../../src/agent-pool/session.js');
-  const { session: _unused, settings, runtime } = await fixture();
-  const isolated = productionWorkspace();
-  let produced: Awaited<ReturnType<typeof createSessionInDir>> | null = null;
-  try {
-    produced = await createSessionInDir(isolated.workspace + '/production-session', { tools: [], modelRuntime: runtime, settingsManager: settings });
-    produced.session.setThinkingLevel('high');
-    await produced.session.setModel(models[1]); expect(produced.session.thinkingLevel).toBe('high');
-    expect(getSessionThinkingPolicy(produced.session)?.defaults).toEqual({ level: 'low', source: 'global' });
-    const { AgentRuntimeFacade } = await import('../../src/agent-pool/runtime-facade.js');
-    const registry = new ModelRegistry(produced.session.modelRuntime);
-    const facade = new AgentRuntimeFacade({ pool: new Map([['fixture', { runtime: produced, lastUsed: Date.now() }]]), getDurableSession: () => ({sessionId:'native-metadata',branchId:'main',readPosition:async()=>null,readState:async()=>({position:null,model:'fixture-openai/b',thinkingLevel:'high'})}), modelRegistry: registry, settingsManager: settings, modelRuntime: produced.session.modelRuntime, authPath: 'synthetic-unused' } as any);
-    const status = await facade.getAvailableModels('fixture', { includeProviderUsage: false, includeProviderDiagnostics: false });
-    expect(status).toMatchObject({current:'fixture-openai/b',thinking_level:'high',thinking_level_label:'high'});
-    // Native metadata follows the SDK reader, never the legacy per-session monkeypatch.
-    expect(status.thinking_policy).toBeNull();
-    expect(JSON.stringify(status)).not.toContain(ws.workspace);
-  } finally { await produced?.dispose(); isolated.cleanup(); }
+test('native status ignores the installed legacy thinking policy and preserves settings', async () => {
+  const { session, settings, runtime } = await fixture();
+  session.setThinkingLevel('high');
+  await session.setModel(models[1]); expect(session.thinkingLevel).toBe('high');
+  expect(getSessionThinkingPolicy(session)?.defaults).toEqual({ level: 'low', source: 'global' });
+  const { AgentRuntimeFacade } = await import('../../src/agent-pool/runtime-facade.js');
+  const registry = new ModelRegistry(runtime);
+  const facade = new AgentRuntimeFacade({ pool: new Map([['fixture', { session, lastUsed: Date.now() }]]), getDurableSession: () => ({sessionId:'native-metadata',branchId:'main',readPosition:async()=>null,readState:async()=>({position:null,model:'fixture-openai/b',thinkingLevel:'high'})}), modelRegistry: registry, settingsManager: settings, modelRuntime: runtime, authPath: 'synthetic-unused' } as any);
+  const status = await facade.getAvailableModels('fixture', { includeProviderUsage: false, includeProviderDiagnostics: false });
+  expect(status).toMatchObject({current:'fixture-openai/b',thinking_level:'high',thinking_level_label:'high'});
+  expect(status.thinking_policy).toBeNull();
+  expect(settings.getDefaultThinkingLevel()).toBe('low');
+  expect(JSON.stringify(status)).not.toContain(ws.workspace);
 }, 20_000);
-
 
 test('two successive cold hydrations do not replace preferred high with the effective off clamp', async () => {
   const { session } = await fixture(); await session.setModel(models[3]);

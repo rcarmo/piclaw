@@ -23,6 +23,12 @@ function staticGraph(entry: string): Set<string> {
   return visited;
 }
 
+test("legacy execution constructor and cold-session CLI are absent; bounded source reader remains", () => {
+  for (const file of ["session-archive.ts","agent-pool/session-persistence.ts","agent-pool/session-node-modules-link.ts","agent-pool/retired-provider-selection.ts","agent-pool/session.ts","../scripts/benchmark-cold-session.ts"])
+    expect(existsSync(resolve(source, file))).toBe(false);
+  expect(existsSync(resolve(source, "session-import/source.ts"))).toBe(true);
+});
+
 // Public SDK definitions/resources remain allowed. Native startup must not
 // evaluate LOCAL retired execution/replay or lifecycle composition modules.
 // Legacy compatibility deliberately retains its separate session load fence.

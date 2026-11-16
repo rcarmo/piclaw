@@ -34,17 +34,15 @@ test("exact 1.5.2 root closure includes SDK schema and excludes durable", () => 
   expect(existsSync(resolve(root, "node_modules/@earendil-works/pi-durable"))).toBe(false);
 });
 
-test("1.5.2 keeps wrapper ownership and does not activate native MCP or Harness", () => {
+test("1.5.2 native MCP composition excludes the retired session constructor and generic adapter", () => {
   expect(pkg.dependencies["pi-mcp-adapter"]).toBe("github:piclaw-bot/pi-mcp-adapter#dddfcf630508f42c169889c11dee94e69b746e7c");
-  const session = readFileSync(resolve(root, "runtime/src/agent-pool/session.ts"), "utf8");
-  expect(session).toContain('require("pi-mcp-adapter")');
-  expect(session).toContain("initializeOnLoad: false");
-  expect(session).toContain("resolveRuntimeEnv");
-  for (const factory of ["createMcpExtension", "createToolSearchExtension", "createCodemodeExtension"]) expect(session).not.toContain(factory);
+  expect(existsSync(resolve(root, "runtime/src/agent-pool/session.ts"))).toBe(false);
+  const host = readFileSync(resolve(root, "runtime/durable-engine/src/host-mcp.ts"), "utf8");
+  expect(host).toContain("createHostMcp");
+  expect(host).not.toMatch(/pi-mcp-adapter|createAgentSession|AgentHarness|Pico3/);
   expect(typeof createMcpExtension).toBe("function");
   expect(typeof createToolSearchExtension).toBe("function");
   expect(typeof createCodemodeExtension).toBe("function");
-  expect(session).not.toMatch(/AgentHarness|Pico3|pi-durable/);
   expect(historicalHarnessEvidence.authority.currentRuntimeVersion).toBe("0.99.1"); // Frozen as-of evidence, not installed target.
   expect(historicalHarnessEvidence.authority.harnessActivation).toBe("latent_only");
   expect(historicalHarnessEvidence.experimentalPico3.productionImport).toBe(false);

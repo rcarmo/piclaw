@@ -8,10 +8,11 @@ import * as syntax from "@babel/types";
 
 import { collectModuleSpecifiers, parseTypeScriptSource } from "./fixtures/typescript-syntax-oracle.js";
 import {
-  inventoryRepositoryToolFamilies,
+  inventoryLatentToolFamilies,
   readRepositorySourceTree,
+  readLatentPreparationSourceTree,
   resolveRepositoryModule,
-  snapshotRepositoryToolContracts,
+  snapshotLatentToolContracts,
 } from "./fixtures/repository-tool-family-oracle.js";
 
 const runtimeRoot = resolve(import.meta.dir, "../..");
@@ -158,7 +159,7 @@ describe("WP-3C static import graph and inert top-level boundary", () => {
   });
 });
 
-describe("WP-3C active-composition snapshots", () => {
+describe("WP-3C retained latent-composition snapshots", () => {
   test("default and Windows activation declarations remain byte-for-byte semantic snapshots", () => {
     const source = readFileSync(resolve(runtimeRoot, "src/extensions/tool-activation.ts"), "utf8");
     expect(stringArray(source, "DEFAULT_ACTIVE_TOOL_NAMES")).toEqual([
@@ -180,19 +181,19 @@ describe("WP-3C active-composition snapshots", () => {
       expect(factory.createDefaultTools().some((name) => name.includes("tool-preparation"))).toBeFalse();
     }
 
-    const tree = readRepositorySourceTree();
+    const tree = readLatentPreparationSourceTree();
     const withoutLatent = Object.freeze({
       files: Object.freeze(Object.fromEntries(Object.entries(tree.files).filter(([file]) => !file.startsWith(latentPrefix)))),
     });
-    const withInventory = inventoryRepositoryToolFamilies(tree);
-    const withoutInventory = inventoryRepositoryToolFamilies(withoutLatent);
+    const withInventory = inventoryLatentToolFamilies(tree);
+    const withoutInventory = inventoryLatentToolFamilies(withoutLatent);
     const available = (names: readonly string[]) => names.map((name) => ({ name }));
     expect(activation.getEffectiveDefaultActiveToolNames(available(withInventory.names))).toEqual(
       activation.getEffectiveDefaultActiveToolNames(available(withoutInventory.names)),
     );
   }, 30_000);
   test("keeps active name/description/prompt/schema contracts identical with and without latent files", () => {
-    const tree = readRepositorySourceTree();
+    const tree = readLatentPreparationSourceTree();
     const withoutLatent = Object.freeze({
       files: Object.freeze(Object.fromEntries(Object.entries(tree.files).filter(([file]) => !file.startsWith(latentPrefix)))),
     });
@@ -204,9 +205,9 @@ describe("WP-3C active-composition snapshots", () => {
       { platform: "win32" as const, enabledEnv: new Set<string>(), activeNames: windowsNames },
     ];
     for (const { activeNames, ...config } of configurations) {
-      const withContracts = snapshotRepositoryToolContracts(tree, config);
-      const withoutContracts = snapshotRepositoryToolContracts(withoutLatent, config);
-      const availableNames = inventoryRepositoryToolFamilies(tree, config).names;
+      const withContracts = snapshotLatentToolContracts(tree, config);
+      const withoutContracts = snapshotLatentToolContracts(withoutLatent, config);
+      const availableNames = inventoryLatentToolFamilies(tree, config).names;
       const effectiveActiveNames = activeNames.filter((name) => availableNames.includes(name));
       const snapshot = (contracts: typeof withContracts) => Object.freeze(Object.fromEntries(
         effectiveActiveNames.map((name) => [name, contracts[name]]),
@@ -224,8 +225,8 @@ describe("WP-3C active-composition snapshots", () => {
   }, 30_000);
 
   // Four full source-as-data AST compositions are intentionally bounded above Bun's default timeout.
-  test("models Linux and Windows production compositions without execution", () => {
-    const tree = readRepositorySourceTree();
+  test("models retained Linux and Windows declarations without execution", () => {
+    const tree = readLatentPreparationSourceTree();
     const withoutLatent = Object.freeze({
       files: Object.freeze(Object.fromEntries(Object.entries(tree.files).filter(([file]) => !file.startsWith(latentPrefix)))),
     });
@@ -233,8 +234,8 @@ describe("WP-3C active-composition snapshots", () => {
       { platform: "linux" as const, enabledEnv: new Set<string>() },
       { platform: "win32" as const, enabledEnv: new Set<string>() },
     ];
-    const withLatent = configurations.map((config) => inventoryRepositoryToolFamilies(tree, config));
-    const withoutLatentInventories = configurations.map((config) => inventoryRepositoryToolFamilies(withoutLatent, config));
+    const withLatent = configurations.map((config) => inventoryLatentToolFamilies(tree, config));
+    const withoutLatentInventories = configurations.map((config) => inventoryLatentToolFamilies(withoutLatent, config));
     const [linux, windows] = withLatent;
     for (const [index, inventory] of withLatent.entries()) {
       expect(inventory.names).toEqual(withoutLatentInventories[index].names);

@@ -14,7 +14,7 @@ import {
 
 const runtimeRoot = resolve(import.meta.dir, "../../..");
 const BUILTIN_ROOT = "src/extensions/index.ts";
-const SESSION_ROOT = "src/agent-pool/session.ts";
+const RETIRED_COMPOSITION = "historical/retired-session-composition.ts";
 const SERVICE_FACTORY_ROOT = "src/agent-pool/service-factory.ts";
 const SDK_TOOLS_SOURCE = resolve(runtimeRoot, "../node_modules/@earendil-works/pi-coding-agent/dist/core/tools/index.js");
 
@@ -22,7 +22,7 @@ export interface SourceTree {
   readonly files: Readonly<Record<string, string>>;
 }
 
-export interface ProductionCompositionConfig {
+export interface LatentCompositionConfig {
   readonly platform?: "linux" | "win32";
   readonly enabledEnv?: ReadonlySet<string>;
   readonly sdkToolFamilies?: readonly string[];
@@ -40,7 +40,7 @@ export interface RepositoryToolFamilyInventory {
   readonly unresolvedRegistrations: readonly string[];
   readonly sdkToolFamilies: readonly string[];
   readonly compositionRoots: readonly string[];
-  readonly productionRoots: readonly string[];
+  readonly reachableRoots: readonly string[];
   readonly registrationSites: Readonly<Record<string, readonly string[]>>;
   readonly nonProductionDuplicateSites: Readonly<Record<string, readonly string[]>>;
 }
@@ -62,10 +62,20 @@ export function readRepositorySourceTree(root = runtimeRoot): SourceTree {
   return Object.freeze({ files: Object.freeze(files) });
 }
 
-/** Resolve only production composition roots and registrations reachable from them. */
-export function inventoryRepositoryToolFamilies(
-  tree: SourceTree = readRepositorySourceTree(),
-  config: ProductionCompositionConfig = {},
+/** Preserve latent registry coverage using the original composition declarations.
+ * Current native tools are qualified separately under qualification/native.
+ */
+export function readLatentPreparationSourceTree(): SourceTree {
+  const tree = readRepositorySourceTree();
+  const excerpts = JSON.parse(readFileSync(resolve(runtimeRoot, "test/fixtures/retired-session-composition.json"), "utf8"));
+  return Object.freeze({ files: Object.freeze({ ...tree.files,
+    [RETIRED_COMPOSITION]: excerpts.optionalExtensions + "\n" + excerpts.mcpComposition,
+  }) });
+}
+
+export function inventoryLatentToolFamilies(
+  tree: SourceTree = readLatentPreparationSourceTree(),
+  config: LatentCompositionConfig = {},
 ): RepositoryToolFamilyInventory {
   const files = tree.files;
   const sdkToolFamilies = Object.freeze([...(config.sdkToolFamilies ?? extractSdkToolFamilies(readFileSync(SDK_TOOLS_SOURCE, "utf8")))].sort());
@@ -75,9 +85,9 @@ export function inventoryRepositoryToolFamilies(
   const roots = new Set<string>();
 
   for (const root of parseBuiltinFactoryRoots(files[BUILTIN_ROOT] ?? "", BUILTIN_ROOT, files)) roots.add(root);
-  for (const root of parseOptionalExtensionRoots(files[SESSION_ROOT] ?? "", config)) roots.add(root);
+  for (const root of parseOptionalExtensionRoots(files[RETIRED_COMPOSITION] ?? "", config)) roots.add(root);
   if (files[SERVICE_FACTORY_ROOT]) roots.add(SERVICE_FACTORY_ROOT);
-  if (containsCall(files[SESSION_ROOT] ?? "", "createMcpAdapter")) names.add("mcp");
+  if (containsCall(files[RETIRED_COMPOSITION] ?? "", "createMcpAdapter")) names.add("mcp");
 
   const compositionRoots = Object.freeze([...roots].sort());
   const queue = [...roots].sort();
@@ -140,17 +150,17 @@ export function inventoryRepositoryToolFamilies(
     unresolvedRegistrations: Object.freeze([...unresolved].sort()),
     sdkToolFamilies,
     compositionRoots,
-    productionRoots: Object.freeze([...roots].sort()),
+    reachableRoots: Object.freeze([...roots].sort()),
     registrationSites: readonlySiteRecord(sites),
     nonProductionDuplicateSites: readonlySiteRecord(duplicateSites),
   });
 }
 
-export function snapshotRepositoryToolContracts(
-  tree: SourceTree = readRepositorySourceTree(),
-  config: ProductionCompositionConfig = {},
+export function snapshotLatentToolContracts(
+  tree: SourceTree = readLatentPreparationSourceTree(),
+  config: LatentCompositionConfig = {},
 ): Readonly<Record<string, StaticToolContract>> {
-  const inventory = inventoryRepositoryToolFamilies(tree, config);
+  const inventory = inventoryLatentToolFamilies(tree, config);
   const contracts: Record<string, StaticToolContract> = Object.create(null);
   for (const [name, sites] of Object.entries(inventory.registrationSites)) {
     const file = sites[0];
@@ -276,8 +286,8 @@ function parseBuiltinFactoryRoots(source: string, file: string, files: Readonly<
   return [...roots].sort();
 }
 
-function parseOptionalExtensionRoots(source: string, config: ProductionCompositionConfig): string[] {
-  const ast = sourceFile(SESSION_ROOT, source);
+function parseOptionalExtensionRoots(source: string, config: LatentCompositionConfig): string[] {
+  const ast = sourceFile(RETIRED_COMPOSITION, source);
   const roots: string[] = [];
   const platform = config.platform;
   const enabledEnv = config.enabledEnv;
@@ -888,7 +898,7 @@ function expressionArgument(node: ts.Node | null | undefined): ts.Expression | n
 }
 
 function containsCall(source: string, name: string): boolean {
-  const ast = sourceFile(SESSION_ROOT, source);
+  const ast = sourceFile(RETIRED_COMPOSITION, source);
   let found = false;
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && calleeName(node.callee) === name) found = true;

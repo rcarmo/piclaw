@@ -8,7 +8,7 @@ import { AgentPool } from "../../src/agent-pool.js";
 import { AgentRuntimeFacade } from "../../src/agent-pool/runtime-facade.js";
 import { buildSessionTreeSnapshot } from "../../src/agent-control/session-tree-snapshot.js";
 import { SESSIONS_DIR } from "../../src/core/config.js";
-import { sanitiseJid } from "../../src/agent-pool/session.js";
+import { sanitiseJid } from "../../src/agent-pool/session-paths.js";
 import { initDatabase } from "../../src/db.js";
 import "../helpers.js";
 import { bedrockOpus5Fixtures } from "../fixtures/bedrock-opus5.js";

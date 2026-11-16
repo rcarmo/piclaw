@@ -3,7 +3,7 @@ import { writeFileSync, readFileSync } from "fs";
 
 import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { join } from "path";
-import { ensureSessionDir } from "../../src/agent-pool/session.js";
+import { ensureSessionDir } from "../../src/agent-pool/session-paths.js";
 import { AgentBranchManager } from "../../src/agent-pool/branch-manager.js";
 import { createTempWorkspace, importFresh, setEnv } from "../helpers.js";
 

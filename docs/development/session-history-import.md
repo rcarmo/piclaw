@@ -84,10 +84,40 @@ native application metadata remains valid. This format discriminator grants no
 execution/configuration rights and does not replace native ownership/recovery checks.
 Ordinary supported native/public SDK schema evolution is separate from v3 conversion.
 
+## Retired constructor and test disposition
+
+The shipped `agent-pool/session.ts` constructor and `benchmark-cold-session.ts`
+CLI are removed. They had no production caller after resident manager retirement.
+Their automatic recent-file discovery, source sanitisation/rewrites, destructive
+pre-compaction trimming, implicit resume and generic extension/MCP execution are
+outside the one-shot import boundary.
+
+| Removed constructor scenarios | Retained supported checks |
+| --- | --- |
+| JSONL rewrite, trim, cold hydration and future append sanitisation | Import source bytes stay unchanged; supported payload/history/lineage checks; partial/native reopen refusal |
+| Generic MCP proxy reload, resources/prompts/slash commands, anonymous Parallel preset and lazy discovery | `factory-mcp-maintenance` and `host-mcp-http`: actual native public client, invocation-local abort/revocation, sibling survival, unsupported-profile refusal and uncertain close retaining credential leases |
+| Legacy automatic-compaction disable flag and same-turn `activate_tools` mutation | Native factory compaction/settings and native registry/loadout qualification; SDK owns current execution |
+| Arbitrary installed extension execution, legacy command-context trust and channel/platform bootstrap gating | `installed-tool-catalog`: unknown packages refuse before top-level I/O; `host-addon-resources`: qualified static viewer routes remain |
+| Legacy thinking policy in status | Existing SDK-only policy tests remain; native status reads native metadata and ignores legacy session policy |
+
+Native tests cover their named supported profiles. Generic adapter features and
+arbitrary v3 extension command contexts have no native parity certification.
+Path-only callers use `session-paths.ts`. Existing ownership, branch restore,
+filesystem non-mutation and public SDK-constructor fences remain tested.
+
+The four protected #1875 preparation metadata files remain unchanged. Their exact
+rows, protected selectors, strict unknown/missing registration checks and original
+retention classifications remain. A frozen JSON fixture retains only the original
+optional-extension/MCP composition excerpts from `00700001a`, with source and
+fixture hashes. Test-only AST oracles combine those historical declarations with
+the retained registry; current native composition is qualified separately. The
+fixture is not executable, is outside package inputs, and moved declarations earn
+no production deletion credit. Historical `currentSource` fields retain their
+as-of references, including the removed constructor.
+
 ## Delivery checkpoint
 
 This procedure describes the implemented import and refusal boundaries under #2017.
-The wider removal census, residual packaged legacy session-construction helpers,
-exact-source full/package qualification and acceptance reconciliation must finish
-before #2017 or #1650 closes. No live import, installation, restart, backup/restore,
+The wider removal/schema census, exact-source full/package qualification and
+acceptance reconciliation must finish before #2017 or #1650 closes. No live import, installation, restart, backup/restore,
 provider call or source-store mutation has been performed by this source work.

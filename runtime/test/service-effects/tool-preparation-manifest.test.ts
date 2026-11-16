@@ -2,6 +2,7 @@ import "../helpers.js";
 
 import { beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 
 import {
   CORE_EARENDIL_FACTORY_TARGETS,
@@ -28,7 +29,7 @@ import {
   type McpServerFixture,
 } from "./fixtures/mcp-metadata-oracle.js";
 import {
-  inventoryRepositoryToolFamilies,
+  inventoryLatentToolFamilies,
   type SourceTree,
 } from "./fixtures/repository-tool-family-oracle.js";
 
@@ -39,10 +40,20 @@ const SPEC_FIELDS = [
 const TEMPLATE_NAMES = DYNAMIC_TOOL_PREPARATION_TEMPLATES.map((row) => row.toolName);
 
 // Scan the immutable repository once; policy assertions reuse the same inventory.
-let repositoryInventory: ReturnType<typeof inventoryRepositoryToolFamilies>;
+let repositoryInventory: ReturnType<typeof inventoryLatentToolFamilies>;
 beforeAll(() => {
-  repositoryInventory = inventoryRepositoryToolFamilies();
+  repositoryInventory = inventoryLatentToolFamilies();
 }, 30_000);
+
+test("retired v3 composition excerpts remain frozen test data, separate from native composition", () => {
+  const bytes = readFileSync(new URL("../fixtures/retired-session-composition.json", import.meta.url));
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe("c590cb71f7038d5a038e9808f7dda34ec3efa618925829ab46b2e354b41d8961");
+  const fixture = JSON.parse(bytes.toString());
+  expect(fixture.sourceCommit).toBe("00700001abb9b3c740bbf5031586d09d81a88928");
+  expect(fixture.sourceSha256).toBe("16459dbb39a1be20d9f307bf33d610b782dd2b6b9edf604c719eaf90b8503624");
+  expect(fixture.scope).toContain("no native execution or parity evidence");
+  expect(existsSync(new URL("../../src/agent-pool/session.ts", import.meta.url))).toBe(false);
+});
 
 interface TestMcpCacheEntry {
   readonly configHash?: unknown;
@@ -92,7 +103,7 @@ function compositionTree(optionalFiles: readonly string[] = ["one.ts"], builtinE
         export function createBuiltinExtensionFactories() { return [${builtinEntries}]; }
       `,
       "src/extensions/always.ts": `export const alwaysOn = (pi: any) => pi.registerTool({ name: "fixture_always" });`,
-      "src/agent-pool/session.ts": `
+      "historical/retired-session-composition.ts": `
         const OPTIONAL_EXTENSIONS = [${optionalEntries}];
       `,
       "extensions/optional/one.ts": `export default (pi: any) => pi.registerTool({ name: "fixture_optional" });`,
@@ -102,8 +113,8 @@ function compositionTree(optionalFiles: readonly string[] = ["one.ts"], builtinE
   };
 }
 
-describe("WP-3C production-root coverage oracle", () => {
-  test("matches exact repository rows from authoritative production composition", () => {
+describe("WP-3C retained latent registry coverage oracle", () => {
+  test("matches exact retained metadata rows using frozen v3 composition excerpts", () => {
     const inventory = repositoryInventory;
     expect(inventory.unresolvedRegistrations).toEqual([]);
     expect(TOOL_PREPARATION_MANIFEST.map((row) => row.toolName).sort()).toEqual([...inventory.names]);
@@ -140,7 +151,7 @@ describe("WP-3C production-root coverage oracle", () => {
   }, 30_000); // Whole-repository TypeScript scan under the bounded CI CPU quota.
 
   test("ignores an unreferenced registration", () => {
-    const inventory = inventoryRepositoryToolFamilies(compositionTree());
+    const inventory = inventoryLatentToolFamilies(compositionTree());
     expect(inventory.names).toContain("fixture_always");
     expect(inventory.names).toContain("fixture_optional");
     expect(inventory.names).not.toContain("fixture_unreferenced");
@@ -149,7 +160,7 @@ describe("WP-3C production-root coverage oracle", () => {
   });
 
   test("returns immutable records and tuples rather than mutable Map/Set views", () => {
-    const inventory = inventoryRepositoryToolFamilies(compositionTree(), { sdkToolFamilies: [] });
+    const inventory = inventoryLatentToolFamilies(compositionTree(), { sdkToolFamilies: [] });
     expect(Object.isFrozen(inventory)).toBeTrue();
     expect(Object.isFrozen(inventory.registrationSites)).toBeTrue();
     expect(Object.isFrozen(inventory.nonProductionDuplicateSites)).toBeTrue();
@@ -176,7 +187,7 @@ describe("WP-3C production-root coverage oracle", () => {
       export const REAL_NAME = "fixture_source_constant";
       export function createRealTool() { return { name: "fixture_source_factory" }; }
     `;
-    const inventory = inventoryRepositoryToolFamilies({ files }, { sdkToolFamilies: [] });
+    const inventory = inventoryLatentToolFamilies({ files }, { sdkToolFamilies: [] });
     expect(inventory.unresolvedRegistrations).toEqual([]);
     expect(inventory.names).toEqual(["fixture_source_constant", "fixture_source_factory"]);
     expect(inventory.registrationSites).toEqual({
@@ -204,18 +215,18 @@ describe("WP-3C production-root coverage oracle", () => {
       ["latent/namespace.ts", "fixture_namespace"], ["latent/legacy.ts", "fixture_legacy"],
       ["latent/assigned.ts", "fixture_assigned"], ["node_modules/fixture-package/src/dynamic.ts", "fixture_dynamic"],
     ]) files[file] = `declare const pi: any; pi.registerTool({ name: "${name}" });`;
-    const inventory = inventoryRepositoryToolFamilies({ files }, { sdkToolFamilies: [] });
+    const inventory = inventoryLatentToolFamilies({ files }, { sdkToolFamilies: [] });
     expect(inventory.unresolvedRegistrations).toEqual([]);
     expect(inventory.names).toEqual(["fixture_always"]);
-    expect(inventory.productionRoots).toEqual(expect.arrayContaining([
+    expect(inventory.reachableRoots).toEqual(expect.arrayContaining([
       "latent/namespace.ts", "latent/legacy.ts", "latent/assigned.ts", "node_modules/fixture-package/src/dynamic.ts",
     ]));
     expect(Object.values(inventory).some((value) => value instanceof Map || value instanceof Set)).toBeFalse();
   });
 
   test("a newly referenced optional registration fails exact coverage", () => {
-    const baseline = inventoryRepositoryToolFamilies(compositionTree());
-    const changed = inventoryRepositoryToolFamilies(compositionTree(["one.ts", "two.ts"]));
+    const baseline = inventoryLatentToolFamilies(compositionTree());
+    const changed = inventoryLatentToolFamilies(compositionTree(["one.ts", "two.ts"]));
     const issues = validateToolPreparationManifest(fixtureSpecs(baseline.names), {
       knownToolNames: changed.names,
       enforceAuthoritativePolicy: false,
@@ -225,8 +236,8 @@ describe("WP-3C production-root coverage oracle", () => {
   });
 
   test("removing an always-on production root makes its row unexpected", () => {
-    const baseline = inventoryRepositoryToolFamilies(compositionTree());
-    const changed = inventoryRepositoryToolFamilies(compositionTree(undefined, ""));
+    const baseline = inventoryLatentToolFamilies(compositionTree());
+    const changed = inventoryLatentToolFamilies(compositionTree(undefined, ""));
     const issues = validateToolPreparationManifest(fixtureSpecs(baseline.names), {
       knownToolNames: changed.names,
       rejectUnexpectedExactTools: true,
@@ -467,11 +478,10 @@ describe("WP-3C closed manifest policy and hostile-safe normalization", () => {
 
 describe("WP-3C hermetic add-on package-tree oracle", () => {
   test("pins the shared package-entry containment policy adopted by installed add-on consumers", () => {
-    const sessionSource = readFileSync(new URL("../../src/agent-pool/session.ts", import.meta.url), "utf8");
+    const catalogSource = readFileSync(new URL("../../durable-engine/src/host-extension-catalog.ts", import.meta.url), "utf8");
     const resolverSource = readFileSync(new URL("../../src/addons/package-entries.ts", import.meta.url), "utf8");
-    expect(sessionSource).not.toContain("export function getInstalledAddonExtensionPaths");
-    expect(sessionSource).toMatch(/import\s*\{\s*getInstalledAddonExtensionPaths,?\s*\}\s*from\s*["']\.\.\/addons\/package-entries\.js["']/);
-    expect(sessionSource).toContain("getInstalledAddonExtensionPaths(getWorkspaceDir())");
+    expect(catalogSource).toContain("getInstalledAddonExtensionPaths");
+    expect(catalogSource).toContain("package-entries.js");
     // Activation filtering may remove retired packages, but must still use the
     // same lexical/realpath containment owner before returning any entry.
     expect(resolverSource).toMatch(/resolveActiveAddonEntries\(packageDir,\s*\w+\.manifest,\s*\w+\.manifest\.pi\?\.extensions\)/);

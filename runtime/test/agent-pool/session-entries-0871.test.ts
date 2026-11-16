@@ -2,7 +2,6 @@ import { expect, test } from 'bun:test';
 import { buildSessionContext, type SessionEntry } from '@earendil-works/pi-coding-agent';
 import { adoptedJsonl } from './adopted-session-fixture.js';
 import { computePromptCacheWaste } from '../../src/agent-pool/cache-stats.js';
-import { createSessionManagerPersistencePort } from '../../src/agent-pool/session-persistence.js';
 
 const stamp = '2026-09-06T00:00:00.000Z';
 const append = (rows: any[], entries: any[]) => {
@@ -14,14 +13,6 @@ const append = (rows: any[], entries: any[]) => {
   }
   return JSON.stringify(copy[0]) + '\n' + copy.slice(1).map((entry) => JSON.stringify(entry)).join('\n') + '\n';
 };
-
-test('nullable compaction is forwarded; managers without context-edit support fail closed', async () => {
-  const port = createSessionManagerPersistencePort({
-    appendCompaction: (_summary, first) => { expect(first).toBeNull(); return 'compact'; },
-  } as any);
-  expect(await port.appendCompaction('summary', null, 0)).toBe('compact');
-  expect(port.appendContextEdit).toBeUndefined();
-});
 
 test('0.87.1 canonical projection omits context-edited content on reopen', () => {
   const { rows } = adoptedJsonl('/tmp/adoption', '/tmp/parent.jsonl');

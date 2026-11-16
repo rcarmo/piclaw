@@ -167,28 +167,28 @@ bun test \
 
 User/operator behavior is documented in [configuration.md](configuration.md), [tools-and-skills.md](tools-and-skills.md), [mcp.md](mcp.md), [azure-openai-extension.md](azure/azure-openai-extension.md), and [vendored-widget-libraries.md](vendored-widget-libraries.md).
 
-### MCP adapter
+### Native MCP
 
-PiClaw bundles `pi-mcp-adapter` as a normal package dependency and loads it as a packaged session extension from `node_modules/`.
+`runtime/durable-engine/src/host-mcp.ts` owns the supported tools-only native
+profile through the public MCP client. It maps server tools explicitly, uses
+invocation-local cancellation and source-authority checks, and retains credential
+leases when transport cleanup is uncertain. It has no generic adapter fallback.
 
-Relevant files when working on MCP integration:
+The old `runtime/src/agent-pool/session.ts` constructor and cold-session CLI are
+removed. `pi-mcp-adapter` remains a pinned dependency for retained metadata and
+compatibility consumers; its generic proxy, resources, prompts, slash commands
+and anonymous preset profiles are outside current native qualification.
 
-- `package.json` / `bun.lock`
-- `runtime/src/agent-pool/session.ts`
-- `docs/mcp.md`
-- `skel/.mcp.json.example`
-- `skel/.pi/mcp.json.example`
-- `skel/.pi/skills/mcp-adapter/SKILL.md`
-
-Piclaw pins `pi-mcp-adapter` 2.15.0 to Git commit `715843cd574923880c6a82e30641a0c2dc01c96a` in `package.json` and `bun.lock`. The adapter forwards abort signals and applies its configured `requestTimeoutMs` to protocol requests. Piclaw independently wraps MCP tools after their `session_start` registration so existing `PICLAW_MCP_TOOL_TIMEOUT_MS` behavior remains stable across adapter upgrades.
-
-Focused regression tests:
+Focused native checks use the reviewed fixture roots from
+[native validation](native-validation.md):
 
 ```bash
-PICLAW_DB_IN_MEMORY=1 bun test \
-  runtime/test/agent-pool/mcp-adapter-bundled.test.ts \
-  runtime/test/extensions/mcp-timeout-patch.test.ts
+bun run test:local --cwd qualification/native -- bun test \
+  factory-mcp-maintenance.test.ts host-mcp-http.test.ts
 ```
+
+See [offline history import](development/session-history-import.md) for the
+constructor-test disposition and the separate data-only import command.
 
 ### Azure OpenAI image commands
 

@@ -78,13 +78,13 @@
       "semanticReaderOccurrences": 0
     },
     "tooling": {
-      "referencedNames": 94,
-      "directReaderNames": 42,
-      "directReaderOccurrences": 64,
+      "referencedNames": 93,
+      "directReaderNames": 39,
+      "directReaderOccurrences": 58,
       "helperReaderNames": 0,
       "helperReaderOccurrences": 0,
-      "semanticReaderNames": 42,
-      "semanticReaderOccurrences": 64
+      "semanticReaderNames": 39,
+      "semanticReaderOccurrences": 58
     },
     "docsDeploy": {
       "referencedNames": 156,
@@ -1039,11 +1039,10 @@
         },
         "tooling": {
           "referenced": true,
-          "directReaders": 3,
+          "directReaders": 2,
           "helperReaders": 0,
-          "semanticReaders": 3,
+          "semanticReaders": 2,
           "files": [
-            "runtime/scripts/benchmark-cold-session.ts",
             "runtime/scripts/lib/native-recovery-unit.ts",
             "runtime/scripts/note-retrieval-baseline.ts",
             "runtime/scripts/test-filesystem-isolation.ts",
@@ -1053,7 +1052,6 @@
             "scripts/token-chart.ts"
           ],
           "readerFiles": [
-            "runtime/scripts/benchmark-cold-session.ts",
             "runtime/scripts/lib/native-recovery-unit.ts",
             "scripts/token-chart.ts"
           ]
@@ -1110,7 +1108,6 @@
             "docs/development/receipts/pi-103-deeper-qualification.json",
             "docs/development/receipts/pi-103-soak-agent-qualification.json",
             "docs/development/scheduled-result-history.md",
-            "docs/development/schema-ownership.md",
             "docs/development/testing-and-linting-flow-presentation-2026-04-18.html",
             "docs/development/tool-output-retention-performance.md",
             "docs/development/web-session-query-performance.md",
@@ -1124,11 +1121,10 @@
         },
         "tooling": {
           "referenced": true,
-          "directReaders": 1,
+          "directReaders": 0,
           "helperReaders": 0,
-          "semanticReaders": 1,
+          "semanticReaders": 0,
           "files": [
-            "runtime/scripts/benchmark-cold-session.ts",
             "runtime/scripts/controlled-test-runner.ts",
             "runtime/scripts/note-retrieval-baseline.ts",
             "runtime/scripts/test-filesystem-isolation.ts",
@@ -1140,9 +1136,7 @@
             "scripts/integration-test-suite.ts",
             "scripts/native-test-suite.ts"
           ],
-          "readerFiles": [
-            "runtime/scripts/benchmark-cold-session.ts"
-          ]
+          "readerFiles": []
         },
         "production": {
           "referenced": true,
@@ -1237,16 +1231,13 @@
       "scopes": {
         "tooling": {
           "referenced": true,
-          "directReaders": 1,
+          "directReaders": 0,
           "helperReaders": 0,
-          "semanticReaders": 1,
+          "semanticReaders": 0,
           "files": [
-            "runtime/scripts/benchmark-cold-session.ts",
             "runtime/scripts/note-retrieval-baseline.ts"
           ],
-          "readerFiles": [
-            "runtime/scripts/benchmark-cold-session.ts"
-          ]
+          "readerFiles": []
         },
         "production": {
           "referenced": true,
@@ -1292,23 +1283,6 @@
             "runtime/src/runtime/single-instance.ts"
           ],
           "readerFiles": []
-        }
-      }
-    },
-    {
-      "name": "PICLAW_DISABLE_STARTUP_SESSION_WARMUP",
-      "scopes": {
-        "tooling": {
-          "referenced": true,
-          "directReaders": 1,
-          "helperReaders": 0,
-          "semanticReaders": 1,
-          "files": [
-            "runtime/scripts/benchmark-cold-session.ts"
-          ],
-          "readerFiles": [
-            "runtime/scripts/benchmark-cold-session.ts"
-          ]
         }
       }
     },
@@ -2411,8 +2385,7 @@
           "files": [
             "docs/development/native-ui-projections.md",
             "docs/development/pi-1.5.1-qualification.md",
-            "docs/development/pi-1.5.2-qualification.md",
-            "docs/development/schema-ownership.md"
+            "docs/development/pi-1.5.2-qualification.md"
           ],
           "readerFiles": []
         },
@@ -4620,11 +4593,10 @@
         },
         "tooling": {
           "referenced": true,
-          "directReaders": 4,
+          "directReaders": 3,
           "helperReaders": 0,
-          "semanticReaders": 4,
+          "semanticReaders": 3,
           "files": [
-            "runtime/scripts/benchmark-cold-session.ts",
             "runtime/scripts/lib/native-recovery-unit.ts",
             "runtime/scripts/note-retrieval-baseline.ts",
             "runtime/scripts/test-filesystem-isolation.ts",
@@ -4635,7 +4607,6 @@
             "scripts/token-chart.ts"
           ],
           "readerFiles": [
-            "runtime/scripts/benchmark-cold-session.ts",
             "runtime/scripts/lib/native-recovery-unit.ts",
             "scripts/backfill-token-usage.ts",
             "scripts/token-chart.ts"
@@ -7051,11 +7022,10 @@
         },
         "tooling": {
           "referenced": true,
-          "directReaders": 2,
+          "directReaders": 1,
           "helperReaders": 0,
-          "semanticReaders": 2,
+          "semanticReaders": 1,
           "files": [
-            "runtime/scripts/benchmark-cold-session.ts",
             "runtime/scripts/lib/native-recovery-unit.ts",
             "runtime/scripts/note-retrieval-baseline.ts",
             "runtime/scripts/test-filesystem-isolation.ts",
@@ -7065,7 +7035,6 @@
             "scripts/smoke-install-from-repo.sh"
           ],
           "readerFiles": [
-            "runtime/scripts/benchmark-cold-session.ts",
             "runtime/scripts/lib/native-recovery-unit.ts"
           ]
         },

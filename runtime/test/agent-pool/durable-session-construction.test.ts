@@ -7,7 +7,7 @@ import { createAgentPoolServices } from "../../src/agent-pool/service-factory.js
 import { createAgentPoolModelOptions } from "../model-services-fixture.js";
 import { SESSIONS_DIR } from "../../src/core/config.js";
 import { archiveChatBranch, initDatabase, storeChatMetadata, storeMessage, getChatBranchByChatJid } from "../../src/db.js";
-import * as legacySession from "../../src/agent-pool/session.js";
+import * as legacyPaths from "../../src/agent-pool/session-paths.js";
 import { AgentToolFactory } from "../../src/agent-pool/tool-factory.js";
 import { AgentBranchManager } from "../../src/agent-pool/branch-manager.js";
 import { getDb } from "../../src/db/connection.js";
@@ -61,8 +61,8 @@ for (const empty of [false, true]) {
     const before = snapshot();
     const spies = [
       ...(["create", "open", "continueRecent"] as const).map(name => spyOn(SessionManager, name).mockImplementation(() => { throw Error("JSONL forbidden"); })),
-      ...(["ensureSessionDir", "ensureNamedSessionDir", "createDefaultSession", "createSessionInDir"] as const)
-        .map(name => spyOn(legacySession, name).mockImplementation(() => { throw Error("legacy session setup forbidden"); })),
+      ...(["ensureSessionDir", "ensureNamedSessionDir"] as const)
+        .map(name => spyOn(legacyPaths, name).mockImplementation(() => { throw Error("legacy session setup forbidden"); })),
       spyOn(AgentToolFactory.prototype, "createDefaultTools").mockImplementation(() => { throw Error("legacy tool setup forbidden"); }),
       spyOn(AgentBranchManager.prototype, "mergeChatBranchIntoParent").mockImplementation(() => { throw Error("legacy merge entered"); }),
       spyOn(AgentBranchManager.prototype, "restoreChatBranch").mockImplementation(() => { throw Error("legacy restore entered"); }),
@@ -134,8 +134,8 @@ test("durable branch discovery stays host-only without legacy session constructi
   };
   const spies = [
     ...(["create", "open", "continueRecent"] as const).map(name => spyOn(SessionManager, name).mockImplementation(() => { throw Error("JSONL forbidden"); })),
-    ...(["ensureSessionDir", "ensureNamedSessionDir", "createDefaultSession", "createSessionInDir"] as const)
-      .map(name => spyOn(legacySession, name).mockImplementation(() => { throw Error("legacy session setup forbidden"); })),
+    ...(["ensureSessionDir", "ensureNamedSessionDir"] as const)
+      .map(name => spyOn(legacyPaths, name).mockImplementation(() => { throw Error("legacy session setup forbidden"); })),
   ];
   let pool: AgentPool | undefined;
   try {
@@ -271,8 +271,8 @@ test("durable shutdown remains host-only without legacy session construction", a
   };
   const spies = [
     ...(["create", "open", "continueRecent"] as const).map(name => spyOn(SessionManager, name).mockImplementation(() => { throw Error("JSONL forbidden"); })),
-    ...(["ensureSessionDir", "ensureNamedSessionDir", "createDefaultSession", "createSessionInDir"] as const)
-      .map(name => spyOn(legacySession, name).mockImplementation(() => { throw Error("legacy session setup forbidden"); })),
+    ...(["ensureSessionDir", "ensureNamedSessionDir"] as const)
+      .map(name => spyOn(legacyPaths, name).mockImplementation(() => { throw Error("legacy session setup forbidden"); })),
   ];
   const pool = new AgentPool(options);
   try {
