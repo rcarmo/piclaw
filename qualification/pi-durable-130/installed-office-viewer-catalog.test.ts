@@ -25,7 +25,7 @@ export default function() {}\n`);
     expect(qualified).toBeDefined();
     expect(qualified!.extension.handlers.size).toBe(0);
     expect(() => assertApplicationExtensionCatalogSupported(catalog!)).toThrow("open_office_viewer");
-    assertApplicationExtensionCatalogSupported(catalog, undefined, undefined, undefined, qualified);
+    assertApplicationExtensionCatalogSupported(catalog, undefined, undefined, qualified);
     if (mode === "execute") qualified!.definition.execute = async () => { throw Error("substituted"); };
     if (mode === "schema") qualified!.definition.parameters = { ...qualified!.definition.parameters, description: "changed" };
     if (mode !== "approved") expect(() => qualified!.assertCurrent()).toThrow("capabilities");

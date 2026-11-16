@@ -22,7 +22,7 @@ function fixture(options: { createSession?: () => Promise<AgentSessionRuntime>; 
   return { manager, pool, cleanup: () => { restore(); ws.cleanup(); } };
 }
 
-test("manager fence rejects cached/new main admissions and prevents prewarm/eviction", async () => {
+test("manager fence rejects cached/new main admissions and prevents eviction", async () => {
   const f = fixture();
   const main = runtime("main");
   try {
@@ -30,7 +30,6 @@ test("manager fence rejects cached/new main admissions and prevents prewarm/evic
     f.manager.blockMcpAdmissions();
     await expect(f.manager.getOrCreate("web:main")).rejects.toThrow("MCP engine transition");
     await expect(f.manager.getOrCreate("web:new")).rejects.toThrow("MCP engine transition");
-    expect(f.manager.prewarm("web:new", { priority: true })).toBe(false);
     f.manager.evictIdle({ mainIdleTtlMs: 0 });
     expect(f.pool.size).toBe(1);
     expect(await f.manager.fenceMcpAndSnapshot(new AbortController().signal)).toEqual([main]);
@@ -126,22 +125,7 @@ test("fenced manager rejects runtime recreation before lifecycle work", async ()
   } finally { f.cleanup(); }
 });
 
-test("lightweight prewarm already in flight is drained by the snapshot", async () => {
-  const entered = deferred<void>(), release = deferred<void>();
-  const f = fixture();
-  try {
-    // This variant creates no session, but extension-factory discovery must
-    // still finish before the fenced owner snapshot is considered stable.
-    const manager = new AgentSessionManager({ pool: f.pool, modelRuntime: {} as ModelRuntime, settingsManager: {} as SettingsManager, createDefaultTools: () => [], bindSession: async () => {},
-      lightweightPrewarmSession: async () => { entered.resolve(); await release.promise; } });
-    expect(manager.prewarm("web:light", { mode: "lightweight" })).toBe(true);
-    await entered.promise;
-    let settled = false;
-    const snapshot = manager.fenceMcpAndSnapshot(new AbortController().signal).then(value => { settled = true; return value; });
-    await Bun.sleep(0); expect(settled).toBe(false);
-    release.resolve(); expect(await snapshot).toEqual([]);
-  } finally { f.cleanup(); }
-});
+
 
 test("public runtime rebinding is rejected while fenced and pre-fence binding is drained", async () => {
   const entered = deferred<void>(), release = deferred<void>();

@@ -263,7 +263,6 @@ export class AgentPool {
   private modelRegistry: ModelRegistry;
   private settingsManager = SettingsManager.create(WORKSPACE_DIR, getPiclawAgentDir());
   private attachments: AgentPoolServices["attachments"];
-  private sessionBinder: AgentPoolServices["sessionBinder"];
   private sessionManager: AgentPoolServices["sessionManager"];
   private branchManager: AgentPoolServices["branchManager"];
   private runtimeFacade: AgentPoolServices["runtimeFacade"];
@@ -312,7 +311,6 @@ export class AgentPool {
     this.modelRegistry = options.modelRegistry ?? new ModelRegistry(this.modelRuntime);
     ({
       attachments: this.attachments,
-      sessionBinder: this.sessionBinder,
       sessionManager: this.sessionManager,
       mcpSettings: this.mcpSettings,
       runtimeFacade: this.runtimeFacade,
@@ -380,11 +378,6 @@ export class AgentPool {
         if (remaining === 0) log.info("Reclaimed all freelist pages after token_usage pruning");
       }
     } catch (e) { void e; }
-  }
-
-  setSessionBinder(binder?: (runtime: AgentSessionRuntime, chatJid: string) => Promise<void> | void): void {
-    if (!this.sessionBinder) throw Error("Native host does not install a legacy session binder");
-    this.sessionBinder.setBinder(binder);
   }
 
   async applyControlCommand(chatJid: string, command: AgentControlCommand): Promise<AgentControlResult> {

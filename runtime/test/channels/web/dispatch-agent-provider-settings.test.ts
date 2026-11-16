@@ -79,19 +79,41 @@ test('Settings discovers an extension-only runtime provider using the same actua
   const {modelRuntime,modelRegistry}=await createRealTestModelServices(f.agentDir);
   modelRuntime.registerNativeProvider({id,name:'Fixture Extension',getModels:()=>[],auth:{apiKey:{name:'Fixture',login:async()=>({type:'api_key',key})}},
     stream(){throw Error('Settings must not execute a provider');},streamSimple(){throw Error('Settings must not execute a provider');}});
-  const before=definitions.getProviderDefs();const calls=spyOn(definitions,'getProviderDefs');
+  const before=definitions.getProviderDefs(modelRegistry,modelRuntime);const calls=spyOn(definitions,'getProviderDefs');
   try{
     const payload=await f.read({modelRuntime,getModelRegistry:()=>modelRegistry});
     expect(calls.mock.calls.some(args=>args[0]===modelRegistry&&args[1]===modelRuntime)).toBe(true);
     expect(payload.providers.find(provider=>provider.id===id)).toMatchObject({name:'Fixture Extension',configured:true,authType:'api_key',hasApiKey:true});
     expect(JSON.stringify(payload)).not.toContain(key);
-    expect(payload.providers.slice(0,before.length).map(({id,name,hasOAuth,hasApiKey})=>({id,name,hasOAuth,hasApiKey}))).toEqual(before.map(({id,name,hasOAuth,hasApiKey})=>({id,name,hasOAuth,hasApiKey})));
+    expect(payload.providers.map(({id,name,hasOAuth,hasApiKey})=>({id,name,hasOAuth,hasApiKey}))).toEqual(before.map(({id,name,hasOAuth,hasApiKey})=>({id,name,hasOAuth,hasApiKey})));
   }finally{calls.mockRestore();}
 });
 
-for(const mode of ['missing','registry-throws','registry-read-throws','runtime-throws'] as const)test(`Settings retains the exact static provider list during ${mode}`,async()=>{
+for(const mode of ['missing','registry-throws','registry-read-throws'] as const)test(`Settings retains the exact static provider list during ${mode}`,async()=>{
   const f=await settingsFixture(undefined),before=definitions.getProviderDefs();
-  const pool=mode==='missing'?undefined:mode==='registry-throws'?{getModelRegistry(){throw Error('Registry not ready');}}:mode==='registry-read-throws'?{getModelRegistry:()=>({getAll(){throw Error('Registry refreshing');}})}:{modelRuntime:{getProviders(){throw Error('Runtime refreshing');}}};
+  const pool=mode==='missing'?undefined:mode==='registry-throws'?{getModelRegistry(){throw Error('Registry not ready');}}:{getModelRegistry:()=>({getAll(){throw Error('Registry refreshing');}})};
   const payload=await f.read(pool);
   expect(payload.providers.map(({id,name,hasOAuth,hasApiKey})=>({id,name,hasOAuth,hasApiKey}))).toEqual(before.map(({id,name,hasOAuth,hasApiKey})=>({id,name,hasOAuth,hasApiKey})));
+});
+
+test('Settings uses every current public provider-owned login capability, including OpenAI OAuth', async()=>{
+  const f=await settingsFixture(undefined);
+  const {modelRuntime,modelRegistry}=await createRealTestModelServices(f.agentDir);
+  const payload=await f.read({modelRuntime,getModelRegistry:()=>modelRegistry});
+  expect(payload.providers.find(p=>p.id==='openai')).toMatchObject({hasOAuth:true,hasApiKey:true});
+  expect(payload.providers.find(p=>p.id==='openai-codex')).toMatchObject({hasOAuth:true,hasApiKey:false});
+  for(const provider of modelRuntime.getProviders()){
+    expect(payload.providers.find(p=>p.id===provider.id)).toMatchObject({
+      hasOAuth:typeof provider.auth.oauth?.login==='function',
+      hasApiKey:typeof provider.auth.apiKey?.login==='function',
+    });
+  }
+});
+
+for(const mode of ['empty','throws'] as const)test(`Settings cannot advertise static login methods over an authoritative ${mode} runtime`,async()=>{
+  const f=await settingsFixture(undefined);
+  const modelRuntime={getProviders(){if(mode==='throws')throw Error('Synthetic inventory unavailable');return [];}};
+  const payload=await f.read({modelRuntime,getModelRegistry:()=>({getAll:()=>[]})});
+  expect(payload.providers.filter(p=>p.hasOAuth||p.hasApiKey)).toEqual([]);
+  for(const id of ['ollama','llama-cpp'])expect(payload.providers.find(p=>p.id===id)).toMatchObject({isCustom:true});
 });

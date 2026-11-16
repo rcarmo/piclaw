@@ -48,7 +48,7 @@ export function createEditableTableTool() { return { name: 'editable_table' }; }
       expect(qualified!.extension.handlers.size).toBe(1);
       expect(qualified!.extension.handlers.has("resources_discover")).toBe(true);
       expect(() => assertApplicationExtensionCatalogSupported(catalog!)).toThrow("editable_table: no operation-owned host effect port");
-      assertApplicationExtensionCatalogSupported(catalog, undefined, undefined, qualified);
+      assertApplicationExtensionCatalogSupported(catalog, undefined, qualified);
       const factory = qualified!.addon.createEditableTableTool;
       expect(typeof factory).toBe("function");
       const unavailable = factory({ available: false, publishWidget() { throw Error("must not publish"); } });
@@ -61,7 +61,7 @@ export function createEditableTableTool() { return { name: 'editable_table' }; }
       if (mode === "approved") { qualified!.assertCurrent(); const again = await load(); try { expect(await qualifyInstalledEditableTable(again, dir)).toBeDefined(); } finally { again.runtime.invalidate("fixture ended"); } }
       else {
         expect(() => qualified!.assertCurrent()).toThrow(mode === "source-after-load" ? "source changed" : "capabilities");
-        expect(() => assertApplicationExtensionCatalogSupported(catalog!, undefined, undefined, qualified)).toThrow();
+        expect(() => assertApplicationExtensionCatalogSupported(catalog!, undefined, qualified)).toThrow();
       }
     } finally { catalog?.runtime.invalidate("fixture ended"); rmSync(dir, { recursive: true, force: true }); }
   });

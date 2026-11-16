@@ -215,7 +215,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "a64d2881c5a7e657f71e965f4beb5a581dc07e9797edd1123af3739af3f0ca63",
       "state": "retained-decoupled",
-      "currentSha256": "4879f2cf0ea6da2bbfde466048038df2d585a080c171279c074221c681c3119f",
+      "currentSha256": "693dceb90c04107464deecdde6876f3f5049f2eb295a466ce49834f44652d70d",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": []
     },
@@ -638,7 +638,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "e506827fe77e26e48c722ff15a957a5d37acfe9c66c32e4511a67f627c2cf94f",
       "state": "retained-decoupled",
-      "currentSha256": "b2a6fe534df5e203595224d9f0c4caba95c3648de3097ade09db1a80d5484d6d",
+      "currentSha256": "d327934470b80f8bbdb947233571f83763e58d9ed4225385342674c2e3f27467",
       "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
       "directImportCallers": [
         {
@@ -1028,7 +1028,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "cdddbc02e1f46e6767bfd9f5602c55ef007d6083aff7af016550f74d1f73aa6f",
       "state": "retained-decoupled",
-      "currentSha256": "701e4b9febe7af2e68656fd3291c91b126e0baf8b2a327a7b36f47609b83b55f",
+      "currentSha256": "32575efe68b89b5276f60307ea3ec7f65fc4fa75e8860065e03b7e71015b771d",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -2039,7 +2039,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "b1967a9bc02e27e622fe853ae10880bb571128abdcfafd83726c5986fabe5a77",
       "state": "retained-decoupled",
-      "currentSha256": "661d1a63bdf1d94c2caf5ce8505a40498a7a64cb511001aed5d4126c2cf90644",
+      "currentSha256": "f98b23c705c98a2cd83c223e884e2157d1b676d3ea7ba52022ab4e5cf3758f08",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -2326,7 +2326,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "92bf8e7afe1e2851b0f0f90262729411bd58776cbb38685ffd1dd5b1900350e6",
       "state": "retained-decoupled",
-      "currentSha256": "997db8a0ef3eb1750ba9cd56def59286e397676f95fed9b16c7ce0d2ea2313a1",
+      "currentSha256": "5e3212ee821b5c1f83ddbc3535ebb924c3316133a4cfa9397a70f5ad97fc69f9",
       "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
       "directImportCallers": []
     },
@@ -2456,7 +2456,7 @@
       "deliveryOwner": "#1882",
       "originalSha256": "1af8f43680724ca4c05c9beede8db5903b013bc76e9bc5dbceb1235e3d823105",
       "state": "retained-decoupled",
-      "currentSha256": "90140c191802d8262aff0a8219964cf29639f5b47baca0887d1af6366fa81099",
+      "currentSha256": "b23aa8ba7e544ccf876b22d61a9bfd487d062e61b3413221339ee09b8f81c01f",
       "currentPurpose": "exact approved add-on source/resource identity and public exported domain contracts",
       "directImportCallers": [
         {
@@ -2889,5 +2889,23 @@
       "runtime/durable-engine/src/host-extension-catalog.ts"
     ],
     "scope": "Reliability/maintenance/legacy SQL retirement and approved published add-on source pins; original classifications/deleted paths/financial accounting unchanged. No1875deletioncredit."
-  }
+  },
+  "laterSourceRefreshes": [
+    {
+      "issue": 1650,
+      "base": "d75ec20fb1f2c67a2ac88ecb576e43e308418163",
+      "paths": [
+        "runtime/src/agent-pool.ts"
+      ],
+      "scope": "Remove the uncalled legacy session binder API and factory stage. Original 105 classifications, 37 deleted paths and financial reduction accounting remain unchanged; this slice receives no additional #1875 credit."
+    },
+    {
+      "issue": 1650,
+      "base": "b55ab07685fe8430e8f5c7dca37d1b55c5d356f2",
+      "paths": [
+        "runtime/src/channels/web/http/dispatch-agent.ts"
+      ],
+      "scope": "Settings now uses the existing provider-owned auth definitions for built-in and extension providers alike. Original classifications, deleted paths and financial accounting remain unchanged; no additional #1875 deletion credit."
+    }
+  ]
 }

@@ -11,13 +11,6 @@
       "sha256": "fe03dc2c4aa26cc68dc61b562f80fdcfee4021fd9342f29ba3fae0019e8f0ea9"
     },
     {
-      "slug": "delegate",
-      "name": "@rcarmo/piclaw-addon-delegate",
-      "version": "0.2.22",
-      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-delegate-0.2.22.tgz",
-      "sha256": "d9f758f76fd853b43d20be4a7fb0018f42e992a97907783be830055f12c0d49d"
-    },
-    {
       "slug": "goal",
       "name": "@rcarmo/piclaw-addon-goal",
       "version": "0.1.50",

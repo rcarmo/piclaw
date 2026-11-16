@@ -60,8 +60,10 @@ import { createHostBuiltinTools } from "./host-builtins.js";
 import { createHostModelTools, hostModelToolNames, nativeToolInstructions } from "./host-model-controls.js";
 import { createHostCommandPolicy } from "./host-command-policy.js";
 import { createHostProcessControls, nativeProcessToolNames, nativeProcessInstructions } from "./host-process-controls.js";
-import { inspectAddonInstall, loadApplicationExtensionCatalog, qualifyInstalledAddon, bindInstalledAddon, qualifyInstalledDelegate, qualifyInstalledCodeReview, qualifyInstalledEditableTable, qualifyInstalledOfficeViewer, qualifyInstalledDrawio, qualifyInstalledGoal, qualifyInstalledObservability, qualifyInstalledRestic, assertApplicationExtensionCatalogSupported } from "./host-extension-catalog.js";
+import { inspectAddonInstall, loadApplicationExtensionCatalog, qualifyInstalledAddon, bindInstalledAddon, qualifyInstalledCodeReview, qualifyInstalledEditableTable, qualifyInstalledOfficeViewer, qualifyInstalledDrawio, qualifyInstalledGoal, qualifyInstalledObservability, qualifyInstalledRestic, assertApplicationExtensionCatalogSupported } from "./host-extension-catalog.js";
 import { createHostDelegateTool } from "./host-delegate-tool.js";
+import { buildModelCandidates, type DelegateConfig } from "../../src/delegate/policy.js";
+import { createDelegateSettings, delegateInstructions } from "../../src/delegate/settings.js";
 import { createHostDelegateFileReader } from "./host-delegate-files.js";
 import { extensionKvGet } from "../../src/db/extension-kv.js";
 import { createHostProxmoxTool, type ProxmoxNativeExports } from "./host-proxmox-tool.js";
@@ -295,12 +297,13 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     assert(); observability?.assertCurrent();
     return saved;
   };
-  const delegate = await qualifyInstalledDelegate(catalog, WORKSPACE_DIR);
   const codeReview = await qualifyInstalledCodeReview(catalog, WORKSPACE_DIR);
   const editableTable = await qualifyInstalledEditableTable(catalog, WORKSPACE_DIR);
   const officeViewer = qualifyInstalledOfficeViewer(catalog, WORKSPACE_DIR);
   const drawio = await qualifyInstalledDrawio(catalog, WORKSPACE_DIR), goal = await qualifyInstalledGoal(catalog, WORKSPACE_DIR);
   const lifetime = new AbortController(), terminalLifetime = new AbortController();
+  const assertCoreDelegate = () => { assert(); lifetime.signal.throwIfAborted();
+    if (getDb() !== root || readAccessConfig().mode !== "single-user") throw Error("Core Delegate owner unavailable"); };
   // Fatal source errors seal execution. Passive reporting retains its own
   // database lifetime until SDK shutdown has joined provider calls.
   const usageReports = new Set<Promise<void>>();
@@ -695,11 +698,11 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     tools: [infrastructureTools[index]!], lifecycle: infrastructureLifecycle(qualified), commands: {},
   }));
   try {
-    assert(); assertApplicationExtensionCatalogSupported(catalog, delegate, codeReview, editableTable, officeViewer, drawio, goal, observability, restic, [...receipts, ...resourceReceipts, ...(remoteReceipt ? [remoteReceipt] : []), ...(regretsReceipt ? [regretsReceipt] : []), ...(codexReceipt ? [codexReceipt] : [])]);
+    assert(); assertApplicationExtensionCatalogSupported(catalog, codeReview, editableTable, officeViewer, drawio, goal, observability, restic, [...receipts, ...resourceReceipts, ...(remoteReceipt ? [remoteReceipt] : []), ...(regretsReceipt ? [regretsReceipt] : []), ...(codexReceipt ? [codexReceipt] : [])]);
   } catch (error) { closeResources(); throw error; } finally { catalog.runtime.invalidate("Application extension preflight ended"); }
   let infrastructureClosed = false;
   const closeInfrastructure = () => { if (infrastructureClosed) return; infrastructureClosed = true; for (const qualified of infrastructure) if (qualified.kind === "imap") (qualified.nativeExports["index.ts"]!.disposeImapPool as () => void)(); };
-  const baseApplicationToolNames: readonly string[] = [...defaultToolNames, ...hostModelToolNames, ...nativeProcessToolNames, ...(codexGroup?.tools.map(tool => tool.name) ?? []), "codemode", ...(remotePeer ? ["remote_peer"] : []), ...(regrets ? ["regrets_review"] : []), ...infrastructureTools.map(tool => tool.name), ...(restic ? ["restic"] : []), ...(goal ? ["get_goal", "create_goal", "goal_complete", "goal_stop", "update_goal"] : []), "plan", ...(delegate ? ["delegate"] : []), ...(codeReview ? ["code_review"] : []), ...(editableTable ? ["editable_table"] : []), ...(officeViewer ? ["open_office_viewer"] : []), ...(drawio ? ["open_drawio_editor"] : [])];
+  const baseApplicationToolNames: readonly string[] = [...defaultToolNames, ...hostModelToolNames, ...nativeProcessToolNames, ...(codexGroup?.tools.map(tool => tool.name) ?? []), "codemode", ...(remotePeer ? ["remote_peer"] : []), ...(regrets ? ["regrets_review"] : []), ...infrastructureTools.map(tool => tool.name), ...(restic ? ["restic"] : []), ...(goal ? ["get_goal", "create_goal", "goal_complete", "goal_stop", "update_goal"] : []), "plan", "delegate", ...(codeReview ? ["code_review"] : []), ...(editableTable ? ["editable_table"] : []), ...(officeViewer ? ["open_office_viewer"] : []), ...(drawio ? ["open_drawio_editor"] : [])];
   const fetchDefault = [...baseApplicationToolNames, "fetch"];
   const previousDefault = baseApplicationToolNames.filter(name => name !== "codemode");
   let previousModelDefault: readonly string[] = [];
@@ -710,7 +713,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     previousModelDefault.filter(name => name !== "codemode"), previousProcessDefault,
     previousProcessDefault.filter(name => name !== "fetch"),
     previousProcessDefault.filter(name => !(hostModelToolNames as readonly string[]).includes(name)),
-  ].some(names => completeToolSet(value, names) || completeToolSet(value, names.filter(name => name !== "plan")));
+  ].some(names => [names, names.filter(name => name !== "plan"), names.filter(name => name !== "delegate"), names.filter(name => name !== "plan" && name !== "delegate")].some(prior => completeToolSet(value, prior)));
   let drawioHost: ReturnType<DrawioNativeExports["bindDrawioVendorHost"]> | undefined;
   let sandbox: CodemodeSandbox | undefined;
   let sandboxClose: Promise<void> | undefined;
@@ -726,7 +729,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     // Keep their exact namespaces and source assertions after legacy preflight ends.
     const nativeConfigOwners = new Map<string, { assertCurrent(): void } | undefined>([
       ["goal", goal], ["observability", observability],
-      ["delegate", delegate], ["code-review", codeReview],
+      ["delegate", { assertCurrent: assertCoreDelegate }], ["code-review", codeReview],
     ]);
     releaseAdminKv = registerAddonConfigKvAuthority((extensionId, chatJid, request) => {
       const qualified = infrastructure.find(item => item.kind === extensionId) ?? resourceQualifications.find(item => item.kind === extensionId) ?? (regrets?.kind === extensionId ? regrets : undefined)
@@ -803,7 +806,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   };
   const instructionsFor = (chatJid?: string) => loadHostInstructions({ cwd: WORKSPACE_DIR, agentDir: getPiclawAgentDir(),
     projectTrusted: true, additionalSkillPaths: [...settings.getSkillPaths(), ...infrastructure.flatMap(item => [...item.skillPaths]), ...resourceQualifications.flatMap(item => [...item.skillPaths]), ...(regrets?.skillPaths ?? [])],
-    channelAppendix: [nativeToolInstructions, nativeProcessInstructions, chatJid ? buildChannelSystemPromptAppendix(detectChannel(chatJid), chatJid) ?? "" : "", ...infrastructure.map(infrastructurePrompt)].filter(Boolean).join("\n\n") });
+    channelAppendix: [nativeToolInstructions, nativeProcessInstructions, delegateInstructions, chatJid ? buildChannelSystemPromptAppendix(detectChannel(chatJid), chatJid) ?? "" : "", ...infrastructure.map(infrastructurePrompt)].filter(Boolean).join("\n\n") });
   const instructionUpgrades = new Map<number, string>();
   const toolUpgrades: number[] = [];
   // Validate stored choices without opening/writing SDK documents or bundle ports.
@@ -846,11 +849,10 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   // Automatic selection inherits the parent; explicit exact models use the same
   // installed approval/classification/exclusion policy, without a parent-tier cap.
   assertDelegateModel = (model: { provider: string; modelId: string }) => {
-    if (!delegate) throw Error("Native Delegate unavailable");
-    delegate.assertCurrent(); check({ provider: model.provider, id: model.modelId }, lifetime.signal);
+    assertCoreDelegate(); check({ provider: model.provider, id: model.modelId }, lifetime.signal);
     const config = extensionKvGet("delegate", "config", "global");
     const candidate = { provider: model.provider, id: model.modelId, fullId: `${model.provider}/${model.modelId}` };
-    if (!delegate.buildModelCandidates([candidate], config).some(entry => entry.id === candidate.fullId)) throw Error("Native Delegate model not approved");
+    if (!buildModelCandidates([candidate], config as DelegateConfig | undefined).some(entry => entry.id === candidate.fullId)) throw Error("Native Delegate model not approved");
   };
   const sideObservers = new Map<string, NonNullable<import("../../src/agent-pool/contracts.js").SidePromptOptions["onEvent"]>>();
   // SDK hook failures are reported but can still reach the model bridge. Keep
@@ -1038,14 +1040,14 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     assertOwner() { assert(); lifetime.signal.throwIfAborted(); drawio.assertCurrent();
       if (readAccessConfig().mode !== "single-user") throw Error("Draw.io requires single-user mode");
     } }));
-  if (delegate) {
+  {
     const readers = builtins.filter(tool => ["read", "grep", "find", "ls"].includes(tool.name));
     const readerExtension = defineExtension({ name: "app.host-delegate-readers", tools: readers });
     const standardExtension = defineExtension({ name: "app.host-delegate-standard", tools: builtins });
     registry.install(readerExtension);
     registry.install(standardExtension);
-    tools.push(createHostDelegateTool(delegate.definition as Parameters<typeof createHostDelegateTool>[0], {
-      assertCurrent() { assert(); lifetime.signal.throwIfAborted(); delegate.assertCurrent(); }, runtime,
+    tools.push(createHostDelegateTool({
+      assertCurrent: assertCoreDelegate, runtime,
       async selectModel(args, parent) {
         if (args.task_category !== undefined && !["quick", "summarize", "code", "analyze", "reason"].includes(String(args.task_category))) throw Error("Native Delegate task category not qualified");
         let model = parent;
@@ -1417,6 +1419,19 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     }
     remoteDisposers.push(registerChatTransport(remotePorts.chatTransport));
     if (!offlineMaintenance) await remotePorts.start();
+  }
+  const delegateSettings = createDelegateSettings({ assertCurrent: assertCoreDelegate, defaultModel: () => `${selected.provider}/${selected.id}`,
+    models: () => { assertCoreDelegate(); return host.modelRegistry.getAvailable().flatMap(model => {
+      if (!available.some(allowed => allowed.provider === model.provider && allowed.id === model.id)) return [];
+      const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
+      if (!physical || physical.provider !== model.provider || physical.id !== model.id) return [];
+      return [{ provider: physical.provider, id: physical.id, fullId: `${physical.provider}/${physical.id}`, name: physical.name,
+        supportsImages: physical.input?.includes("image"), reasoning: physical.reasoning, contextWindow: physical.contextWindow, maxOutputTokens: physical.maxTokens }];
+    }); } });
+  for (const [action, handlers] of [["config", { get: () => delegateSettings.get(), set: (patch: unknown) => delegateSettings.set(patch) }],
+    ["models", { get: () => delegateSettings.models(), set: () => delegateSettings.models() }]] as const) {
+    const registration = registerOwnedAddonConfigApi("delegate", action, handlers, "core:delegate");
+    resourceDisposers.push(registration.dispose);
   }
   if (regrets) {
     const settings = createHostRegretsSettings(regretsAddon, async () => {

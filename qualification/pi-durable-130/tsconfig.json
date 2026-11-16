@@ -69,7 +69,7 @@
     "installed-delegate-catalog.test.ts",
     "vertical.test.ts",
     "addon-host-services.test.ts",
-    "delegate.test.ts",
+    "native-core-delegate.test.ts",
     "native-delegate-parallel.test.ts",
     "host-delegate-tool.test.ts",
     "host-delegate-progress.test.ts",

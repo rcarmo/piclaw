@@ -33,7 +33,7 @@ perf('module-eval-start');
 import { html, useState, useEffect, useLayoutEffect, useCallback, useRef } from '../vendor/preact-htm.js';
 import { useTranslation } from '../utils/i18n.js';
 import { BodyPortal } from './body-portal.js';
-import { compareSettingsPanesAlphabetically, getRegisteredSettingsPanes } from './settings/pane-registry.js';
+import { compareSettingsPanesAlphabetically, getRegisteredSettingsPanes, registerSettingsPane, notifySettingsPanesChanged } from './settings/pane-registry.js';
 import { iconDeveloperPane, iconEditorPane } from './settings/core-pane-icons.js';
 import { consumeRequestedSettingsOpenState, normalizeSettingsSectionId, peekRequestedSettingsSection, requestOpenSettingsDialog } from './settings-dialog-events.js';
 // General is statically imported — it's always the first visible section.
@@ -74,6 +74,10 @@ const BUILTIN_SECTION_LOADERS: Record<BuiltinSectionId, () => Promise<SettingsSe
 // reachable; each module loads only when its pane is opened.
 const LAZY_EXTENSION_PANES: Array<{ id: string; label: string; icon: unknown; order: number; load: () => Promise<unknown>; searchable?: boolean; searchPlaceholder?: string; component?: any }> = [
     { id: 'editor', label: 'Editor', icon: iconEditorPane, order: 150, load: () => import('./settings/editor-settings.js') },
+    { id: 'delegate', label: 'Delegate', icon: renderToolIcon(), order: 169, load: () => {
+        const url = '/static/classic/dist/delegate-settings.bundle.js' + new URL(import.meta.url).search;
+        return import(url).then(module => module.registerDelegateSettings({ html, useState, useEffect, useCallback, registerSettingsPane, notifySettingsPanesChanged }));
+    } },
     { id: 'developer', label: 'Developer', icon: iconDeveloperPane, order: 900, load: () => import('./settings/developer-settings.js') },
 ];
 const lazyExtensionPaneLoads = new Map<string, Promise<unknown>>();
