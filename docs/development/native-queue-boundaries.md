@@ -1,6 +1,6 @@
 # Native queue ownership
 
-Native web input goes directly to pi-durable 1.4 public submission APIs. The SDK owns busy handling, inbox placement, model/tool execution and terminal results. Root stores the accepted message and source correlation. AgentPool activity flags, host lanes, legacy queue JSON and host operation settlement do not choose native placement.
+Native web input goes directly to pi-durable 1.5.2 public submission APIs. The SDK owns busy handling, inbox placement, model/tool execution and terminal results. Root stores the accepted message and source correlation. AgentPool activity flags, host lanes, legacy queue JSON and host operation settlement do not choose native placement.
 
 ## Admission and receipts
 
@@ -26,6 +26,14 @@ A native queue action uses the exact SDK submission ID and explicit target chat.
 An ID shared with a preserved legacy row is ambiguous and returns409 unchanged. A preserved row without an SDK submission also returns409 unchanged. Native actions do not fall through to legacy materialisation or withdrawal. Historical schema and source records remain intact.
 
 Write authority is captured before request-body awaits and rechecked at the guarded mutation. Native watches publish queue changes, placement, status and retained replies. The compatibility worker performs only a direct admission handoff: it does not advance native cursors, materialise old queue rows, publish synthetic run status, wait for a host terminal or schedule another host wake.
+
+## Stop response
+
+`/abort` and Stop response capture the active SDK run or manual/blocking compaction. Pending inbox submissions are excluded. Cancellation follows the captured run through its task handoffs with public `abortTask`/`waitForTask`; a stale scope cannot cancel a later run. The SDK settles the active input and joins its owned work. Its task-abort path leaves the inbox intact independently of `afterFailedRun` policy.
+
+An idle conversation with pending inputs has no active abort scope. Repeating Stop preserves those inputs. They retain their submission IDs, accepted message/source bytes, order and modes across native close/reopen, without automatic execution replay. A later explicit input can resume SDK processing. Removing a queued input remains a separate per-submission action. Unscoped whole-conversation cleanup keeps the SDK's broader cancellation contract and is not used by Stop response.
+
+A failed queue-state refresh keeps the UI's last known pending rows. Only an authoritative empty response clears them. Native generation/tool cancellation and bootstrap-control regressions cover retained inputs and reopen; Classic Chromium/WebKit keyboard/touch checks cover Stop, failed refresh and reload using the production Compose and queued stack.
 
 ## Producer paths and verification
 

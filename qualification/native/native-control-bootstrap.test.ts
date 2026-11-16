@@ -21,7 +21,7 @@ import {admitWebMessage} from '../../runtime/src/channels/web/messaging/message-
 import {InMemoryEffectPayloadResolver} from '../../runtime/src/service-effects/testing/in-memory-payload-resolver.js';
 import {openFixture,context} from './src/fixture.js';
 const applicationTest=isolatedApplicationTest(import.meta.url);
-for(const scenario of ['idle','busy','retry','storage-recovery','storage-reopen-retry'] as const) applicationTest('native critical bootstrap: '+scenario,async()=>{
+for(const scenario of ['idle','busy','queue-abort','retry','storage-recovery','storage-reopen-retry'] as const) applicationTest('native critical bootstrap: '+scenario,async()=>{
  const recovering=scenario==='storage-recovery'||scenario==='storage-reopen-retry';
  const dir=await mkdtemp(join(process.env.PICLAW_WORKSPACE!,'critical-controls-'));
  const owner=acquireRuntimeLock({lockPath:join(dir,'owner.lock'),strictOwnership:true,disabled:false});
@@ -119,6 +119,21 @@ for(const scenario of ['idle','busy','retry','storage-recovery','storage-reopen-
    await bound.prepareInputSourceAdmission!(chat);
    expect(bound.getInputSourceAdmission!(chat)).toBeDefined();
    expect(calls).toBe(1);return;
+  }
+  if(scenario==='queue-abort'){
+   const queued:number[]=[];
+   for(const content of ['Keep queued B','Keep queued C']){
+    await admitWebMessage({pendingLinkPreviews:new Set<number>(),broadcastEvent(){}},{chatJid:chat,content,isBot:false,mediaIds:[],agentId:'default',agentName:'Fixture'},{acceptSource:bound.getInputSourceAdmission!(chat)},assert,new AbortController().signal);
+    const row=root.query('SELECT rowid,id FROM messages WHERE chat_jid=? AND content=?').get(chat,content) as any;
+    const accepted=await coordinator(chat,row.id,row.rowid)!;queued.push(Number(accepted.submission_id));
+   }
+   const rows=()=>queued.map(id=>root.query('SELECT * FROM submissions WHERE id=?').get(id));const original=rows();
+   expect(await control.abort!()).toBe(true);
+   for(const id of queued)expect(root.query('SELECT status FROM submissions WHERE id=?').get(id)).toEqual({status:'queued'});
+   expect(rows()).toEqual(original);expect(await control.readAbortScope!()).toBeNull();expect(await control.abort!()).toBe(false);expect(rows()).toEqual(original);expect(calls).toBe(1);
+   await bundle.close();bundle=await prepare();const reopened=bundle.sessionOptions.getDurableSession!(chat)!;
+   expect(await reopened.readAbortScope!()).toBeNull();expect(await reopened.abort!()).toBe(false);expect(rows()).toEqual(original);expect(calls).toBe(1);
+   expect(root.query("SELECT count(*) AS n FROM service_effect_s01_sources WHERE kind='cancellation'").get()).toEqual({n:0});return;
   }
   if(scenario==='busy'){
    const sourceBefore=root.query('SELECT count(*) AS n FROM service_effect_s01_sources').get();
