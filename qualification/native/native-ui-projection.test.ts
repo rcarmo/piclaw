@@ -2,7 +2,8 @@ import './src/test-guard.js';
 import {expect} from 'bun:test';
 import {isolatedApplicationTest} from './src/isolated-application-test.js';
 import {nativeMessageFixture} from './src/native-message-fixture.js';
-import {barrier} from './src/fixture.js';
+import {barrier,context} from './src/fixture.js';
+import type {Harness,ConversationId} from '../../runtime/durable-engine/qualification/durable.js';
 import {getRouterState,setRouterState} from '../../runtime/src/db.js';
 import {extensionKvGet,extensionKvSet} from '../../runtime/src/db/extension-kv.js';
 import {createNativeTurnView} from '../../runtime/src/channels/web/agent/native-turn-view.js';
@@ -25,11 +26,22 @@ for(const phase of ['generation','tool','tool-restart'] as const)applicationTest
       const store=new AgentStatusStore(15000,2);stores.push(store);
       const events:Array<{event:string;data:Record<string,any>}>=[],generation=barrier(),tool=barrier();let inputs:readonly number[]|undefined;
       const render=createNativeTurnView(f.root,{broadcastEvent(event,data){events.push({event,data});},updateAgentStatus(chat,data){store.update(chat,data);}},f.chat);
-      const stop=await f.runtime.watchSession(f.binding,view=>{render(view);const live=view.docs['pi.live'] as any;inputs=live?.run?.inputs;if(live?.generation)generation.release();if(live?.tools?.some((slot:any)=>slot.name==='host_effect'&&slot.status==='running'))tool.release();});
+      const stop=await f.runtime.watchSession(f.binding,(view,startedAt)=>{render(view,startedAt);const live=view.docs['pi.live'] as any;inputs=live?.run?.inputs;if(live?.generation)generation.release();if(live?.tools?.some((slot:any)=>slot.name==='host_effect'&&slot.status==='running'))tool.release();});
       stops.push(stop);return {store,events,stop,generation,tool,get inputs(){return inputs;}};
     };
+    if(phase==='generation'){
+      // Put the run's first entry outside the SDK watch's default 50-entry
+      // window. Reattachment must read its exact immutable timestamp publicly.
+      const harness=Reflect.get(f.runtime,'harness') as Harness;
+      const conversation=(await harness.conversation(f.binding.conversationId as ConversationId,context))!;
+      await conversation.commit(async tx=>{for(let i=0;i<60;i++)await tx.appendEntry(conversation.id,{kind:'qualification.display',data:{i}});},context);
+    }
+    await Bun.sleep(25); // Attaching later cannot become the turn's start.
     const view=await attach();await view.generation.promise;
     expect(view.store.get(f.chat)).toMatchObject({type:'thinking',operation_id:runId});expect(view.inputs).toEqual([id]);
+    const startedAt=view.store.get(f.chat)!.started_at;
+    const inputEntry=(await f.runtime.readTurnEntries(f.binding))!.entries.find(entry=>entry.kind==='host.accepted'&&(entry.data as any)?.sourceId===pending.sourceId)!;
+    expect(startedAt).toBe(new Date((inputEntry.model![0] as {timestamp:number}).timestamp).toISOString());
     const beforeContext=await f.runtime.readSessionContextUsage(f.binding);expect(beforeContext.contextWindow).toBe(100000);expect(beforeContext.tokens).toBeGreaterThan(0);
     await expect(f.runtime.watchSession({...f.binding,chatJid:'web:foreign'},()=>{throw Error('foreign publication');})).rejects.toThrow('Manifest conflict');
     await expect(f.runtime.readSessionContextUsage({...f.binding,incarnation:'stale'})).rejects.toThrow('Host binding conflict');
@@ -37,7 +49,7 @@ for(const phase of ['generation','tool','tool-restart'] as const)applicationTest
     if(phase==='generation'){
       await f.reopen();const entries=providerEntries,before=f.sdkSnapshot();
       expect(await f.runtime.readSessionContextUsage(f.binding)).toEqual(beforeContext);
-      const restored=await attach();expect(restored.store.get(f.chat)).toMatchObject({operation_id:runId});
+      const restored=await attach();expect(restored.store.get(f.chat)).toMatchObject({operation_id:runId,started_at:startedAt});
       expect(f.sdkSnapshot()).toEqual(before);expect(providerEntries).toBe(entries);expect(toolEntries).toBe(0);
       await f.runtime.abortMessages(f.binding);expect(providerEntries).toBe(entries);
     }else{
@@ -47,10 +59,10 @@ for(const phase of ['generation','tool','tool-restart'] as const)applicationTest
       const before=f.sdkSnapshot();replacement.store.update('other-chat-1',{type:'thinking'});replacement.store.update('other-chat-2',{type:'thinking'});expect(replacement.store.get(f.chat)).toBeNull();
       expect((await f.runtime.messageSubmissionStatus(pending))?.id).toBe(id);
       await replacement.stop();replacement.store.dispose();const fresh=await attach();await fresh.tool.promise;
-      expect(fresh.store.get(f.chat)).toMatchObject({tool_name:'host_effect',status:'running',active_tool_count:1});expect(f.sdkSnapshot()).toEqual(before);expect(providerEntries).toBe(2);expect(toolEntries).toBe(1);
+      expect(fresh.store.get(f.chat)).toMatchObject({tool_name:'host_effect',status:'running',active_tool_count:1,started_at:startedAt});expect(f.sdkSnapshot()).toEqual(before);expect(providerEntries).toBe(2);expect(toolEntries).toBe(1);
       if(phase==='tool-restart'){
         await fresh.stop();fresh.store.dispose();await f.reopen();const paused=f.sdkSnapshot(),entries=providerEntries;
-        const reopened=await attach();expect(reopened.store.get(f.chat)).toMatchObject({operation_id:runId});expect(f.sdkSnapshot()).toEqual(paused);expect(providerEntries).toBe(entries);expect(toolEntries).toBe(1);expect(f.base.host.effects).toBe(0);
+        const reopened=await attach();expect(reopened.store.get(f.chat)).toMatchObject({operation_id:runId,started_at:startedAt});expect(f.sdkSnapshot()).toEqual(paused);expect(providerEntries).toBe(entries);expect(toolEntries).toBe(1);expect(f.base.host.effects).toBe(0);
         expect((await f.runtime.inspectAuthority()).inspection.scheduling).toBe('paused');
         await f.runtime.abortMessages(f.binding);expect(providerEntries).toBe(entries);expect(toolEntries).toBe(1);
       }else{

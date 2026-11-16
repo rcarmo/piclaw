@@ -215,7 +215,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "a64d2881c5a7e657f71e965f4beb5a581dc07e9797edd1123af3739af3f0ca63",
       "state": "retained-decoupled",
-      "currentSha256": "693dceb90c04107464deecdde6876f3f5049f2eb295a466ce49834f44652d70d",
+      "currentSha256": "8f6c8191f7e00dc679400c4f0623d2acfed06f3207045a3987d5ea0f4ac40233",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": []
     },
@@ -379,7 +379,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "2f6a632f863196fccd48a3f3912c8bef407fb2ca5d07c13d32400dcef84c87cc",
       "state": "retained-decoupled",
-      "currentSha256": "f2510fc86aa4fcd5e33ffc4b27507e6f0ccc055f07f4bda65023dd629a7d5345",
+      "currentSha256": "3d17b954b8b7fd6ddddfe5d279b3f1c6537da31533c28b306746faec3b566950",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": [
         {
