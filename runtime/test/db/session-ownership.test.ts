@@ -1,7 +1,8 @@
 import Database from "bun:sqlite";
 import { beforeEach, afterEach, expect, test } from "bun:test";
 import { createUser, initializeUserSchema, updateUser } from "../../src/db/users.js";
-import { initializeSessionOwnershipSchema, assignRootOwner, provisionUserHome, getRootOwnership, resolveAuthorisedChat, assignLegacyRootOwners, ChatAccessDenied } from "../../src/db/session-ownership.js";
+import { initializeSessionOwnershipSchema, assignRootOwner, provisionUserHome, getRootOwnership, resolveAuthorisedChat, ChatAccessDenied } from "../../src/db/session-ownership.js";
+import * as ownership from "../../src/db/session-ownership.js";
 import type { AuthenticatedPrincipal } from "../../src/channels/web/auth/principal.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -112,24 +113,13 @@ test("stable branch ownership survives permitted root JID maintenance", () => {
   expect(resolveAuthorisedChat(db,principal(),undefined,"session.read").chatJid).toBe("web:alice-renamed");
 });
 
-test("explicit legacy migration includes archived and non-web roots atomically", () => {
-  root("web:archived", "old"); root("messaging:root");
-  assignLegacyRootOwners(db,[{rootChatJid:"web:alice",ownerUserId:alice},{rootChatJid:"web:bob",ownerUserId:bob},{rootChatJid:"web:archived",ownerUserId:"default"},{rootChatJid:"messaging:root",ownerUserId:"default"}]);
-  expect(getRootOwnership(db,"web:archived",true)?.ownerUserId).toBe("default");
-  expect(getRootOwnership(db,"messaging:root")?.ownerUserId).toBe("default");
-});
-
-test("legacy migration missing mappings, unknown users, duplicates or corrupt topology rolls back", () => {
-  root("new-one"); root("new-two");
-  const prior=[{rootChatJid:"web:alice",ownerUserId:alice},{rootChatJid:"web:bob",ownerUserId:bob}];
-  expect(() => assignLegacyRootOwners(db,prior)).toThrow(ChatAccessDenied);
-  expect(() => assignLegacyRootOwners(db,[...prior,{rootChatJid:"new-one",ownerUserId:alice},{rootChatJid:"new-two",ownerUserId:"missing"}])).toThrow(ChatAccessDenied);
-  expect(getRootOwnership(db,"new-one")).toBeNull();
-  const complete=[...prior,{rootChatJid:"new-one",ownerUserId:alice},{rootChatJid:"new-two",ownerUserId:bob}];
-  expect(() => assignLegacyRootOwners(db,[...complete,complete[0]])).toThrow(ChatAccessDenied);
-  child("orphan","new-one","absent");
-  expect(() => assignLegacyRootOwners(db,complete)).toThrow(ChatAccessDenied);
-  expect(getRootOwnership(db,"new-one")).toBeNull();
+test('native ownership initialization never adopts unowned archived or non-web history',()=>{
+  root('web:archived','old');root('messaging:root');
+  const snapshot=()=>['users','chats','chat_branches','session_roots'].map(table=>db.query(`SELECT * FROM ${table} ORDER BY 1`).all());
+  const before=snapshot();expect(ownership).not.toHaveProperty('assignLegacyRootOwners');
+  initializeSessionOwnershipSchema(db);expect(snapshot()).toEqual(before);
+  expect(getRootOwnership(db,'web:archived',true)).toBeNull();expect(getRootOwnership(db,'messaging:root')).toBeNull();
+  expect(()=>resolveAuthorisedChat(db,principal(),'messaging:root','session.read')).toThrow(ChatAccessDenied);
 });
 
 test("ownership and home survive closing and reopening the store", () => {
@@ -151,7 +141,8 @@ test("ownership and home survive closing and reopening the store", () => {
   } finally { disk.close(); rmSync(dir, {recursive:true, force:true}); }
 });
 
-test("unregistered chat requires explicit review before migration", () => {
+test('unregistered chat has no migration fallback or implicit authority',()=>{
   db.query("INSERT INTO chats VALUES ('unmapped')").run();
-  expect(() => assignLegacyRootOwners(db,[{rootChatJid:"web:alice",ownerUserId:alice},{rootChatJid:"web:bob",ownerUserId:bob}])).toThrow(ChatAccessDenied);
+  expect(ownership).not.toHaveProperty('assignLegacyRootOwners');
+  expect(()=>resolveAuthorisedChat(db,principal(),'unmapped','session.read')).toThrow(ChatAccessDenied);
 });

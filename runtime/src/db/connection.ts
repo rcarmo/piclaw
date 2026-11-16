@@ -21,7 +21,6 @@ import { initializeChatCursorStorage } from "./chat-cursor-storage.js";
 import { initializeAccessSchema } from "./access-state.js";
 import { initializeSessionOwnershipSchema } from "./session-ownership.js";
 import { initializeSessionHandleSchema } from "./session-handles.js";
-import { initializeOwnedForkSchema } from "./owned-forks.js";
 import { initializeAuthLabelsSchema } from "./auth-labels-schema.js";
 import { initializePickerPins } from './picker-pins.js';
 import { initializeToolOutputOwnership } from './tool-output-ownership-schema.js';
@@ -830,7 +829,6 @@ function initializeSchema(database: Database): void {
   initializeAccessSchema(database);
   initializeSessionOwnershipSchema(database);
   initializeToolOutputOwnership(database);
-  initializeOwnedForkSchema(database);
   initializeAuthLabelsSchema(database);
   initializePickerPins(database);
 }

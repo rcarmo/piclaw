@@ -41,6 +41,7 @@ applicationTest("fresh core inventory owns every object and exact FTS shadow wit
     expect(db.query("SELECT * FROM piclaw_schema_migrations ORDER BY owner,migration_order").all()).toEqual(receipts);
     expect(readSchemaInventory(db)).toEqual(readSchemaInventory(db));
     expect(db.query("SELECT name FROM main.sqlite_schema WHERE name GLOB 'budget_*'").all()).toEqual([]);
+    expect(db.query("SELECT name FROM main.sqlite_schema WHERE name IN ('message_input_snapshots','message_execution_authorities','migration_input_holds','migration_input_dismissals','access_input_migration','owned_fork_operations')").all()).toEqual([]);
     // Classify preserved historical objects without recreating them at startup.
     installHistoricalExpenseFixture(db);
     const historicalSchema=db.query('SELECT * FROM sqlite_schema ORDER BY type,name').all();
@@ -100,6 +101,7 @@ applicationTest("existing native schema preserves archived identities and bytes 
     expect(archive.every(object => object.presence === "optional-preserved")).toBe(true);
     expect(db.query("SELECT * FROM piclaw_agent_sessions").all()).toEqual(before.sessions);
     expect(db.query("SELECT * FROM piclaw_agent_entries ORDER BY entry_seq").all()).toEqual(before.entries);
+    expect(db.query("SELECT * FROM owned_fork_operations ORDER BY request_id").all()).toEqual(before.ownedForks);
     expect(db.query("SELECT * FROM piclaw_schema_migrations WHERE owner='piclaw-agent-sessions'").all()).toEqual(before.receipts);
     expect(db.query('SELECT rowid,* FROM host_legacy_chat_cursor_state_v1 ORDER BY rowid').all()).toEqual(before.cursors);
     expect((db.query('PRAGMA main.table_info(chat_cursors)').all() as {name:string}[]).map(row=>row.name)).toEqual(['chat_jid','cursor_ts','queued_followups_json']);
@@ -136,6 +138,7 @@ applicationTest("existing native schema preserves archived identities and bytes 
     expect(getDb().query("SELECT * FROM piclaw_schema_migrations WHERE owner='piclaw-agent-sessions'").all()).toEqual(before.receipts);
     expect(getDb().query("SELECT * FROM piclaw_schema_migrations WHERE owner='host.chat-cursors'").all()).toEqual(cursorReceipts);
     expect(getDb().query('SELECT rowid,* FROM host_legacy_chat_cursor_state_v1 ORDER BY rowid').all()).toEqual(before.cursors);
+    expect(getDb().query('SELECT * FROM owned_fork_operations ORDER BY request_id').all()).toEqual(before.ownedForks);
   } finally { await closeDatabase(); }
 });
 

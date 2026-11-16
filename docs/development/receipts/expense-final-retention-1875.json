@@ -638,7 +638,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "e506827fe77e26e48c722ff15a957a5d37acfe9c66c32e4511a67f627c2cf94f",
       "state": "retained-decoupled",
-      "currentSha256": "fc59c709695c2385b5e4bce94e59392feef09953494cc9718ebf74d2f35ee3c1",
+      "currentSha256": "d53a0923ce96dd719f5e91a8d209851a64163cde090449ce3022b8f58756c852",
       "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
       "directImportCallers": [
         {
@@ -722,7 +722,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "b0f702a1b555904e4bbab8b5c93b7497b5277d8f25a95b1258b0fc4c10daed4a",
       "state": "retained-decoupled",
-      "currentSha256": "89e118439a73686e29dd28cd0f56cdca4eac4aa40d52942c1f4879cef3a69e63",
+      "currentSha256": "50cfc02c34dbd9761d63287b6ceec557507d1a82d5efe54bd5a5be7142945713",
       "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
       "directImportCallers": [
         {
@@ -1380,7 +1380,7 @@
       "deliveryOwner": "#1878",
       "originalSha256": "cb401291005aabe1b6644163da800cad71a2f9e460de5c4006e0b3ec617bb54a",
       "state": "retained-decoupled",
-      "currentSha256": "e83e4ca06fa060795cc02f2dca29ee7fe11c5d7d5088f41609068baf7cd7d0df",
+      "currentSha256": "e422c420f078e91212fefbaaf90b204f9bacba0b41d7a953288d6415051bacda",
       "currentPurpose": "fresh canonical database/routing ownership, passive observations and historical data protection; no financial schema startup",
       "directImportCallers": [
         {
@@ -2141,7 +2141,7 @@
       "deliveryOwner": "#1878",
       "originalSha256": "c7e461e26639a5d99f9ca8f9c3de6d013963f51978794b4c96e52581de243d8a",
       "state": "retained-decoupled",
-      "currentSha256": "cd5f231b9b2354305856fd97f68ada2be2d76fd208efef88f01df9a640a20ac6",
+      "currentSha256": "6f395c99fb19ace96d468908c1a8e6a5b3a835ba1f933c21e38e7b4d92c28057",
       "currentPurpose": "generic exact schema/backup/recovery/reference inspection including inert old objects; no financial initializer or repair",
       "directImportCallers": []
     },
@@ -2556,7 +2556,7 @@
       "deliveryOwner": "#1882",
       "originalSha256": "19afc92f568933da7824143d95dffc1083c2371cf4561abe473909ef5d8ed68f",
       "state": "retained-decoupled",
-      "currentSha256": "495967c3aff52957f8715cc6cc393057211b625197b695905b5274e96ea65008",
+      "currentSha256": "60b142469fd02aeb373109ebf275d08e829c4c6b8d630378e8c96c03b01f2f45",
       "currentPurpose": "existing native domain/control/message transport boundary with no expense port",
       "directImportCallers": [
         {

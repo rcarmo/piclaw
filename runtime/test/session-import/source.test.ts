@@ -61,6 +61,14 @@ test('model/thinking/compaction/label/name markers are retained as inert source 
   expect(parsed.entries.filter(entry => entry.message)).toHaveLength(2);
 });
 
+test('current SDK max thinking metadata is retained as inert v3 history',()=>{
+  const records=[{type:'thinking_level_change',id:'thinking',parentId:null,timestamp,thinkingLevel:'max'},entry('u','thinking',user()),entry('a','u',assistant())];
+  const source=encode(records),parsed=readOfflineSessionSource(source);
+  expect(parsed.selectedEntries.map(record=>record.original)).toEqual(records);
+  expect(parsed.selectedEntries[0]!.message).toBeUndefined();expect(encode(records)).toBe(source);
+  expect(()=>readOfflineSessionSource(encode([{...records[0],thinkingLevel:'unknown'},...records.slice(1)]))).toThrow('invalid historical thinking change');
+});
+
 for (const first of [{ ...header, version: 2 }, { ...header, parentSession: 'foreign-session.jsonl' }, { ...header, configuration: { model: 'DO_NOT_MIGRATE' } }]) test('unsupported versions, external lineage and config-bearing headers fail closed', () => {
   expect(() => readOfflineSessionSource(encode(linear(), first))).toThrow();
 });

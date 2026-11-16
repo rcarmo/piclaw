@@ -276,5 +276,9 @@ for (const fails of [false,true]) test(`native backend ${fails ? "uncertain" : "
     }else{
       close.resolve();await pending;expect(bridge.getModelRegistry).toBeUndefined();expect(certificates).toBe(1);expect(exit).toHaveBeenCalledTimes(1);
     }
-  }finally{close.resolve();await pending.catch(()=>{});await pool.shutdown();exit.mockRestore();}
+  }finally{
+    close.resolve();const [cleanup]=await Promise.allSettled([pending]);
+    await pool.shutdown();exit.mockRestore();
+    if(cleanup.status==='rejected')expect(cleanup.reason).toBe(failure);
+  }
 });

@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { join } from 'node:path';
 import { AgentBranchManager } from '../../src/agent-pool/branch-manager.js';
-import type { PoolEntry } from '../../src/agent-pool/session-manager.js';
+import type { PoolEntry } from '../../src/agent-pool/contracts.js';
 import { getRuntimeConfigPaths } from '../../src/core/config.js';
 import { importFresh, withTempWorkspaceEnv } from '../helpers.js';
 

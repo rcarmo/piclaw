@@ -3,7 +3,6 @@ import { readdirSync } from "node:fs";
 import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { spyOn } from "bun:test";
 import { AgentPool } from "../../src/agent-pool.js";
-import { AgentSessionManager } from "../../src/agent-pool/session-manager.js";
 import { createAgentPoolServices } from "../../src/agent-pool/service-factory.js";
 import { createAgentPoolModelOptions } from "../model-services-fixture.js";
 import { SESSIONS_DIR } from "../../src/core/config.js";

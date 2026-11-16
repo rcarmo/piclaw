@@ -21,7 +21,7 @@ import { peekProviderUsage, peekProviderUsageForRuntime, warmProviderUsage, type
 import { resolveModelLabel } from "../utils/model-utils.js";
 import { resolveModelScope } from "../utils/scoped-models.js";
 import { withChatContext } from "../core/chat-context.js";
-import type { PoolEntry } from "./session-manager.js";
+import type { PoolEntry } from "./contracts.js";
 import { readAccessConfig } from "../core/config-access.js";
 import { getExecutionIdentity } from "../core/execution-context.js";
 import { createLogger } from "../utils/logger.js";

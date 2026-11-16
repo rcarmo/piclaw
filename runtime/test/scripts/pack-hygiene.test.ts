@@ -39,12 +39,11 @@ describe("pack-hygiene", () => {
     ]);
   });
 
-  test("archive tooling is packaged without the retired AgentPool backend path", () => {
-    expect(findBlockedPackEntries(["runtime/src/agent-pool/sqlite-session-store.ts"]))
-      .toEqual(["runtime/src/agent-pool/sqlite-session-store.ts"]);
-    for (const path of ["runtime/scripts/lib/sqlite-session-archive.ts", "runtime/scripts/import-jsonl-sessions.ts",
-      "runtime/scripts/benchmark-sqlite-session-layouts.ts", "runtime/durable-engine/src/legacy-import-schema.ts"])
-      expect(REQUIRED_PACK_ENTRIES).toContain(path);
+  test('one-shot native history importer is packaged and obsolete archive constructors/CLIs are forbidden',()=>{
+    for(const path of ['runtime/src/session-import/source.ts','runtime/durable-engine/src/session-history-import.ts','runtime/durable-engine/src/session-history-import-record.ts','runtime/durable-engine/src/legacy-import-schema.ts'])expect(REQUIRED_PACK_ENTRIES).toContain(path);
+    for(const path of ['runtime/src/agent-pool/sqlite-session-store.ts','runtime/scripts/lib/sqlite-session-archive.ts','runtime/scripts/import-jsonl-sessions.ts','runtime/scripts/benchmark-sqlite-session-layouts.ts','runtime/src/agent-pool/session-manager.ts','runtime/src/agent-pool/branch-seeding.ts','runtime/src/agent-pool/adopted-session-import.ts','runtime/src/agent-pool/session-file-persistence.ts', 'runtime/src/db/migration-input-holds.ts', 'runtime/src/db/owned-forks.ts']){
+      expect(REQUIRED_PACK_ENTRIES).not.toContain(path);expect(findBlockedPackEntries([path])).toEqual([path]);
+    }
   });
 
   test("findBlockedPackEntries allows runtime files", () => {

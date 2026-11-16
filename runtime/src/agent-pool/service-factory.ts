@@ -7,7 +7,7 @@ import type { ModelRegistry, ModelRuntime, SettingsManager } from "@earendil-wor
 import { getAttachmentRegistry } from "./attachments.js";
 import { AgentBranchManager } from "./branch-manager.js";
 import { AgentRuntimeFacade } from "./runtime-facade.js";
-import type { PoolEntry } from "./session-manager.js";
+import type { PoolEntry } from "./contracts.js";
 import type { AgentPoolOptions } from "./contracts.js";
 import type { PiclawCredentialStore } from "./credential-store.js";
 import { McpCodemodeController } from "./mcp-codemode-runtime.js";

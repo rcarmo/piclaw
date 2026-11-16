@@ -1,6 +1,8 @@
-# Verified startup migrations
+# Historical startup-migration evidence
 
-Issues #1699, #1700 and #1701 share one requirement: record or report an applied migration only after its postconditions hold. The changes use the existing owners and markers. They add no schema ledger or automatic repair of historical receipts.
+The selected legacy column/media startup passes described below are historical. V4 removes the media recompression pass and refuses unsupported v3 stores before schema work. The generic owned ledger and supported native/public SDK storage evolution retain their existing owners. Use the [one-shot history importer](development/session-history-import.md) with a fresh separate destination; this page supplies no current conversion, cleanup or rollback procedure.
+
+Issues #1699, #1700 and #1701 shared one requirement: record or report an applied migration only after its postconditions hold. The changes use the existing owners and markers. They add no schema ledger or automatic repair of historical receipts.
 
 ## Owned ledger
 

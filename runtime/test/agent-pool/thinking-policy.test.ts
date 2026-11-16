@@ -112,21 +112,13 @@ test('reinstallation is idempotent and metadata records only bounded choices', a
 });
 
 
-test('resume and historical deferred context retain effective clamp and preferred choice', async () => {
-  const { seedSessionManagerFromDeferredBranchSeed } = await import('../../src/agent-pool/branch-seeding.js');
+test('resume retains effective clamp and preferred choice', async () => {
   const { session } = await fixture();
   session.setThinkingLevel('high'); await session.setModel(models[3]);
   const reopened = SessionManager.inMemory(ws.workspace, { id: 'fixture-resume' }, session.sessionManager.getEntries());
   const restored = await fixture({ manager: reopened });
   expect(getSessionThinkingPolicy(restored.session)?.preferred_level).toBe('high');
   await restored.session.setModel(models[1]); expect(restored.session.thinkingLevel).toBe('high');
-  {
-    const manager = SessionManager.inMemory(ws.workspace);
-    await seedSessionManagerFromDeferredBranchSeed(manager, { version: 1, parentSession: null, sessionName: null, mode: 'rotated_context', context: session.sessionManager.buildSessionContext(), model: { provider: models[3].provider, modelId: models[3].id }, thinkingLevel: 'off', preferredThinkingLevel: 'high' });
-    const successor = await fixture({ manager });
-    expect(getSessionThinkingPolicy(successor.session)?.preferred_level).toBe('high');
-    await successor.session.setModel(models[2]); expect(successor.session.thinkingLevel).toBe('high');
-  }
 });
 
 test('restoration uses active branch and newer explicit SDK level instead of stale policy metadata', async () => {
@@ -194,16 +186,11 @@ test('two successive cold hydrations do not replace preferred high with the effe
   }
 });
 
-test('deferred inactive branch and compaction retain preferred intent separately from effective level', async () => {
-  const { createDeferredBranchSeed, seedSessionManagerFromDeferredBranchSeed } = await import('../../src/agent-pool/branch-seeding.js');
-  const { session } = await fixture(); await session.setModel(models[3]);
-  const leaf = session.sessionManager.appendMessage({ role: 'user', content: 'synthetic', timestamp: Date.now() });
-  session.sessionManager.appendCompaction('synthetic summary', leaf, 100);
+test('compaction retains preferred intent separately from effective level',async()=>{
+  const {session}=await fixture();await session.setModel(models[3]);
+  const leaf=session.sessionManager.appendMessage({role:'user',content:'synthetic',timestamp:Date.now()});
+  session.sessionManager.appendCompaction('synthetic summary',leaf,100);
   expect(readThinkingPreference(session.sessionManager.getBranch())).toBe('high');
-  const seed = await createDeferredBranchSeed(session, { sourceIsActive: false, stableLeafId: null });
-  expect(seed.thinkingLevel).toBe('off'); expect(seed.preferredThinkingLevel).toBe('high');
-  const manager = SessionManager.inMemory(ws.workspace); await seedSessionManagerFromDeferredBranchSeed(manager, seed);
-  expect(readThinkingPreference(manager.getBranch())).toBe('high');
 });
 
 test('new settings provenance handles global, project, untrusted and runtime overrides', () => {
@@ -214,25 +201,6 @@ test('new settings provenance handles global, project, untrusted and runtime ove
 });
 
 
-test('production cold restoration preserves recorded high even before the first message', async () => {
-  const { createSessionInDir } = await import('../../src/agent-pool/session.js');
-  const { forcePersistSessionFile } = await import('../../src/agent-pool/session-file-persistence.js');
-  const { runtime } = await fixture();
-  const settings = SettingsManager.inMemory({ defaultProvider: models[0].provider, defaultModel: models[0].id, defaultThinkingLevel: 'low' });
-  const isolated = productionWorkspace();
-  const dir = isolated.workspace + '/cold-message-free';
-  let first: Awaited<ReturnType<typeof createSessionInDir>> | null = null;
-  let resumed: Awaited<ReturnType<typeof createSessionInDir>> | null = null;
-  try {
-    first = await createSessionInDir(dir, { tools: [], modelRuntime: runtime, settingsManager: settings });
-    first.session.setThinkingLevel('high'); forcePersistSessionFile(first.session); await first.dispose(); first = null;
-    resumed = await createSessionInDir(dir, { tools: [], modelRuntime: runtime, settingsManager: settings });
-    expect(resumed.session.thinkingLevel).toBe('high');
-    expect(getSessionThinkingPolicy(resumed.session)?.preferred_level).toBe('high');
-    await resumed.session.setModel(models[1]); expect(resumed.session.thinkingLevel).toBe('high');
-    expect(settings.getDefaultThinkingLevel()).toBe('low');
-  } finally { await first?.dispose(); await resumed?.dispose(); isolated.cleanup(); }
-}, 20_000);
 
 test('restoration metadata belongs only to the selected branch, not future preference changes', async () => {
   const { session } = await fixture();
@@ -257,15 +225,12 @@ test('native max and restricted target capabilities clamp without erasing prefer
 });
 
 
-test('deferred restore keeps carried effective choice and resumes session preference on next model', async () => {
+test('restore keeps effective choice and resumes session preference on next model', async () => {
   const { restoreSessionThinkingPolicy } = await import('../../src/agent-pool/thinking-policy.js');
-  const { seedSessionManagerFromDeferredBranchSeed } = await import('../../src/agent-pool/branch-seeding.js');
   const { session } = await fixture();
-  await seedSessionManagerFromDeferredBranchSeed(session.sessionManager, {
-    version: 1, parentSession: null, sessionName: null,
-    model: { provider: models[0].provider, modelId: models[0].id },
-    thinkingLevel: 'medium', preferredThinkingLevel: 'high', mode: 'rotated_context',
-  });
+  session.sessionManager.appendModelChange(models[0].provider,models[0].id);
+  session.sessionManager.appendThinkingLevelChange('medium');
+  session.sessionManager.appendCustomEntry('piclaw.thinking-policy.v1',{preferred:'high'});
   restoreSessionThinkingPolicy(session, 'medium', 'high');
   expect(session.thinkingLevel).toBe('medium');
   expect(getSessionThinkingPolicy(session)?.preferred_level).toBe('high');

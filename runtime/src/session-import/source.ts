@@ -75,7 +75,7 @@ export function readOfflineSessionSource(jsonl: string, requestedLeaves?: readon
     const entry: OfflineSessionEntry = { id: raw.id, type: raw.type, timestamp: raw.timestamp, parentId: raw.parentId as string | null, original: raw as Record<string, JsonValue> };
     if (raw.type === 'message') entry.message = readMessage(raw.message);
     else if (raw.type === 'model_change') require(text(raw.provider) && text(raw.modelId), 'invalid historical model change');
-    else if (raw.type === 'thinking_level_change') require(['off', 'minimal', 'low', 'medium', 'high', 'xhigh'].includes(String(raw.thinkingLevel)), 'invalid historical thinking change');
+    else if (raw.type === 'thinking_level_change') require(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(String(raw.thinkingLevel)), 'invalid historical thinking change');
     else if (raw.type === 'compaction') require(typeof raw.summary === 'string' && text(raw.firstKeptEntryId) && byId.has(raw.firstKeptEntryId) && finite(raw.tokensBefore), 'invalid historical compaction');
     else if (raw.type === 'branch_summary') require(typeof raw.summary === 'string' && text(raw.fromId) && byId.has(raw.fromId), 'invalid historical branch summary');
     else if (raw.type === 'label') require(text(raw.targetId) && byId.has(raw.targetId) && (raw.label === undefined || typeof raw.label === 'string'), 'invalid historical label');

@@ -3,7 +3,6 @@ import { buildSessionContext, type SessionEntry } from '@earendil-works/pi-codin
 import { adoptedJsonl } from './adopted-session-fixture.js';
 import { computePromptCacheWaste } from '../../src/agent-pool/cache-stats.js';
 import { createSessionManagerPersistencePort } from '../../src/agent-pool/session-persistence.js';
-import { seedSessionManagerFromDeferredBranchSeed, type DeferredBranchSeed } from '../../src/agent-pool/branch-seeding.js';
 
 const stamp = '2026-09-06T00:00:00.000Z';
 const append = (rows: any[], entries: any[]) => {
@@ -15,36 +14,6 @@ const append = (rows: any[], entries: any[]) => {
   }
   return JSON.stringify(copy[0]) + '\n' + copy.slice(1).map((entry) => JSON.stringify(entry)).join('\n') + '\n';
 };
-test('deferred fork omits usage, maps surviving edits and preserves null compaction', async () => {
-  const calls: string[] = [];
-  let serial = 0;
-  const write = async (name: string) => { calls.push(name); return `new-${++serial}`; };
-  const port = {
-    appendMessage: async () => write('message'),
-    appendThinkingLevelChange: async () => write('thinking'),
-    appendModelChange: async () => write('model'),
-    appendCompaction: async (_summary: string, first: string | null) => write(`compact:${first}`),
-    appendContextEdit: async (target: string, replacement: unknown) => write(`edit:${target}:${replacement === null ? 'omit' : 'replace'}`),
-    appendSessionInfo: async () => write('info'),
-    appendCustomMessageEntry: async () => write('custom-message'),
-    appendCustomEntry: async () => write('custom'),
-  };
-  const seed: DeferredBranchSeed = {
-    version: 1, parentSession: null, sessionName: null, model: null, thinkingLevel: null, mode: 'stable_branch',
-    branchEntries: [
-      { type: 'message', id: 'old-message', parentId: null, timestamp: stamp, message: { role: 'user', content: 'hello', timestamp: 1 } } as SessionEntry,
-      { type: 'usage', id: 'old-usage', parentId: 'old-message', timestamp: stamp, kind: 'cache_warm', provider: 'test', model: 'fixture', usage: {} },
-      { type: 'context_edit', id: 'old-edit', parentId: 'old-usage', timestamp: stamp, targetId: 'old-message', replacement: null },
-      { type: 'compaction', id: 'old-compact', parentId: 'old-edit', timestamp: stamp, summary: 'summary', firstKeptEntryId: null, tokensBefore: 2 },
-    ],
-  };
-  await seedSessionManagerFromDeferredBranchSeed(port, seed);
-  expect(calls).toEqual(['message', 'edit:new-1:omit', 'compact:null']);
-  seed.branchEntries![2] = { type: 'context_edit', id: 'unmapped', parentId: 'old-usage', timestamp: stamp, targetId: 'missing', replacement: null };
-  calls.length = 0;
-  await expect(seedSessionManagerFromDeferredBranchSeed(port, seed)).rejects.toThrow('unmappable target');
-  expect(calls).toEqual([]);
-});
 
 test('nullable compaction is forwarded; managers without context-edit support fail closed', async () => {
   const port = createSessionManagerPersistencePort({

@@ -25,8 +25,9 @@ destination aliases, including hardlinks/symlinks to existing files, are refused
 - User, assistant, historical tool-result and system messages. Historical system
   messages are retained as data and never installed as current instructions.
 - Model/thinking changes, compaction and branch summaries, labels and session names
-  remain inert historical records. They never configure a current actor or invoke
-  the old compaction algorithm.
+  remain inert historical records. Supported recorded thinking levels are `off`,
+  `minimal`, `low`, `medium`, `high`, `xhigh` and `max`. They never configure a
+  current actor or invoke the old compaction algorithm.
 - Text and declared inline PNG/JPEG/GIF/WebP/BMP message payloads are preserved.
   No image resampling, external file dereference, download or PDF/archive/media
   conversion occurs. Relative text references remain text references; their files
@@ -86,7 +87,7 @@ Ordinary supported native/public SDK schema evolution is separate from v3 conver
 ## Delivery checkpoint
 
 This procedure describes the implemented import and refusal boundaries under #2017.
-The wider removal census, residual legacy capture selectors, obsolete schema branches,
+The wider removal census, residual packaged legacy session-construction helpers,
 exact-source full/package qualification and acceptance reconciliation must finish
 before #2017 or #1650 closes. No live import, installation, restart, backup/restore,
 provider call or source-store mutation has been performed by this source work.

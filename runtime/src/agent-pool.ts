@@ -36,7 +36,7 @@ import {
 } from "./agent-pool/contracts.js";
 import { type AgentRuntimeFacade, type AvailableModelsResult } from "./agent-pool/runtime-facade.js";
 import { createAgentPoolServices, type AgentPoolServices } from "./agent-pool/service-factory.js";
-import { type AgentSessionManagerInstrumentationSnapshot, type PoolEntry } from "./agent-pool/session-manager.js";
+import type { PoolEntry } from "./agent-pool/contracts.js";
 import type { PiclawCredentialStore } from "./agent-pool/credential-store.js";
 import { type ChatBranchRecord, type MergeChatBranchIntoParentResult, type SshConfig, type SshConfigClearResult, type SshConfigSetResult, deleteSshConfig, getDb, getSshConfig, pruneOldTokenUsage, reclaimFreelistPages, restoreChatBranchIdentity, upsertSshConfig } from "./db.js";
 import { registerRootExtensionKvStore } from "./db/register-extension-kv.js";
@@ -91,7 +91,6 @@ export interface AgentPoolMemoryInstrumentationSnapshot {
   activeForkBaseLeaves: number;
   activeChats: number;
   sessionResources?: AgentPoolSessionResourceInstrumentationSnapshot;
-  sessionManager?: AgentSessionManagerInstrumentationSnapshot;
 }
 
 function collectSessionResourceInstrumentation(

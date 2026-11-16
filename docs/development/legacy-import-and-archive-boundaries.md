@@ -1,34 +1,29 @@
-# Imported-history schemas and archive tooling
+# Historical import and archive boundaries
 
-Harness owns native execution storage. Imported-history documents supply active provenance for native history projection; the JSONL archive store supplies explicit import, search and export tooling.
+V4 supports the explicit [one-shot session history importer](session-history-import.md) into a fresh separate native destination. Resident v3 conversion, copied-installation rehearsal, live cutover and the former JSONL-to-archive database CLI/benchmark are removed. None runs during normal startup.
 
-## Persisted import documents
+## Already-native document history
 
-`runtime/durable-engine/src/legacy-import-schema.ts` defines the copied linear/tree manifests and shared binding types, limits and importer version. It imports only the public document factory at runtime. Document kinds, version 1, conversation scope, latest-history retention, initial-on-fork policy and `{ binding: null }` initial state are unchanged. Importer version 2 and source-hash inputs are unchanged.
+`runtime/durable-engine/src/legacy-import-schema.ts` retains pure definitions for copied linear/tree documents already persisted in native stores. The original kinds, versions, scopes, fork/history policies and identity/provenance fields remain readable. It imports the public document factory; it cannot read a v3 source, construct an old runtime or convert a store.
 
-Live readers `host-runtime.ts` and `session-tree.ts` depend on this schema module. Their compiled application import graph excludes `legacy-import.ts`, copied-upgrade/installation preparation and the archive store. No startup saving is measured.
+`host-runtime.ts` and `session-tree.ts` use these definitions for retained native history. Their compiled runtime graph excludes removed import/cutover/rehearsal and archive constructors. The new one-shot importer uses its own bounded source reader and public SDK session/transaction APIs. No compatibility re-export restores `legacy-import.ts`.
 
-`legacy-import.ts` retains explicit preparation/import functions and compatibility re-exports of the same document objects. The engine `index.ts` remains the existing combined offline migration/qualification API, used by `db-tree.test.ts`, `copied-upgrade.test.ts` and other explicit fixtures. Production source has no consumer of that compatibility barrel; history readers import the schema submodule directly. No new lazy-import layer or duplicate document definition is introduced.
+## Already-native archive tables
 
-## JSONL archive store
+The former `SqliteSessionStore`, archive importer and layout benchmark are removed. Their old table/index/trigger/view creation, JSONL decoder, append/search/export methods, recursive discovery, automatic backup and package requirements are removed with them. V4 supplies no in-place archive conversion or repair command.
 
-The implementation moved from `runtime/src/agent-pool/sqlite-session-store.ts` to `runtime/scripts/lib/sqlite-session-archive.ts`. Its class name, schema owner `piclaw-agent-sessions`, table namespaces, migration ID/order/SQL checksum, import identity, raw bytes and export behaviour are unchanged. No archive data or historical evidence is removed.
+Existing exact `piclaw_agent_sessions`, `piclaw_agent_entries`, FTS/shadows, indexes, triggers and original owned-migration receipts can remain as inert data on supported already-native stores. Fresh v4 Root and one-shot import destinations create none of this old archive schema. The schema inventory still rejects missing indexes, incomplete FTS components, unknown objects and shape drift; retiring a producer does not relax retained-data protection.
 
-The identified consumers are the explicit importer, layout benchmark and archive tests; all use the new tooling path. The old private deep import is retired without a compatibility shim. No package export or documented external consumer requires that runtime-looking path. Package checks require the tooling files and reject the retired AgentPool path.
+The native schema-preservation fixture now seeds explicit synthetic already-native history and the frozen historical DDL under `runtime/test/fixtures/historical-session-archive.json`. It invokes no removed producer or source-file importer. This test-only DDL/data setup is charged as replacement footprint; relocating it earns no production deletion credit.
 
-Supported commands keep their filenames:
+## Already-native input and fork bookkeeping
 
-```sh
-bun runtime/scripts/import-jsonl-sessions.ts --source <copied-jsonl> --target <archive.db> --layout separate --dry-run
-bun runtime/scripts/benchmark-sqlite-session-layouts.ts --sessions <copied-jsonl-directory> --messages <disposable-timeline.db> --out <disposable-output-directory> --limit 1 --iterations 1
-```
+The old migration-input capture/DDL/backfill module and owned-fork initializer, mutation and seed-materialisation APIs are removed. Fresh Root omits their tables. Already-native input holds/dismissals and owned-fork records retain their exact declared shapes, original identities, captured seed bytes and timestamps; no old seed becomes runnable work. Native reopen tests compare those rows, including unmaterialised seed bytes.
 
-The importer still rejects unified and unrelated targets. The retained benchmark compares archive layouts and fault behaviour; its report labels the scope `archive-layout-only`. Historical measurements and report versions are preserved. The benchmark deliberately replaces its output directory and uses disposable copies only. These tools do not migrate native Harness execution state.
+The unused offline root-owner assignment operation is also removed. Current ownership resolution, explicit home provisioning, role/enabled checks, parent-chain validation and foreign-owner denials remain supported. Reinitialising those native metadata schemas does not assign unowned archived or non-web history to any account. History import never adopts source accounts or configuration.
 
-A verifier lock regression exposed by the benchmark is covered separately: `verifySqliteBackup` explicitly ends its owned read snapshot before closing, so an immediate writer can reopen the verified file. Snapshot fields/publication logic are unchanged; the regression test verifies the source remains unchanged.
+## Evidence and operational boundary
 
-## Qualification
+Native history tests retain original mappings, forks, counts, content and redaction checks. Schema tests retain exact component/constraint/foreign-key and byte/receipt preservation negatives. New importer tests cover supported content, refusals, data-only execution, incomplete destinations and reopen. Full exact-source/package qualification remains a separate delivery requirement.
 
-Archive tests cover byte/hash round trips, idempotence, FTS/branch/export behaviour and the exact historical migration checksum. CLI and benchmark smoke tests use disposable files. Native import/projection tests cover preserved mappings, forks, counts, context edits and private-baseline redaction; a build-graph guard prevents the history readers from acquiring migration execution dependencies.
-
-No deployment, live import, restore, configuration, restart or schema action is implied by this boundary change.
+Historical measurements and receipts remain labelled historical. No live source/store/configuration/history mutation, backup/restore, release, installation or restart is authorised by these source changes.

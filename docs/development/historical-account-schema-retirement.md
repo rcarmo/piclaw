@@ -40,7 +40,7 @@ Everything outside the exact declaration remains retained, including:
 - `access_migration_preparation`, whose presence still vetoes startup; retirement never fabricates activation;
 - `migration_input_holds`, `migration_input_dismissals`, `message_execution_authorities` and `message_recovery_authorities`, with their indexes and immutable guards.
 
-The four input-authority tables have an explicit optional archive owner in the shared schema registry. Current `migration-input-holds.ts` remains their reader/writer where applicable. Their admission, dismissal, source-snapshot and recovery history is neither deleted nor replayed by this tool. Their old initializer is fixture-only.
+The four input-authority tables have an explicit optional archive owner in the shared schema registry. Their old initializer and unused migration capture/dismissal module are removed from current runtime source. Their original admission, dismissal, source-snapshot and recovery records and exact schema guards remain inert data; this tool neither deletes nor replays them.
 
 ## Prepare and approve an owned offline copy
 

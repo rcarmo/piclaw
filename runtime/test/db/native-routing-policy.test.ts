@@ -3,9 +3,9 @@ import { beforeEach, afterEach, expect, test } from "bun:test";
 import { initDatabase, closeDatabase, getDb } from "../../src/db/connection.js";
 import { storeChatMetadata, storeMessage } from "../../src/db/messages.js";
 import { createUser, updateUser } from "../../src/db/users.js";
-import { provisionUserHome } from "../../src/db/session-ownership.js";
+import { provisionUserHome, resolveAuthorisedChat } from "../../src/db/session-ownership.js";
 import { migrateOwnedSessionHandles } from "../../src/db/session-handles.js";
-import { commitOwnedFork } from "../../src/db/owned-forks.js";
+import { existsSync } from "node:fs";
 import type { AuthenticatedPrincipal } from "../../src/core/access-types.js";
 import { ensureChatBranch, getChatBranchByChatJid, renameChatBranchIdentity, archiveChatBranch, restoreChatBranchIdentity } from "../../src/db/chat-branches.js";
 import { registerNativeBranchControlGuard } from "../../src/db/native-routing-policy.js";
@@ -154,10 +154,14 @@ test("native routing policy: owned legacy fork cannot create a partially publish
   provisionUserHome(db, user.id, chat); updateUser(db, user.id, { enabled: true }); migrateOwnedSessionHandles(db);
   const principal: AuthenticatedPrincipal = { kind: "user", userId: user.id, username: user.username, displayName: user.displayName,
     role: "member", mode: "single-user", homeChatJid: chat, authentication: { method: "totp", sessionId: "fixture", expiresAt: null } };
-  expect(() => commitOwnedFork(db, principal, chat, "native-owned-fork", "child", "{}")).toThrow("Native routing identities are immutable");
+  expect(existsSync(new URL('../../src/db/owned-forks.ts',import.meta.url))).toBe(false);
+  expect(resolveAuthorisedChat(db,principal,chat,'session.fork')).toMatchObject({ownerUserId:user.id,chatJid:chat});
+  // This shared legacy metadata API rejects owned namespaces even for a valid
+  // owner. Native fork publication must use the existing native port.
+  expect(()=>ensureChatBranch({chat_jid:chat+':child',root_chat_jid:chat,parent_branch_id:branch.branch_id})).toThrow(ChatAccessDenied);
   expect(db.query("SELECT branch_id FROM chat_branches").all()).toEqual([{ branch_id: branch.branch_id }]);
-  expect(db.query("SELECT * FROM owned_fork_operations").all()).toEqual([]);
-  expect(() => commitOwnedFork(db, { ...principal, userId: "foreign" }, chat, "native-owned-foreign", "child", "{}")).toThrow(ChatAccessDenied);
+  expect(db.query("SELECT 1 FROM sqlite_schema WHERE name='owned_fork_operations'").get()).toBeNull();
+  expect(()=>resolveAuthorisedChat(db,{...principal,userId:'foreign'},chat,'session.fork')).toThrow(ChatAccessDenied);
 });
 test("native routing policy: legacy Dream cleanup cannot erase native metadata or history", async () => {
   fixture(); const db = getDb(), ghost = "dream:manual:protected:0";

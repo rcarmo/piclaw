@@ -20,7 +20,6 @@ const ALLOWED_UNUSED_EXPORTS = new Map<string, string>([
   ["src/core/domain-config.ts - registerDomainConfig", "domain-config registration API retained for #752+ domain migration tranches"],
   ["src/core/domain-config.ts - resetDomainConfigWarningsForTests", "test-only API for focused core/domain-config.ts compatibility-warning regression harnesses"],
   ["src/core/domain-config.ts - stringField", "domain-config framework constructor retained for #752+ domain migration tranches"],
-  ["src/agent-pool/branch-seeding.ts - readDeferredBranchSeed", "branch seeding persistence helper retained for deferred branch lifecycle recovery"],
   ["src/agent-pool/compaction.ts - scheduleIdleAutoCompaction", "agent-pool compaction scheduling helper retained for runtime compatibility"],
   ["src/agent-pool/compaction.ts - setCompactionSettlementGraceForTests", "test-only API for bounded compaction settlement and generation-race coverage"],
   ["src/agent-pool/llm-context-normalizer.ts - normalizeAgentMessages", "LLM context normalizer helper retained for extension and provider-boundary compatibility"],

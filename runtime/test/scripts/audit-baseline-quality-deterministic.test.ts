@@ -46,9 +46,17 @@ async function runAuditWithRootGates(rootGates: Array<{ id: string; label: strin
 }
 
 describe("audit-baseline-quality-deterministic", () => {
-  test("archive tooling tests have exactly one dedicated non-AgentPool group", () => {
-    const matches = groupDefinitions.filter(group => group.match("archive/sqlite-session-archive.test.ts"));
-    expect(matches.map(group => group.id)).toEqual(["archive-tools"]);
+  test("one-shot history import tests have exactly one dedicated non-AgentPool group", () => {
+    for(const path of ['session-import/source.test.ts','session-import/cli.test.ts']){
+      const matches = groupDefinitions.filter(group => group.match(path));
+      expect(matches.map(group => group.id)).toEqual(["session-history-import"]);
+    }
+    expect(groupDefinitions.some(group=>group.id==='archive-tools')).toBe(false);
+  });
+
+  test('new inventory entries do not introduce a catch-all for unknown owners or web files',()=>{
+    for(const path of ['unreviewed-subsystem/example.test.ts','channels/web/unreviewed.test.ts','web/unreviewed.test.ts'])
+      expect(groupDefinitions.filter(group=>group.match(path))).toEqual([]);
   });
 
   test("buildAuditCommandEnv isolates runtime state away from the live workspace", () => {

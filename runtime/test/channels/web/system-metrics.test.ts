@@ -134,7 +134,7 @@ test("SystemMetricsSampler includes optional bounded VRAM payloads when GPU tele
   expect(third.gpu_provider).toBe("nvml");
 });
 
-test("handleSystemMetricsRequest includes runtime memory instrumentation when provided", async () => {
+test("handleSystemMetricsRequest cannot revive retired resident counters from a stale snapshot", async () => {
   const response = handleSystemMetricsRequest({
     json: (payload, status = 200) => new Response(JSON.stringify(payload), { status, headers: { "content-type": "application/json" } }),
     getRuntimeMemorySnapshot: () => ({
@@ -160,21 +160,7 @@ test("handleSystemMetricsRequest includes runtime memory instrumentation when pr
 
   expect(response.status).toBe(200);
   const payload = await response.json();
-  expect(payload.runtime_memory).toEqual({
-    cached_main_sessions: 2,
-    cached_side_sessions: 1,
-    active_fork_base_leaves: 3,
-    active_chats: 4,
-    session_entries: 15,
-    active_messages: 16,
-    persisted_session_bytes: 17,
-    loaded_skills: 18,
-    loaded_extensions: 19,
-    registered_tools: 20,
-    create_in_flight: 6,
-    branch_seed_realizations_in_flight: 5,
-    invalid_deferred_seed_errors: 7,
-  });
+  expect(payload.runtime_memory).toBeNull();
 });
 
 test('optional GPU activity has nullable history and survives memory-only telemetry',()=>{

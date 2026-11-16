@@ -317,25 +317,6 @@ function readCgroupMemoryCurrent(): number | null {
   }
 }
 
-function normalizeRuntimeMemorySnapshot(snapshot: AgentPoolMemoryInstrumentationSnapshot | null | undefined): RuntimeMemorySnapshot | null {
-  // These are legacy session-pool counters, not native SDK runtime metrics.
-  if (!snapshot?.sessionManager) return null;
-  return {
-    cached_main_sessions: snapshot.cachedMainSessions,
-    cached_side_sessions: snapshot.cachedSideSessions,
-    active_fork_base_leaves: snapshot.activeForkBaseLeaves,
-    active_chats: snapshot.activeChats,
-    session_entries: snapshot.sessionResources?.sessionEntries ?? 0,
-    active_messages: snapshot.sessionResources?.activeMessages ?? 0,
-    persisted_session_bytes: snapshot.sessionResources?.persistedSessionBytes ?? 0,
-    loaded_skills: snapshot.sessionResources?.loadedSkills ?? 0,
-    loaded_extensions: snapshot.sessionResources?.loadedExtensions ?? 0,
-    registered_tools: snapshot.sessionResources?.registeredTools ?? 0,
-    create_in_flight: snapshot.sessionManager.createInFlight,
-    branch_seed_realizations_in_flight: snapshot.sessionManager.branchSeedRealizationsInFlight,
-    invalid_deferred_seed_errors: snapshot.sessionManager.invalidDeferredSeedErrors,
-  };
-}
 
 export class SystemMetricsSampler {
   private lastCpuTotals: CpuTotals | null = null;
@@ -360,7 +341,7 @@ export class SystemMetricsSampler {
     private readonly ioPressureReader: () => LinuxIoPressureSnapshot | null = readLinuxIoPressure,
   ) {}
 
-  readSnapshot(runtimeMemorySnapshot?: AgentPoolMemoryInstrumentationSnapshot | null, gpus: IntelGpuSnapshot[] = [], collectGpu = true): SystemMetricsSnapshot {
+  readSnapshot(_runtimeMemorySnapshot?: AgentPoolMemoryInstrumentationSnapshot | null, gpus: IntelGpuSnapshot[] = [], collectGpu = true): SystemMetricsSnapshot {
     const currentCpuTotals = readCpuTotals();
     let cpuPercent = 0;
     if (this.lastCpuTotals) {
@@ -456,7 +437,7 @@ export class SystemMetricsSampler {
         cgroup_memory_current_bytes: cgroupMemoryCurrentBytes,
         threads: procStatus.threads,
       },
-      runtime_memory: normalizeRuntimeMemorySnapshot(runtimeMemorySnapshot),
+      runtime_memory: null, // The retired resident pool has no current metric producer.
     };
   }
 }

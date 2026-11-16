@@ -107,7 +107,6 @@
         "runtime/src/dream.ts",
         "runtime/src/runtime/startup.ts",
         "runtime/src/db/chat-branches.ts",
-        "runtime/src/db/owned-forks.ts",
         "runtime/src/db/session-handles.ts"
       ],
       "sourceOfTruth": "Host stable branch identity, friendly handles/display names, owner namespace and archive policy. The SDK application manifest alone binds native conversation/session IDs. Native address/reparent/destructive legacy mutations are fenced; registration cannot unarchive or rename a native branch. Copied/native routing is never inferred from metadata or a first/default row.",
@@ -117,8 +116,7 @@
         "runtime/src/db/native-routing-policy.ts",
         "runtime/durable-engine/src/default-application-runtime.ts",
         "runtime/durable-engine/src/application-bootstrap.ts",
-        "runtime/src/agent-pool.ts",
-        "runtime/src/db/owned-forks.ts"
+        "runtime/src/agent-pool.ts"
       ]
     },
     "core:chat_cursors": {
@@ -159,7 +157,6 @@
         "runtime/src/runtime/startup.ts",
         "runtime/src/extensions/messages-crud.ts",
         "runtime/src/db/chat-branches.ts",
-        "runtime/src/db/owned-forks.ts",
         "runtime/src/db/messages.ts",
         "runtime/src/service-effects/current-piclaw/terminal-settlement-timeline-statements.ts",
         "runtime/src/service-effects/current-piclaw/timeline-draft-store.ts",
@@ -320,15 +317,15 @@
       ]
     },
     "core:owned_fork_operations": {
-      "category": "core",
-      "initializer": "runtime/src/db/owned-forks.ts#initializeOwnedForkSchema",
-      "writers": [
-        "runtime/src/db/owned-forks.ts"
-      ],
+      "category": "retired",
+      "initializer": "None; obsolete owned/deferred fork initializer, mutation and seed-materialisation APIs are removed",
+      "writers": [],
       "sourceOfTruth": "Owner/request idempotency receipt plus captured fork seed.",
-      "replayRetention": "finishOwnedForkSeed clears seed_json and sets materialised_at, retaining operation identity; no receipt TTL found.",
+      "replayRetention": "Preserve original owner/request/source/target identities, raw captured seed bytes, timestamps and exact SQLite constraints on already-native stores. Fresh stores omit the table; no old seed is materialised or replayed.",
       "references": [
-        "runtime/src/db/owned-forks.ts"
+        "runtime/test/fixtures/historical-session-archive.json",
+        "qualification/native/schema-ownership-fixture.ts",
+        "qualification/native/schema-ownership.test.ts"
       ]
     },
     "core:picker_pin_imports": {
@@ -1088,17 +1085,15 @@
       ]
     },
     "archive:session-store": {
-      "category": "migration-archive",
-      "initializer": "SqliteSessionStore explicit archive-tool constructor; owned piclaw-agent-sessions / 001-namespaced-session-import",
-      "writers": [
-        "runtime/scripts/lib/sqlite-session-archive.ts#SqliteSessionStore.importJsonl",
-        "runtime/scripts/lib/sqlite-session-archive.ts#SqliteSessionStore.appendRawEntry"
-      ],
+      "category": "retired",
+      "initializer": "None; original archive import/append constructors and CLI were removed. Already-native optional objects remain inert.",
+      "writers": [],
       "sourceOfTruth": "Exact imported JSONL header/raw entry bytes, source path/hash/byte/trailing-LF metadata and branch/entry identities. Archive FTS and shadows derive search text from retained imported entries.",
-      "replayRetention": "Same-path same-source-hash import replays without rewriting rows; changed source hash fails. Exact JSONL export and migration/checksum receipts are preserved. Native fresh startup does not instantiate this archive store or authorise cleanup.",
+      "replayRetention": "Preserve exact existing JSONL header/raw entry bytes, FTS/shadows, stable archive identities and original migration/checksum receipts. No archive creation/import/append, backup, conversion, cleanup or execution authority.",
       "references": [
-        "runtime/scripts/lib/sqlite-session-archive.ts",
-        "runtime/test/archive/sqlite-session-archive.test.ts"
+        "runtime/test/fixtures/historical-session-archive.json",
+        "qualification/native/schema-ownership-fixture.ts",
+        "qualification/native/schema-ownership.test.ts"
       ]
     },
     "sqlite:planner-statistics": {
@@ -1131,16 +1126,14 @@
       ]
     },
     "archive:input-authority": {
-      "category": "migration-archive",
-      "initializer": "Historical initializeMessageAuthoritySchema only; current startup does not recreate these objects",
-      "writers": [
-        "runtime/src/db/migration-input-holds.ts"
-      ],
+      "category": "retired",
+      "initializer": "None; historical input-authority producer and unused migration capture/dismissal APIs are removed",
+      "writers": [],
       "sourceOfTruth": "Original input snapshots, execution admission, dismissal and recovery receipts",
       "replayRetention": "Retain all rows and guards. This retirement neither deletes nor replays imported input/authority history.",
       "references": [
         "cdc214fcc06349dc9d315c2d17c866764e4557d5:runtime/src/db/message-authority-schema.ts",
-        "runtime/src/db/migration-input-holds.ts",
+        "runtime/test/fixtures/historical-account-schema.json",
         "docs/development/historical-account-schema-retirement.md"
       ]
     },
@@ -2494,15 +2487,17 @@
       "fingerprints": [
         "9cddbc843fee51f1a5d4eccfcefb0db7c7a93038d12bb026e17e615e7bea14cc"
       ],
-      "requiredIn": [
+      "requiredIn": [],
+      "derivedIndexes": [
+        "0901f404348d8c46220f6fb728d2a1d183127690a34264e435f1acc862a31201",
+        "288fd414b5ee592d2ea9710e2559c540eb00e32d8e5fdd1025bddfdde78d3281"
+      ],
+      "optionalIn": [
         "core",
         "native",
         "native-addons"
       ],
-      "derivedIndexes": [
-        "0901f404348d8c46220f6fb728d2a1d183127690a34264e435f1acc862a31201",
-        "288fd414b5ee592d2ea9710e2559c540eb00e32d8e5fdd1025bddfdde78d3281"
-      ]
+      "requiredWhenOwnerPresent": true
     },
     "table:picker_pin_imports": {
       "owner": "core:picker_pin_imports",

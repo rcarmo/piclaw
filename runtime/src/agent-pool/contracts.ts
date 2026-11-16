@@ -13,6 +13,12 @@ import type { AgentAbortCause } from "./abort-provenance.js";
 import type { PiclawCredentialStore } from "./credential-store.js";
 import type { ProtectedRecoveryHandoffMetadata } from "./protected-recovery-handoff-reason.js";
 
+/** Read-only inventory entry for already-held host resources; never a factory. */
+export interface PoolEntry {
+  runtime: AgentSessionRuntime;
+  lastUsed: number;
+}
+
 export type AgentFailureCategory =
   | "rate_limit"
   | "auth_config"
