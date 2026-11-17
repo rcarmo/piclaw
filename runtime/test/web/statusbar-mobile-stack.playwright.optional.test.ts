@@ -44,7 +44,7 @@ async function open(engine: string, width: number, height: number, query = '?usa
   if (width >= 1024 && width > height) await page.locator('.workbench-activity-button[aria-label="Sessions"]').click();
   await page.waitForTimeout(350);
   // The footer reserves its measured height after the meters' first sample; let it settle.
-  await page.waitForFunction(() => Math.abs(document.querySelector('.app-shell')!.getBoundingClientRect().bottom - document.querySelector('.workbench-statusbar')!.getBoundingClientRect().top) <= 1, undefined, { timeout: 2000 }).catch(() => {});
+  await page.waitForFunction(() => Math.abs(document.querySelector('.app-shell')!.getBoundingClientRect().bottom - document.querySelector('.workbench-statusbar')!.getBoundingClientRect().top) <= 1, undefined, { timeout: 2000 });
   return { page, errors };
 }
 const layout = (page: Page) => page.evaluate(() => {
