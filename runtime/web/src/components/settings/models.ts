@@ -49,7 +49,9 @@ export function describeCatalogueRefresh(outcome) {
     if (outcome?.status === 'timed_out') return { type: 'error', text: 'Model catalogue update timed out. The previous catalogues are still in use.' };
     if (outcome?.status === 'failed') return { type: 'error', text: `Model catalogues could not be updated. ${details}`.trim() };
     if (outcome?.status === 'partial') return { type: 'warning', text: `Model catalogues updated with problems. ${details}` };
-    return { type: skipped.length ? 'warning' : 'success', text: `Model catalogues updated.${details ? ` ${details}` : ''}` };
+    const providers = Array.isArray(outcome?.providers) && outcome.providers.length ? ` for ${outcome.providers.join(', ')}` : '';
+    const counts = outcome?.models ? ` (${outcome.models.before} → ${outcome.models.after} models)` : '';
+    return { type: skipped.length ? 'warning' : 'success', text: `Model catalogues updated${providers}${counts}.${details ? ` ${details}` : ''}` };
 }
 
 async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 10_000) {

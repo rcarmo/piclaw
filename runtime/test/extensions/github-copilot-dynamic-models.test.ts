@@ -326,7 +326,8 @@ describe("github-copilot dynamic models overlay", () => {
     const overlay = createGitHubCopilotDynamicModelsProvider(runtime)!;
     setGitHubCopilotDynamicModelsFetchForTests((async () => { throw new Error("catalog unavailable"); }) as any);
     const harness = createRefreshHarness();
-    await overlay.refreshModels!(harness.context({ credential: oauth("token"), allowNetwork: true }) as any);
+    // The failure is reported to the refresh caller; the catalogue stays last-good.
+    await expect(overlay.refreshModels!(harness.context({ credential: oauth("token"), allowNetwork: true }) as any)).rejects.toThrow("catalog unavailable");
     expect(overlay.getModels().map((model) => model.id)).toEqual(["gpt-5.5"]);
     const controller = new AbortController();
     controller.abort();
