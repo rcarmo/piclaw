@@ -1,4 +1,4 @@
-> Current assessment: [#1650 acceptance — 22 October 2026](pi-durable-130-acceptance-current-20261022.md), including current native controls, family retirement, preservation and remaining acceptance. The body below preserves the historical `87efd0342` assessment and subsequent dated follow-ups; its earlier missing-controller/default-selection claims and CI totals do not describe current source.
+> Current qualification uses SDK 1.5.2 and `qualification/native`; see [native validation](../../../../docs/native-validation.md), [watch qualification](../../../development/native-watch-qualification.md) and the [17 November #1650 crosswalk](https://github.com/rcarmo/piclaw/issues/1650#issuecomment-6942644287). The [22 October assessment](pi-durable-130-acceptance-current-20261022.md) and the body below are dated history. Their old paths, missing-controller/default-selection claims, migration proposals and CI totals do not describe current source.
 
 # Historical #1650 acceptance gaps at 87efd0342
 
