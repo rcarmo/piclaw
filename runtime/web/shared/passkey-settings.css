@@ -1,7 +1,7 @@
 .passkey-settings { color: var(--text-primary, inherit); min-width: 0; }
 .passkey-settings__header, .passkey-settings__card-header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
 .passkey-settings__header-actions, .passkey-settings__actions, .passkey-settings__notice-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.passkey-settings button, .passkey-settings a { font: inherit; border: 1px solid var(--border-color, #8886); border-radius: 6px; padding: 8px 12px; background: var(--bg-secondary, transparent); color: inherit; cursor: pointer; min-height: 36px; text-decoration: none; }
+.passkey-settings button, .passkey-settings a { font: inherit; border: 1px solid var(--border-color, #8886); border-radius: 6px; padding: 2px 10px; background: var(--bg-secondary, transparent); color: inherit; cursor: pointer; min-height: var(--settings-button-height, 26px); text-decoration: none; }
 .passkey-settings button:disabled { opacity: .55; cursor: default; }
 .passkey-settings button:focus-visible, .passkey-settings a:focus-visible, .passkey-settings input:focus-visible { outline: 2px solid var(--accent-color, currentColor); outline-offset: 2px; }
 .passkey-settings__card { margin-block: 12px; padding: 14px; border: 1px solid var(--border-color, #8886); border-radius: 8px; min-width: 0; }
@@ -11,10 +11,10 @@
 .passkey-settings__meta dt, .passkey-settings__help, .passkey-settings__badge { font-size: .85em; opacity: .8; }
 .passkey-settings__meta dd { margin: 3px 0 0; overflow-wrap: anywhere; }
 .passkey-settings__inline-form { display: grid; gap: 8px; margin-top: 12px; }
-.passkey-settings__inline-form input { font: inherit; padding: 8px; color: inherit; background: var(--bg-primary, transparent); border: 1px solid var(--border-color, #8886); border-radius: 5px; min-width: 0; width: 100%; box-sizing: border-box; }
+.passkey-settings__inline-form input { font: inherit; padding: 4px 8px; height: var(--settings-control-height, 30px); color: inherit; background: var(--bg-primary, transparent); border: 1px solid var(--border-color, #8886); border-radius: 5px; min-width: 0; width: 100%; box-sizing: border-box; }
 .passkey-settings__notice, .passkey-settings__status { display: grid; gap: 8px; padding-block: 10px; overflow-wrap: anywhere; }
 .passkey-settings__notice--error, .passkey-settings__error, .passkey-settings__status--error { color: var(--error-color, #c54b45); }
 .passkey-settings__help, .passkey-settings__inline-form p { margin: 0; }
 .passkey-settings__empty { display: grid; gap: 8px; padding-block: 20px; }
 .passkey-settings__badge { display: block; }
-@media (max-width: 480px) { .passkey-settings__card { padding: 10px; } .passkey-settings button, .passkey-settings a { min-height: 44px; } }
+@media (max-width: 480px) { .passkey-settings__card { padding: 10px; } }

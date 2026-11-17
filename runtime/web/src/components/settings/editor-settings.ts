@@ -54,19 +54,25 @@ function EditorSettingsSection() {
         <div class="settings-section">
             <h3>${t('settings.editor.heading')}</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${fieldId('vim')}>${t('settings.editor.vimMode')}</label>
-                <input id=${fieldId('vim')} type="checkbox" checked=${vimMode}
-                    onChange=${() => { const v = !vimMode; setVimMode(v); setBool('piclaw_vim_mode', v); }} />
+                <label class="settings-dense-check" for=${fieldId('vim')}>
+                    <input id=${fieldId('vim')} type="checkbox" checked=${vimMode}
+                        onChange=${() => { const v = !vimMode; setVimMode(v); setBool('piclaw_vim_mode', v); }} />
+                    <span>${t('settings.editor.vimMode')}</span>
+                </label>
             </div>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${fieldId('whitespace')}>${t('settings.editor.showWhitespace')}</label>
-                <input id=${fieldId('whitespace')} type="checkbox" checked=${showWhitespace}
-                    onChange=${() => { const v = !showWhitespace; setShowWhitespace(v); setBool('piclaw_show_whitespace', v); }} />
+                <label class="settings-dense-check" for=${fieldId('whitespace')}>
+                    <input id=${fieldId('whitespace')} type="checkbox" checked=${showWhitespace}
+                        onChange=${() => { const v = !showWhitespace; setShowWhitespace(v); setBool('piclaw_show_whitespace', v); }} />
+                    <span>${t('settings.editor.showWhitespace')}</span>
+                </label>
             </div>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${fieldId('preview')}>${t('settings.editor.livePreview')}</label>
-                <input id=${fieldId('preview')} type="checkbox" checked=${livePreview}
-                    onChange=${() => { const v = !livePreview; setLivePreview(v); setBool('piclaw_md_live_preview', v); }} />
+                <label class="settings-dense-check" for=${fieldId('preview')}>
+                    <input id=${fieldId('preview')} type="checkbox" checked=${livePreview}
+                        onChange=${() => { const v = !livePreview; setLivePreview(v); setBool('piclaw_md_live_preview', v); }} />
+                    <span>${t('settings.editor.livePreview')}</span>
+                </label>
             </div>
             <div class="settings-row settings-dense-row">
                 <label>${t('settings.editor.fontSize')}</label>

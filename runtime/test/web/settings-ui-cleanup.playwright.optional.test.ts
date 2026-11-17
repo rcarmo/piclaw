@@ -141,7 +141,7 @@ for (const engine of ['chromium', 'webkit']) {
 const ALL_SECTIONS = ['general', 'theme', 'sessions', 'recordings', 'compaction', 'keyboard', 'quick-actions', 'workspace', 'environment', 'keychain', 'providers', 'models', 'mcp', 'tools', 'authentication', 'scheduled-tasks', 'addons', 'editor', 'developer', 'fixture-a-portainer'];
 
 for (const engine of ['chromium', 'webkit']) for (const width of [390, 1280]) {
-  browserTest(`${engine} ${width}px: every Settings pane keeps text at 12px or larger and controls at target size`, async () => {
+  browserTest(`${engine} ${width}px: every Settings pane keeps text at 12px or larger and controls at a usable size`, async () => {
     const problems: string[] = [];
     for (const section of ALL_SECTIONS) {
       const { page, errors } = await openSettings(engine, width, section);
@@ -159,11 +159,66 @@ for (const engine of ['chromium', 'webkit']) for (const width of [390, 1280]) {
           for (const element of dialog.querySelectorAll('button, select, summary, input:not([type=hidden]):not([type=range])')) {
             if (!visible(element)) continue;
             const r = element.getBoundingClientRect(), type = (element as HTMLInputElement).type;
-            const min = type === 'checkbox' || type === 'radio' ? (narrow ? 20 : 12) : narrow ? 44 : 28;
+            const min = type === 'checkbox' || type === 'radio' ? (narrow ? 18 : 12) : narrow ? 28 : 24;
             if (Math.round(r.height) < min) out.push(`${element.tagName.toLowerCase()}[${type || ''}].${element.className} ${Math.round(r.height)}px < ${min}`);
           }
           return out;
         }, { narrow: width < 600 });
+        problems.push(...found.map(problem => `${section}: ${problem}`), ...errors.map(error => `${section}: pageerror ${error}`));
+      } finally { await page.close(); }
+    }
+    expect(problems).toEqual([]);
+  }, 180000);
+}
+
+for (const engine of ['chromium', 'webkit']) for (const width of [1280, 390]) {
+  browserTest(`${engine} ${width}px: fields stay within the Sessions search height, buttons are smaller and checkboxes lead their text`, async () => {
+    const problems: string[] = [];
+    for (const section of ALL_SECTIONS) {
+      const { page, errors } = await openSettings(engine, width, section);
+      try {
+        const found = await page.evaluate(() => {
+          // Reference: the sidebar's "Search sessions" field, rendered with the app stylesheet.
+          const probe = document.createElement('div');
+          probe.className = 'sessions-sidebar-search';
+          probe.innerHTML = '<input type="search" placeholder="Search sessions">';
+          document.body.append(probe);
+          const reference = probe.querySelector('input')!.getBoundingClientRect().height;
+          probe.remove();
+          const content = document.querySelector('.settings-content')!, out: string[] = [];
+          const visible = (e: Element) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+          const name = (e: Element) => `${e.tagName.toLowerCase()}.${(e as HTMLElement).className || (e as HTMLInputElement).placeholder || ''}`.slice(0, 60);
+          for (const field of content.querySelectorAll('input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="password"], input[type="url"], input[type="email"], select')) {
+            if (!visible(field)) continue;
+            const height = field.getBoundingClientRect().height;
+            if (height > reference + 0.5) out.push(`field ${name(field)} ${height.toFixed(1)}px > ${reference.toFixed(1)}px`);
+          }
+          // Number steppers and avatar pickers sit flush with their field.
+          for (const control of content.querySelectorAll('.settings-number-step-btn, .settings-avatar-inline')) {
+            if (!visible(control)) continue;
+            const height = control.getBoundingClientRect().height;
+            if (height > reference + 0.5) out.push(`field control ${name(control)} ${height.toFixed(1)}px > ${reference.toFixed(1)}px`);
+          }
+          // List/card rows that happen to be buttons are not action buttons.
+          for (const button of content.querySelectorAll('button:not(.mcp-server-card):not(.settings-task-row):not([role="tab"]):not([role="switch"]):not(.settings-number-step-btn):not(.settings-avatar-inline)')) {
+            if (!visible(button)) continue;
+            const height = button.getBoundingClientRect().height, lineHeight = parseFloat(getComputedStyle(button).lineHeight) || 16;
+            const range = document.createRange(); range.selectNodeContents(button);
+            const lines = new Set([...range.getClientRects()].filter(r => r.width > 0).map(r => Math.round(r.top / lineHeight))).size;
+            if (lines <= 1 && height > reference - 3) out.push(`button ${name(button)} "${(button.textContent || '').trim().slice(0, 20)}" ${height.toFixed(1)}px > ${(reference - 3).toFixed(1)}px`);
+          }
+          for (const box of content.querySelectorAll('input[type="checkbox"]')) {
+            if (!visible(box)) continue;
+            const label = (box as HTMLInputElement).labels?.[0];
+            if (!label) continue;
+            const text = [...label.childNodes].filter(node => node !== box && !node.contains?.(box) && (node.textContent || '').trim());
+            if (!text.length) continue;
+            const range = document.createRange(); range.setStartBefore(text[0]); range.setEndAfter(text[text.length - 1]);
+            const textBox = range.getClientRects()[0], boxRect = box.getBoundingClientRect();
+            if (boxRect.right > textBox.left + 1 || boxRect.bottom < textBox.top || boxRect.top > textBox.bottom) out.push(`checkbox after its text "${label.textContent!.trim().slice(0, 30)}"`);
+          }
+          return out;
+        });
         problems.push(...found.map(problem => `${section}: ${problem}`), ...errors.map(error => `${section}: pageerror ${error}`));
       } finally { await page.close(); }
     }
@@ -285,14 +340,14 @@ for (const engine of ['chromium', 'webkit']) {
           const content = document.querySelector('.settings-content')!;
           const dense = [...content.querySelectorAll('.settings-dense-row')] as HTMLElement[];
           const plain = [...content.querySelectorAll('.settings-row:not(.settings-dense-row)')].filter(row => row.closest('.settings-section') && !row.closest('.workspace-indexing, .settings-identity-field'));
-          const columns = new Set(dense.map(row => Math.round(row.children[1].getBoundingClientRect().left)));
+          const columns = new Set(dense.filter(row => !row.classList.contains('settings-dense-row-checkbox')).map(row => Math.round(row.children[1].getBoundingClientRect().left)));
           const unnamed = [...content.querySelectorAll('.settings-dense-row :is(input, select, textarea)')]
             .filter(control => !(control as HTMLInputElement).labels?.length && !control.getAttribute('aria-label'))
             .map(control => control.outerHTML.slice(0, 80));
           return { dense: dense.length, plain: plain.length, columns: columns.size, unnamed, overflow: content.scrollWidth - content.clientWidth };
         });
         expect(found.dense).toBeGreaterThanOrEqual(rows);
-        expect(found.columns).toBe(1); // every control starts in the same column (or stacks on phones)
+        expect(found.columns).toBeLessThanOrEqual(1); // every control starts in the same column (or stacks on phones); checkbox rows lead with the box
         expect(found.unnamed).toEqual([]);
         expect(found.overflow).toBeLessThanOrEqual(1);
         expect(errors).toEqual([]);

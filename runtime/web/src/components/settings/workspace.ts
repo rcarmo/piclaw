@@ -128,19 +128,25 @@ export function WorkspaceSection({ settingsData, setStatus, mergeSettingsData })
 
             <h3>${t('settings.workspace.access')}</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${fieldId('terminal')}>${t('settings.workspace.enableTerminal')}</label>
-                <input id=${fieldId('terminal')} type="checkbox" checked=${webTerminalEnabled} onChange=${e => setWebTerminalEnabled(e.target.checked)} />
+                <label class="settings-dense-check" for=${fieldId('terminal')}>
+                    <input id=${fieldId('terminal')} type="checkbox" checked=${webTerminalEnabled} onChange=${e => setWebTerminalEnabled(e.target.checked)} />
+                    <span>${t('settings.workspace.enableTerminal')}</span>
+                </label>
             </div>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${fieldId('vnc')}>${t('settings.workspace.allowVnc')}</label>
-                <input id=${fieldId('vnc')} type="checkbox" checked=${vncAllowDirect} onChange=${e => setVncAllowDirect(e.target.checked)} />
+                <label class="settings-dense-check" for=${fieldId('vnc')}>
+                    <input id=${fieldId('vnc')} type="checkbox" checked=${vncAllowDirect} onChange=${e => setVncAllowDirect(e.target.checked)} />
+                    <span>${t('settings.workspace.allowVnc')}</span>
+                </label>
             </div>
             <p class="settings-hint">${t('settings.workspace.accessHint')}</p>
 
             <h3 style="margin-top:20px">Timeline SVG</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${fieldId('svg')}>Sanitize SVG code fences</label>
-                <input id=${fieldId('svg')} type="checkbox" checked=${sanitizeSvgFences} onChange=${e => setSanitizeSvgFences(e.target.checked)} />
+                <label class="settings-dense-check" for=${fieldId('svg')}>
+                    <input id=${fieldId('svg')} type="checkbox" checked=${sanitizeSvgFences} onChange=${e => setSanitizeSvgFences(e.target.checked)} />
+                    <span>Sanitize SVG code fences</span>
+                </label>
                 <span class="settings-hint">Enabled by default: fenced SVG is rendered as a bounded static image. Disable only for trusted SVG that needs timeline interaction; its source will run in this page.</span>
             </div>
 
