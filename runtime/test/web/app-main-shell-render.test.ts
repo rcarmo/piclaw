@@ -10,7 +10,7 @@ import {
   extractPostedUserMessageId,
   handleComposePost,
   renderMainShell,
-  scrollToPostedTimelineMessage,
+  revealSubmittedTimelineMessage,
 } from '../../web/src/ui/app-main-shell-render.js';
 
 test('buildMainShellClassName composes workspace/editor/chat/zen modifiers', () => {
@@ -340,7 +340,7 @@ test('handleComposePost does nothing while search is active', () => {
   expect(scrollPostedMessage).not.toHaveBeenCalled();
 });
 
-test('scrollToPostedTimelineMessage waits for the existing row and highlights it without reloading', () => {
+test('revealSubmittedTimelineMessage keeps the latest end in view and highlights the row in place once it renders', () => {
   const element = {
     scrollIntoView: mock(() => {}),
     classList: {
@@ -348,19 +348,16 @@ test('scrollToPostedTimelineMessage waits for the existing row and highlights it
       remove: mock(() => {}),
     },
   } as any;
-  let reveals = 0;
-  // Simulate an acknowledgement before the row enters the rendered post list:
-  // only a later reveal can move the virtual window and mount it.
-  const requestReveal = mock(() => { reveals += 1; });
-  const getElementById = mock((id: string) => id === 'post-77' && reveals >= 3 ? element : null);
+  let lookups = 0;
+  // The acknowledgement arrives before the realtime row renders.
+  const getElementById = mock((id: string) => (id === 'post-77' && ++lookups >= 3 ? element : null));
   const rafQueue: Array<() => void> = [];
   const timeoutQueue: Array<() => void> = [];
-  const scrollToBottom = mock(() => {});
+  const jumpToLatest = mock(() => {});
 
-  scrollToPostedTimelineMessage({
+  revealSubmittedTimelineMessage({
     id: 77,
-    scrollToBottom,
-    requestReveal,
+    jumpToLatest,
     getElementById,
     scheduleRaf: (callback) => { rafQueue.push(callback); },
     scheduleTimeout: (callback, delayMs) => {
@@ -372,6 +369,7 @@ test('scrollToPostedTimelineMessage waits for the existing row and highlights it
     },
     maxAttempts: 4,
   });
+  expect(jumpToLatest).toHaveBeenCalledTimes(1);
 
   while (rafQueue.length > 0 || timeoutQueue.length > 0) {
     const raf = rafQueue.shift();
@@ -380,10 +378,9 @@ test('scrollToPostedTimelineMessage waits for the existing row and highlights it
     if (timeout) timeout();
   }
 
-  expect(getElementById).toHaveBeenCalled();
-  expect(requestReveal).toHaveBeenCalledTimes(3);
-  expect(element.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+  expect(getElementById).toHaveBeenCalledTimes(3);
+  expect(jumpToLatest).toHaveBeenCalledTimes(2);
+  expect(element.scrollIntoView).not.toHaveBeenCalled();
   expect(element.classList.add).toHaveBeenCalledWith('post-highlight');
   expect(element.classList.remove).toHaveBeenCalledWith('post-highlight');
-  expect(scrollToBottom).not.toHaveBeenCalled();
 });

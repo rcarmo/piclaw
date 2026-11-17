@@ -3,6 +3,8 @@ import { ChatSurface } from '../../../web/src/components/chat-surface.js';
 import { useMainAppTimelineComposition } from '../../../web/src/ui/app-main-timeline-composition.js';
 import { runTimelineLoadFlow } from '../../../web/src/ui/app-boot-load-orchestration.js';
 import { cacheTimelineSnapshot } from '../../../web/src/ui/app-timeline-cache.js';
+import { handleComposePost } from '../../../web/src/ui/app-main-shell-render.js';
+import { jumpTimelineToLatest } from '../../../web/src/ui/timeline-latest.js';
 
 const count = Number(new URLSearchParams(location.search).get('count')) || 30;
 const posts = (chat: string) => Array.from({ length: count }, (_, index) => ({
@@ -25,7 +27,9 @@ function Fixture() {
   useEffect(() => {
     (window as any).timelineFixture = { replace: timeline.setPosts, refresh: timeline.refreshTimeline, loadMore: timeline.loadMore,
       preserve: timeline.preserveTimelineScroll, preserveTop: timeline.preserveTimelineScrollTop,
-      arrive(post: any) { timeline.setPosts(previous => [...(previous || []), post]); timeline.scrollToBottom(); } };
+      arrive(post: any) { timeline.setPosts(previous => [...(previous || []), post]); timeline.scrollToBottom(); },
+      // The compose acknowledgement, as the app shell wires it; the realtime row may arrive later.
+      submitted(response: unknown) { handleComposePost({ response, viewStateRef, scrollToBottom: timeline.scrollToBottom, jumpToLatest: () => jumpTimelineToLatest(timelineRef.current) }); } };
     return () => { delete (window as any).timelineFixture; };
   }, [timeline.setPosts, timeline.refreshTimeline]);
   useEffect(() => {
