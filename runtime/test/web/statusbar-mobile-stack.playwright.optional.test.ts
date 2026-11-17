@@ -280,3 +280,25 @@ for (const engine of ['chromium', 'webkit']) for (const width of [320, 390, 820]
     } finally { await page.close(); }
   }, 30000);
 }
+
+// iPhone home-screen apps set a compose inset for the home indicator. The status
+// bar already clears it, so the inset must not open a gap above the status bar.
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine} 390px: the iPhone standalone inset leaves no gap between compose and status bar`, async () => {
+    const { page, errors } = await open(engine, 390, 844);
+    try {
+      const gap = () => page.evaluate(() => document.querySelector('.workbench-statusbar')!.getBoundingClientRect().top
+        - document.querySelector('.chat-surface-compose')!.getBoundingClientRect().bottom);
+      const before = await gap();
+      await page.evaluate(() => {
+        document.documentElement.setAttribute('data-iphone-standalone-compose-inset', '1');
+        document.documentElement.style.setProperty('--iphone-standalone-compose-safe-area-bottom', '34px');
+      });
+      await page.waitForTimeout(100);
+      const after = await gap();
+      expect(Math.abs(after - before)).toBeLessThanOrEqual(1);
+      expect(after).toBeLessThanOrEqual(12);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+}
