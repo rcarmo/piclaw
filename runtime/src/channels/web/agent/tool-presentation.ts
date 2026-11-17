@@ -114,6 +114,25 @@ function editDiff(edits: Array<{ oldText?: unknown; newText?: unknown }>): strin
 }
 
 /** A readable view of a tool's arguments, or null when the original is already readable. */
+/** The delegate prompt as written, then the routing it ran with. */
+function delegateBrief(record: Record<string, unknown>): string {
+  const text = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : null;
+  const settings = [
+    text(record.model) && `Model: ${text(record.model)}`,
+    text(record.task_category) && `Category: ${text(record.task_category)}`,
+    typeof record.timeout_sec === "number" && `Timeout: ${record.timeout_sec} s`,
+  ].filter(Boolean);
+  const tools = text(record.tools)?.split(",").map((tool) => tool.trim()).filter(Boolean).join(", ");
+  const files = Array.isArray(record.files) ? record.files.filter((file): file is string => typeof file === "string" && Boolean(file.trim())) : [];
+  const footer = [
+    settings.length ? settings.join(" · ") : null,
+    tools ? `Tools: ${tools}` : null,
+    text(record.system_prompt) ? `System prompt: ${text(record.system_prompt)}` : null,
+    files.length ? ["Files:", ...files.map((file) => `- ${file}`)].join("\n") : null,
+  ].filter(Boolean);
+  return [String(record.prompt).trim(), ...(footer.length ? ["", "---", ...footer] : [])].join("\n");
+}
+
 export function readableToolInput(name: string, args: unknown): ReadableInput | null {
   const record = args && typeof args === "object" ? args as Record<string, unknown> : null;
   if (!record) return null;
@@ -122,6 +141,7 @@ export function readableToolInput(name: string, args: unknown): ReadableInput | 
     const formatted = formatShellCommand(command);
     return formatted ? { kind: "shell", label: "Command", language: "shell", text: formatted } : { kind: "shell", label: "Command", language: "shell", text: command, only: true };
   }
+  if (name === "delegate" && typeof record.prompt === "string") return { kind: "code", label: "Delegated task", language: "markdown", text: delegateBrief(record) };
   if (name === "codemode" && typeof record.code === "string") return { kind: "code", label: "Script", language: "javascript", text: record.code };
   if (name === "edit") {
     const edits = Array.isArray(record.edits) ? record.edits : [record];
