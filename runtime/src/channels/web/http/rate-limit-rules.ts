@@ -15,6 +15,7 @@ export const AUTH_RATE_LIMIT = 10;
 export const DATA_RATE_WINDOW_MS = 60 * 1000;
 
 const DATA_POST_LIMIT = 30;
+const DATA_MODEL_CATALOG_REFRESH_LIMIT = 6;
 const DATA_REPLY_LIMIT = 30;
 const DATA_AGENT_MESSAGE_LIMIT = 30;
 const DATA_MEDIA_UPLOAD_LIMIT = 20;
@@ -90,6 +91,10 @@ export function getDataRateLimitRule(method: string, pathname: string): DataRate
   }
   if ((method === "GET" && ["/agent/settings/mcp", '/agent/settings/mcp/servers'].includes(pathname)) || (method === "POST" && ["/agent/settings/mcp/preview", "/agent/settings/mcp/apply", '/agent/settings/mcp/servers/preview', '/agent/settings/mcp/servers/apply'].includes(pathname))) {
     return { bucket: "data/mcp_settings", limit: DATA_AGENT_UI_LIMIT, message: "Too many MCP settings requests. Slow down." };
+  }
+  // Each request forces every provider catalogue to refetch from the network.
+  if (method === "POST" && pathname === "/agent/models/refresh") {
+    return { bucket: "data/model_catalog_refresh", limit: DATA_MODEL_CATALOG_REFRESH_LIMIT, message: "Too many model catalogue updates. Slow down." };
   }
   if (method === "POST" && pathname === "/agent/scheduled-tasks/action") {
     return {

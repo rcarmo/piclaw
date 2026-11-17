@@ -630,6 +630,11 @@ export async function reorderAgentQueue(order, chatJid = null) {
 /**
  * Get available models and current selection.
  */
+/** Force every provider's model catalogue to refetch (`pi update --models`). Owner-only. */
+export async function refreshModelCatalogs() {
+    return request('/agent/models/refresh', { method: 'POST' });
+}
+
 export async function getAgentModels(chatJid = null) {
     const query = chatJid ? `?chat_jid=${encodeURIComponent(chatJid)}` : '';
     return deduplicatedGet(`/agent/models${query}`);

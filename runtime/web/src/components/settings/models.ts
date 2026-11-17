@@ -1,6 +1,6 @@
 import { createVisibleInterval } from '../../ui/visible-interval.js';
 import { html, useState, useEffect, useCallback, useMemo, useRef } from '../../vendor/preact-htm.js';
-import { getAgentModels, sendAgentMessage } from '../../api.js';
+import { getAgentModels, refreshModelCatalogs, sendAgentMessage } from '../../api.js';
 import {
     formatModelCatalogueContextWindow,
     formatModelCataloguePricing,
@@ -39,6 +39,17 @@ export function resolveModelsSettingsChatJid(runtimeWindow: ((Window & typeof gl
 
 export async function sendModelsSettingsCommand(content, chatJid, sender = sendAgentMessage) {
     return sender('default', content, null, [], null, chatJid);
+}
+
+/** One notice for a catalogue update: what failed, and which logins need renewing. */
+export function describeCatalogueRefresh(outcome) {
+    const failed = (outcome?.failed || []).map((item) => item.provider ? `${item.provider}: ${item.message}` : item.message);
+    const skipped = (outcome?.skipped || []).map((item) => `${item.provider} (log in again)`);
+    const details = [failed.length ? `Failed: ${failed.join('; ')}.` : '', skipped.length ? `Skipped: ${skipped.join(', ')}.` : ''].filter(Boolean).join(' ');
+    if (outcome?.status === 'timed_out') return { type: 'error', text: 'Model catalogue update timed out. The previous catalogues are still in use.' };
+    if (outcome?.status === 'failed') return { type: 'error', text: `Model catalogues could not be updated. ${details}`.trim() };
+    if (outcome?.status === 'partial') return { type: 'warning', text: `Model catalogues updated with problems. ${details}` };
+    return { type: skipped.length ? 'warning' : 'success', text: `Model catalogues updated.${details ? ` ${details}` : ''}` };
 }
 
 async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 10_000) {
@@ -123,6 +134,24 @@ export function ModelsSection({ filter = '', onFilterChange = null }) {
         setActionStatus(null);
         void loadModels();
     }, [chatJid]);
+
+    // Like `pi update --models`: refetch every provider catalogue, then reload.
+    const updateCatalogues = useCallback(async () => {
+        const generation = ++actionGeneration.current;
+        setBusyAction('catalogues');
+        setActionStatus(null);
+        try {
+            const outcome = await refreshModelCatalogs();
+            if (generation !== actionGeneration.current) return;
+            await loadModels({ quiet: true });
+            if (generation !== actionGeneration.current) return;
+            setActionStatus(describeCatalogueRefresh(outcome));
+        } catch (error) {
+            if (generation === actionGeneration.current) setActionStatus({ type: 'error', text: error?.message || 'Model catalogues could not be updated.' });
+        } finally {
+            if (generation === actionGeneration.current) setBusyAction('');
+        }
+    }, [loadModels]);
 
     useEffect(() => {
         const onChatChanged = (event) => {
@@ -356,7 +385,10 @@ export function ModelsSection({ filter = '', onFilterChange = null }) {
                     <strong>Models for ${chatJid}</strong>
                     <span>${entries.length} available · ${projection.totalMatches} matched${projection.hiddenCount ? ` · ${projection.renderedEntries.length} shown` : ''}</span>
                 </div>
-                <button type="button" class="settings-btn" onClick=${() => loadModels()} disabled=${loading}>${loading ? 'Refreshing…' : 'Refresh'}</button>
+                <span class="model-catalogue-settings__header-actions">
+                    <button type="button" class="settings-btn" onClick=${() => loadModels()} disabled=${loading}>${loading ? 'Refreshing…' : 'Refresh'}</button>
+                    <button type="button" class="settings-btn" title="Fetch the latest model lists from every provider (pi update --models)" onClick=${updateCatalogues} disabled=${busyAction === 'catalogues'}>${busyAction === 'catalogues' ? 'Updating…' : 'Update catalogues'}</button>
+                </span>
             </div>
             ${loadError && html`<div class="model-catalogue-settings__notice error" role="alert">${loadError} <button type="button" onClick=${() => loadModels()}>Retry</button></div>`}
             ${staleMessage && html`<div class="model-catalogue-settings__notice warning" role="status">${staleMessage}</div>`}

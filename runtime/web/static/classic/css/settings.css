@@ -2113,6 +2113,14 @@
     min-width: 0;
 }
 
+.model-catalogue-settings__header .model-catalogue-settings__header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    color: inherit;
+    font-size: inherit;
+}
+
 .model-catalogue-settings__header span,
 .model-catalogue-settings__scope > span,
 .model-catalogue-settings__thinking > span,
