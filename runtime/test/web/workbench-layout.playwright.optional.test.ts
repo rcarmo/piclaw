@@ -433,7 +433,8 @@ for (const engine of ['chromium', 'webkit']) {
     try {
       await page.waitForFunction(() => (window as any).workbench.probes.statusCalls.length > 0);
       await page.waitForSelector('.sessions-sidebar-preview.live');
-      expect((await page.locator('.sessions-sidebar-active-count').textContent())?.trim()).toBe('1 active');
+      // The Active section and the activity-bar badge carry the count; the list header has no extra pill.
+      expect(await page.locator('.sessions-sidebar-header').getByText(/\d+ active/).count()).toBe(0);
       // Running sessions come straight after the current one.
       expect(await page.locator('.sessions-sidebar-section-heading').allTextContents()).toEqual(['Current', 'Active', 'Other sessions', 'Archived (1)']);
       expect((await page.locator('.sessions-sidebar-section-active .sessions-sidebar-handle').allTextContents())).toEqual(['@proxmox']);

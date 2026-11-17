@@ -708,7 +708,6 @@ export function WorkbenchSidebar({
       <section id="workbench-view-sessions" class="workbench-view workbench-view-sessions" role="tabpanel" aria-label="Sessions" hidden=${view !== 'sessions'}>
       <div class="sessions-sidebar-header">
         <span class="sessions-sidebar-title">Sessions</span>
-        ${activeCount > 0 && html`<span class="sessions-sidebar-active-count" title=${`${activeCount} active`}>${activeCount} active</span>`}
         <span class="sessions-sidebar-toolbar">
           ${sessionActions?.createRoot && html`<button type="button" class="sessions-sidebar-tool" title="New session" aria-label="New session" onClick=${createRootSession}>${SESSION_ICONS.add}</button>`}
           ${sessionActions?.fork && html`<button type="button" class="sessions-sidebar-tool" title="Fork the current session" aria-label="Fork the current session" onClick=${() => void sessionActions.fork()}>${SESSION_ICONS.fork}</button>`}
