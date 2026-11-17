@@ -695,7 +695,7 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
     padding: 0;
     border: 0;
     background: transparent;
@@ -705,13 +705,19 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
 .system-meters-hud-statusbar .system-meters-row {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
     height: var(--workbench-statusbar-row-height);
 }
 
 .system-meters-hud-statusbar .system-meters-spark {
-    width: 32px;
+    width: 24px;
     height: 10px;
+}
+
+/* Values sit against their chart; a 4ch floor stops neighbours shifting as digits change. */
+.system-meters-hud-statusbar .system-meters-value {
+    min-width: 4ch;
+    text-align: left;
 }
 
 /* Footer details open into the visible area, not below the viewport. */

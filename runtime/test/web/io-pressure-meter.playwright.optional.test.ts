@@ -68,7 +68,7 @@ async function expectChart(page: Page, value = '25%') {
   expect(geometry.left).toBeGreaterThanOrEqual(0);
   expect(geometry.right).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
   expect(geometry.bottom).toBeLessThanOrEqual(900);
-  expect(geometry.width).toBeGreaterThan(70);
+  expect(geometry.width).toBeGreaterThan(50); // compact footer row: label, 24px chart and value
   expect(geometry.height).toBeGreaterThan(9);
   expect(geometry.chart).toBeTruthy();
   expect(geometry.stroke).not.toBe('none');
@@ -110,6 +110,35 @@ for (const engine of ['chromium', 'webkit']) {
       pressureText = null;
       await page.waitForFunction(() => !document.querySelector('.io-pressure'));
       expect(await page.locator('.system-meters-compact-system').innerText()).toContain('CPU');
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  });
+}
+
+for (const engine of ['chromium', 'webkit']) for (const width of [1440, 820]) {
+  browserTest(`${engine} ${width}px: footer meters pack label, chart and value tightly`, async () => {
+    const { page, errors } = await open(engine, width, 'dark');
+    try {
+      if (width === 1440) {
+        await page.locator('.workbench-activity-button[aria-label="Sessions"]').click();
+        await page.waitForSelector('.workbench-statusbar .io-pressure');
+      }
+      const layout = await page.evaluate(() => {
+        const rows = [...document.querySelectorAll('.workbench-statusbar .system-meters-hud-statusbar :is(.system-meters-row, .io-pressure)')] as HTMLElement[];
+        const textBox = (element: Element) => { const range = document.createRange(); range.selectNodeContents(element); return range.getBoundingClientRect(); };
+        return rows.map(row => {
+          const label = textBox(row.querySelector('.system-meters-label')!), spark = row.querySelector('.system-meters-spark')!.getBoundingClientRect(), value = textBox(row.querySelector('.system-meters-value')!);
+          return { name: row.querySelector('.system-meters-label')!.textContent, labelGap: spark.left - label.right, valueGap: value.left - spark.right, spark: spark.width, left: row.getBoundingClientRect().left, right: value.right, top: Math.round(row.getBoundingClientRect().top) };
+        });
+      });
+      expect(layout.length).toBeGreaterThanOrEqual(4);
+      for (const row of layout) {
+        expect(row.labelGap).toBeLessThanOrEqual(4.5);
+        expect(row.valueGap).toBeLessThanOrEqual(4.5);
+        expect(row.spark).toBeLessThanOrEqual(28);
+      }
+      // Neighbouring meters on the same line keep one small gap between them.
+      for (let i = 1; i < layout.length; i++) if (layout[i].top === layout[i - 1].top) expect(layout[i].left - layout[i - 1].right).toBeLessThanOrEqual(10);
       expect(errors).toEqual([]);
     } finally { await page.close(); }
   });
