@@ -745,24 +745,48 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
         display: none;
     }
 
+    /* Two lines on phones: the model summary on one, the meter values on the
+       next. Each line truncates rather than wrapping. */
     .workbench-statusbar .compose-meta-row,
     .workbench-statusbar .compose-model-meta {
         flex: 1 1 auto;
+        min-width: 0;
     }
 
     .workbench-statusbar .compose-model-meta {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         gap: 0 8px;
     }
 
+    .workbench-statusbar .compose-model-meta-subline {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    /* The model name keeps its width (up to half the line); usage truncates. */
     .workbench-statusbar .compose-model-hint {
-        max-width: 100%;
+        flex: 0 0 auto;
+        max-width: 50%;
+    }
+
+    .workbench-statusbar .compose-model-hint-provider,
+    .workbench-statusbar .compose-model-usage-part.is-routed {
+        display: none;
+    }
+
+    /* The routed model was first only when there is no thinking level. */
+    .workbench-statusbar .compose-model-usage-part.is-routed:first-child + .compose-model-usage-part::before {
+        content: none;
     }
 
     .workbench-statusbar .compose-model-usage-hint {
-        max-width: none;
-        white-space: normal;
-        overflow-wrap: anywhere;
+        max-width: 100%;
+    }
+
+    .workbench-statusbar .compose-context-pie {
+        height: var(--workbench-statusbar-row-height);
+        min-height: 0;
     }
 
     .system-meters-hud-statusbar .system-meters-card {
@@ -780,9 +804,27 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
         flex: 0 0 auto;
     }
 
+    /* Meter values, not charts: CPU 5% • RAM 26% • BUF 1.0G • I/O 6.4%. */
     .system-meters-hud-statusbar .system-meters-compact-summary {
-        row-gap: 0;
+        flex-wrap: nowrap;
+        gap: 0 4px;
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
         line-height: var(--workbench-statusbar-row-height);
+    }
+
+    .system-meters-hud-statusbar .system-meters-compact-summary .system-meters-spark {
+        display: none;
+    }
+
+    .system-meters-hud-statusbar .system-meters-compact-summary .system-meters-label {
+        color: inherit;
+        font-weight: inherit;
+    }
+
+    .system-meters-hud-statusbar .system-meters-compact-summary > :is(.system-meters-compact-io, .system-meters-compact-gpu)::before {
+        content: '•';
     }
 }
 

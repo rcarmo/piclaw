@@ -970,6 +970,12 @@
     transform: rotate(-12deg);
 }
 
+/* Usage parts are separate spans so narrow footers can drop some; the
+   separator belongs to the part that follows it. */
+.compose-model-usage-part + .compose-model-usage-part::before {
+    content: ' • ';
+}
+
 .compose-model-usage-hint {
     display: block;
     font-size: 10.5px;
