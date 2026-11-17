@@ -1102,18 +1102,6 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
     text-overflow: ellipsis;
 }
 
-/* Session activity, carried over from the session-dashboard add-on. */
-.sessions-sidebar-active-count {
-    flex-shrink: 0;
-    padding: 1px 6px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--success-color) 16%, transparent);
-    color: var(--success-color);
-    font-size: 11px;
-    font-weight: 600;
-    white-space: nowrap;
-}
-
 .sessions-sidebar-line {
     display: flex;
     align-items: center;
