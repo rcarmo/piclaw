@@ -245,3 +245,10 @@ test('aggregate sample identities and resident gaps survive tracker outages and 
  const missing=tracker.resolve({...base,vram_percent:null,vram_series:[],gpu_busy_series:[20,null],gpu_sample_times:[10000,12000],gpu_resident_series:[25,null]})[0];expect(missing.sample_time_ms).toBe(12000);expect(missing.history[1]).toEqual({timestamp_ms:12000,busy_percent:null,resident_bytes:null});
  const recovered=tracker.resolve({...base,vram_percent:50,vram_used_bytes:50,vram_series:[25,25,50],gpu_busy_series:[20,null,60],gpu_sample_times:[10000,12000,14000],gpu_resident_series:[25,null,50]})[0];expect(recovered.history.map(row=>row.resident_bytes)).toEqual([25,null,50]);expect(recovered.history.map(row=>row.timestamp_ms)).toEqual([10000,12000,14000]);
 });
+
+test('compact byte values move up a unit from 1000 so they stay at three digits', async () => {
+  const { formatBytesCompact } = await import('../../web/src/components/system-meters-hud.js');
+  expect(formatBytesCompact(1001 * 1024 * 1024)).toBe('1.0G');
+  expect(formatBytesCompact(999 * 1024 * 1024)).toBe('999M');
+  expect(formatBytesCompact(118 * 1024 * 1024)).toBe('118M');
+});

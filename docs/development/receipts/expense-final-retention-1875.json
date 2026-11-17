@@ -2528,7 +2528,7 @@
       "deliveryOwner": "#1882",
       "originalSha256": "cf798de30d41b9114ed684033145363088f0fa82695582d96b9213dbe4e9faad",
       "state": "retained-decoupled",
-      "currentSha256": "cf798de30d41b9114ed684033145363088f0fa82695582d96b9213dbe4e9faad",
+      "currentSha256": "0cecd1d1b970d124b0b1731fa7e654d329c26db9f0d459b2d87c50790cb1b97e",
       "currentPurpose": "passive token/cost append, unit/provenance projection, idempotency and optional opaque historical references; no execution allowance",
       "directImportCallers": [
         {
