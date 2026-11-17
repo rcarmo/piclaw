@@ -203,7 +203,7 @@ function ie(O){let{html:d,useState:i,useEffect:T,useCallback:_,registerSettingsP
       </div>
       </section>
       ${v&&d`<div class=${f?"settings-addon-error":"settings-addon-status"} role=${f?"alert":"status"}>${v}</div>`}
-    </div>`}z({id:"delegate",label:"Delegate",icon:d`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7h10v10H7z"/><path d="M4 4h4m8 0h4M4 20h4m8 0h4"/></svg>`,component:H,order:169}),F()}export{ie as registerDelegateSettings};
+    </div>`}z({id:"delegate",label:"Delegate",icon:d`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7h10v10H7z"/><path d="M4 4h4m8 0h4M4 20h4m8 0h4"/></svg>`,component:H,order:30.25}),F()}export{ie as registerDelegateSettings};
 
-//# debugId=324B7B629900FEE664756E2164756E21
+//# debugId=BC9C38CF310C43D364756E2164756E21
 //# sourceMappingURL=delegate-settings.bundle.js.map

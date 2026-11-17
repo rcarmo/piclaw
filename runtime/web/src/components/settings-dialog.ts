@@ -73,7 +73,7 @@ const BUILTIN_SECTION_LOADERS: Record<BuiltinSectionId, () => Promise<SettingsSe
 // reachable; each module loads only when its pane is opened.
 const LAZY_EXTENSION_PANES: Array<{ id: string; label: string; icon: unknown; order: number; load: () => Promise<unknown>; searchable?: boolean; searchPlaceholder?: string; component?: any }> = [
     { id: 'editor', label: 'Editor', icon: iconEditorPane, order: 150, load: () => import('./settings/editor-settings.js') },
-    { id: 'delegate', label: 'Delegate', icon: renderToolIcon(), order: 169, load: () => {
+    { id: 'delegate', label: 'Delegate', icon: renderToolIcon(), order: 30.25, load: () => {
         const url = '/static/classic/dist/delegate-settings.bundle.js' + new URL(import.meta.url).search;
         return import(url).then(module => module.registerDelegateSettings({ html, useState, useEffect, useCallback, registerSettingsPane, notifySettingsPanesChanged }));
     } },
@@ -261,7 +261,7 @@ export function SettingsDialogContent({ onClose = null, variant = 'dialog' }) {
         isCore,
         component: p.component,
     });
-    // Core-owned Editor and Developer panes sit with the built-in sections;
+    // Core-owned Delegate, Editor and Developer panes sit with the built-in sections;
     // only registered add-on panes go below the separator.
     const corePaneSections = LAZY_EXTENSION_PANES.map(lazy => toSection(extensionPanes.find(pane => pane.id === lazy.id) || lazy, true));
     const builtinSections = [...BUILTIN_SECTIONS, ...corePaneSections].sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
