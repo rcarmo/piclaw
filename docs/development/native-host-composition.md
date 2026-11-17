@@ -1,40 +1,37 @@
 # Native host composition
 
-`AgentPool` requires a callable `getDurableSession` lookup for native construction. Its scope is exhaustive: an empty lookup remains native and cannot choose a legacy session factory. Missing lookup rejects construction. Explicit `legacyCapture: true` selects the historical resident-capture/resource composition; it cannot coexist with native lookup. Production backend preparation supplies native ports. Only internal migration inspection requests capture composition through bootstrap.
+Core constructs one public pi-durable application over its owned SQLite database. The SDK owns conversation execution, task and input ordering, context, compaction, results and recovery. Core binds authenticated product input, timeline identity, tools, credentials, channels and workspace resources to that application.
 
-## Native services
+## Construction and services
 
-`service-factory.ts` returns shared attachments, native control/report/model/auth facade, host branch metadata and MCP configuration inspection. It does not construct or return a legacy session manager, session binder, tool factory, turn tracker, prewarm/replay controller or fake lifecycle implementation. No placeholder tool/session/binder methods or fabricated manager counters stand in for native ownership.
+[`prepareDefaultApplicationBackend`](../../runtime/src/runtime/bootstrap.ts) loads the qualified private engine after checking its dependencies. [`createApplicationBootstrapBundle`](../../runtime/durable-engine/src/application-bootstrap.ts) validates the application manifest and branch bindings, borrows the existing runtime owner and opens the SDK storage against the same physical database. The owner is acquired before this path can write.
 
-Root SDK definitions/settings/resources, credential/model runtime/catalogue and host restrictions remain real dependencies. They do not create an AgentSession. Native requests, grants, budgets, tool effects, maintenance and terminal settlement belong to the application backend. Native MCP transport/client/credential closure belongs to `runtime/durable-engine/src/host-mcp.ts`, not the legacy session-pool manager.
+[`createAgentPoolServices`](../../runtime/src/agent-pool/service-factory.ts) requires a callable `getDurableSession`. An empty lookup remains native; a missing lookup rejects construction. There is no legacy session-manager, binder, tool-factory, prewarm controller or idle-eviction timer. Passing the retired `legacyCapture` option to AgentPool is rejected. No resident capture composition remains.
 
-Host branch metadata remains independently useful. Native composition supplies no get/create, refresh or warmup callbacks to its branch service. Unsupported native branch mutations remain rejected at their existing authority boundaries. Database-only root creation/rename/archive/restore retain their owner and exact-binding guards.
+The retained services provide model/authentication controls, attachments, branch metadata and MCP configuration inspection. [`DurableSessionPositionPort`](../../runtime/src/agent-pool/durable-runtime-adapter.ts) is an internal structural boundary for those product operations and committed projections. It does not construct an AgentSession, admit arbitrary prompts or own a second scheduler.
 
-## Lifecycle
+## Source and storage boundaries
 
-The legacy idle eviction/pressure/forced-GC timer runs only with a real explicit capture/resource manager. Native construction installs no such timer. Native shutdown does not call an empty legacy shutdown object; the application backend joins its actual owned resources before releasing the global owner.
+The [application input port](../../runtime/durable-engine/src/host-application-input.ts) validates authenticated product ingress. SDK submissions and Core correlation use the shared [Bun SQLite adapter](../../runtime/durable-engine/src/bun-sqlite.ts); source and ownership checks run inside the write boundary. Retry is restricted to transaction acquisition, never an entered effect or callback.
 
-Startup warmup environment controls, AgentPool warmup methods and branch-endpoint prewarm handling are deleted. Stale HTTP query parameters confer no hydration authority and do not alter the branch response. SDK sessions needed for historical capture must already be selected by the explicit owner; a prewarm queue cannot invent that selection.
+Core's accepted-source, delivery and credential records retain their product purpose. They do not replace the SDK's execution history or task outcomes. Historical records and uncertain outcomes remain readable without recreating a legacy runner or replaying effects. See [operation binding](native-operation-binding.md) and [input retirement](native-input-retirement-review.md).
 
-Native host memory snapshots omit legacy session-manager instrumentation; the web legacy-pool metric projection returns unavailable rather than synthetic zeroes. This does not claim that broader native UI/persistence projection retirement (#1691/#1692) is complete.
+## Lifecycle and MCP
 
-## MCP configuration boundary
+[`createRecoverableRuntimeBackend`](../../runtime/src/runtime/bootstrap.ts) retains one current backend and rebinds product readers only after the qualified recovery sequence. Close joins actual owned resources; uncertain cleanup retains ownership and propagates failure.
 
-Read/preview remains available through the existing owner-only, no-store API. Without a real legacy transition owner, `applyAvailable` is false and `runtime.observedPolicy` is null. Both Apply routes reject with409 before persistence or activation. Empty legacy session snapshots cannot certify native shutdown/reload or report a new native configuration as observed.
+The native [MCP owner](../../runtime/durable-engine/src/host-mcp.ts) uses public `McpClient` with the qualified tools-only transports and a startup configuration snapshot. Configuration or source changes invalidate calls. Cleanup joins transports before releasing the credential lease; a rejected close stays rejected and retains the lease. This path supplies no legacy adapter fallback or generic hot replacement. Owner-only configuration preview remains available; unavailable Apply operations reject before persistence or activation.
 
-The native MCP owner captures startup configuration and invalidates itself on source/policy changes. Replacing that startup-owned context requires an explicit lifecycle operation; this composition change does not add hot replacement, restart the service or infer permission for an operational action. Existing settings panes already consume capability/observed-policy fields, so no parallel state surface is introduced.
+Agent-driven process exit uses [native process controls](../../runtime/durable-engine/src/host-process-controls.ts): a singleton accepted tool operation, committed terminal notice, fresh global idle check and confirmed SDK cleanup. A persisted old receipt cannot authorise another exit.
 
-The historical controller with a real session manager remains separately tested at the explicit capture/resource boundary. Its acknowledged shutdown/reload, quarantine, credential and revision checks are unchanged. Those legacy-controller tests do not certify native live reconfiguration.
+## Offline history and terminal fallback
 
-## Historical capture
+Resident capture, cutover and conversion were removed in [#2017](session-import-retirement-2017.md). The explicit `session-import` CLI reads bounded v3 JSONL input into a fresh, separate SQLite destination. It refuses an existing destination and neither opens a live store nor schedules imported effects. This offline reader does not establish a second runtime mode.
 
-`captureLegacyUpgradeBindings` is a deliberate lazy entry. Native host instances reject it and `assertLegacyCaptureIdle` because they have no resident legacy authority. The explicit capture composition retains synchronous quiescence checks and detaches original source selection/baselines before its first filesystem await. Capture/import preserves aliases, source bytes, selected public SDK heads, provenance, immutable host baseline, queue/owner certificates and revalidation; it does not prompt, retry, rotate files or migrate live state as part of ordinary startup.
+The user retained standalone `pi` as the JSONL-backed terminal fallback. Core execution remains SQLite-only. Future durable terminal work is tracked separately in #2038.
 
-## Evidence
+## Qualification
 
-- Fresh-process native import/construction fences for both bound and empty scopes; explicit capture selection separately reaches its legacy fence.
-- `native-host-services.test.ts`: lifecycle object absence, missing/mixed authority denial, no native GC timer/capture certificate/fake manager metrics, and MCP Apply refusal with unchanged config/DB.
-- Native controls/auth/catalogue and actual MCP config-change/uncertain-close/concurrent-call cases; SDK budget/source admission and owner-retaining shutdown remain separate application tests.
-- `runtime-upgrade-workflow.test.ts`: actual capture→owned upgrade across all22 scenarios, plus retained resident alias/baseline/source race tests.
+Current boundaries have named cases in [`native-control-bootstrap`](../../qualification/native/native-control-bootstrap.test.ts), [`native-core-consumers`](../../qualification/native/native-core-consumers.test.ts), [`single-database`](../../qualification/native/single-database.test.ts), [`host-process-controls`](../../qualification/native/host-process-controls.test.ts), [`host-recovery`](../../qualification/native/host-recovery.test.ts) and [`session-history-import`](../../qualification/native/session-history-import.test.ts).
 
-No dependency upgrade, deployment, restart, credential operation, live schema/history cleanup or repeat migration is included.
+These are source and disposable-fixture qualifications. Live provider/server calls, operational restore, arbitrary external-effect guarantees and real-work latency require their own evidence. The [#1650 final review](epic1650-final-review.md) records the current review and accounting boundaries.

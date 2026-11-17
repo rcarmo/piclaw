@@ -1,0 +1,215 @@
+{
+  "at": "2026-11-17T18:48:29.734Z",
+  "tools": {
+    "bun": "1.4.4",
+    "babelParser": "8.1.2",
+    "babelTypes": "8.1.2"
+  },
+  "baselines": "Last first-parent main before epic creation2026-10-15T21:16:24Z; all changes in each whole range are charged, no sum of child counters.",
+  "metric": "Physical source LoC plus runtime-token-bearing lines/tokens after excluding comments, TypeScript-only declarations/import-export declarations and static literal/enum data; runtime namespace bodies and dynamic enum initialisers remain measured. Runtime tokens are a formatting countercheck, not a behaviour proof. No causal credit is assigned by these measurements.",
+  "repos": [
+    {
+      "name": "core",
+      "base": "09ba20064965ba5f9fa5430e0721cfe106c343d7",
+      "head": "b9dd5ec79e938e3ddeed168472c0d4ac305486c3",
+      "repository": "https://github.com/rcarmo/piclaw"
+    },
+    {
+      "name": "addons",
+      "base": "de92bc95b5b3bb1505beec9617d3b8a5e4fa92d3",
+      "head": "d534f90e8507db71cdb736afdbd0539c8fa4f802",
+      "repository": "https://github.com/rcarmo/piclaw-addons"
+    }
+  ],
+  "totals": [
+    {
+      "repo": "core",
+      "area": "backend",
+      "base": {
+        "files": 749,
+        "physicalLines": 167779,
+        "runtimeTokenLines": 88436,
+        "runtimeTokens": 477051,
+        "implementationFiles": 713
+      },
+      "head": {
+        "files": 666,
+        "physicalLines": 137194,
+        "runtimeTokenLines": 73691,
+        "runtimeTokens": 431609,
+        "implementationFiles": 634
+      },
+      "delta": {
+        "files": -83,
+        "physicalLines": -30585,
+        "runtimeTokenLines": -14745,
+        "runtimeTokens": -45442,
+        "implementationFiles": -79
+      },
+      "physicalDiff": {
+        "added": 25614,
+        "deleted": 56199
+      }
+    },
+    {
+      "repo": "core",
+      "area": "frontend",
+      "base": {
+        "files": 329,
+        "physicalLines": 78830,
+        "runtimeTokenLines": 46062,
+        "runtimeTokens": 239467,
+        "implementationFiles": 317
+      },
+      "head": {
+        "files": 324,
+        "physicalLines": 76774,
+        "runtimeTokenLines": 44448,
+        "runtimeTokens": 224047,
+        "implementationFiles": 312
+      },
+      "delta": {
+        "files": -5,
+        "physicalLines": -2056,
+        "runtimeTokenLines": -1614,
+        "runtimeTokens": -15420,
+        "implementationFiles": -5
+      },
+      "physicalDiff": {
+        "added": 5507,
+        "deleted": 7563
+      }
+    },
+    {
+      "repo": "core",
+      "area": "tooling",
+      "base": {
+        "files": 114,
+        "physicalLines": 24123,
+        "runtimeTokenLines": 12258,
+        "runtimeTokens": 70862,
+        "implementationFiles": 95
+      },
+      "head": {
+        "files": 118,
+        "physicalLines": 23398,
+        "runtimeTokenLines": 11691,
+        "runtimeTokens": 69419,
+        "implementationFiles": 100
+      },
+      "delta": {
+        "files": 4,
+        "physicalLines": -725,
+        "runtimeTokenLines": -567,
+        "runtimeTokens": -1443,
+        "implementationFiles": 5
+      },
+      "physicalDiff": {
+        "added": 1367,
+        "deleted": 2092
+      }
+    },
+    {
+      "repo": "addons",
+      "area": "backend",
+      "base": {
+        "files": 288,
+        "physicalLines": 70727,
+        "runtimeTokenLines": 40144,
+        "runtimeTokens": 208210,
+        "implementationFiles": 274
+      },
+      "head": {
+        "files": 289,
+        "physicalLines": 67259,
+        "runtimeTokenLines": 37626,
+        "runtimeTokens": 202118,
+        "implementationFiles": 275
+      },
+      "delta": {
+        "files": 1,
+        "physicalLines": -3468,
+        "runtimeTokenLines": -2518,
+        "runtimeTokens": -6092,
+        "implementationFiles": 1
+      },
+      "physicalDiff": {
+        "added": 3972,
+        "deleted": 7440
+      }
+    },
+    {
+      "repo": "addons",
+      "area": "frontend",
+      "base": {
+        "files": 56,
+        "physicalLines": 12304,
+        "runtimeTokenLines": 6983,
+        "runtimeTokens": 42183,
+        "implementationFiles": 33
+      },
+      "head": {
+        "files": 55,
+        "physicalLines": 12232,
+        "runtimeTokenLines": 6869,
+        "runtimeTokens": 41795,
+        "implementationFiles": 33
+      },
+      "delta": {
+        "files": -1,
+        "physicalLines": -72,
+        "runtimeTokenLines": -114,
+        "runtimeTokens": -388,
+        "implementationFiles": 0
+      },
+      "physicalDiff": {
+        "added": 514,
+        "deleted": 586
+      }
+    },
+    {
+      "repo": "addons",
+      "area": "tooling",
+      "base": {
+        "files": 22,
+        "physicalLines": 2673,
+        "runtimeTokenLines": 926,
+        "runtimeTokens": 5878,
+        "implementationFiles": 11
+      },
+      "head": {
+        "files": 23,
+        "physicalLines": 2824,
+        "runtimeTokenLines": 1011,
+        "runtimeTokens": 6486,
+        "implementationFiles": 12
+      },
+      "delta": {
+        "files": 1,
+        "physicalLines": 151,
+        "runtimeTokenLines": 85,
+        "runtimeTokens": 608,
+        "implementationFiles": 1
+      },
+      "physicalDiff": {
+        "added": 169,
+        "deleted": 18
+      }
+    }
+  ],
+  "exclusions": {
+    "core:non-source/data": 2587,
+    "core:test/docs/fixture/vendor/generated/template": 3444,
+    "core:declaration-only": 22,
+    "core:test tooling": 31,
+    "core:static/generated/legacy assets; no source reduction credit": 217,
+    "core:generated catalogue": 1,
+    "addons:non-source/data": 5775,
+    "addons:test/docs/fixture/vendor/generated/template": 1354,
+    "addons:declaration-only": 10,
+    "addons:test tooling": 4
+  },
+  "outsidePaths": [],
+  "selfTestsPassed": 12,
+  "scriptSha256": "1cd73473706d782bef0f0050a763cae1693b11b3cba22aef449ffc07e13b5641"
+}

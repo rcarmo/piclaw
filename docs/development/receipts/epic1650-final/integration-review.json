@@ -1,0 +1,686 @@
+{
+  "source": "b9dd5ec79e938e3ddeed168472c0d4ac305486c3",
+  "model": "github-copilot/mai-code-1.1-flash",
+  "category": "analyze",
+  "scope": "Current retained engine integration graph plus central AgentPool/service/runtime/routing/DB identity and direct Core consumers; reviewer-reported read coverage, parent source adjudication and hashes. Not a fresh review of every file in both accounting ranges or live acceptance.",
+  "findings": [
+    {
+      "kind": "documentation",
+      "paths": [
+        "docs/development/native-host-composition.md",
+        "docs/development/native-runner-boundary.md"
+      ],
+      "finding": "Current design docs describe retired capture/runAgent paths; corrected in this delivery."
+    }
+  ],
+  "initialIncomplete": [
+    {
+      "partition": "composition",
+      "result": "No tool output; no signoff. Replaced by two smaller completed source partitions."
+    },
+    {
+      "partition": "storage_tools",
+      "result": "Partial initial source read; remaining files covered by goal_domain/tools_domain."
+    },
+    {
+      "partition": "central AgentPool boundary",
+      "result": "Final audit found missing root/services/routing files; two bounded follow-ups and a rename-finding adjudication covered them. Branch-manager prefix initially omitted, then full file explicitly read in adjudication."
+    }
+  ],
+  "scopes": {
+    "lifecycle": [
+      "runtime/durable-engine/src/host-bindings.ts",
+      "runtime/durable-engine/src/recovery-submission-inspection.ts",
+      "runtime/durable-engine/src/host-runtime.ts",
+      "runtime/durable-engine/src/host-terminal-outcome.ts",
+      "runtime/durable-engine/src/recovery-unit-qualification.ts",
+      "runtime/durable-engine/src/host-schema.ts",
+      "runtime/durable-engine/src/host-recovery.ts",
+      "runtime/durable-engine/src/host-process-controls.ts",
+      "runtime/durable-engine/src/host-process-receipt.ts",
+      "runtime/durable-engine/src/host-controller.ts",
+      "runtime/durable-engine/src/accepted-payload-recovery.ts"
+    ],
+    "providers": [
+      "runtime/durable-engine/src/host-effects.ts",
+      "runtime/durable-engine/src/host-codex-process.ts",
+      "runtime/durable-engine/src/host-model-failure-evidence.ts",
+      "runtime/durable-engine/src/host-codex-artifacts.ts",
+      "runtime/durable-engine/src/host-delegate-progress.ts",
+      "runtime/durable-engine/src/host-delegate-tool.ts",
+      "runtime/durable-engine/src/host-models.ts",
+      "runtime/durable-engine/src/host-tools.ts",
+      "runtime/durable-engine/src/host-codex-model-services.ts",
+      "runtime/durable-engine/src/host-codex-output.ts",
+      "runtime/durable-engine/src/host-model-controls.ts",
+      "runtime/durable-engine/src/host-codex-model-profile.ts",
+      "runtime/durable-engine/src/host-mcp.ts",
+      "runtime/durable-engine/src/host-codex-tool-group.ts",
+      "runtime/durable-engine/src/host-model-context.ts",
+      "runtime/durable-engine/src/host-model-failure.ts",
+      "runtime/durable-engine/src/task-model-boundary-shim.ts",
+      "runtime/durable-engine/src/host-delegate-files.ts",
+      "runtime/durable-engine/src/host-codex-provider-tools.ts",
+      "runtime/src/agent-pool/credential-store.ts"
+    ],
+    "storage_high_risk": [
+      "runtime/durable-engine/src/bun-sqlite.ts",
+      "runtime/durable-engine/src/session-history-import.ts",
+      "runtime/durable-engine/src/host-operation-authority.ts",
+      "runtime/durable-engine/src/generate-host-installed-addon-profiles.ts",
+      "runtime/durable-engine/src/host-builtins.ts",
+      "runtime/durable-engine/src/host-addon-resources.ts",
+      "runtime/durable-engine/src/host-installed-addon-profiles.ts",
+      "runtime/durable-engine/src/host-extension-catalog.ts",
+      "runtime/src/db/connection.ts"
+    ],
+    "composition_runtime": [
+      "runtime/durable-engine/src/host-background-context.ts",
+      "runtime/durable-engine/src/index.ts",
+      "runtime/durable-engine/src/host-application-input.ts",
+      "runtime/durable-engine/src/default-application-runtime.ts",
+      "runtime/durable-engine/src/host-background-policy.ts",
+      "runtime/durable-engine/src/host-message-thread.ts"
+    ],
+    "composition_bootstrap": [
+      "runtime/durable-engine/src/application-bootstrap.ts",
+      "runtime/src/agent-pool/durable-runtime-adapter.ts",
+      "runtime/src/runtime/bootstrap.ts"
+    ],
+    "goal_domain": [
+      "runtime/durable-engine/src/host-goal-config.ts",
+      "runtime/durable-engine/src/host-goal-usage.ts",
+      "runtime/durable-engine/src/host-goal-tools.ts",
+      "runtime/durable-engine/src/host-goal-settlement.ts",
+      "runtime/durable-engine/src/host-goal-progress.ts",
+      "runtime/durable-engine/src/host-scheduled-terminal.ts",
+      "runtime/durable-engine/src/host-dream-tools.ts",
+      "runtime/durable-engine/src/host-goal-prompt.ts",
+      "runtime/durable-engine/src/host-goal-command.ts",
+      "runtime/durable-engine/src/host-goal-input.ts",
+      "runtime/durable-engine/src/host-regrets-bindings.ts",
+      "runtime/durable-engine/src/host-goal-terminal.ts",
+      "runtime/durable-engine/src/host-regrets-tool.ts"
+    ],
+    "tools_domain": [
+      "runtime/durable-engine/src/host-code-review-tool.ts",
+      "runtime/durable-engine/src/host-bash.ts",
+      "runtime/durable-engine/src/host-prompt-cache-audit.ts",
+      "runtime/durable-engine/src/host-remote-peer-tool.ts",
+      "runtime/durable-engine/src/host-office-viewer-tool.ts",
+      "runtime/durable-engine/src/session-history-import-record.ts",
+      "runtime/durable-engine/src/plan-http.ts",
+      "runtime/durable-engine/src/host-managed-instructions.ts",
+      "runtime/durable-engine/src/host-editable-table-tool.ts",
+      "runtime/durable-engine/src/host-remote-peer-service.ts",
+      "runtime/durable-engine/src/host-plan-prompt.ts",
+      "runtime/durable-engine/src/session-tree.ts",
+      "runtime/durable-engine/src/host-addon-prompts.ts",
+      "runtime/durable-engine/src/host-proxmox-tool.ts",
+      "runtime/durable-engine/src/host-instructions.ts",
+      "runtime/durable-engine/src/host-imap-tool.ts",
+      "runtime/durable-engine/src/host-restic-tool.ts",
+      "runtime/durable-engine/src/host-plan-context.ts",
+      "runtime/durable-engine/src/host-drawio-tool.ts",
+      "runtime/durable-engine/src/plan-tool.ts",
+      "runtime/durable-engine/src/legacy-import-schema.ts",
+      "runtime/durable-engine/src/plan-document.ts",
+      "runtime/durable-engine/src/host-fetch.ts",
+      "runtime/durable-engine/src/host-observability.ts",
+      "runtime/durable-engine/src/host-command-policy.ts",
+      "runtime/durable-engine/src/host-portainer-tool.ts",
+      "runtime/src/runtime/durable-engine-dependencies.ts",
+      "runtime/src/extensions/index.ts",
+      "runtime/src/cli.ts"
+    ],
+    "agentpool_core": [
+      "runtime/src/agent-pool.ts",
+      "runtime/src/agent-pool/service-factory.ts",
+      "runtime/src/agent-pool/runtime-facade.ts"
+    ],
+    "agentpool_routing": [
+      "runtime/src/agent-pool/branch-manager.ts",
+      "runtime/src/agent-pool/contracts.ts",
+      "runtime/src/agent-pool/adopted-session.ts",
+      "runtime/src/agent-pool/owned-session-access.ts",
+      "runtime/src/agent-pool/owned-session-target.ts",
+      "runtime/src/agent-pool/mcp-codemode-runtime.ts",
+      "runtime/src/db/native-routing-policy.ts"
+    ],
+    "branch_adjudication_db": [
+      "runtime/src/db/chat-branches.ts",
+      "runtime/src/db/session-handles.ts"
+    ]
+  },
+  "files": [
+    {
+      "path": "runtime/durable-engine/src/accepted-payload-recovery.ts",
+      "sha256": "dc9c302284ae319d0f7df8099b89c52121a0dea5b7566c71143af8c9882f91bd",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/application-bootstrap.ts",
+      "sha256": "3a5948d7b2e4495a26d443561dbab0ec829b422636e4218eb52800cf20d3ec44",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/bun-sqlite.ts",
+      "sha256": "e76cb59fd5875b27732fc4571e280a4830f22f1744a8c5c09d5c26e07d53a4e5",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/default-application-runtime.ts",
+      "sha256": "48a6573066fbf6ed9ef5701891e69232936ce3f5f189ae029305b05ab5e8be9d",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/generate-host-installed-addon-profiles.ts",
+      "sha256": "954a80bc7c98e3024fc7242e1aeabfe75de480e6504429e5d7098f2013c6be9e",
+      "coverage": "generated declaration invariants via generator/catalogue"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-addon-prompts.ts",
+      "sha256": "96db9f8ab6a821cd83df7a843e9026b64d978a3e815f5b7bf014f84dfa6c97cc",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-addon-resources.ts",
+      "sha256": "298fd3955ca643359e2aa1a8da177be55a2b58d36ad3cb7fdae13ec8b9cbbe60",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-application-input.ts",
+      "sha256": "714139b14ea3f270d5c98201aec20f94cd0523d5eb4e958bab7742fb04931d22",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-background-context.ts",
+      "sha256": "7e4ba7a62483c1dbc96c489be9c25ed21d565c3fbf2f101c1140d45e29ae0e23",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-background-policy.ts",
+      "sha256": "bcc97eda4c2b40f91f2ad2b6dfc1de24d3737a1bd114fffed9c8a19e44342042",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-bash.ts",
+      "sha256": "e26496e7b5c6eb5962957f8f166dfd7d2f4d87f3b9c64d3a502148973988a352",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-bindings.ts",
+      "sha256": "53b7940dcf94c7222774f4ef41cf4b92a3dd82603e0ef2b8a772c3d9cabf66fc",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-builtins.ts",
+      "sha256": "ef80b92bbbaaaa48688574d72c813b564d4158deb75adab31b14f311fed7016d",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-code-review-tool.ts",
+      "sha256": "bbd51525bfb597f05ffb412b3f264e1481d15ac520929c623f9c98caa2a67bca",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-codex-artifacts.ts",
+      "sha256": "55b6fd6e8d912e305384a4186636af8c8e67c0929bbe844562ccb3b830c30a0c",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-codex-model-profile.ts",
+      "sha256": "4d9b0f92211c5e71b34b3ecd82a3058f6ab0b2fc92509f22ba7d4ff191321b9f",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-codex-model-services.ts",
+      "sha256": "ab0b4e8746c49846e622b779a988971d92c75fea8140620d70853f1814dc9956",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-codex-output.ts",
+      "sha256": "231747b88427c85680e8d15d1ea40b454fd0474207b670aabc90edffe14f9f0f",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-codex-process.ts",
+      "sha256": "7bb479459c2dc2f8dff273f870f9ca0e874429f571aeb673395690414ef06893",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-codex-provider-tools.ts",
+      "sha256": "ddad261059c0f9097b60a21aff1464c44af3a2555590b9608008a8c33378bce3",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-codex-tool-group.ts",
+      "sha256": "19e829da93a9029c1e4b673d0b7bc8113d387c11d0794d0a8e21ccff11c6a37e",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-command-policy.ts",
+      "sha256": "8093baf523f235dffd42b7986a2a5a45209493b2c5fde57f49c5525dc85a1fc7",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-controller.ts",
+      "sha256": "7b841795e763e3e3bf7f893f87cfe13b9ffd0525b3db551060c270c18ed514e5",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-delegate-files.ts",
+      "sha256": "2b82c203325e61f8424dfbfd207f2fdb542282a09935db9191b8e7976a2b298c",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-delegate-progress.ts",
+      "sha256": "47e5fdd396bf39e1bf88c4f0596f7148a8c03471d9a86e5bd833155d47e60908",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-delegate-tool.ts",
+      "sha256": "20fb74d8ade373cac711798b0ca04b2d170dae8b55805c06d61741109623c00a",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-drawio-tool.ts",
+      "sha256": "021b0acc9a02c761c6d4ed75943908bd9fae34554cf2ac6ae509dd8674812c41",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-dream-tools.ts",
+      "sha256": "39c0a4ceef3b4107113161ba1eb1d5f6e2177318fb153938d43593967579a576",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-editable-table-tool.ts",
+      "sha256": "57997e1fdabb1b93b068a14a87921ca3989a07c91e9fb23267f88a59f2eebb81",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-effects.ts",
+      "sha256": "d033e6b36f45dac45c3a94b151c5ae5459108b0abff71fc96122a339bdbd047d",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-extension-catalog.ts",
+      "sha256": "b23aa8ba7e544ccf876b22d61a9bfd487d062e61b3413221339ee09b8f81c01f",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-fetch.ts",
+      "sha256": "82aa75f695b4e203b349ebce80e28d3f4087e437e6c21a50a69e01455e918698",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-goal-command.ts",
+      "sha256": "78a1fae11c2bd66bb75a4f243a9e43817d0f388816182b556672d7f77c7cc87f",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-goal-config.ts",
+      "sha256": "17b561d0dc51833b99ca439a2cb409a4682cef4bf686017cc7d023c70ad3fd4c",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-goal-input.ts",
+      "sha256": "60b7217f47c882b7fb694660b36cd75d76f6fabb7bdd676a409c3b779486b846",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-goal-progress.ts",
+      "sha256": "178cd15756d2d61a8d3f1e957ed03f86687b795d81a6cc452edf6d0e1432640c",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-goal-prompt.ts",
+      "sha256": "ab059453d6801be8d8469359b354b0d7d8f7fd359822f14f8d7ca13b97fc48e4",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-goal-settlement.ts",
+      "sha256": "e1ba47c9d8f6817ff2a5a3c0b9671c4f48d7076ed05c8cbf323e656f4698d452",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-goal-terminal.ts",
+      "sha256": "284c05a4b7ec2a76e205eaeae8f8e9f0b4eb98a39bbd018adbf32a755b18e7ca",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-goal-tools.ts",
+      "sha256": "eaa5c8a95f70772a087bb5068f31500362b05efadbf8a9bd63df34879f59cb98",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-goal-usage.ts",
+      "sha256": "5188459eda50c68480f29afb3f44113d9e2ea0c295bf162021c61d165ae208dd",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-imap-tool.ts",
+      "sha256": "5a0dd1a2c0bae23ad79fd36d3194d509ce3a50d00f5fcb634cc942176403a103",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-installed-addon-profiles.ts",
+      "sha256": "b0e53f51654a841b8b52b7dff8176006a720074ebf63339c33d298a40788fab4",
+      "coverage": "generated declaration invariants via generator/catalogue"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-instructions.ts",
+      "sha256": "87dc43d61662716e7f86784659dcd921c6de79988bf2e27ea5b561e909caac3a",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-managed-instructions.ts",
+      "sha256": "6211b27e6f6610f9d0d87dadefa8153146a8bb3879fed58ed054c431ddd5f593",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-mcp.ts",
+      "sha256": "bc43b7f29d13ce344676696d49553466e655983ea3fd29bdf4ea82adcfc24c44",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-message-thread.ts",
+      "sha256": "84e6e3f80359cbbe91a7a29449505c2c7cd431b186292b2a824a725d4cf87fd4",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-model-context.ts",
+      "sha256": "8bf956bf905844e62806cffe0139c2c0c7b1010e7c49c9f6f207027d54d6cbac",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-model-controls.ts",
+      "sha256": "4824f950e70faf60bea54e61e799da95b4644074b481bd6c97e49b0a96039171",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-model-failure-evidence.ts",
+      "sha256": "b09e37ae4a2678029149b736b4e1d2d9b7616aa3ecfa5805b58d08b29f00ee56",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-model-failure.ts",
+      "sha256": "625b85e236f0d2827d30521d9b9ec0e5494f8c9603862a72fc989eff567fd09f",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-models.ts",
+      "sha256": "92e8c15ebdac6c8d4e1df588bd2f316fd1b3a42da4020021ffb3131ea7341d8a",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-observability.ts",
+      "sha256": "0b5f0e63379087d46fc4a74164b6d89ee1bd56a9c3aee850af03fca736c2ff5f",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-office-viewer-tool.ts",
+      "sha256": "1cd2df3cf537b39074887563bada83e4f1893343a74388a6ded0831dd197d142",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-operation-authority.ts",
+      "sha256": "13563c252c8acfc5410dd172bcffbdd618c7a7eea1cc01827715a07e50e7bcdb",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-plan-context.ts",
+      "sha256": "2c861195447520c053dd19f7c229691548817a9826bf32c07fe2f4da76dfd86f",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-plan-prompt.ts",
+      "sha256": "e8e2c99cefe05fe83fe7abd8586cbd4a1395f1a064318baf7acda6a426aa63b1",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-portainer-tool.ts",
+      "sha256": "0f3fdd76e6aa368a529c72c91825325c222078bab7e1ef53bef91bbc5bfec4d2",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-process-controls.ts",
+      "sha256": "a1e6a79b016e3fd4268718f6e86f0538b9aabefc20088346c8750f570eea40f2",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-process-receipt.ts",
+      "sha256": "183a626a9be438bbefdc3878506d6565bfccc39d39d9e85eb81b852e9f7a1672",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-prompt-cache-audit.ts",
+      "sha256": "7d11413c09eac5122f0d37741443b3a9b3f80b30a18f9160854c71c8c49ff679",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-proxmox-tool.ts",
+      "sha256": "d5c992565f87dadd9f49b653ec95bef06d85bedca2e1cc315a0c74fda05e9d42",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-recovery.ts",
+      "sha256": "cb564e10c8836ca5ab3fdbe449a54cb12b08a61792cc0a2d743e47bd5fb1cfb9",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-regrets-bindings.ts",
+      "sha256": "60fad6c6ae8a2b6ec94a71fc01ba352f6539651ddc5ce7c7dba255003c05ae2f",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-regrets-tool.ts",
+      "sha256": "9cfd8aa54a023cceb74f9abe68506ca326ee1a147f809469a9c128bd871d15ff",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-remote-peer-service.ts",
+      "sha256": "ee28a4b02950df35f05f716fba3ca8def944dbac5ebf32114c4534749eafae8f",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-remote-peer-tool.ts",
+      "sha256": "82a63165516334479d0ea57627c8e1b755babcb50f2f7b46c826cf7df754667d",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-restic-tool.ts",
+      "sha256": "cc6d45bb1dd9159fe01d6c258c8c7da03536ab74942f9f8d196d09a5fcb05e4a",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-runtime.ts",
+      "sha256": "9620afb3d5a01b8a6fd5494ffa459fb6f714279da80e6debd4865e48ec00c12a",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-scheduled-terminal.ts",
+      "sha256": "b454917c39cafb08e6ee57bebe480149649b994667238474ae318619d80c965f",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-schema.ts",
+      "sha256": "2ee54b25a3a46c555666834d9d0f4c8da09a1ecd0ac0040b0efc3dff9a93b4bd",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-terminal-outcome.ts",
+      "sha256": "813f8cab2d1170918006effef26e6695acbd07859cb23d38a5af7e2900a6bfb1",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/host-tools.ts",
+      "sha256": "e6eebcbd5a78a33eb45fe0e8e4d1772a8f1314728fdd7c17740c46faf620b7bc",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/index.ts",
+      "sha256": "52e6fc5e393d5229487b554f9b95eb9bc1737f3216896d03825012826a9e2ac0",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/legacy-import-schema.ts",
+      "sha256": "d23d16a0599579d0a3673dbacec9bd8cb3c6dcea1b220352f16990c3ca47b92e",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/plan-document.ts",
+      "sha256": "d6f32c906a5b412ada46b20e2fdc57823a59050ff7c9519bab2b88225ac4c817",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/plan-http.ts",
+      "sha256": "897386f03f8cb803f08e89dc6de3a8c8a5f022df00d5676c0aac85600ae9c3f1",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/plan-tool.ts",
+      "sha256": "0a3e43910dcf483c55ce1a729bbc7bb13db33318696a031863931d9f973d6a1f",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/recovery-submission-inspection.ts",
+      "sha256": "d02c72d7d77706d7c92742a11f438b6243973551fd854c50020942943f537585",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/recovery-unit-qualification.ts",
+      "sha256": "9ab02aa24e69a782638a1b30b619d9b75ce690627b8383920bdcc96f7bd095d1",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/session-history-import-record.ts",
+      "sha256": "1f700041dab41538cd8648a5e4c86db891f573954eebbb1dce2fbf7ca5c11481",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/session-history-import.ts",
+      "sha256": "69e277ce2be60abe7efe497abd947d37330b2acf9b59793b1210fec79246253f",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/session-tree.ts",
+      "sha256": "5bab200915d09953f29568662b0e054237a0cac8a72ce3e6dc212bd40d1d36a0",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/durable-engine/src/task-model-boundary-shim.ts",
+      "sha256": "f2d0921cc8e353cf7475f66c5a64543c3b9cdcfe19c45e8b5cef5399003a3f1d",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/agent-pool.ts",
+      "sha256": "d53a0923ce96dd719f5e91a8d209851a64163cde090449ce3022b8f58756c852",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/agent-pool/adopted-session.ts",
+      "sha256": "fb4b2723241534f491666eebf17ee1849784ed0459b978066145b146a80c5260",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/agent-pool/branch-manager.ts",
+      "sha256": "1ed7cc3fbbd609e8c3492863abf34f7dee375621cd891bca732ef794614dd082",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/agent-pool/contracts.ts",
+      "sha256": "50cfc02c34dbd9761d63287b6ceec557507d1a82d5efe54bd5a5be7142945713",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/agent-pool/credential-store.ts",
+      "sha256": "7eb032a1f5a90dffe5bd4cf18247551a1fa09c5cfb61de69c2fe57deef2aa563",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/agent-pool/durable-runtime-adapter.ts",
+      "sha256": "fa480b32cb67114ac5c42b95d6091deb3f83c983e63fecd151c9f33f0ef6b242",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/agent-pool/mcp-codemode-runtime.ts",
+      "sha256": "0c86e27f181304216f06f880ed25a74d34be5bbc71809fe9a50219f308d12cd0",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/agent-pool/owned-session-access.ts",
+      "sha256": "1687a27e21f44fd807d97bd4d69fec41cd8b284e84edb652c70495281a88270a",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/agent-pool/owned-session-target.ts",
+      "sha256": "d000c486528b7d2a5a45dc52b8bc4c93ade3f378e3ac9f48137bd36abce99534",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/agent-pool/runtime-facade.ts",
+      "sha256": "60b142469fd02aeb373109ebf275d08e829c4c6b8d630378e8c96c03b01f2f45",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/agent-pool/service-factory.ts",
+      "sha256": "916acd17ce566c622a7c82214848bfd54c10da0c6f5ebf161cdd0886b8802687",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/cli.ts",
+      "sha256": "a527cd29dd0f13c2ddc8060dc05877f02157985547f3e111030ec1519eab4a5e",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/db/chat-branches.ts",
+      "sha256": "540a7ee8054d9317fafb2cc46002416681ee700a5e80eb9d93f36c2a2a69c78e",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/db/connection.ts",
+      "sha256": "83cb3b3225feee950088a607e1d94a66053dd7bebe80ea61cdb87b74205ad91b",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/db/native-routing-policy.ts",
+      "sha256": "fa047473557512f5f2732badf7b45a86840ebedd1e83f9c930096e988cedc03d",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/db/session-handles.ts",
+      "sha256": "ae1f7d99298bbdd33efe561d5288212cc717539c7192b1848932d6d819a5aa68",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/extensions/index.ts",
+      "sha256": "08b491d3c83eeb439ce3bf5a8dfc310038a78e1330ed5a90c8870c342018b61a",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/runtime/bootstrap.ts",
+      "sha256": "797747505dd5f6dd22c9215e1490718357e6591ddc1ee1a9ef772bec97c34976",
+      "coverage": "reported full source read"
+    },
+    {
+      "path": "runtime/src/runtime/durable-engine-dependencies.ts",
+      "sha256": "66b8b9a83cc8c75e16205adfafafc35a1d500842de46495f8731c408ed6e08a0",
+      "coverage": "reported full source read"
+    }
+  ],
+  "adjudications": [
+    {
+      "finding": "Null-actor branch rename claimed to bypass principal authority",
+      "disposition": "Rejected after parent source review, independent finding adjudication and61existing regression cases/267assertions.",
+      "reason": "Null is an explicit single-user unscheduled metadata allowance. Scheduled/non-single-user contexts cannot take this null branch. Generic metadata rename rejects migrated owner namespaces; actor-required target lookup rejects null; request/transaction/DB binding checks stay in force.",
+      "tests": [
+        "runtime/test/agent-pool/branch-request-admission.test.ts",
+        "runtime/test/agent-pool/branch-executor-retirement.test.ts",
+        "runtime/test/agent-pool/branch-manager.test.ts",
+        "runtime/test/db/native-routing-policy.test.ts",
+        "runtime/test/db/session-handles.test.ts"
+      ]
+    }
+  ]
+}
