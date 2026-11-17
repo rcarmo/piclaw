@@ -11,6 +11,7 @@ import { WorkbenchSidebar } from '../components/workbench-sidebar.js';
 import { WorkbenchStatusBar } from '../components/workbench-statusbar.js';
 import { requestOpenSettingsDialog } from '../components/settings-dialog-events.js';
 import { setEditorPaneCollapsed } from './use-splitters.js';
+import { jumpTimelineToLatest } from './timeline-latest.js';
 
 export interface MainShellRenderOptions {
   [key: string]: any;
@@ -32,67 +33,60 @@ export function extractPostedUserMessageId(response: unknown): number | null {
   return Number.isFinite(id) ? id : null;
 }
 
-export function scrollToPostedTimelineMessage(options: {
+/**
+ * After the user's own submission: show the latest end of the timeline, then
+ * mark the posted row once it renders. The acknowledgement can precede the
+ * realtime row; staying at the latest end lets that row mount and stay in view
+ * whenever it arrives. The row is highlighted in place, never centred, so the
+ * timeline keeps following the reply that comes after it.
+ */
+export function revealSubmittedTimelineMessage(options: {
   id: string | number;
-  scrollToBottom?: () => void;
+  jumpToLatest: () => void;
   getElementById?: (id: string) => HTMLElement | null;
   scheduleRaf?: (callback: () => void) => void;
   scheduleTimeout?: (callback: () => void, delayMs: number) => void;
-  requestReveal?: (id: string | number) => void;
   maxAttempts?: number;
 }): void {
   const {
     id,
-    scrollToBottom,
+    jumpToLatest,
     getElementById = (value) => document.getElementById(value),
     scheduleRaf = (callback) => requestAnimationFrame(callback),
     scheduleTimeout = (callback, delayMs) => { setTimeout(callback, delayMs); },
-    requestReveal = (value) => {
-      if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('piclaw:reveal-timeline-post', { detail: { id: value } }));
-      }
-    },
     maxAttempts = 12,
   } = options;
 
-  const highlight = (el: HTMLElement) => {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.classList.add('post-highlight');
-    scheduleTimeout(() => el.classList.remove('post-highlight'), 2000);
-  };
-
-  const tryScroll = (attemptsRemaining: number) => {
-    // The acknowledgement can precede the post render. Retry the reveal too:
-    // a DOM-only retry cannot mount a row outside the virtual history window.
-    requestReveal(id);
+  jumpToLatest();
+  const tryHighlight = (attemptsRemaining: number) => {
     const element = getElementById(`post-${id}`);
     if (element) {
-      highlight(element);
+      jumpToLatest();
+      element.classList.add('post-highlight');
+      scheduleTimeout(() => element.classList.remove('post-highlight'), 2000);
       return;
     }
-    if (attemptsRemaining <= 0) {
-      scrollToBottom?.();
-      return;
-    }
+    if (attemptsRemaining <= 0) return;
     scheduleRaf(() => {
-      scheduleTimeout(() => tryScroll(attemptsRemaining - 1), 40);
+      scheduleTimeout(() => tryHighlight(attemptsRemaining - 1), 40);
     });
   };
-
-  tryScroll(maxAttempts);
+  tryHighlight(maxAttempts);
 }
 
 export function handleComposePost(options: {
   response?: unknown;
   viewStateRef: { current: Record<string, unknown> | null | undefined };
   scrollToBottom: () => void;
+  jumpToLatest?: () => void;
   scrollPostedMessage?: (id: string | number) => void;
 }): void {
   const {
     response,
     viewStateRef,
     scrollToBottom,
-    scrollPostedMessage = (id) => scrollToPostedTimelineMessage({ id, scrollToBottom }),
+    jumpToLatest = scrollToBottom,
+    scrollPostedMessage = (id) => revealSubmittedTimelineMessage({ id, jumpToLatest }),
   } = options;
 
   const { searchQuery: sq, searchOpen: so } = viewStateRef.current || {};
@@ -104,7 +98,9 @@ export function handleComposePost(options: {
     return;
   }
 
-  scrollToBottom();
+  // Queued follow-ups and commands have no timeline row yet; the sender still
+  // expects to see the latest end of the conversation.
+  jumpToLatest();
 }
 
 export function renderMainShell(options: MainShellRenderOptions): any {
@@ -447,7 +443,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           attachmentPreview=${attachmentPreview}
           onCloseAttachmentPreview=${() => setAttachmentPreview(null)}
           composeProps=${{
-            onPost: (response) => handleComposePost({ response, viewStateRef, scrollToBottom }),
+            onPost: (response) => handleComposePost({ response, viewStateRef, scrollToBottom, jumpToLatest: () => jumpTimelineToLatest(timelineRef.current) }),
             onFocus: handleComposeFocus,
             searchMode: searchOpen,
             searchScope,

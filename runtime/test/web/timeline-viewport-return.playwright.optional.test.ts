@@ -55,3 +55,16 @@ for(const[name,engine]of Object.entries({chromium,webkit}))browserTest(`${name}:
  try{await page.goto(`${server.url}?count=160`);await page.waitForFunction(()=>document.body.dataset.ready==='a');await page.locator('#post-1244').waitFor();await page.evaluate(()=>(window as any).timelineFixture.replace(Array.from({length:20},(_,n)=>({id:1000+n,data:{content:'Historical replacement'}}))));await page.waitForTimeout(100);await page.evaluate(()=>(window as any).timelineFixture.refresh());await page.locator('#post-1244').waitFor();await page.evaluate(()=>window.dispatchEvent(new CustomEvent('piclaw:reveal-timeline-post',{detail:{id:1195}})));await page.locator('#post-1195').waitFor();expect(await page.locator('#post-1195').count()).toBe(1);
  }finally{await browser.close();}
 },15000);
+for(const[name,engine]of Object.entries({chromium,webkit}))for(const[label,response,delay]of[['posted row arriving late','posted',1500],['posted row arriving at once','posted',0],['queued follow-up','queued',0]]as const)browserTest(`${name}: submitting from history reaches the latest input (${label})`,async()=>{
+ latestCount=160;const browser=await engine.launch({headless:true}),page=await browser.newPage({viewport:{width:820,height:900}});await page.route('**/*',route=>new URL(route.request().url()).origin===server.url.origin?route.continue():route.abort());
+ try{await page.goto(`${server.url}?count=160`);await page.waitForFunction(()=>document.body.dataset.ready==='a');await page.waitForTimeout(200);
+ // The reader is well away from the latest row when they send.
+ await page.locator('#fixture-timeline').evaluate((root:HTMLElement)=>{root.scrollTop=-900;});await page.waitForTimeout(150);
+ const id=1160;
+ await page.evaluate(({id,response,delay})=>{const fixture=(window as any).timelineFixture;fixture.submitted(response==='posted'?{user_message:{id}}:{queued:'followup'});
+  setTimeout(()=>fixture.arrive({id,type:'user',data:{content:'Latest input from the composer',timestamp:'2026-09-20T12:00:00Z',sender_name:'Fixture',is_bot_message:false}}),delay);},{id,response,delay});
+ await page.waitForTimeout(delay+400);await page.locator(`#post-${id}`).waitFor({timeout:3000});await page.waitForTimeout(500);
+ const state=await page.locator('#fixture-timeline').evaluate((root:HTMLElement,id)=>{const box=root.getBoundingClientRect(),post=document.getElementById(`post-${id}`)!.getBoundingClientRect();return{scrollTop:root.scrollTop,visible:post.top>=box.top-1&&post.bottom<=box.bottom+1};},id);
+ expect(Math.abs(state.scrollTop)).toBeLessThan(3);expect(state.visible).toBe(true);
+ }finally{await browser.close();}
+},15000);
