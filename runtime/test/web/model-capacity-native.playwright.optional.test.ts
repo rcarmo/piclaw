@@ -36,6 +36,8 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
     const compactions: string[] = [], thinkingCommands: string[] = [];
     let thinkingLevels = ['medium', 'high', 'xhigh', 'max'];
     let catalogueEmpty = false, statusBlocked = false, failConfirmation = false;
+    // Holds the next /agent/models reply (body captured at request time) until released.
+    let holdModels: { release: () => void } | null = null;
     const statusWaiters: (() => void)[] = [], failedConfirmations: string[] = [];
     const pins = { scope: "fixture", revision: 0, models: [] as string[], sessions: [] as string[] };
     page.on("dialog", async dialog => { notices.push(dialog.message()); await dialog.dismiss(); });
@@ -98,7 +100,10 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
         if (statusBlocked) await new Promise<void>(resolve => statusWaiters.push(resolve));
         body = { status: { status: "idle", state: "idle", data: null }, model: modelPayload(), context: contextPayload(), metrics: { cpu_percent: 2, ram_percent: 12 }, agent_name: "Fixture", errors: [] };
       }
-      else if (url.pathname === "/agent/models") body = modelPayload();
+      else if (url.pathname === "/agent/models") {
+        body = modelPayload();
+        if (holdModels) { const held = Promise.withResolvers<void>(); holdModels.release = held.resolve; holdModels = null; await held.promise; }
+      }
       else if (url.pathname === "/agent/context") body = contextPayload();
       else if (url.pathname === "/agent/system-metrics") body = { cpu_percent: 2, ram_percent: 12 };
       else if (url.pathname === "/timeline") body = { posts: [], has_more: false, chat_jid: chatJid, user: { name: "Fixture User" }, agent: { name: "Fixture" } };
@@ -168,6 +173,20 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       thinkingLevels = ['medium', 'high']; await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
       await page.waitForFunction(_skin => document.querySelectorAll('select[aria-label="Thinking level"] option').length === 2, skin);
       expect(await readThinking()).toEqual(thinkingLevels);
+      // A picker read issued before a model change must not overwrite it when it lands later.
+      await page.keyboard.press('Escape');
+      const held = { release: () => {} }; holdModels = held;
+      const staleRead = page.waitForRequest(request => new URL(request.url()).pathname === '/agent/models');
+      await badge.click(); await staleRead;
+      thinkingLevels = ['high'];
+      await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
+      await page.waitForFunction(_skin => document.querySelectorAll('select[aria-label="Thinking level"] option').length === 1, skin);
+      held.release(); // the held reply still carries the earlier two levels
+      await page.waitForResponse(response => new URL(response.url()).pathname === '/agent/models');
+      await page.waitForTimeout(200);
+      expect(await readThinking()).toEqual(['high']);
+      thinkingLevels = ['medium', 'high']; await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
+      await page.waitForFunction(_skin => document.querySelectorAll('select[aria-label="Thinking level"] option').length === 2, skin);
       thinkingLevels = []; await emit('model_changed', { chat_jid: chatJid, ...modelPayload() });
       { await page.waitForFunction(() => !document.querySelector('select[aria-label="Thinking level"]')); }
       expect(thinkingCommands).toEqual([]);

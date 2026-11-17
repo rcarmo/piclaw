@@ -9,10 +9,13 @@ import {
 import { WebTerminalVncHttpService } from "../../src/channels/web/terminal-vnc-http-service.js";
 import { createTempWorkspace } from "../helpers.js";
 
-// Run only inside the disposable network-namespace runner. Never probe the production desktop.
+// Run only inside the disposable network-namespace runner
+// (runtime/scripts/test-vnc-disposable.sh), which starts the desktop on 5901/5902
+// and sets VNC_FIXTURE_OUTPUT_DIR. Never probe the production desktop.
 const enabled =
   process.env.PICLAW_E2E_DISPOSABLE === "1" &&
-  process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === "1";
+  process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === "1" &&
+  Boolean(process.env.VNC_FIXTURE_OUTPUT_DIR);
 const browserTest = enabled ? test : test.skip;
 let browser: Browser;
 let service: VncSessionService;

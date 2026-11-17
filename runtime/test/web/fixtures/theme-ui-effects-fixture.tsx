@@ -59,6 +59,7 @@ if (view === "lightbox") {
       cost_total: 0.01234,
       provider_cost_total: 0.01234,
       cost_provenance: "provider_reported",
+      provider_cost_currency: "USD",
     },
   };
   classicRender(

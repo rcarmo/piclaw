@@ -205,10 +205,10 @@ for (const engine of ["chromium", "webkit"])
             .locator(".compose-model-catalogue-pin")
             .getAttribute("title"),
         ).toBe("Unpin model");
-        await pb.locator(".session-pill").click();
-        await pb
-          .getByRole("button", { name: "Unpin session one", exact: true })
-          .click();
+        // Classic's session picker lives in the composer, which this fixture does
+        // not mount (the Visual session pill went with #1990); unpin through the
+        // same preference API the picker uses, as the pin above does.
+        await pb.evaluate(() => (window as any).pinFixture.session("web:one"));
         await pa.waitForFunction(
           () =>
             !(window as any).pinFixture.state().sessions.includes("web:one"),
@@ -401,6 +401,9 @@ for (const engine of ["chromium", "webkit"])
           document.dispatchEvent(new Event("visibilitychange"));
           await (window as any).pinFixture.refresh();
         });
+        // Overlapping refreshes coalesce: a re-run queued by the reconnect above
+        // can still be in flight, so the failing read may land just after it.
+        for (let i = 0; i < 100 && failedReads <= before; i++) await Bun.sleep(20);
         expect(failedReads).toBeGreaterThan(before);
         expect(await p.evaluate(() => (window as any).pinFixture.state())).toEqual(legacy);
         expect(await p.evaluate(() => (window as any).pinFixture.errors)).toEqual([]);

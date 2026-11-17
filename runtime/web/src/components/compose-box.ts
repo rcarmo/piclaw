@@ -1246,9 +1246,12 @@ export function ComposeBox({
     const [hiddenSessionChatJids, setHiddenSessionChatJids] = useState(() => new Set());
     const deletingSessionChatJidsRef = useRef(new Set());
     const currentChatJidRef = useRef(currentChatJid);
+    // Model state the app last pushed in; a picker read that started earlier is stale.
+    const agentModelsPayloadRef = useRef(agentModelsPayload);
     const modelCommandGenerationRef = useRef(0);
     const modelListGenerationRef = useRef(0);
     currentChatJidRef.current = currentChatJid;
+    agentModelsPayloadRef.current = agentModelsPayload;
     const [modelOptions, setModelOptions] = useState([]);
     useEffect(() => {
         const applyPreferences = () => {
@@ -3109,11 +3112,14 @@ export function ComposeBox({
 
         const targetChatJid = currentChatJid;
         const generation = ++modelListGenerationRef.current;
+        const stateAtRequest = agentModelsPayloadRef.current;
         popupTypeaheadRef.current = { value: '', updatedAt: 0 };
         setLoadingModels(true);
         Promise.resolve(loadModels(targetChatJid))
             .then((payload) => {
                 if (generation !== modelListGenerationRef.current || targetChatJid !== currentChatJidRef.current) return;
+                // A model change arrived while this read was in flight; keep the newer state.
+                if (agentModelsPayloadRef.current !== stateAtRequest) return;
                 setModelOptions(normaliseComposeModelCatalogue(payload, modelPreferenceRuntime));
                 emitModelState(payload);
             })

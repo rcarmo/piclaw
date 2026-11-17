@@ -41,7 +41,7 @@ browserTest('failed older-page admission retries the same cursor rather than per
  }finally{await browser.close();}
 },15000);
 for(const[name,engine]of Object.entries({chromium,webkit}))browserTest(`${name}: reverse scroll anchor remains on the same content after appended rows`,async()=>{
- latestCount=160;const browser=await engine.launch({headless:true}),page=await browser.newPage({viewport:{width:820,height:1180}});await page.route('**/*',route=>new URL(route.request().url()).origin===server.url.origin?route.continue():route.abort());
+ /* Keep the server at the cached 30 rows: this checks the plain (unwindowed) anchor. */latestCount=30;const browser=await engine.launch({headless:true}),page=await browser.newPage({viewport:{width:820,height:1180}});await page.route('**/*',route=>new URL(route.request().url()).origin===server.url.origin?route.continue():route.abort());
  try{await page.goto(`${server.url}?count=30`);await page.waitForFunction(()=>document.body.dataset.ready==='a');await page.waitForTimeout(200);const result=await page.locator('#fixture-timeline').evaluate(async(root:HTMLElement)=>{root.scrollTop=-700;await new Promise(resolve=>requestAnimationFrame(resolve));const before=root.scrollHeight+root.scrollTop;(window as any).timelineFixture.preserve(()=>{const row=document.createElement('div');row.style.height='320px';row.style.flex='0 0 320px';root.querySelector('.timeline-content')!.appendChild(row);});await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return{before,after:root.scrollHeight+root.scrollTop,top:root.scrollTop};});expect(Math.abs(result.after-result.before)).toBeLessThan(2);expect(result.top).toBeLessThan(-700);
  }finally{await browser.close();}
 },15000);
