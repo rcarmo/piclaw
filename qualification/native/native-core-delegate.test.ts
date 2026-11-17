@@ -18,7 +18,7 @@ import { admitAddonLocalRequest } from '../../runtime/src/addons/local-context.j
 import { handleRegisteredAddonConfigApiRequest } from '../../runtime/src/channels/web/handlers/addon-config-api.js';
 
 const applicationTest = isolatedApplicationTest(import.meta.url);
-for (const installedLegacy of [false, true]) for (const approved of [false, true]) applicationTest(`Core Delegate fresh tool and Settings; installedLegacy=${installedLegacy}; approved=${approved}`, async () => {
+for (const installedLegacy of [false, true]) for (const approved of [false, true]) for (const credentialed of [false, true]) applicationTest(`Core Delegate fresh tool and Settings; installedLegacy=${installedLegacy}; approved=${approved}; credentialed=${credentialed}`, async () => {
   const workspace = process.env.PICLAW_WORKSPACE!;
   const marker = join(workspace, 'retired-delegate-evaluated');
   if (installedLegacy) {
@@ -31,23 +31,33 @@ for (const installedLegacy of [false, true]) for (const approved of [false, true
   process.env.PICLAW_DB_IN_MEMORY = '0'; initDatabase(); storeChatMetadata('web:default', new Date().toISOString());
   const root = getDb(), original = root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all();
   const owner = acquireRuntimeLock({ lockPath: join(workspace, 'core-delegate.lock'), strictOwnership: true, disabled: false });
-  const credentials = createTestCredentialStore({});
   const common = { provider: 'fixture', api: 'openai-completions', baseUrl: 'https://fixture.invalid', input: ['text'], reasoning: false, contextWindow: 100000, maxTokens: 1000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
-  const parent = { ...common, id: 'gpt-6.1-sol', name: 'Parent' }, child = { ...common, id: 'gpt-5.4-mini', name: 'Child' };
+  const parent = { ...common, provider: credentialed ? 'fixture-parent' : 'fixture', id: 'gpt-6.1-sol', name: 'Parent' };
+  const child = { ...common, provider: credentialed ? 'fixture-child' : 'fixture', id: 'gpt-5.4-mini', name: 'Child' };
+  const keys: Record<string, string> = { [parent.provider]: 'SYNTHETIC_PARENT_AUTH', [child.provider]: 'SYNTHETIC_CHILD_AUTH', unrelated: 'SYNTHETIC_UNRELATED_AUTH' };
+  const credentials = createTestCredentialStore(credentialed ? Object.fromEntries(Object.entries(keys).map(([id, key]) => [id, { type: 'api_key' as const, key }])) : {});
+  const searchable = [...new Set([parent.provider, child.provider])];
+  const expectedCandidates = approved ? [`${child.provider}/${child.id}`, `${parent.provider}/${parent.id}`].sort() : [];
   const host = await ModelRuntime.create({ credentials, modelsPath: null, modelsStore: { read: async () => undefined, write: async () => {}, delete: async () => {} }, refreshOnCreate: false, allowModelNetwork: false });
   let children = 0; const offered: string[][] = [];
-  const stream = (physical: any, transcript: any) => {
+  const requests: { provider: string; model: string; apiKey: string | undefined; options: string; transcript: string }[] = [];
+  const stream = (physical: any, transcript: any, options?: { apiKey?: string }) => {
+    requests.push({ provider: physical.provider, model: physical.id, apiKey: options?.apiKey, options: JSON.stringify(options ?? {}), transcript: JSON.stringify(transcript) });
     const isChild = physical.id === child.id;
     if (isChild) { children++; expect(JSON.stringify(transcript)).not.toContain('PARENT_PRIVATE'); }
     else offered.push(getCurrentTools(transcript.messages).map(tool => tool.name));
-    const called = transcript.messages.some((message: any) => message.role === 'toolResult');
-    const content = !isChild && !called ? [{ type: 'toolCall', id: 'core-delegate', name: 'delegate', arguments: { prompt: 'CHILD_STANDALONE', model: 'fixture/gpt-5.4-mini', tools: 'read_only' } }]
+    const lastUser = transcript.messages.findLastIndex((message: any) => message.role === 'user');
+    const called = transcript.messages.slice(lastUser).some((message: any) => message.role === 'toolResult');
+    const content = !isChild && !called ? [{ type: 'toolCall', id: 'core-delegate', name: 'delegate', arguments: { prompt: 'CHILD_STANDALONE', model: `${child.provider}/${child.id}`, tools: 'read_only' } }]
       : [{ type: 'text', text: isChild ? 'CHILD_RESULT' : 'PARENT_DONE' }];
     const message: any = { role: 'assistant', api: physical.api, provider: physical.provider, model: physical.id, timestamp: Date.now(), content,
       stopReason: content[0].type === 'toolCall' ? 'toolUse' : 'stop', usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
     const output = createAssistantMessageEventStream(); queueMicrotask(() => { output.push({ type: 'done', reason: message.stopReason, message }); output.end(message); }); return output;
   };
-  host.registerNativeProvider({ id: 'fixture', name: 'Fixture', getModels: () => [parent, child] as any, auth: { apiKey: { name: 'Keyless', resolve: async () => ({ auth: {}, source: 'fixture' }) } }, stream: stream as any, streamSimple: stream as any });
+  for (const id of searchable) host.registerNativeProvider({ id, name: credentialed ? id : 'Fixture', getModels: () => [parent, child].filter(model => model.provider === id) as any,
+    auth: { apiKey: { name: credentialed ? 'Stored synthetic' : 'Keyless', resolve: async ({ credential }) => credentialed
+      ? credential?.key === undefined ? undefined : { auth: { apiKey: credential.key }, source: 'fixture-store' }
+      : { auth: {}, source: 'fixture' } } }, stream: stream as any, streamSimple: stream as any });
   await host.refresh({ allowNetwork: false });
   const services: any = { modelRuntime: host, modelRegistry: { getAvailable: () => [parent, child] } };
   let backend: Awaited<ReturnType<typeof createDefaultApplicationRuntime>> | undefined, pool: AgentPool | undefined, channel: WebChannel | undefined;
@@ -64,12 +74,12 @@ for (const installedLegacy of [false, true]) for (const approved of [false, true
     const initial = await request('models'); expect(initial?.status).toBe(200);
     const snapshot: any = await initial!.json(); expect(snapshot.source).toBe('native'); expect(snapshot.candidates).toEqual([]);
     expect(root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all()).toEqual(original);
-    const denied = await request('config', 'POST', { searchable_providers: ['fixture'] }, false);
+    const denied = await request('config', 'POST', { searchable_providers: searchable }, false);
     expect(denied!.status).toBeGreaterThanOrEqual(400);
     expect(root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all()).toEqual(original);
-    if (approved) expect((await request('config', 'POST', { searchable_providers: ['fixture'], excluded_models: [] }))!.status).toBe(200);
+    if (approved) expect((await request('config', 'POST', { searchable_providers: searchable, excluded_models: [] }))!.status).toBe(200);
     const current: any = await (await request('models'))!.json();
-    expect(current.candidates.map((model: any) => model.id)).toEqual(approved ? ['fixture/gpt-5.4-mini', 'fixture/gpt-6.1-sol'] : []);
+    expect(current.candidates.map((model: any) => model.id)).toEqual(expectedCandidates);
     expect(JSON.stringify(current)).not.toMatch(/api_key|synthetic-only|access_token|Authorization/);
     const response = await handleAgentMessage(channel, new Request('https://fixture/agent/default/message', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: 'PARENT_PRIVATE', mode: 'auto' }) }), '/agent/default/message', 'web:default', 'default');
     expect(response.status).toBe(201);
@@ -78,11 +88,51 @@ for (const installedLegacy of [false, true]) for (const approved of [false, true
     expect(offered[0]).toContain('delegate'); expect(offered).toHaveLength(2); expect(children).toBe(approved ? 1 : 0);
     expect(existsSync(marker)).toBe(false);
     expect(root.query("SELECT value FROM extension_kv WHERE extension_id='delegate' AND key='config' AND scope='global' AND scope_key=''").all()).toHaveLength(approved ? 1 : 0);
+    const firstEntries = JSON.stringify(root.query('SELECT record FROM entries').all());
+    expect(firstEntries.includes('CHILD_RESULT')).toBe(approved);
+    // Assert outside provider callbacks: SDK error conversion must not hide a
+    // swallowed callback assertion or substitute a different credential/model.
+    for (const call of requests) {
+      if (credentialed) {
+        expect(call.apiKey).toBe(keys[call.provider]);
+        for (const [provider, key] of Object.entries(keys)) if (provider !== call.provider) expect(call.options).not.toContain(key);
+      }
+      if (call.model === child.id) expect(call.transcript).not.toContain('PARENT_PRIVATE');
+      for (const key of Object.values(keys)) expect(call.transcript).not.toContain(key);
+    }
+    for (const key of Object.values(keys)) { expect(firstEntries).not.toContain(key); expect(JSON.stringify(current)).not.toContain(key); }
+    if (credentialed && approved) {
+      await host.logout(child.provider); // Synthetic provider/store only; no server revocation.
+      expect(await credentials.read(parent.provider)).toMatchObject({ key: keys[parent.provider] });
+      expect(await credentials.read('unrelated')).toMatchObject({ key: keys.unrelated });
+      expect(await credentials.read(child.provider)).toBeUndefined();
+      const before = requests.length;
+      const response = await handleAgentMessage(channel, new Request('https://fixture/agent/default/message', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: 'PARENT_PRIVATE_SECOND', mode: 'auto' }) }), '/agent/default/message', 'web:default', 'default');
+      expect(response.status).toBe(201);
+      const deadline = Date.now() + 10000;
+      while ((root.query('SELECT count(*) n FROM messages WHERE is_terminal_agent_reply=1').get() as { n: number }).n < 2 && Date.now() < deadline) await Bun.sleep(10);
+      expect((root.query('SELECT count(*) n FROM messages WHERE is_terminal_agent_reply=1').get() as { n: number }).n).toBe(2);
+      expect(children).toBe(1); expect(offered).toHaveLength(4);
+      expect(requests.slice(before).map(call => [call.provider, call.model])).toEqual([[parent.provider, parent.id], [parent.provider, parent.id]]);
+      for (const call of requests.slice(before)) {
+        expect(call.apiKey).toBe(keys[parent.provider]);
+        for (const key of Object.values(keys)) expect(call.transcript).not.toContain(key);
+        for (const [provider, key] of Object.entries(keys)) if (provider !== call.provider) expect(call.options).not.toContain(key);
+      }
+      const afterLogoutEntries = JSON.stringify(root.query('SELECT record FROM entries').all());
+      for (const key of Object.values(keys)) expect(afterLogoutEntries).not.toContain(key);
+    }
+    const beforeReopen = (await (await request('models'))!.json() as any).candidates.map((model: any) => model.id);
     const saved = root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all(), callsBefore = offered.length;
     await backend.close(); await channel.stop(); await pool.shutdown(); await base.queue.shutdown();
     backend = await createDefaultApplicationRuntime(owner, async () => services);
     expect(root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all()).toEqual(saved);
-    expect((await (await request('models'))!.json() as any).candidates.map((model: any) => model.id)).toEqual(approved ? ['fixture/gpt-5.4-mini', 'fixture/gpt-6.1-sol'] : []);
+    expect((await (await request('models'))!.json() as any).candidates.map((model: any) => model.id)).toEqual(credentialed ? beforeReopen : expectedCandidates);
     expect(offered.length).toBe(callsBefore); expect(children).toBe(approved ? 1 : 0); expect(existsSync(marker)).toBe(false);
+    if (credentialed && approved) {
+      expect(await credentials.read(child.provider)).toBeUndefined();
+      expect(await credentials.read(parent.provider)).toMatchObject({ key: keys[parent.provider] });
+      expect(await credentials.read('unrelated')).toMatchObject({ key: keys.unrelated });
+    }
   } finally { await backend?.close(); await channel?.stop(); await base.queue.shutdown(); await pool?.shutdown(); await closeDatabase(); owner.release(); }
 });

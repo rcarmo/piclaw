@@ -303,6 +303,13 @@ export class FileCredentialStore implements PiclawCredentialStore {
         this.data = current;
         return cloneCredential(current[providerId]);
       }
+      // Provider JSON can violate the public Credential type (for example a
+      // malformed successful Radius token response). Reject before any write;
+      // this is not a transient refresh failure and must never replay fn.
+      if (nextCredential.type === "oauth" && (typeof nextCredential.access !== "string"
+        || typeof nextCredential.refresh !== "string" || !Number.isFinite(nextCredential.expires))) {
+        throw new Error("Invalid OAuth credential.");
+      }
       const next = { ...current, [providerId]: cloneCredential(nextCredential) };
       this.writeFileData(next);
       this.data = next;
