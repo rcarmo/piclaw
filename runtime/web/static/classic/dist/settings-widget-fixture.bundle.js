@@ -226,24 +226,32 @@ var Al=Object.defineProperty;var Ml=(e)=>e;function El(e,t){this[e]=Ml.bind(null
 
             <h3>Local models</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${s("check-1")}>Local-lite prompt and tools</label>
-                <input id=${s("check-1")} type="checkbox" checked=${r} onChange=${(B)=>l(Boolean(B.target.checked))} />
+                <label class="settings-dense-check" for=${s("check-1")}>
+                    <input id=${s("check-1")} type="checkbox" checked=${r} onChange=${(B)=>l(Boolean(B.target.checked))} />
+                    <span>Local-lite prompt and tools</span>
+                </label>
                 <span class="settings-hint">Off by default. When enabled, local endpoints use a compact prompt and start with only read and tool discovery. Changes apply on the next turn.</span>
             </div>
             <h3>${o("settings.compaction.autoHeading")}</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${s("check-2")}>${o("settings.compaction.enableAutomatic")}</label>
-                <input id=${s("check-2")} type="checkbox" checked=${i} onChange=${(B)=>a(Boolean(B.target.checked))} />
+                <label class="settings-dense-check" for=${s("check-2")}>
+                    <input id=${s("check-2")} type="checkbox" checked=${i} onChange=${(B)=>a(Boolean(B.target.checked))} />
+                    <span>${o("settings.compaction.enableAutomatic")}</span>
+                </label>
                 <span class="settings-hint">Native compaction uses the active conversation model and SDK thresholds. Changes apply at the next compaction decision; already accepted maintenance is not cancelled.</span>
             </div>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${s("check-3")}>${o("settings.compaction.enableToolResult")}</label>
-                <input id=${s("check-3")} type="checkbox" checked=${g} onChange=${(B)=>d(Boolean(B.target.checked))} />
+                <label class="settings-dense-check" for=${s("check-3")}>
+                    <input id=${s("check-3")} type="checkbox" checked=${g} onChange=${(B)=>d(Boolean(B.target.checked))} />
+                    <span>${o("settings.compaction.enableToolResult")}</span>
+                </label>
                 <span class="settings-hint">${o("settings.compaction.enableToolResultHint")}</span>
             </div>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${s("check-4")}>${o("settings.compaction.semanticSummaries")}</label>
-                <input id=${s("check-4")} type="checkbox" checked=${b} onChange=${(B)=>y(Boolean(B.target.checked))} />
+                <label class="settings-dense-check" for=${s("check-4")}>
+                    <input id=${s("check-4")} type="checkbox" checked=${b} onChange=${(B)=>y(Boolean(B.target.checked))} />
+                    <span>${o("settings.compaction.semanticSummaries")}</span>
+                </label>
                 <span class="settings-hint">${o("settings.compaction.semanticSummariesHint")}</span>
             </div>
             <div class="settings-row settings-dense-row">
@@ -290,8 +298,10 @@ var Al=Object.defineProperty;var Ml=(e)=>e;function El(e,t){this[e]=Ml.bind(null
             </div>
             <h3 style="margin-top:20px">${o("settings.compaction.watchdogHeading")}</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${s("check-5")}>${o("settings.compaction.enableWatchdog")}</label>
-                <input id=${s("check-5")} type="checkbox" checked=${T} onChange=${(B)=>M(Boolean(B.target.checked))} />
+                <label class="settings-dense-check" for=${s("check-5")}>
+                    <input id=${s("check-5")} type="checkbox" checked=${T} onChange=${(B)=>M(Boolean(B.target.checked))} />
+                    <span>${o("settings.compaction.enableWatchdog")}</span>
+                </label>
                 <span class="settings-hint">${o("settings.compaction.enableWatchdogHint")}</span>
             </div>
             <div class="settings-row settings-dense-row">
@@ -565,19 +575,25 @@ var Al=Object.defineProperty;var Ml=(e)=>e;function El(e,t){this[e]=Ml.bind(null
 
             <h3>${o("settings.workspace.access")}</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${s("terminal")}>${o("settings.workspace.enableTerminal")}</label>
-                <input id=${s("terminal")} type="checkbox" checked=${i} onChange=${(K)=>a(K.target.checked)} />
+                <label class="settings-dense-check" for=${s("terminal")}>
+                    <input id=${s("terminal")} type="checkbox" checked=${i} onChange=${(K)=>a(K.target.checked)} />
+                    <span>${o("settings.workspace.enableTerminal")}</span>
+                </label>
             </div>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${s("vnc")}>${o("settings.workspace.allowVnc")}</label>
-                <input id=${s("vnc")} type="checkbox" checked=${r} onChange=${(K)=>l(K.target.checked)} />
+                <label class="settings-dense-check" for=${s("vnc")}>
+                    <input id=${s("vnc")} type="checkbox" checked=${r} onChange=${(K)=>l(K.target.checked)} />
+                    <span>${o("settings.workspace.allowVnc")}</span>
+                </label>
             </div>
             <p class="settings-hint">${o("settings.workspace.accessHint")}</p>
 
             <h3 style="margin-top:20px">Timeline SVG</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${s("svg")}>Sanitize SVG code fences</label>
-                <input id=${s("svg")} type="checkbox" checked=${g} onChange=${(K)=>d(K.target.checked)} />
+                <label class="settings-dense-check" for=${s("svg")}>
+                    <input id=${s("svg")} type="checkbox" checked=${g} onChange=${(K)=>d(K.target.checked)} />
+                    <span>Sanitize SVG code fences</span>
+                </label>
                 <span class="settings-hint">Enabled by default: fenced SVG is rendered as a bounded static image. Disable only for trusted SVG that needs timeline interaction; its source will run in this page.</span>
             </div>
 
@@ -1500,19 +1516,25 @@ ${W}`;if(!window.confirm(K))return;if(L&&!window.confirm(n("settings.tasks.confi
         <div class="settings-section">
             <h3>${t("settings.editor.heading")}</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${e("vim")}>${t("settings.editor.vimMode")}</label>
-                <input id=${e("vim")} type="checkbox" checked=${n}
-                    onChange=${()=>{let c=!n;s(c),ys("piclaw_vim_mode",c)}} />
+                <label class="settings-dense-check" for=${e("vim")}>
+                    <input id=${e("vim")} type="checkbox" checked=${n}
+                        onChange=${()=>{let c=!n;s(c),ys("piclaw_vim_mode",c)}} />
+                    <span>${t("settings.editor.vimMode")}</span>
+                </label>
             </div>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${e("whitespace")}>${t("settings.editor.showWhitespace")}</label>
-                <input id=${e("whitespace")} type="checkbox" checked=${o}
-                    onChange=${()=>{let c=!o;i(c),ys("piclaw_show_whitespace",c)}} />
+                <label class="settings-dense-check" for=${e("whitespace")}>
+                    <input id=${e("whitespace")} type="checkbox" checked=${o}
+                        onChange=${()=>{let c=!o;i(c),ys("piclaw_show_whitespace",c)}} />
+                    <span>${t("settings.editor.showWhitespace")}</span>
+                </label>
             </div>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${e("preview")}>${t("settings.editor.livePreview")}</label>
-                <input id=${e("preview")} type="checkbox" checked=${a}
-                    onChange=${()=>{let c=!a;r(c),ys("piclaw_md_live_preview",c)}} />
+                <label class="settings-dense-check" for=${e("preview")}>
+                    <input id=${e("preview")} type="checkbox" checked=${a}
+                        onChange=${()=>{let c=!a;r(c),ys("piclaw_md_live_preview",c)}} />
+                    <span>${t("settings.editor.livePreview")}</span>
+                </label>
             </div>
             <div class="settings-row settings-dense-row">
                 <label>${t("settings.editor.fontSize")}</label>
@@ -1538,8 +1560,10 @@ ${W}`;if(!window.confirm(K))return;if(L&&!window.confirm(n("settings.tasks.confi
         <div class="settings-section">
             <h3>${t("settings.developer.heading")}</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${e("dev-mode")}>${t("settings.developer.devMode")}</label>
-                <input id=${e("dev-mode")} type="checkbox" checked=${n} onChange=${v} />
+                <label class="settings-dense-check" for=${e("dev-mode")}>
+                    <input id=${e("dev-mode")} type="checkbox" checked=${n} onChange=${v} />
+                    <span>${t("settings.developer.devMode")}</span>
+                </label>
             </div>
 
             <p class="settings-hint settings-local-only-hint">${t("settings.developer.localHint")}</p>
@@ -1573,14 +1597,18 @@ ${W}`;if(!window.confirm(K))return;if(L&&!window.confirm(n("settings.tasks.confi
 
                 <h3 style="margin-top:16px">${t("settings.developer.debug")}</h3>
                 <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                    <label for=${e("log-sse")}>${t("settings.developer.logSse")}</label>
-                    <input id=${e("log-sse")} type="checkbox" checked=${d}
-                        onChange=${()=>{let f=!d;b(f),mi("piclaw_debug_sse",f)}} />
+                    <label class="settings-dense-check" for=${e("log-sse")}>
+                        <input id=${e("log-sse")} type="checkbox" checked=${d}
+                            onChange=${()=>{let f=!d;b(f),mi("piclaw_debug_sse",f)}} />
+                        <span>${t("settings.developer.logSse")}</span>
+                    </label>
                 </div>
                 <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                    <label for=${e("log-tools")}>${t("settings.developer.logToolCalls")}</label>
-                    <input id=${e("log-tools")} type="checkbox" checked=${y}
-                        onChange=${()=>{let f=!y;c(f),mi("piclaw_debug_tool_calls",f)}} />
+                    <label class="settings-dense-check" for=${e("log-tools")}>
+                        <input id=${e("log-tools")} type="checkbox" checked=${y}
+                            onChange=${()=>{let f=!y;c(f),mi("piclaw_debug_tool_calls",f)}} />
+                        <span>${t("settings.developer.logToolCalls")}</span>
+                    </label>
                 </div>
                 <p class="settings-hint">${t("settings.developer.debugHint")}</p>
             `}
@@ -1685,5 +1713,5 @@ ${W}`;if(!window.confirm(K))return;if(L&&!window.confirm(n("settings.tasks.confi
     </div>
   `}function Xp(){zp(),Gp(),Qp();let e=new URLSearchParams(window.location.search);Tl(e.get("section")||"general");let t=document.getElementById("settings-widget-fixture-root")||document.body.appendChild(document.createElement("div"));t.id="settings-widget-fixture-root",At(u`<${Yp} />`,t),window.piclawWidget?.ready?.({title:"Settings fixture",mockMode:Yt})}Xp();
 
-//# debugId=E5CEB2F9E7AAF0A464756E2164756E21
+//# debugId=0E491BAE3103550064756E2164756E21
 //# sourceMappingURL=settings-widget-fixture.bundle.js.map

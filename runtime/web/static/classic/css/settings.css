@@ -194,7 +194,8 @@
     --settings-addon-control-accent: var(--accent-color);
     --settings-addon-label-size: 0.88em;
     --settings-addon-help-size: max(12px, 0.82em);
-    --settings-addon-button-min-height: var(--settings-control-height, 30px);
+    --settings-addon-button-min-height: var(--settings-button-height, 26px);
+    --settings-addon-button-padding: 2px 14px;
     --settings-addon-button-min-width: 70px;
     --settings-addon-button-font-size: var(--settings-text-sm, 13px);
     --settings-addon-button-font-weight: normal;
@@ -281,9 +282,9 @@
 }
 
 .settings-number-step-btn {
-    min-width: 32px;
-    width: 32px;
-    height: 32px;
+    min-width: var(--settings-control-height, 30px);
+    width: var(--settings-control-height, 30px);
+    height: var(--settings-control-height, 30px);
     padding: 0;
     display: inline-flex;
     align-items: center;
@@ -309,7 +310,7 @@
 }
 
 .settings-row button:not(.settings-number-step-btn) {
-    padding: 6px 14px;
+    padding: 2px 14px;
     border: 1px solid var(--border-color, rgba(128,128,128,0.3));
     border-radius: 6px;
     background: var(--bg-hover, var(--bg-secondary));
@@ -379,6 +380,23 @@
     grid-template-columns: minmax(120px, var(--settings-dense-label-width)) minmax(0, var(--settings-dense-control-width)) minmax(0, 1fr);
 }
 
+/* Checkbox rows read "[x] Description": the box leads its label across the
+ * label and control columns; help stays in the help column. */
+.settings-dense-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    cursor: pointer;
+}
+.settings-dense-check > input[type="checkbox"] {
+    flex: 0 0 auto;
+    margin: 0;
+}
+@media (min-width: 641px) {
+    .settings-dialog:not(.settings-dialog-narrow) .settings-dense-row-checkbox > .settings-dense-check { grid-column: 1 / 3; }
+}
+
 .settings-dense-row-compound {
     align-items: start;
 }
@@ -404,8 +422,8 @@
     flex: 1 1 320px;
     min-width: 0;
     max-width: 100%;
-    min-height: 32px;
-    padding: 6px 10px;
+    height: var(--settings-control-height, 30px);
+    padding: 0 10px;
     border: 1px solid var(--border-color, rgba(128,128,128,0.3));
     border-radius: 6px;
     background: var(--bg-primary);
@@ -428,11 +446,6 @@
     .compaction-model-picker button:not(.settings-number-step-btn) {
         width: 100%;
         max-width: 100%;
-    }
-
-    .compaction-model-picker select,
-    .compaction-model-picker button:not(.settings-number-step-btn) {
-        min-height: 44px;
     }
 
     .compaction-model-picker button:not(.settings-number-step-btn) {
@@ -950,6 +963,7 @@
 .settings-env-add {
     display: grid;
     grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr) auto;
+    align-items: center;
     gap: 8px;
     flex: 1;
     min-width: 0;
@@ -1885,8 +1899,8 @@
 /* ── Avatar field (inline) ──────────────────────────────────── */
 
 .settings-avatar-inline {
-    width: 32px;
-    height: 32px;
+    width: var(--settings-control-height, 30px);
+    height: var(--settings-control-height, 30px);
     border-radius: 8px;
     border: 1px solid var(--border-color, rgba(128,128,128,0.3));
     overflow: hidden;
@@ -2108,8 +2122,8 @@
 }
 
 .model-catalogue-settings .settings-btn {
-    min-height: 34px;
-    padding: 6px 10px;
+    min-height: var(--settings-button-height, 26px);
+    padding: 2px 10px;
     border: 1px solid var(--border-color, rgba(128,128,128,0.3));
     border-radius: 7px;
     background: var(--bg-secondary, rgba(128,128,128,0.1));
@@ -2431,10 +2445,6 @@
     .model-catalogue-settings__header,
     .model-catalogue-settings__scope { align-items: stretch; flex-direction: column; }
     .model-catalogue-settings__filters { grid-template-columns: 1fr; }
-    .model-catalogue-settings__filter-toggle,
-    .model-catalogue-settings__filters select,
-    .model-catalogue-settings .settings-btn,
-    .model-catalogue-settings__thinking select { min-height: 44px; }
     .model-catalogue-settings__facts { grid-template-columns: 1fr; }
     .model-catalogue-settings__workspace { display: block; }
     .model-catalogue-settings__enabled-models { grid-template-columns: 1fr; }
@@ -2474,7 +2484,6 @@
 }
 
 @media (max-width: 640px) {
-    .settings-header-filter { min-height: 44px; }
     .model-catalogue-settings { height: 100%; min-height: 0; overflow: hidden; }
 }
 
@@ -2812,8 +2821,6 @@
 }
 @media (max-width: 640px) {
     .settings-keychain-action-group { justify-content: flex-start; }
-    .settings-keychain-action-group > button,
-    .settings-keychain-confirm button { min-width: 44px; min-height: 44px; }
 }
 .settings-keychain-delete-btn {
     border: none;
@@ -3277,13 +3284,15 @@
 .settings-dialog {
     --settings-text-xs: 12px;
     --settings-text-sm: 13px;
+    /* Fields never exceed the sidebar "Search sessions" field; buttons sit below them. */
     --settings-control-height: 30px;
+    --settings-button-height: 26px;
 }
-.settings-dialog-narrow { --settings-control-height: 44px; }
+.settings-dialog-narrow { --settings-control-height: 32px; --settings-button-height: 28px; }
 
 :where(.settings-content:not(.settings-addon-pane)) :where(button:not([role="tab"]):not([role="switch"]):not([data-settings-button="unstyled"]):not(.settings-dialog-close):not(.settings-nav-item)) {
-    min-height: var(--settings-control-height);
-    padding: 4px 12px;
+    min-height: var(--settings-button-height);
+    padding: 2px 10px;
     border: 1px solid var(--border-color, rgba(128,128,128,0.3));
     border-radius: 6px;
     background: var(--bg-secondary, var(--bg-primary));
@@ -3301,7 +3310,7 @@
     cursor: not-allowed;
 }
 :where(.settings-content:not(.settings-addon-pane)) :where(select) {
-    min-height: var(--settings-control-height);
+    height: var(--settings-control-height);
     padding: 4px 8px;
     border: 1px solid var(--border-color, rgba(128,128,128,0.3));
     border-radius: 6px;
@@ -3310,11 +3319,22 @@
     font: inherit;
     font-size: var(--settings-text-sm);
 }
-.settings-dialog-narrow :is(.settings-addon-btn, .settings-btn, .settings-secondary-btn, .settings-keychain-add-btn, .settings-keychain-save-btn, .settings-number-step-btn, .settings-header-filter),
-.settings-dialog-narrow .settings-content :is(input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="password"], input[type="url"], select) {
-    min-height: 44px;
+/* One height for every single-line field and one for action buttons, whatever
+ * pane-level rule set before. Card-like list buttons keep their own size. */
+.settings-dialog :is(.settings-content, .settings-dialog-header) :is(input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="password"], input[type="url"], input[type="email"], select) {
+    box-sizing: border-box;
+    height: var(--settings-control-height);
+    min-height: var(--settings-control-height);
 }
-.settings-dialog-narrow .settings-number-step-btn { min-width: 44px; }
+.settings-dialog .settings-content button:not(.mcp-server-card):not(.settings-task-row):not([role="tab"]):not([role="switch"]):not(.settings-number-step-btn):not(.settings-avatar-inline) {
+    min-height: var(--settings-button-height);
+    padding-block: 2px;
+    line-height: 1.2;
+}
+.settings-dialog .settings-content :is(.settings-keychain-action-group > button, .settings-keychain-confirm button) {
+    min-width: var(--settings-button-height);
+    min-height: var(--settings-button-height);
+}
 
 .settings-dialog :is(.passkey-settings__meta dt, .passkey-settings__help, .passkey-settings__badge, .mcp-server-meta, .mcp-server-card-meta, .settings-task-row-main span, .mcp-current, .mcp-badge, .mcp-server-card small, .model-catalogue-settings__columns, .model-catalogue-settings__row, .model-catalogue-settings__row-mobile-meta, .model-catalogue-settings__provider-heading, .model-catalogue-settings__group-heading, .model-catalogue-settings__facts dd, .settings-tool-summary, .settings-hint, .settings-tool-kind, .settings-tool-source, .settings-tool-row-header, .settings-tag, .settings-task-pill, .settings-addon-version, .settings-keychain-type-badge, .settings-keychain-date, .settings-keychain-reveal-label, .settings-shortcut-default, .settings-task-row-times, .settings-provider-id, .settings-tint-hex, .language-switcher-label, .settings-theme-table th, .settings-keychain-table th) {
     font-size: max(var(--settings-text-xs), 0.84em);
@@ -3323,13 +3343,10 @@
     font-size: max(var(--settings-text-sm), 0.88em);
 }
 .settings-dialog .settings-content :is(code, small, dt, kbd) { font-size: max(var(--settings-text-xs), 0.9em); }
-.settings-header-filter,
-.settings-output-pad-number { min-height: var(--settings-control-height); }
-.settings-dialog-narrow :is(.settings-dialog-close, .settings-nav-item, .model-catalogue-settings__pin) { min-width: 44px; min-height: 44px; }
-.settings-dialog-narrow .settings-content summary { min-height: 44px; }
-.settings-dialog-narrow .settings-content input[type="color"] { min-height: 44px; width: 44px; height: 44px; }
-.settings-content summary { min-height: var(--settings-control-height); padding-block: 6px; box-sizing: border-box; }
-.settings-dialog-narrow .settings-content :is(input[type="checkbox"], input[type="radio"]) { width: 22px; height: 22px; }
+.settings-dialog-narrow :is(.settings-dialog-close, .settings-nav-item) { min-width: 36px; min-height: 36px; }
+.settings-dialog-narrow .settings-content input[type="color"] { min-height: 0; width: var(--settings-control-height); height: var(--settings-control-height); }
+.settings-content summary { min-height: var(--settings-button-height); padding-block: 4px; box-sizing: border-box; }
+.settings-dialog-narrow .settings-content :is(input[type="checkbox"], input[type="radio"]) { width: 18px; height: 18px; }
 
 /* One block alert for load and action failures across panes. Inline field
  * errors stay as red text next to their control. */
@@ -3361,7 +3378,7 @@
 }
 .settings-identity-field input[type="text"] { min-width: 0; }
 .settings-dialog-narrow .settings-identity-field { max-width: none; }
-.settings-dialog-narrow .settings-avatar-inline { width: 44px; height: 44px; }
+.settings-dialog-narrow .settings-avatar-inline { width: var(--settings-control-height); height: var(--settings-control-height); }
 .settings-row button.settings-avatar-inline { min-width: 0; padding: 0; font: inherit; }
 button.settings-avatar-inline:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
 

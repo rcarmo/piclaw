@@ -113,7 +113,7 @@ for (const engine of ['chromium', 'webkit']) for (const skin of ['classic']) for
                 expect(await page.getByLabel('Engine to preview').inputValue()).toBe('native');
                 const layout = await page.evaluate(() => ({ viewport: innerWidth, scroll: document.documentElement.scrollWidth, controls: [...document.querySelectorAll('button,select')].map(node => { const r = node.getBoundingClientRect(); return { left: r.left, right: r.right, height: r.height }; }) }));
                 expect(layout.scroll).toBeLessThanOrEqual(width);
-                for (const control of layout.controls) { expect(control.left).toBeGreaterThanOrEqual(0); expect(control.right).toBeLessThanOrEqual(width); expect(control.height).toBeGreaterThanOrEqual(width < 600 ? 44 : 36); }
+                for (const control of layout.controls) { expect(control.left).toBeGreaterThanOrEqual(0); expect(control.right).toBeLessThanOrEqual(width); expect(control.height).toBeGreaterThanOrEqual(26); }
                 holdRefresh = true; held = false;
                 await page.getByRole('button', { name: 'Refresh MCP status' }).click();
                 await page.getByText('Loading MCP settings…', { exact: true }).waitFor();

@@ -88,9 +88,9 @@ for (const width of [1366, 820, 520, 390]) {
         background: metrics.reference?.background,
         border: metrics.reference?.border,
       });
-      // Narrow dialogs give every Settings text control a 44px touch target; the
-      // off-dialog reference row cannot reflect that, so check it directly.
-      const expectedHeight = width <= 720 ? 44 : (metrics.reference?.height || 0);
+      // Settings fields share one compact height (32px in narrow dialogs, 30px
+      // otherwise); the off-dialog reference row cannot reflect it, so check it directly.
+      const expectedHeight = width <= 720 ? 32 : 30;
       expect(Math.abs((metrics.input?.height || 0) - expectedHeight)).toBeLessThanOrEqual(2);
     } finally { await page.close(); }
   });

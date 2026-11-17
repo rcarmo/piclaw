@@ -34,8 +34,10 @@ function DeveloperSettingsSection() {
         <div class="settings-section">
             <h3>${t('settings.developer.heading')}</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${fieldId('dev-mode')}>${t('settings.developer.devMode')}</label>
-                <input id=${fieldId('dev-mode')} type="checkbox" checked=${devMode} onChange=${toggleDev} />
+                <label class="settings-dense-check" for=${fieldId('dev-mode')}>
+                    <input id=${fieldId('dev-mode')} type="checkbox" checked=${devMode} onChange=${toggleDev} />
+                    <span>${t('settings.developer.devMode')}</span>
+                </label>
             </div>
 
             <p class="settings-hint settings-local-only-hint">${t('settings.developer.localHint')}</p>
@@ -69,14 +71,18 @@ function DeveloperSettingsSection() {
 
                 <h3 style="margin-top:16px">${t('settings.developer.debug')}</h3>
                 <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                    <label for=${fieldId('log-sse')}>${t('settings.developer.logSse')}</label>
-                    <input id=${fieldId('log-sse')} type="checkbox" checked=${debugSse}
-                        onChange=${() => { const v = !debugSse; setDebugSse(v); setBool('piclaw_debug_sse', v); }} />
+                    <label class="settings-dense-check" for=${fieldId('log-sse')}>
+                        <input id=${fieldId('log-sse')} type="checkbox" checked=${debugSse}
+                            onChange=${() => { const v = !debugSse; setDebugSse(v); setBool('piclaw_debug_sse', v); }} />
+                        <span>${t('settings.developer.logSse')}</span>
+                    </label>
                 </div>
                 <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                    <label for=${fieldId('log-tools')}>${t('settings.developer.logToolCalls')}</label>
-                    <input id=${fieldId('log-tools')} type="checkbox" checked=${debugToolCalls}
-                        onChange=${() => { const v = !debugToolCalls; setDebugToolCalls(v); setBool('piclaw_debug_tool_calls', v); }} />
+                    <label class="settings-dense-check" for=${fieldId('log-tools')}>
+                        <input id=${fieldId('log-tools')} type="checkbox" checked=${debugToolCalls}
+                            onChange=${() => { const v = !debugToolCalls; setDebugToolCalls(v); setBool('piclaw_debug_tool_calls', v); }} />
+                        <span>${t('settings.developer.logToolCalls')}</span>
+                    </label>
                 </div>
                 <p class="settings-hint">${t('settings.developer.debugHint')}</p>
             `}
