@@ -40,6 +40,34 @@ export async function openSettings(engine: string, width: number, section: strin
 }
 
 for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: Models can update the provider catalogues like pi update --models`, async () => {
+    const { page, errors } = await openSettings(engine, 1280, 'models');
+    try {
+      const requests: Array<{ method: string; body: string | null }> = [];
+      let release!: () => void;
+      const held = new Promise<void>(resolve => { release = resolve; });
+      await page.route('**/agent/models/refresh', async route => {
+        requests.push({ method: route.request().method(), body: route.request().postData() });
+        await held;
+        await route.fulfill({ json: { status: 'partial', skipped: [{ provider: 'github-copilot', message: 'Token expired' }], failed: [{ provider: 'openrouter', message: 'HTTP 503' }] } });
+      });
+      const update = page.getByRole('button', { name: 'Update catalogues', exact: true });
+      await update.click();
+      await page.getByRole('button', { name: 'Updating…', exact: true }).waitFor();
+      expect(await page.getByRole('button', { name: 'Updating…', exact: true }).isDisabled()).toBe(true);
+      release();
+      const notice = page.locator('.model-catalogue-settings__notice.warning');
+      await notice.waitFor();
+      const text = await notice.innerText();
+      expect(text).toContain('Model catalogues updated with problems.');
+      expect(text).toContain('openrouter: HTTP 503');
+      expect(text).toContain('github-copilot (log in again)');
+      expect(requests).toEqual([{ method: 'POST', body: null }]);
+      expect(await update.isEnabled()).toBe(true);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  });
+
   browserTest(`${engine}: Settings no longer offers a Recordings pane`, async () => {
     const { page, errors } = await openSettings(engine, 1280, 'general');
     try {
