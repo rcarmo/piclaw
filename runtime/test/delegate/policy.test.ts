@@ -30,11 +30,14 @@ for (const [id, tier, rule] of [
   ['gpt_6.1_sol', 3, 'gpt-6-1-sol'],
   ['openai/gpt-6-astra-pro:batch', 4, 'gpt-6-astra-pro'],
   ['mai-code-1.1-flash', 2, 'mai-code-flash'],
+  ['mai-code-2-flash', 2, 'mai-code-flash'],
+  ['mai-code-2', 3, 'mai-code-2'],
+  ['MAI.Code_2', 3, 'mai-code-2'],
 ] as const) test(`ordered model classification: ${id}`, () => {
   expect(classifyModel(model('fixture', id))).toMatchObject({ status: 'classified', tier, rule, confidence: 'exact-policy' });
 });
 
-for (const id of ['gpt-6.1-sol-unknown', 'gpt-6-unannounced', 'unknown-model']) test(`unclassified models stay denied: ${id}`, () => {
+for (const id of ['gpt-6.1-sol-unknown', 'gpt-6-unannounced', 'unknown-model', 'mai-code-2-pro', 'mai-code-20', 'mai-code-3']) test(`unclassified models stay denied: ${id}`, () => {
   expect(classifyModel(model('github-copilot', id))).toMatchObject({ status: 'unclassified', tier: null, rule: null });
   expect(buildModelCandidates([model('github-copilot', id)], { searchable_providers: ['github-copilot'], excluded_providers: [], excluded_models: [] })).toEqual([]);
 });
@@ -48,6 +51,19 @@ test('approved candidates keep metadata, deduplicate exact IDs and sort determin
   expect(candidates[1]).toMatchObject({ supportsImages: true, reasoning: false, contextWindow: 100000, maxOutputTokens: 8192 });
   expect(candidates[0]).toMatchObject({ supportsImages: null, reasoning: null, contextWindow: null, maxOutputTokens: null });
   expect(JSON.stringify({ input, config })).toBe(before);
+});
+
+test('MAI Code 2 variants require approval and preserve existing exclusions and Flash order', () => {
+  const mai = ['mai-code-2', 'mai-code-2-flash', 'mai-code-1.1-flash'].map(id => model('github-copilot', id));
+  const config = { searchable_providers: ['github-copilot'], excluded_providers: ['openai-codex'], excluded_models: ['*grok*', 'gpt-6.1'] };
+  const before = JSON.stringify({ mai, config });
+  expect(buildModelCandidates(mai)).toEqual([]);
+  expect(buildModelCandidates(mai, config).map(candidate => [candidate.modelId, candidate.tier])).toEqual([
+    ['mai-code-1.1-flash', 2], ['mai-code-2-flash', 2], ['mai-code-2', 3],
+  ]);
+  expect(buildModelCandidates(mai, { ...config, excluded_providers: ['github-copilot'] })).toEqual([]);
+  expect(buildModelCandidates(mai, { ...config, excluded_models: ['mai-code-2'] }).map(candidate => candidate.modelId)).toEqual(['mai-code-1.1-flash']);
+  expect(JSON.stringify({ mai, config })).toBe(before);
 });
 
 test('configured provider order breaks same-model ties without changing tier order', () => {
