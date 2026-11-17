@@ -20,12 +20,12 @@ async function createStore(initial: Record<string, Credential> = {}) {
 }
 
 // Exercise Pi's actual refresh callback/error wrapper without any provider I/O.
-function oauthModels(store: FileCredentialStore, refresh: OAuthAuth["refresh"]) {
+function oauthModels(store: FileCredentialStore, refresh: OAuthAuth["refresh"], login: OAuthAuth["login"] = async () => { throw new Error("login must not run"); }) {
   const models = createModels({ credentials: store });
   models.setProvider({
     id: "oauth", name: "Synthetic OAuth", getModels: () => [],
     auth: { oauth: {
-      name: "Synthetic OAuth", login: async () => { throw new Error("login must not run"); },
+      name: "Synthetic OAuth", login,
       refresh, toAuth: async (credential) => ({ apiKey: credential.access }),
     } },
     stream: () => { throw new Error("stream must not run"); },
@@ -440,6 +440,63 @@ describe("FileCredentialStore", () => {
     await other.modify("b", async () => ({ type: "api_key", key: "b" }));
     await store.delete("a");
     expect(JSON.parse(readFileSync(authPath, "utf8"))).toEqual({ b: { type: "api_key", key: "b" } });
+  });
+
+  // Public Radius1.5.2 can return missing fields/NaN after an HTTP200 token
+  // response. Type declarations do not validate that external JSON at runtime.
+  for (const [label, patch] of [
+    ["missing access", { access: undefined }],
+    ["missing refresh", { refresh: undefined }],
+    ["missing expiry", { expires: undefined }],
+    ["null expiry", { expires: null }],
+    ["string expiry", { expires: "123" }],
+    ["NaN expiry", { expires: NaN }],
+    ["infinite expiry", { expires: Infinity }],
+  ] as const) test(`rejects malformed OAuth ${label} before replacing stored credentials`, async () => {
+    const unrelated = { type: "api_key" as const, key: "SYNTHETIC_UNRELATED" };
+    const { authPath } = await createStore({ oauth: expiredOAuth, unrelated });
+    let calls = 0, sleeps = 0;
+    const store = new FileCredentialStore(authPath, { sleep: async () => { sleeps++; } });
+    const bytes = readFileSync(authPath), inode = statSync(authPath).ino;
+    await expect(store.modify("oauth", async () => {
+      calls++;
+      return { ...expiredOAuth, ...patch } as Credential;
+    })).rejects.toThrow("Invalid OAuth credential");
+    expect(calls).toBe(1); expect(sleeps).toBe(0);
+    expect(readFileSync(authPath)).toEqual(bytes); expect(statSync(authPath).ino).toBe(inode);
+    expect(await store.read("oauth")).toEqual(expiredOAuth); expect(await store.read("unrelated")).toEqual(unrelated);
+    // Rejection releases the existing owner: a later valid update can commit.
+    const valid = { ...expiredOAuth, access: "SYNTHETIC_NEW", refresh: "SYNTHETIC_ROTATED", expires: Date.now() + 600000 };
+    expect(await store.modify("oauth", async () => valid)).toEqual(valid);
+  });
+
+  for (const operation of ["refresh", "login"] as const) test(`public Models ${operation} cannot persist a malformed successful provider result or retry it`, async () => {
+    const { authPath } = await createStore({ oauth: expiredOAuth, unrelated: { type: "api_key", key: "SYNTHETIC_UNRELATED" } });
+    const bytes = readFileSync(authPath); let calls = 0, sleeps = 0;
+    const store = new FileCredentialStore(authPath, { sleep: async () => { sleeps++; } });
+    const malformed = async () => {
+      calls++;
+      // Same runtime shape observed from Radius's public refresh({}) response.
+      return { type: "oauth", access: undefined, refresh: undefined, expires: NaN } as unknown as Credential & { type: "oauth" };
+    };
+    const models = oauthModels(store, malformed, malformed);
+    const pending = operation === "refresh" ? models.getAuth("oauth") : models.login("oauth", "oauth", {
+      signal: new AbortController().signal, prompt: async () => { throw Error("No prompt expected"); }, notify: () => { throw Error("No event expected"); },
+    });
+    await expect(pending).rejects.toThrow();
+    expect(calls).toBe(1); expect(sleeps).toBe(0); expect(readFileSync(authPath)).toEqual(bytes);
+    expect(await store.read("oauth")).toEqual(expiredOAuth);
+    expect((await store.list()).map(row => row.providerId).sort()).toEqual(["oauth", "unrelated"]);
+  });
+
+  test("valid empty OAuth strings and non-expiring timestamps retain their public type semantics", async () => {
+    const { store } = await createStore();
+    for (const credential of [
+      { type: "oauth" as const, access: "", refresh: "", expires: 0 },
+      { type: "oauth" as const, access: "SYNTHETIC_KEY", refresh: "", expires: Number.MAX_SAFE_INTEGER, scope: "synthetic", availableModelIds: ["model"] },
+    ]) expect(await store.modify("valid", async () => credential)).toEqual(credential);
+    const external = { type: "api_key" as const, env: { AWS_PROFILE: "synthetic-profile" } };
+    expect(await store.modify("external", async () => external)).toEqual(external);
   });
 
   test("invalid auth.json is never overwritten by modify", async () => {
