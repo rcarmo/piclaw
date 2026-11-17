@@ -78,7 +78,7 @@ for (const engine of ['chromium', 'webkit']) {
                 }));
                 for (const control of controls) {
                     expect(control.left).toBeGreaterThanOrEqual(0); expect(control.right).toBeLessThanOrEqual(width);
-                    expect(control.height).toBeGreaterThanOrEqual(width < 600 ? 44 : 36);
+                    expect(control.height).toBeGreaterThanOrEqual(26);
                 }
                 expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
                 expect(requests.some(r => r.path.endsWith('/apply'))).toBe(false);

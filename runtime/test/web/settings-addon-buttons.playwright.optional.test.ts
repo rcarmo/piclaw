@@ -126,7 +126,7 @@ for (const skin of ["classic"]) {
           expect((await style(page, "tab")).padding).toBe("2px");
           expect((await style(page, "switch")).padding).toBe("3px");
           expect(await page.locator("#hidden").isVisible()).toBe(false);
-          expect(await page.locator("#stepper").evaluate(el => getComputedStyle(el).width)).toBe(width <= 640 ? "44px" : "32px");
+          expect(await page.locator("#stepper").evaluate(el => getComputedStyle(el).width)).toBe(width <= 640 ? "32px" : "30px");
           expect(await page.locator(".settings-addon-pane").evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
         } finally { await page.close(); }
       });

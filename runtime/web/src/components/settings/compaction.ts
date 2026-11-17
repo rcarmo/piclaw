@@ -150,24 +150,32 @@ export function CompactionSection({ settingsData, setStatus, mergeSettingsData }
 
             <h3>Local models</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${fieldId('check-1')}>Local-lite prompt and tools</label>
-                <input id=${fieldId('check-1')} type="checkbox" checked=${localLitePromptProfileEnabled} onChange=${e => setLocalLitePromptProfileEnabled(Boolean(e.target.checked))} />
+                <label class="settings-dense-check" for=${fieldId('check-1')}>
+                    <input id=${fieldId('check-1')} type="checkbox" checked=${localLitePromptProfileEnabled} onChange=${e => setLocalLitePromptProfileEnabled(Boolean(e.target.checked))} />
+                    <span>Local-lite prompt and tools</span>
+                </label>
                 <span class="settings-hint">Off by default. When enabled, local endpoints use a compact prompt and start with only read and tool discovery. Changes apply on the next turn.</span>
             </div>
             <h3>${t('settings.compaction.autoHeading')}</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${fieldId('check-2')}>${t('settings.compaction.enableAutomatic')}</label>
-                <input id=${fieldId('check-2')} type="checkbox" checked=${autoCompactionEnabled} onChange=${e => setAutoCompactionEnabled(Boolean(e.target.checked))} />
+                <label class="settings-dense-check" for=${fieldId('check-2')}>
+                    <input id=${fieldId('check-2')} type="checkbox" checked=${autoCompactionEnabled} onChange=${e => setAutoCompactionEnabled(Boolean(e.target.checked))} />
+                    <span>${t('settings.compaction.enableAutomatic')}</span>
+                </label>
                 <span class="settings-hint">Native compaction uses the active conversation model and SDK thresholds. Changes apply at the next compaction decision; already accepted maintenance is not cancelled.</span>
             </div>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${fieldId('check-3')}>${t('settings.compaction.enableToolResult')}</label>
-                <input id=${fieldId('check-3')} type="checkbox" checked=${toolResultCompactionEnabled} onChange=${e => setToolResultCompactionEnabled(Boolean(e.target.checked))} />
+                <label class="settings-dense-check" for=${fieldId('check-3')}>
+                    <input id=${fieldId('check-3')} type="checkbox" checked=${toolResultCompactionEnabled} onChange=${e => setToolResultCompactionEnabled(Boolean(e.target.checked))} />
+                    <span>${t('settings.compaction.enableToolResult')}</span>
+                </label>
                 <span class="settings-hint">${t('settings.compaction.enableToolResultHint')}</span>
             </div>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${fieldId('check-4')}>${t('settings.compaction.semanticSummaries')}</label>
-                <input id=${fieldId('check-4')} type="checkbox" checked=${toolResultSemanticSummaryEnabled} onChange=${e => setToolResultSemanticSummaryEnabled(Boolean(e.target.checked))} />
+                <label class="settings-dense-check" for=${fieldId('check-4')}>
+                    <input id=${fieldId('check-4')} type="checkbox" checked=${toolResultSemanticSummaryEnabled} onChange=${e => setToolResultSemanticSummaryEnabled(Boolean(e.target.checked))} />
+                    <span>${t('settings.compaction.semanticSummaries')}</span>
+                </label>
                 <span class="settings-hint">${t('settings.compaction.semanticSummariesHint')}</span>
             </div>
             <div class="settings-row settings-dense-row">
@@ -214,8 +222,10 @@ export function CompactionSection({ settingsData, setStatus, mergeSettingsData }
             </div>
             <h3 style="margin-top:20px">${t('settings.compaction.watchdogHeading')}</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
-                <label for=${fieldId('check-5')}>${t('settings.compaction.enableWatchdog')}</label>
-                <input id=${fieldId('check-5')} type="checkbox" checked=${progressWatchdogEnabled} onChange=${e => setProgressWatchdogEnabled(Boolean(e.target.checked))} />
+                <label class="settings-dense-check" for=${fieldId('check-5')}>
+                    <input id=${fieldId('check-5')} type="checkbox" checked=${progressWatchdogEnabled} onChange=${e => setProgressWatchdogEnabled(Boolean(e.target.checked))} />
+                    <span>${t('settings.compaction.enableWatchdog')}</span>
+                </label>
                 <span class="settings-hint">${t('settings.compaction.enableWatchdogHint')}</span>
             </div>
             <div class="settings-row settings-dense-row">

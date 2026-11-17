@@ -102,9 +102,9 @@
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    min-height: 36px;
+    min-height: var(--settings-control-height, 30px);
     margin: 0;
-    padding: 7px 10px;
+    padding: 4px 10px;
     border: 1px solid var(--border-color);
     border-radius: 6px;
     background: var(--bg-primary);
@@ -123,7 +123,7 @@
 .mcp-settings details,
 .mcp-server-editor details { min-width: 0; margin: 14px 0; }
 .mcp-settings summary,
-.mcp-server-editor summary { cursor: pointer; min-height: 36px; padding: 7px 0; font-size: 0.88em; font-weight: 500; }
+.mcp-server-editor summary { cursor: pointer; min-height: var(--settings-button-height, 26px); padding: 4px 0; font-size: 0.88em; font-weight: 500; }
 .mcp-settings details[open] > summary,
 .mcp-server-editor details[open] > summary { margin-bottom: 10px; }
 .mcp-advanced { padding-top: 6px; border-top: 1px solid var(--border-color); }
@@ -133,9 +133,9 @@
 
 .mcp-settings .settings-btn,
 .mcp-server-editor .settings-btn {
-    min-height: 36px;
+    min-height: var(--settings-button-height, 26px);
     max-width: 100%;
-    padding: 6px 10px;
+    padding: 2px 10px;
     border: 1px solid var(--border-color);
     border-radius: 6px;
     background: var(--bg-secondary);
@@ -170,15 +170,6 @@
 
 @media (max-width: 600px) {
     .mcp-panel { padding: 12px; }
-    .mcp-settings button,
-    .mcp-server-editor button,
-    .mcp-settings .settings-btn,
-    .mcp-server-editor .settings-btn,
-    .mcp-settings summary,
-    .mcp-server-editor summary,
-    .mcp-field input,
-    .mcp-field select,
-    .mcp-field textarea { min-height: 44px; }
     .mcp-section-header > .mcp-actions { width: 100%; }
     .mcp-section-header > .mcp-actions > button { flex: 1 1 120px; }
 }
