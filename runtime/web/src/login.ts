@@ -133,19 +133,16 @@ async function loadPolicy(): Promise<void> {
   policy = null;
   form.hidden = true; passkeyButton.hidden = true; retryButton.hidden = true;
   errorEl.textContent = ""; description.textContent = "Loading sign-in options…";
-  codeInput.disabled = true; usernameInput.disabled = true; verifyButton.disabled = true;
+  codeInput.disabled = true; verifyButton.disabled = true;
   try {
     const response = await fetch("/auth/options", { cache: "no-store" });
     if (!response.ok) throw new Error("Cannot load sign-in options.");
     policy = parseLoginPolicy(await response.json());
     if (!policy.auth_enabled) { window.location.href = "/"; return; }
     form.hidden = !policy.totp; passkeyButton.hidden = !policy.passkey;
-    usernameField.hidden = !policy.username_required; usernameInput.required = policy.username_required;
-    usernameInput.disabled = !policy.username_required; codeInput.disabled = !policy.totp; verifyButton.disabled = !policy.totp;
-    description.textContent = policy.totp
-      ? policy.username_required ? "Enter your account username and authenticator code." : "Use the six-digit code from your authenticator app."
-      : "Use a passkey registered for this site.";
-    if (policy.totp) (policy.username_required ? usernameInput : codeInput).focus();
+    codeInput.disabled = !policy.totp; verifyButton.disabled = !policy.totp;
+    description.textContent = policy.totp ? "Use the six-digit code from your authenticator app." : "Use a passkey registered for this site.";
+    if (policy.totp) codeInput.focus();
     if (policy.passkey && window.PublicKeyCredential && typeof PublicKeyCredential.isConditionalMediationAvailable === "function") {
       const available = await probePasskeyCapabilityBestEffort(() => PublicKeyCredential.isConditionalMediationAvailable());
       if (available) void attemptPasskey({ conditional: true });
@@ -163,7 +160,7 @@ const submitCode = async () => {
   if (submitting || !policy?.totp) return;
   errorEl.textContent = "";
   let body;
-  try { body = buildTotpLoginBody(policy, usernameInput.value, codeInput.value); }
+  try { body = buildTotpLoginBody(policy, codeInput.value); }
   catch (error) { errorEl.textContent = (error as Error).message; return; }
   submitting = true; verifyButton.disabled = true;
   try {

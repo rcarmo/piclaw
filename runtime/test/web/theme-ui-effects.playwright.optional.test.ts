@@ -144,7 +144,13 @@ for (const engine of ["chromium", "webkit"])
                 el.focus();
                 const s = getComputedStyle(el);
                 checks++;
-                if (
+                // Quick Actions' filter sits in its own floating surface and is
+                // deliberately borderless when focused (theme-focus.css).
+                const borderless = el.dataset.audit === "timeline-quick-actions-input";
+                if (borderless) {
+                  if (document.activeElement !== el || s.outlineStyle !== "none")
+                    failures.push(`${preset.id}/${el.dataset.audit}: borderless focus ${s.outlineStyle}`);
+                } else if (
                   document.activeElement !== el ||
                   s.outlineStyle !== "solid" ||
                   s.outlineWidth !== "2px" ||
@@ -715,12 +721,15 @@ for (const engine of ["chromium", "webkit"])
               await page
                 .locator('.attachment-preview-close')
                 .click();
+            // The modal renders through a body portal, which unmounts on the next render.
+            await page.locator(backdrop).waitFor({ state: "detached", timeout: 2000 });
             expect(await page.locator(backdrop).count()).toBe(0);
             await page.locator("#open-preview").click();
             await page.locator(backdrop).waitFor();
             if (view === "image-lightbox")
               await page.locator(backdrop).dispatchEvent("mousedown");
             else await page.locator(backdrop).dispatchEvent("click");
+            await page.locator(backdrop).waitFor({ state: "detached", timeout: 2000 });
             expect(await page.locator(backdrop).count()).toBe(0);
             expect(errors).toEqual([]);
           } finally {

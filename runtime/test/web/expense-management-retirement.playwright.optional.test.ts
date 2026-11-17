@@ -61,7 +61,8 @@ browserTest(`${skin}/${engine}/${touch ? 'phone touch' : 'desktop keyboard'} rem
     const item = '.settings-nav-item';
     const model = nav.locator(item).filter({ hasText: /^Models$/ });
     if (touch) await model.tap(); else { await model.focus(); await page.keyboard.press('Enter'); }
-    const pricing = page.locator(touch ? '.model-catalogue-settings__row-mobile-meta' : '.model-catalogue-settings__row-input-price').first();
+    // The column header shares the price-cell class; read a catalogue row.
+    const pricing = page.locator(touch ? '.model-catalogue-settings__row-mobile-meta' : '.model-catalogue-settings__row .model-catalogue-settings__row-input-price').first();
     await pricing.waitFor({ state: 'visible' });
     expect(await pricing.innerText()).toContain('$');
     await page.evaluate(() => window.dispatchEvent(new CustomEvent('piclaw:open-settings', { detail: { section: 'constructor' } })));

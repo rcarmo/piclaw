@@ -201,14 +201,8 @@ for (const engine of ["chromium", "webkit"])
                   );
                 expect(native).toEqual([]);
                 if (picker === "model") {
-                  await page
-                    .getByRole("button", { name: /Show incompatible/ })
-                    .click();
-                  expect(
-                    await page
-                      .getByRole("button", { name: /Hide incompatible/ })
-                      .count(),
-                  ).toBe(1);
+                  // Capacity admission moved to the native backend (#1650), so the
+                  // picker no longer offers a Show/Hide incompatible toggle.
                   await page
                     .getByRole("button", {
                       name: "Open Models settings",

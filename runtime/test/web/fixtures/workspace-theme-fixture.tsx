@@ -83,6 +83,8 @@ window.fetch = (async (input) => {
     status: { status: "idle", data: null }, model: null, context: null,
     metrics, agent_name: "Fixture", errors: [],
   });
+  // The meters poll their own endpoint; /agent/status no longer carries them.
+  if (u.pathname === "/agent/system-metrics") return Response.json(metrics);
   if (u.pathname === "/workspace/index-status")
     return Response.json({ status: "ready" });
   return Response.json({});

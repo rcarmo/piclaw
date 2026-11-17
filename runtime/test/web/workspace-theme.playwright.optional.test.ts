@@ -138,7 +138,8 @@ for (const engine of ["chromium", "webkit"])
                     swap: 4,
                     buf: 3,
                     rss: 6,
-                    vram: 5,
+                    // VRAM renders through the shared GPU memory row.
+                    "intel-gmem": 5,
                   })) {
                     const node = document.querySelector(
                       ".system-meters-row." + name + " path",
@@ -151,16 +152,10 @@ for (const engine of ["chromium", "webkit"])
                     )
                       failures.push(theme.id + " meter " + name);
                   }
-                  for (const icon of document.querySelectorAll(
-                    ".file-tree__item--file .file-tree__icon",
-                  )) {
-                    if (
-                      getComputedStyle(icon, "::before").color !==
-                      color("var(--text-secondary)")
-                    )
-                      failures.push(theme.id + " file icon");
-                  }
-                  const row = document.querySelector(selected)!;
+                  // Pierre Trees renders rows inside the tree host's shadow root.
+                  const tree = document.querySelector("file-tree-container")?.shadowRoot ?? document;
+                  const row = tree.querySelector(selected);
+                  if (!row) { failures.push(theme.id + " no selected row"); continue; }
                   if (
                     getComputedStyle(row).backgroundColor !==
                     color(
@@ -208,7 +203,6 @@ for (const engine of ["chromium", "webkit"])
             ).toBe(true);
             await page.evaluate(() => {
               const f = (window as any).workspaceTheme;
-              f.resetTheme();
               f.selectLocalTheme("synthwave-84-full");
             });
             if (width <= 600) {

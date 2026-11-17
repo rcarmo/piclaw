@@ -67,6 +67,7 @@ for (const [engineName, engine] of Object.entries({ chromium, webkit })) {
       let body: unknown;
       if (url.pathname === "/agent/status") body = { status: { status: "idle", state: "idle", data: null }, model: modelPayload(), context: contextPayload(), metrics: { cpu_percent: 2, ram_percent: 12 }, agent_name: "Fixture", errors: [] };
       else if (url.pathname === "/agent/models") body = modelPayload();
+      else if (url.pathname === "/agent/system-metrics") body = { cpu_percent: 2, ram_percent: 12, cpu_series: [2], ram_series: [12], swap_series: [] };
       else if (url.pathname === "/agent/context") body = contextPayload();
       else if (url.pathname === "/timeline") body = { posts: [{id:777001,chat_jid:chatJid,type:'agent',data:{type:'assistant_message',content:codeText,timestamp:new Date().toISOString(),sender_name:'Fixture',is_bot_message:true,thread_id:777001}}], has_more: false, chat_jid: chatJid, user: { name: "Fixture User" }, agent: { name: "Fixture" } };
       else if (url.pathname === "/agent/addons/web-entries") body = { entries: [] };
