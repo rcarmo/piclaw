@@ -114,3 +114,43 @@ describe("emitted output", () => {
     }
   });
 });
+
+describe("delegate calls", () => {
+  const args = {
+    prompt: "Review the timeline scroll fix for regressions.\nRead runtime/web/src/ui/app-main-shell-render.ts first, then the tests.",
+    task_category: "analyze",
+    model: "github-copilot/mai-code-1",
+    files: ["/workspace/tmp/notes.md"],
+    tools: "read,grep,find,ls,bash",
+    system_prompt: "",
+    timeout_sec: 300,
+  };
+
+  test("title summarises the delegated task in one line", async () => {
+    const { formatToolTitle } = await import("../../src/channels/web/agent/agent-utils.js");
+    expect(formatToolTitle("delegate", args)).toBe("delegate: Review the timeline scroll fix for regressions.");
+    expect(formatToolTitle("delegate", { prompt: `## Task\n\n- ${"word ".repeat(40)}` })).toBe(`delegate: Task`);
+    // A one-paragraph brief is summarised by its first sentence, not cut mid-thought.
+    expect(formatToolTitle("delegate", { prompt: "Audit the retention receipts, e.g. hashes and callers. Then report gaps. Keep it short." }))
+      .toBe("delegate: Audit the retention receipts, e.g. hashes and callers.");
+    expect(formatToolTitle("delegate", {})).toBe("delegate");
+  });
+
+  test("readable input shows the brief, then model, tools and files", () => {
+    expect(readableToolInput("delegate", args)).toEqual({
+      kind: "code",
+      label: "Delegated task",
+      language: "markdown",
+      text: [
+        "Review the timeline scroll fix for regressions.",
+        "Read runtime/web/src/ui/app-main-shell-render.ts first, then the tests.",
+        "",
+        "---",
+        "Model: github-copilot/mai-code-1 · Category: analyze · Timeout: 300 s",
+        "Tools: read, grep, find, ls, bash",
+        "Files:",
+        "- /workspace/tmp/notes.md",
+      ].join("\n"),
+    });
+  });
+});

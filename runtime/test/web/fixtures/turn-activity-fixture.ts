@@ -6,6 +6,7 @@ import { AgentStatus } from '../../../web/src/components/status.js';
 const posts = [
   { id: 41, chat_jid: 'web:fixture', data: { type: 'agent_response', turn_activity: true } },
   { id: 404, chat_jid: 'web:fixture', data: { type: 'agent_response', turn_activity: true } },
+  { id: 43, chat_jid: 'web:fixture', data: { type: 'agent_response', turn_activity: true } },
 ];
 let remount = () => {};
 let setLive = (_value: any) => {};

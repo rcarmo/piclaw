@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { chromium, type Browser } from 'playwright';
+import { formatToolTitle } from '../../src/channels/web/agent/agent-utils.js';
+import { originalToolInput, readableToolInput } from '../../src/channels/web/agent/tool-presentation.js';
 
 const enabled = process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === '1', browserTest = enabled ? test : test.skip;
 let server: ReturnType<typeof Bun.serve>, browser: Browser;
@@ -34,6 +36,15 @@ const activity = {
   ],
 };
 
+// Delegate entries use the production title and readable-input projections.
+const delegateArgs = { prompt: 'Review the timeline scroll fix for regressions.\nRead the shell render module first, then its tests.', task_category: 'analyze',
+  model: 'github-copilot/mai-code-1', files: ['/workspace/tmp/notes.md'], tools: 'read,grep,find,ls,bash', system_prompt: '', timeout_sec: 300 };
+const delegateActivity = {
+  answer_entry_id: 9, started_at: 1000, ended_at: 4000, duration_ms: 3000, tool_ms: 3000, output_tokens: 10, tools: 1, errors: 0, truncated: false,
+  steps: [{ id: 'tool:call-d', kind: 'tool', tool: { call_id: 'call-d', name: 'delegate', title: formatToolTitle('delegate', delegateArgs), status: 'ok', duration_ms: 3000,
+    args_preview: JSON.stringify(delegateArgs, null, 2).slice(0, 240), output_preview: 'No regressions found.', output_chars: 21, output_lines: 1, images: 0 } }],
+};
+
 beforeAll(async () => {
   if (!enabled) return;
   const sharp = (await import('sharp')).default;
@@ -57,6 +68,11 @@ beforeAll(async () => {
     if (url.pathname === '/agent/turn-activity') {
       requests.push(url.search);
       if (url.searchParams.get('live') === '1') return Response.json(liveActivity);
+      if (url.searchParams.get('message_id') === '43') {
+        if (!url.searchParams.get('step')) return Response.json(delegateActivity);
+        return Response.json({ id: 'tool:call-d', kind: 'tool', args: JSON.stringify(delegateArgs, null, 2), output: 'No regressions found.', output_offset: 0, output_chars: 21, truncated: false,
+          input: { original: originalToolInput(delegateArgs), readable: readableToolInput('delegate', delegateArgs) } });
+      }
       if (url.searchParams.get('message_id') !== '41') return Response.json({ error: 'Not found' }, { status: 404 });
       const step = url.searchParams.get('step');
       if (!step) return Response.json(activity);
@@ -382,3 +398,24 @@ browserTest('tool image previews appear beside the title and in the open card, s
     expect(errors).toEqual([]);
   } finally { await page.close(); }
 });
+
+browserTest('delegate entries show the task inline and a readable brief when opened', async () => {
+  const page = await browser.newPage({ viewport: { width: 760, height: 900 } });
+  try {
+    await page.goto(server.url.href);
+    const post = page.locator('#post-43');
+    await post.scrollIntoViewIfNeeded();
+    await post.locator('.turn-activity-header').click();
+    const tool = post.locator('.turn-activity-tool').first();
+    expect((await tool.locator('.turn-activity-tool-title').innerText()).trim()).toBe('delegate: Review the timeline scroll fix for regressions.');
+    await tool.locator('.turn-activity-tool-header').click();
+    const input = tool.locator('.turn-activity-input-region');
+    // The card shows the argument preview until its full detail loads.
+    await input.locator('.turn-activity-section-label', { hasText: 'Delegated task' }).waitFor();
+    const text = await input.locator('pre').innerText();
+    expect(text).toContain('Read the shell render module first, then its tests.');
+    expect(text).toContain('Model: github-copilot/mai-code-1 · Category: analyze · Timeout: 300 s');
+    expect(text).not.toContain('"prompt"');
+    if (process.env.PICLAW_TEST_SCREENSHOT_DIR) await tool.screenshot({ path: join(process.env.PICLAW_TEST_SCREENSHOT_DIR, 'delegate-entry.png') });
+  } finally { await page.close(); }
+}, 20000);

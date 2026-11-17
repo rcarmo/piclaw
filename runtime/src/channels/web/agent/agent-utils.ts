@@ -150,6 +150,18 @@ export function resolveMcpToolStatusIdentity(toolName: string, args: unknown): M
   return { operation: "status", server, tool: null, target: server, label: server ? `mcp: ${server} → status` : "mcp: status" };
 }
 
+/**
+ * First sentence of a prompt's first non-empty line, without Markdown
+ * heading/list/quote markers. A sentence ends at . ! or ? before a capital.
+ */
+function firstPromptLine(prompt: string): string | null {
+  for (const line of prompt.split("\n")) {
+    const text = line.replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|>\s*|\d+[.)]\s+)/, "").trim();
+    if (text) return text.match(/^.+?[.!?](?=\s+[A-Z])/)?.[0] ?? text;
+  }
+  return null;
+}
+
 /** Short "tool: detail" label shared by live status and the turn activity log. */
 export function formatToolTitle(toolName: string, args: unknown): string {
   const mcpIdentity = resolveMcpToolStatusIdentity(toolName, args);
@@ -157,6 +169,9 @@ export function formatToolTitle(toolName: string, args: unknown): string {
   const record = extractToolArgs(args);
   if (!record) return toolName;
   let detail: string | null = null;
+
+  // Delegate's brief is a long prompt; its first line names the task.
+  if (toolName === "delegate" && typeof record.prompt === "string") detail = firstPromptLine(record.prompt);
 
   const command = record.command ?? (toolName === "exec_command" ? record.cmd : undefined);
   if (typeof command === "string") detail = command;
