@@ -48,6 +48,12 @@ html[data-ios-keyboard-viewport] .workbench-statusbar {
     bottom: auto;
 }
 
+/* The status bar already clears the iPhone home indicator, so the standalone
+   compose inset (editor.css) would only open a blank band above it. */
+html[data-iphone-standalone-compose-inset="1"] .app-shell:has(> .workbench-statusbar) > .container {
+    padding-bottom: 0;
+}
+
 /* Panes sized to the viewport stop at the status bar. */
 .app-shell:has(> .workbench-statusbar) > .container,
 .app-shell:has(> .workbench-statusbar) > .editor-pane-container {
