@@ -6,9 +6,10 @@ const owner = { kind: "local", userId: "default", username: "default", displayNa
 const endpoint = "https://fixture.invalid/agent/models/refresh";
 
 function channel(principal: unknown, refresh: (options: any) => Promise<any> = async () => ({ aborted: false, errors: new Map() })) {
-  const calls: any[] = [];
-  return { calls, channel: { agentPool: { modelRuntime: { refresh: (options: any) => { calls.push(options); return refresh(options); } } },
-    authGateway: { getPrincipal: () => principal }, json: (body: unknown, status = 200) => Response.json(body, { status }) } as any };
+  const calls: any[] = [], events: Array<[string, unknown]> = [];
+  return { calls, events, channel: { agentPool: { modelRuntime: { refresh: (options: any) => { calls.push(options); return refresh(options); } } },
+    authGateway: { getPrincipal: () => principal }, broadcastEvent: (type: string, data: unknown) => events.push([type, data]),
+    json: (body: unknown, status = 200) => Response.json(body, { status }) } as any };
 }
 const call = (c: any, init: RequestInit = { method: "POST" }, suffix = "") => {
   const req = new Request(endpoint + suffix, init);
@@ -23,6 +24,8 @@ test("the owner forces a networked catalogue refresh and gets a per-provider out
   expect(await res!.json()).toEqual({ status: "partial", skipped: [], failed: [{ provider: "openrouter", message: "HTTP 503" }] });
   expect(fixture.calls).toHaveLength(1);
   expect(fixture.calls[0]).toMatchObject({ allowNetwork: true, force: true });
+  // Every open tab reloads its model state; the refreshed runtime already serves the new models.
+  expect(fixture.events).toEqual([["models_refreshed", { status: "partial" }]]);
 });
 
 test("only the single-user owner may refresh, before any network work", async () => {
@@ -30,6 +33,7 @@ test("only the single-user owner may refresh, before any network work", async ()
     const fixture = channel(principal);
     expect((await call(fixture.channel))?.status).toBe(403);
     expect(fixture.calls).toEqual([]);
+    expect(fixture.events).toEqual([]);
   }
 });
 

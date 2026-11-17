@@ -500,6 +500,9 @@ export function createGitHubCopilotDynamicModelsProvider(
               operation: "github_copilot_dynamic_models.refresh_failed",
               error: error instanceof Error ? error.message : String(error),
             });
+            // Keep the last-good catalogue, but let the refresh report the failure
+            // like any other provider (Settings → Models, startup refresh log).
+            throw error;
           }
         }
       })();

@@ -597,3 +597,12 @@ test('an older error timeout cannot hide a newer status (#1519)', () => {
     expect(state.getAgentStatusState()?.turn_id).toBe('new');
   } finally { globalThis.setTimeout = original; }
 });
+
+test('a model catalogue update refreshes the open model state in every tab', () => {
+  const state = createDeps();
+  let refreshes = 0;
+  state.deps.refreshModelAndQueueState = () => { refreshes += 1; };
+  // Instance-wide: no chat_jid, so it also reaches tabs on other chats.
+  handleAppSseEvent('models_refreshed', { status: 'completed' }, state.deps);
+  expect(refreshes).toBe(1);
+});
