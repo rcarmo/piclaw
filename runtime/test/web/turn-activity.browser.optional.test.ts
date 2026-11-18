@@ -2,6 +2,8 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { chromium, type Browser } from 'playwright';
 import { formatToolTitle } from '../../src/channels/web/agent/agent-utils.js';
+import { createToolCallSummaryResolver, toolCallSummary } from '../../src/tool-call-summary.js';
+import { summariseDelegateCall } from '../../src/delegate/tool-summary.js';
 import { originalToolInput, readableToolInput } from '../../src/channels/web/agent/tool-presentation.js';
 
 const enabled = process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === '1', browserTest = enabled ? test : test.skip;
@@ -39,9 +41,10 @@ const activity = {
 // Delegate entries use the production title and readable-input projections.
 const delegateArgs = { prompt: 'Review the timeline scroll fix for regressions.\nRead the shell render module first, then its tests.', task_category: 'analyze',
   model: 'github-copilot/mai-code-1', files: ['/workspace/tmp/notes.md'], tools: 'read,grep,find,ls,bash', system_prompt: '', timeout_sec: 300 };
+const delegateSummaries = createToolCallSummaryResolver([{ name: 'delegate', ...toolCallSummary(summariseDelegateCall) }]);
 const delegateActivity = {
   answer_entry_id: 9, started_at: 1000, ended_at: 4000, duration_ms: 3000, tool_ms: 3000, output_tokens: 10, tools: 1, errors: 0, truncated: false,
-  steps: [{ id: 'tool:call-d', kind: 'tool', tool: { call_id: 'call-d', name: 'delegate', title: formatToolTitle('delegate', delegateArgs), status: 'ok', duration_ms: 3000,
+  steps: [{ id: 'tool:call-d', kind: 'tool', tool: { call_id: 'call-d', name: 'delegate', title: formatToolTitle('delegate', delegateArgs, delegateSummaries('delegate', delegateArgs)), status: 'ok', duration_ms: 3000,
     args_preview: JSON.stringify(delegateArgs, null, 2).slice(0, 240), output_preview: 'No regressions found.', output_chars: 21, output_lines: 1, images: 0 } }],
 };
 

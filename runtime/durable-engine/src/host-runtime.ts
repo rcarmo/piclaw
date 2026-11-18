@@ -9,6 +9,7 @@ import { assertModelContextFits, modelSelectionFrame, projectModelContext, prepa
 import { readNativeExitReceipt, nativeExitNotice, type NativeExitReceipt } from "./host-process-receipt.js";
 import { modelFailureNotice, parseModelFailure } from "./host-model-failure.js";
 import { createLogger } from "../../src/utils/logger.js";
+import { createToolCallSummaryResolver, collectToolCallSummaries, type ToolCallSummaryResolver } from "../../src/tool-call-summary.js";
 import { estimateContextTokens } from "@earendil-works/pi-ai/utils/estimate";
 const log = createLogger("durable.runtime");
 import { getSupportedThinkingLevels, type ModelThinkingLevel } from "@earendil-works/pi-ai";
@@ -453,7 +454,7 @@ export class HostConversationRuntime {
   }
   /** Public committed conversation view, including pi.live; display-only subscription. */
   watchSession(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number },
-    listener: (view: import("@earendil-works/pi-durable").ConversationView, startedAt?: number) => void): Promise<() => Promise<void>> {
+    listener: (view: import("@earendil-works/pi-durable").ConversationView, startedAt?: number, summaries?: ToolCallSummaryResolver) => void): Promise<() => Promise<void>> {
     const reader = this.sessionReader(binding), check = reader.check;
     return this.observe(async () => {
       const conversation = await reader.conversation("Unknown conversation");
@@ -461,6 +462,7 @@ export class HostConversationRuntime {
       try {
         check();
         let firstEntry: number | undefined, startedAt: number | undefined;
+        let summaryExtensions: readonly object[] | undefined, summaryAgent: string | undefined, summaries: ToolCallSummaryResolver | undefined;
         const publish = async (view: import("@earendil-works/pi-durable").ConversationView) => {
           if (this.closed) return;
           check();
@@ -480,7 +482,15 @@ export class HostConversationRuntime {
             }
             firstEntry = first;
           }
-          listener(view, startedAt);
+          const extensions = this.options.harnessOptions.registry.snapshot().installed();
+          const agentKey = JSON.stringify(view.docs['pi.agent']);
+          if (!summaries || summaryExtensions !== extensions || summaryAgent !== agentKey) {
+            const agent = await conversation.agent(this.context); check();
+            const resolve = createToolCallSummaryResolver([...agent.tools, ...agent.callable, ...agent.deferred]);
+            summaries = (name, args) => { check(); const text = resolve(name, args); check(); return text; };
+            summaryExtensions = extensions; summaryAgent = agentKey;
+          }
+          listener(view, startedAt, summaries);
         };
         await publish(watch.value);
         watch.start(async call=>{if(call.kind==='failed'){log.warn('Native conversation watch read failed',{operation:'durable.watch_failed',err:call.error});return;}await publish(call.value);});
@@ -620,7 +630,12 @@ export class HostConversationRuntime {
             outcome: task.state.status === "terminal" ? task.state.outcome.status : task.state.status };
         }
       }, this.context); reader.check();
-      return freezeTree({ entries: structuredClone(window), tasks, truncated });
+      const agent = await conversation.agent(this.context); reader.check();
+      const resolve = createToolCallSummaryResolver([...agent.tools, ...agent.callable, ...agent.deferred]);
+      const toolSummaries = collectToolCallSummaries(window, (name, args) => {
+        reader.check(); const text = resolve(name, args); reader.check(); return text;
+      });
+      return freezeTree({ entries: structuredClone(window), tasks, truncated, toolSummaries });
     });
   }
   /** Fork-aware public history across the explicit imported host-session bindings only. */

@@ -1,35 +1,35 @@
 {
   "schemaVersion": 1,
-  "catalog": "https://raw.githubusercontent.com/rcarmo/piclaw-addons/eb13ce2d97cb252d858e574054c661883ae41f20/catalog.json",
-  "catalogSha256": "a05daeec2ac4e47b8c9f420ea622f311a66d85bec63b04d99fc741cec2e60817",
+  "catalog": "https://raw.githubusercontent.com/rcarmo/piclaw-addons/f534bd81ea36cfe95fe4e526ceb0413f71c54c96/catalog.json",
+  "catalogSha256": "bfe05d3c45e5959516999d7043c5024e58ea3a7220cfcd9c9b68d3ce34ee16e5",
   "addons": [
     {
       "slug": "code-review",
       "name": "@rcarmo/piclaw-addon-code-review",
-      "version": "0.1.11",
-      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-code-review-0.1.11.tgz",
-      "sha256": "fe03dc2c4aa26cc68dc61b562f80fdcfee4021fd9342f29ba3fae0019e8f0ea9"
+      "version": "0.1.13",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-code-review-0.1.13.tgz",
+      "sha256": "472307d31ad5ae8e6e44008e9591c4cb07ca76b566ce2b1f113b3a7555a5a9f1"
     },
     {
       "slug": "goal",
       "name": "@rcarmo/piclaw-addon-goal",
-      "version": "0.1.50",
-      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-goal-0.1.50.tgz",
-      "sha256": "9ed1fac62931f3a675f12e0c984a2b0aa6286df4ba13499ffd02ca42904e5c09"
+      "version": "0.1.52",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-goal-0.1.52.tgz",
+      "sha256": "75011163e3a7e25570c447e67fdd001bc0ab9fc3d5280d5ac257576cfaa298f1"
     },
     {
       "slug": "observability",
       "name": "@rcarmo/piclaw-addon-observability",
-      "version": "0.1.25",
-      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-observability-0.1.25.tgz",
-      "sha256": "5b5e59cda8478222290d326965e2cef1e7303461ac47951cc4926cc3dcce107c"
+      "version": "0.1.26",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-observability-0.1.26.tgz",
+      "sha256": "f45aac29fc88cae76a71fac57284616bb9d93a2f3a64e0fc445d1841bfe11640"
     },
     {
       "slug": "restic",
       "name": "@rcarmo/piclaw-addon-restic",
-      "version": "0.1.5",
-      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-restic-0.1.5.tgz",
-      "sha256": "8e6e725cf2b0ad8a700ceebb7b75c891d955019bd179ee5200c2580467341e15"
+      "version": "0.1.6",
+      "url": "https://rcarmo.github.io/piclaw-addons/packages/piclaw-addon-restic-0.1.6.tgz",
+      "sha256": "e3a2727c95d28055103ff0ff9f4141dd18635e81fb01ba428bbf8b3e65c04bf7"
     }
   ]
 }

@@ -37,17 +37,17 @@ test('installer preflight shares exact native package proof before activation', 
   const f=fixture();
   try{
     const obs=inspectAddonInstall('@rcarmo/piclaw-addon-observability','0.1.23');
-    expect(obs?.supportedVersion).toBe('0.1.25');
-    expect(obs?.problem).toContain('This Core release requires Observability 0.1.25');
+    expect(obs?.supportedVersion).toBe('0.1.26');
+    expect(obs?.problem).toContain('This Core release requires Observability 0.1.26');
     const pkg=join(f.cwd,'.pi/extensions/node_modules/@rcarmo/piclaw-addon-goal');
-    expect(inspectAddonInstall('@rcarmo/piclaw-addon-goal','0.1.50',pkg)).toEqual({supportedVersion:'0.1.50'});
+    expect(inspectAddonInstall('@rcarmo/piclaw-addon-goal','0.1.52',pkg)).toEqual({supportedVersion:'0.1.52'});
     const file=join(pkg,'index.ts'),bytes=readFileSync(file);
     writeFileSync(file,'throw Error("UNAPPROVED_MUST_NOT_EXECUTE")');
-    expect(inspectAddonInstall('@rcarmo/piclaw-addon-goal','0.1.50',pkg)?.problem).toContain('does not match');
+    expect(inspectAddonInstall('@rcarmo/piclaw-addon-goal','0.1.52',pkg)?.problem).toContain('does not match');
     expect(()=>auditInstalledApplicationAddonSources(f.cwd)).toThrow();
     writeFileSync(file,bytes);
     writeFileSync(join(pkg,'compat/chat-context.js'),'throw Error("SHADOW_MUST_NOT_EXECUTE")');
-    expect(inspectAddonInstall('@rcarmo/piclaw-addon-goal','0.1.50',pkg)?.problem).toContain('does not match');
+    expect(inspectAddonInstall('@rcarmo/piclaw-addon-goal','0.1.52',pkg)?.problem).toContain('does not match');
     rmSync(join(pkg,'compat/chat-context.js'));
     expect(auditInstalledApplicationAddonSources(f.cwd).profiles.length).toBe(21);
     expect(inspectAddonInstall('@third-party/unmanaged','1.0.0')).toBeUndefined();
@@ -84,4 +84,17 @@ test('actual SDK Harness emits native spans through the add-on adapter without c
  expect(runtime).toContain('observability?.addon.shutdownObservabilityRuntime()');
  await provider.shutdown();
  }finally{cleanup(installed.cwd);}
+});
+
+test('tool summary modules and helper scope cannot be shadowed before add-on evaluation',()=>{
+ const f=fixture();
+ try{
+  const pkg=join(f.cwd,'.pi/extensions/node_modules/@rcarmo/piclaw-addon-goal');
+  for(const file of ['summary.js','compat/tool-call-summary.js','compat/package.json']){
+   const path=join(pkg,file);writeFileSync(path,file.endsWith('.json')?'{}':'throw Error("UNAPPROVED_SUMMARY_MUST_NOT_EXECUTE")');
+   expect(()=>auditInstalledApplicationAddonSources(f.cwd)).toThrow('Unqualified installed add-on package before evaluation');
+   rmSync(path);
+  }
+  expect(auditInstalledApplicationAddonSources(f.cwd).profiles.length).toBe(21);
+ }finally{cleanup(f.cwd);}
 });

@@ -21,7 +21,7 @@ for (const mode of ["approved", "version", "dirty-helper", "shadow-tool-js", "ha
       if (["version", "type", "metadata", "layout"].includes(mode)) {
         const path = join(pkg, "package.json");
         const manifest = JSON.parse(readFileSync(path, "utf8"));
-        if (mode === "version") manifest.version = "0.1.5";
+        if (mode === "version") manifest.version = "99.0.0";
         if (mode === "type") manifest.type = "commonjs";
         if (mode === "metadata") manifest.description += " unapproved";
         if (mode === "layout") { renameSync(join(pkg, "index.ts"), join(pkg, "alternate.ts")); manifest.pi.extensions = ["./alternate.ts"]; }
