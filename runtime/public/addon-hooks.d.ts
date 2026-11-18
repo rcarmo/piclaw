@@ -1,4 +1,9 @@
 /** Self-contained add-on hook contracts. No imports from private Piclaw source. */
+/** Pure display text owned by a tool. Arguments may be partial; never execute,
+ * read configuration/credentials, start async work or mutate the readonly input.
+ * Core adds the tool-name prefix and applies generic text/length validation. */
+export type ToolCallSummary = (args: unknown) => string | null | undefined;
+export interface ToolCallSummaryMetadata { readonly callSummary: ToolCallSummary }
 export type DictationState = 'idle' | 'loading' | 'recording' | 'finishing' | 'error';
 export type DictationFinish = {status:'finished'} | {status:'cancelled'};
 export interface DictationSession { finish():Promise<DictationFinish>; cancel():Promise<void> }

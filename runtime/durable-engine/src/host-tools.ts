@@ -2,9 +2,10 @@ import type { ToolDefinition } from "../../src/durable-legacy-sdk.js";
 import type { TSchema } from "typebox";
 import type { JsonValue } from "@earendil-works/chord/json";
 import { defineTool, type ToolRegistration, type ConversationId, type TaskId } from "@earendil-works/pi-durable";
+import { readToolCallSummary, toolCallSummary, type ToolCallSummary } from "../../src/tool-call-summary.js";
 
 // Identity metadata only: no ownership, adoption, or execution ledger.
-const hostToolBindings = new WeakMap<object, { definition: object; execute: unknown; declaration: string; registrationDeclaration: string; registrationExecute: unknown; assertCurrent(): void }>();
+const hostToolBindings = new WeakMap<object, { definition: object; execute: unknown; summary: ToolCallSummary | undefined; declaration: string; registrationDeclaration: string; registrationExecute: unknown; assertCurrent(): void }>();
 
 /** Verify an actual bridge result against the exact definition used to construct
  * it. A matching name/schema, copied registration, or legacy execute is not proof.
@@ -13,6 +14,8 @@ const hostToolBindings = new WeakMap<object, { definition: object; execute: unkn
 export function assertHostToolBinding(registration: object, definition: ToolDefinition<any, any>): void {
   const proof = hostToolBindings.get(registration);
   if (!proof || proof.definition !== definition || proof.execute !== definition.execute ||
+      Object.hasOwn(definition, "callSummary") !== !!proof.summary || Object.hasOwn(registration, "callSummary") !== !!proof.summary ||
+      proof.summary !== readToolCallSummary(definition) || proof.summary !== readToolCallSummary(registration) ||
       proof.declaration !== JSON.stringify(definition) || proof.registrationDeclaration !== JSON.stringify(registration) ||
       proof.registrationExecute !== (registration as { execute?: unknown }).execute) throw new Error("Host tool binding identity required");
   proof.assertCurrent();
@@ -23,7 +26,11 @@ export function assertHostToolDeclaration(registration: object, declaration: Too
   const proof = hostToolBindings.get(registration);
   if (!proof) throw new Error("Host tool binding identity required");
   assertHostToolBinding(registration, proof.definition as ToolDefinition<any, any>);
-  const shape = (value: any) => JSON.stringify({ name: value.name, label: value.label, description: value.description, parameters: value.parameters });
+  // Jiti and the native importer may create distinct callbacks from the same
+  // qualified source. Compare presence here; exact callback identity is bound
+  // to each bridge/definition above, and source qualification proves its code.
+  const shape = (value: any) => JSON.stringify({ name: value.name, label: value.label, description: value.description, parameters: value.parameters,
+    callSummary: !!readToolCallSummary(value) });
   if (shape(proof.definition) !== shape(declaration)) throw new Error("Host tool declaration mismatch");
 }
 
@@ -67,6 +74,8 @@ export function createHostTool<P extends TSchema, D extends JsonValue>(
   try { parameters = structuredClone(tool.parameters); }
   catch { throw new Error("Host tool registration unavailable"); }
   const execute = tool.execute.bind(tool);
+  const summary = readToolCallSummary(tool);
+  if (Object.hasOwn(tool, "callSummary") && !summary) throw new Error("Synchronous tool call summary required");
   const prepare = tool.prepareArguments?.bind(tool);
   const checkAuthority = () => {
     let allowed: void | boolean;
@@ -76,6 +85,7 @@ export function createHostTool<P extends TSchema, D extends JsonValue>(
   };
   const registration = defineTool<P, D>({
     name: tool.name, description: tool.description, parameters,
+    ...(summary ? toolCallSummary(summary) : {}),
     prepareArguments: prepare ? raw => {
       checkAuthority();
       // Both declarations describe the same JSON Schema; the legacy TypeBox
@@ -130,6 +140,6 @@ export function createHostTool<P extends TSchema, D extends JsonValue>(
       }
     },
   });
-  hostToolBindings.set(registration, { definition: tool, execute: tool.execute, declaration: JSON.stringify(tool), registrationDeclaration: JSON.stringify(registration), registrationExecute: registration.execute, assertCurrent: checkAuthority });
+  hostToolBindings.set(registration, { definition: tool, execute: tool.execute, summary, declaration: JSON.stringify(tool), registrationDeclaration: JSON.stringify(registration), registrationExecute: registration.execute, assertCurrent: checkAuthority });
   return registration;
 }

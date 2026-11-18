@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createNativeTurnView } from "../../../src/channels/web/agent/native-turn-view.js";
 import { createToolTitleTracker } from "../../../src/channels/web/agent/agent-utils.js";
+import { createToolCallSummaryResolver, toolCallSummary } from "../../../src/tool-call-summary.js";
 
 function fixture() {
   const db = new Database(":memory:");
@@ -27,10 +28,11 @@ function fixture() {
 test('native command titles retain actual tool names and command parameters', () => {
   const titles = createToolTitleTracker();
   expect(titles.remember('one', 'exec_command', { cmd: 'printf one' })).toBe('exec_command: printf one');
-  expect(titles.remember('two', 'exec_command', undefined)).toBe('exec_command: run shell command');
-  expect(titles.remember('three', 'write_stdin', { session_id: 1, chars: '' })).toBe('write_stdin: read session output · 1');
-  // The intent and session are visible; typed bytes remain out of the title.
-  expect(titles.remember('four', 'write_stdin', { session_id: 1, chars: 'sensitive input' })).toBe('write_stdin: send input to session · 1');
+  // Core does not invent an add-on-specific description without its provider.
+  expect(titles.remember('two', 'exec_command', undefined)).toBe('exec_command');
+  const summaries = createToolCallSummaryResolver([{ name: 'write_stdin', ...toolCallSummary(() => 'tool-supplied session caption') }]);
+  expect(titles.remember('three', 'write_stdin', { session_id: 1, chars: '' }, summaries)).toBe('write_stdin: tool-supplied session caption');
+  expect(titles.remember('four', 'write_stdin', { session_id: 1, chars: 'sensitive input' }, summaries)).toBe('write_stdin: tool-supplied session caption');
 });
 
 test('successive native tools cannot be replaced by reconstructed older completions', () => {
