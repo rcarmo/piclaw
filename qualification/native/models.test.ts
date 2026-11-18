@@ -1325,3 +1325,10 @@ test('unavailable host observer cannot deny a model request',async()=>{
  const f=await fixture();f.policy.captureTelemetry=()=>{throw Error('Observer unavailable');};
  expect((await f.models.completeSimple(f.model,context)).stopReason).toBe('toolUse');expect(f.calls()).toBe(1);
 });
+
+test('classifier response cannot publish data after its captured policy is revoked',async()=>{
+ const f=await fixture(true),classify=f.runtime.classify.bind(f.runtime);
+ f.runtime.classify=async(...args:Parameters<typeof classify>)=>{const result=await classify(...args);f.revoke();return result;};
+ const result=await f.models.classify(f.models.getModelOfType('classifier',ref.provider,ref.id)!,classifierContext);
+ expect(f.calls()).toBe(1);expect(result.stopReason).toBe('error');expect(result.answers).toEqual({});expect(result.usage?.totalTokens).toBe(5);
+});

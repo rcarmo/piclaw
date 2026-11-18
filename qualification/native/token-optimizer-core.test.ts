@@ -21,3 +21,6 @@ import "../../runtime/durable-engine/vendor/token-economizer/test/sdk-models.tes
 import "../../runtime/durable-engine/vendor/token-economizer/test/sessions.test.ts";
 import "../../runtime/durable-engine/vendor/token-economizer/test/training.test.ts";
 import "../../runtime/durable-engine/vendor/token-economizer/test/upstream-fixes.test.ts";
+import "../../runtime/durable-engine/qualification/token-optimizer-host.test.ts";
+import "../../runtime/durable-engine/qualification/optimizer-model-source.test.ts";
+import "../../runtime/durable-engine/qualification/optimizer-model-bridge.test.ts";

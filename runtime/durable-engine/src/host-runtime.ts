@@ -301,6 +301,9 @@ export class HostConversationRuntime {
     void this.storageEnded.catch(() => {});
   }
 
+  /** Trusted Core extensions borrow this exact SDK namespace; no second Harness or storage owner is constructed. */
+  coreExtensionHarness(): Harness { this.fence(); return this.harness; }
+
   /** Borrow the existing SDK SQLite admission scope. It rechecks the source at
    * physical write/COMMIT boundaries; it owns no state, queue or transaction. */
   withSourceWriteGuard<T>(check: () => void, body: () => Promise<T>): Promise<T> {

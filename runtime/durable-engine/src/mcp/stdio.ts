@@ -3,12 +3,13 @@
 import {spawn,type ChildProcessWithoutNullStreams} from 'node:child_process';
 import {McpClient,PipeTransport,type McpPipe,type McpPipeHandlers} from '@earendil-works/pi-mcp';
 import type {McpAuthority} from './authority.ts';
+import {mcpEnvironmentNameIssue} from './environment.ts';
 export interface McpStdioConnection {command:string[];workdir:string;timeoutSeconds:number;env?:Record<string,string>}
 export function openMcpPipe(config:McpStdioConnection,handlers:McpPipeHandlers,assertCurrent:()=>void,authority?:Pick<McpAuthority,'assertSend'>):McpPipe{
  if(process.platform==='win32')throw Error('MCP stdio requires POSIX process-group cleanup');
  if(!config.command.length||config.command.some(arg=>arg.includes('\0'))||!config.workdir.startsWith('/'))throw Error('Invalid MCP process configuration');
  const env:NodeJS.ProcessEnv={};for(const key of ['PATH','HOME','TMPDIR','TMP','TEMP','LANG','LC_ALL','TZ'])if(process.env[key]!==undefined)env[key]=process.env[key];
- for(const[key,value]of Object.entries(config.env??{})){if(value.startsWith('keychain:'))throw Error('MCP environment references must resolve before process launch');env[key]=value;}
+ for(const[key,value]of Object.entries(config.env??{})){const issue=mcpEnvironmentNameIssue(key);if(issue)throw Error(issue);if(value.includes('\0'))throw Error('Environment values must not contain NUL bytes');if(value.startsWith('keychain:'))throw Error('MCP environment references must resolve before process launch');env[key]=value;}
  assertCurrent();
  const child=spawn(config.command[0]!,config.command.slice(1),{cwd:config.workdir,env,detached:true,stdio:'pipe'}) as ChildProcessWithoutNullStreams;
  const failures:Error[]=[];let closed=false;

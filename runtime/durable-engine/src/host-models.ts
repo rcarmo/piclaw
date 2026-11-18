@@ -575,14 +575,17 @@ export function createHostModels(
     }
   };
   const classify = async (model: ClassifierModel<ClassifierApi>, context: ClassifierContext, options?: ClassifierOptions): Promise<ClassifierResult> => {
-    let phase: ModelFailure["phase"] = "admission", providerError: unknown;
+    let phase: ModelFailure["phase"] = "admission", providerError: unknown, terminalUsage: Usage | undefined;
     try {
       const hostOptions = await admit("classify", model, options);
       const physical = physicalOfType("classifier", model);
       if (!hostModelRuntime120.classify) throw new Error("Host operation is unavailable");
       phase = "provider";
       const result = await hostModelRuntime120.classify(physical, data(context), hostOptions);
-      if (result.stopReason !== "stop") throw new Error("Host request failed");
+      terminalUsage = usage(result.usage);
+      phase = 'source'; hostOptions.signal.throwIfAborted();
+      policy.assertCurrent({provider:model.provider,id:model.id,type:'classifier'},'classify',hostOptions.signal);
+      if (result.stopReason !== "stop") { phase = 'provider'; throw new Error("Host request failed"); }
       return data({ api: model.api, provider: model.provider, model: model.id, stopReason: "stop" as const,
         timestamp: result.timestamp, usage: usage(result.usage),
         answers: Object.fromEntries(Object.entries(result.answers).map(([key, answer]) => [key,
@@ -592,7 +595,7 @@ export function createHostModels(
               : { type: answer.type, probability: answer.probability }])) });
     } catch (cause) {
       return { api: model.api, provider: model.provider, model: model.id, answers: {},
-        stopReason: "error", errorMessage: await operationFailure(model, phase, cause, options?.signal, providerError), timestamp: Date.now() };
+        stopReason: "error", errorMessage: await operationFailure(model, phase, cause, options?.signal, providerError), timestamp: Date.now(), ...(terminalUsage ? {usage: terminalUsage} : {}) };
     }
   };
   const fetchDeferred = (model: Model<Api>, handle: DeferredHandle, options?: DeferredFetchOptions) =>

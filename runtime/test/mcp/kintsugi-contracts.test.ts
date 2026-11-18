@@ -11,3 +11,7 @@ import "../../durable-engine/qualification/token-optimizer-config.test.ts";
 import "../../durable-engine/qualification/mcp-recall-store.test.ts";
 import "../../durable-engine/qualification/optimizer-output.test.ts";
 import "../../durable-engine/qualification/mcp-recall.test.ts";
+import "../../durable-engine/qualification/mcp-migration.test.ts";
+import "../../durable-engine/qualification/token-optimizer-host.test.ts";
+import "../../durable-engine/qualification/optimizer-model-source.test.ts";
+import "../../durable-engine/qualification/optimizer-model-bridge.test.ts";

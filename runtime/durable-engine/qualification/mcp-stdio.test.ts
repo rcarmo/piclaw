@@ -21,6 +21,14 @@ test('stdio does not inherit ambient host credentials',async()=>{
 test('stdio startup errors are visible and do not leave a process',async()=>{await expect(connectMcpStdio({command:['/no-such-owned-mcp-fixture'],workdir:tmpdir(),timeoutSeconds:1},()=>{})).rejects.toThrow();});
 test('unresolved keychain env references are rejected before process launch',async()=>{const f=fixture();await expect(connectMcpStdio({...f.config,env:{TOKEN:'keychain:fixture/token'}},()=>{})).rejects.toThrow('resolve');expect(existsSync(f.pid)).toBe(false);});
 
+test('runtime loader environment overrides are rejected at the physical launch boundary',async()=>{
+ const f=fixture();
+ for(const name of ['LD_PRELOAD','NODE_OPTIONS','BASH_ENV']){
+  const connecting=connectMcpStdio({...f.config,env:{[name]:'DO_NOT_EXECUTE'}},()=>{}).then(client=>{closes.push(client.close);return client;});
+  await expect(connecting).rejects.toThrow('not permitted');expect(existsSync(f.pid)).toBe(false);
+ }
+});
+
 test('parent exit never exempts a server descendant from process-group cleanup',async()=>{
  const f=fixture(),script=join(f.dir,'descendant-server.ts'),childPid=join(f.dir,'child-pid');
  writeFileSync(script,`import{createInterface}from'node:readline';import{writeFileSync}from'node:fs';const child=Bun.spawn([process.execPath,'-e','setInterval(()=>{},1000)'],{stdin:'ignore',stdout:'ignore',stderr:'ignore'});writeFileSync(${JSON.stringify(childPid)},String(child.pid));for await(const line of createInterface({input:process.stdin})){const r=JSON.parse(line);if(r.id===undefined)continue;const result=r.method==='initialize'?{protocolVersion:'2025-03-26',capabilities:{tools:{}},serverInfo:{name:'tree',version:'1'}}:{tools:[]};console.log(JSON.stringify({jsonrpc:'2.0',id:r.id,result}));}process.exit(0);`);

@@ -7,10 +7,8 @@ import { Value } from "typebox/value";
 const isJsonObject=(value:unknown):value is Record<string,import("@earendil-works/chord/json").JsonValue>=>value!==null&&typeof value==="object"&&!Array.isArray(value);
 import { observing, offloadPresentation, outputLineCount, outputOffload, reduceToolOutput, type Policy } from "#token-optimizer/core";
 import {optimizerCallEntry as codemodeCallEntry} from "./optimizer-output-source.ts";
-import { stripTerminalEscapes, type SavedOutputRead } from "./optimizer-output-source.ts";
+import { optimizerBashOutput, stripTerminalEscapes, type SavedOutputRead } from "./optimizer-output-source.ts";
 import type { ToolOutputScope, ToolOutputStore } from "./mcp/tool-output-store.ts";
-const resultSchema = Type.Object({output:Type.String(),exitCode:Type.Union([Type.Integer(),Type.Null()]),aborted:Type.Optional(Type.Boolean()),timedOut:Type.Optional(Type.Boolean()),truncated:Type.Optional(Type.Boolean())});
-const detailsSchema = Type.Object({fullOutputPath:Type.String(),exitCode:Type.Union([Type.Integer(),Type.Null()]),aborted:Type.Optional(Type.Boolean()),timedOut:Type.Optional(Type.Boolean())});
 const commandSchema = Type.Object({command:Type.String()});
 const codeSchema = Type.Object({code:Type.String()});
 const callsSchema = Type.Object({calls:Type.Array(Type.Object({name:Type.String()}))});
@@ -48,8 +46,9 @@ export function createOptimizerOutputExtension(options:OptimizerOutputOptions) {
       const policy = await options.policyFor(api.conversationId);
       const reduce = Boolean(policy && observing(policy) && policy.reduceOutputs), offload = Boolean(policy && observing(policy) && policy.offloadOutputs && options.store && options.scope && options.mark);
       if (!policy || !reduce && !offload) return result;
-      const candidates = !reduce ? [] : call.name === "bash" && Value.Check(commandSchema,call.arguments) && Value.Check(resultSchema,result.structuredOutput) && Value.Check(detailsSchema,result.details)
-        ? [{command:call.arguments.command,...result.structuredOutput,fullOutputPath:result.details.fullOutputPath}]
+      const bash = call.name === 'bash' ? optimizerBashOutput(result.structuredOutput,result.details) : null;
+      const candidates = !reduce ? [] : bash && Value.Check(commandSchema,call.arguments)
+        ? [{command:call.arguments.command,...bash}]
         : call.name === "codemode" ? await nestedOutputs(api,context) : [];
       let reductions = 0, originalBytes = 0, reducedBytes = 0;
       const output = (result.output ?? []).map(block => {
@@ -62,8 +61,9 @@ export function createOptimizerOutputExtension(options:OptimizerOutputOptions) {
             text = reduction.text+text.slice(candidate.output.length);
           } else {
             let json:unknown;try {json = JSON.parse(text);} catch {continue;}
-            if (!Value.Check(resultSchema,json) || json.output !== candidate.output || json.exitCode !== candidate.exitCode || json.aborted || json.timedOut) continue;
-            text = JSON.stringify({...json,output:reduction.text,fullOutputPath:candidate.fullOutputPath});
+            const emitted = optimizerBashOutput(json,undefined);
+            if (!isJsonObject(json) || !emitted || emitted.output !== candidate.output || emitted.exitCode !== candidate.exitCode || emitted.aborted || emitted.timedOut) continue;
+            text = JSON.stringify({...json,output:reduction.text});
           }
           reductions++;originalBytes += reduction.originalBytes;reducedBytes += reduction.reducedBytes;break;
         }
@@ -88,12 +88,13 @@ async function offloaded(options:OptimizerOutputOptions,policy:Policy,call:{name
   if (bytes <= settings.bytes && lines <= settings.lines) return;
   const scope = await options.scope!(api.conversationId);if (!scope) return;const owner = scope.owner;
   let full = raw, complete = true, exitCode:number|null = null, label = "";
-  if (call.name === "bash" && Value.Check(commandSchema,call.arguments) && Value.Check(resultSchema,result.structuredOutput)) {
-    label = call.arguments.command;exitCode = result.structuredOutput.exitCode;
-    const path = result.structuredOutput.truncated && Value.Check(detailsSchema,result.details) ? result.details.fullOutputPath : undefined;
-    if (path) {
-      const file = options.readSaved ? await options.readSaved(path) : {status:"unavailable" as const};
-      if (file.status === "available") {full = stripTerminalEscapes(file.text);complete = !file.truncated;} else complete = false;
+  if (call.name === "bash") {
+    const bash = optimizerBashOutput(result.structuredOutput,result.details);
+    if (!bash || !Value.Check(commandSchema,call.arguments) || bash.aborted || bash.timedOut) return;
+    label = call.arguments.command; exitCode = bash.exitCode; full = bash.output; complete = !bash.truncated;
+    if (bash.truncated && bash.fullOutputPath) {
+      const file = options.readSaved ? await options.readSaved(bash.fullOutputPath) : {status:"unavailable" as const};
+      if (file.status === "available") {full = stripTerminalEscapes(file.text);complete = !file.truncated;}
     }
   } else if (call.name === "codemode" && Value.Check(codeSchema,call.arguments)) label = call.arguments.code.split("\n").find(line => line.trim())?.trim() ?? "";
   const id = `out_${createHash("sha256").update(JSON.stringify([owner,api.conversationId,api.taskId,full])).digest("hex").slice(0,32)}`;
@@ -132,7 +133,11 @@ async function nestedOutputs(api:HookApi,context:Context) {
   for (const entry of entries) if (entry.byTaskId === api.taskId && codemodeCallEntry.is(entry)) {
     const data = entry.data;
     if (data.phase === "start" && data.name === "bash" && Value.Check(commandSchema,data.arguments)) starts.set(data.key,data.arguments.command);
-    if (data.phase === "end" && data.output && !data.cancelled && starts.has(data.key) && Value.Check(detailsSchema,data.details)) candidates.push({command:starts.get(data.key)!,output:data.output,...data.details});
+    if (data.phase === "end" && data.output && !data.cancelled && starts.has(data.key)) {
+      let value:unknown; try { value = JSON.parse(data.output); } catch { continue; }
+      const bash = optimizerBashOutput(value,data.details);
+      if (bash) candidates.push({command:starts.get(data.key)!,...bash});
+    }
   }
   return candidates;
 }
