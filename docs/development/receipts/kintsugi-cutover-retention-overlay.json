@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "sourceParent": "adc5698c1",
+  "sourceParent": "26508ec0641844f46c63176907b194600ec6f46a",
   "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
   "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
   "scope": "Subsequent source transformations only. Original receipt,105 rows,37 deletions and financial accounting are unchanged.",
@@ -14,7 +14,7 @@
     {
       "path": "runtime/durable-engine/src/default-application-runtime.ts",
       "beforeSha256": "85de1db072f2c7e3f5280ca93cab21329da6a2ce8f3052e400202ecee97ce2a7",
-      "afterSha256": "b3e4fed6735b5289227862a9b49f63140ce539796bfc6923e8f9e4c2bdfd3d69",
+      "afterSha256": "b459884a666da1ce21f21acb27d45ab63699ee6c1892427046eb0290da7b6c38",
       "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
     },
     {
@@ -100,6 +100,12 @@
       "beforeSha256": "5e3212ee821b5c1f83ddbc3535ebb924c3316133a4cfa9397a70f5ad97fc69f9",
       "afterSha256": "1a425c0f0f2e94c1adee612a88ddcc87efeeeeb62407e3befef5b980f7db9d61",
       "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "runtime/scripts/schema-ownership.json",
+      "beforeSha256": "038a3dca34d15b62f63319805aeefab84acd249e199da509a9f2aa5f774277b6",
+      "afterSha256": "01f8b9ecb1b274995209edb16a58ce390719b5c70418031b13055a4892e5fedf",
+      "purpose": "Register exact outbound connection metadata, disposable output/recall cache objects and SDK document kinds; preserve historical schema fingerprints and financial accounting unchanged."
     }
   ]
 }

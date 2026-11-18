@@ -1089,7 +1089,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     assertOwner() { assert(); lifetime.signal.throwIfAborted(); observability.assertCurrent(); }, failClosed(error) { lifetime.abort(error); } }));
   if (goal) registry.install(createHostGoalTerminalFence(goal.addon, { root, runtime, assertOwner: assertGoal }));
   // Request-only optimiser projections follow source-owned Goal/Plan materialisation.
-  features=createApplicationOptimizerMcp({root,workspaceRoot:WORKSPACE_DIR,registry,host,harness:()=>runtime().coreExtensionHarness(),async bindings(harness){const mapping=await harness.snapshot(ApplicationConversations,1 as ConversationId,context);if(!mapping)throw Error("Application namespace is absent");return mapping.bindings;},assertOwner:assertCoreDelegate,captureSource:api=>captureSource({conversationId:api.conversationId,taskId:api.taskId,toolCallId:api.callId}),offlineMaintenance});
+  features=createApplicationOptimizerMcp({root,workspaceRoot:WORKSPACE_DIR,registry,host,harness:()=>runtime().coreExtensionHarness(),async bindings(harness){const mapping=await harness.snapshot(ApplicationConversations,1 as ConversationId,context);if(!mapping)throw Error("Application namespace is absent");return mapping.bindings;},assertOwner:assertCoreDelegate,assertCleanupOwner:assert,captureSource:api=>captureSource({conversationId:api.conversationId,taskId:api.taskId,toolCallId:api.callId}),offlineMaintenance});
   await features.prepare();
   const commandPolicy = createHostCommandPolicy(root, () => { assert(); if (readAccessConfig().mode !== "single-user") throw Error("Native controls require single-user policy"); });
   // Preparation stays paused; the executing HostConversationRuntime installs

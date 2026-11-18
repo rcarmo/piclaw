@@ -86,3 +86,16 @@ test('explicit anonymous HTTP uses the public client without forwarding any bear
  let requests=0;const server=Bun.serve({hostname:'127.0.0.1',port:0,async fetch(request){requests++;expect(request.headers.get('authorization')).toBeNull();if(request.method!=='POST')return new Response(null,{status:202});const rpc=await request.json() as any;if(rpc.id===undefined)return new Response(null,{status:202});return Response.json({jsonrpc:'2.0',id:rpc.id,result:rpc.method==='initialize'?{protocolVersion:rpc.params.protocolVersion,capabilities:{},serverInfo:{name:'public',version:'1'}}:{}});}});cleanups.push(async()=>{server.stop(true);});
  const connected=await connectMcpHttp({...config,url:server.url.href,allowHttp:true,auth:'none',bearer:'MUST_NOT_BE_FORWARDED'});cleanups.push(()=>connected.client.close());expect(connected.tools).toEqual([]);expect(requests).toBeGreaterThan(0);
 });
+
+test('HTTP discovery cancellation after execution revocation joins owner-only session disposal',async()=>{
+ let execution=true,deleted=0,effects=0;const entered=Promise.withResolvers<void>(),release=Promise.withResolvers<void>(),abort=new AbortController();
+ const authority=createMcpAuthority({assertOwner(){if(!execution)throw Error('Execution sealed');},assertCleanupOwner(){},assertConnection(){},captureSource:async()=>()=>{}});
+ const server=Bun.serve({hostname:'127.0.0.1',port:0,async fetch(request){
+  if(request.method==='DELETE'){deleted++;return new Response(null,{status:200});}if(request.method!=='POST')return new Response(null,{status:405});const rpc=await request.json() as any;if(rpc.id===undefined)return new Response(null,{status:202});let result:unknown={};
+  if(rpc.method==='initialize')result={protocolVersion:rpc.params.protocolVersion,capabilities:{tools:{}},serverInfo:{name:'held',version:'1'}};
+  if(rpc.method==='tools/list'){entered.resolve();await release.promise;result={tools:[]};}if(rpc.method==='tools/call')effects++;
+  return Response.json({jsonrpc:'2.0',id:rpc.id,result},{headers:{'Mcp-Session-Id':'synthetic-held-session'}});
+ }});
+ let pending:Promise<unknown>|undefined;
+ try{pending=connectMcpHttp({...config,url:server.url.href,allowHttp:true},fetch,undefined,abort.signal,authority).then(()=>null,error=>error);await entered.promise;execution=false;abort.abort();release.resolve();const failure=await pending;expect(failure).toBeInstanceOf(Error);expect(failure).not.toBeInstanceOf(AggregateError);expect(deleted).toBe(1);expect(effects).toBe(0);}finally{release.resolve();await pending;server.stop(true);}
+});

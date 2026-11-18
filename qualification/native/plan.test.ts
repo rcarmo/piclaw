@@ -73,14 +73,15 @@ for (const installedLegacy of [false, true]) for (const nested of [false, true])
   };
   // Open only after backend close: edit current-native metadata through public
   // SDK documents, never a v3 import or a concurrent second application Session.
-  const inspectTools = async (change?: (tools: string[]) => string[]) => {
+  type ToolFilter=string[]|{remove:string[]}|undefined;
+  const inspectTools = async (change?: (tools: ToolFilter) => ToolFilter) => {
     const path = (db.query("PRAGMA database_list").all() as { name: string; file: string }[]).find(row => row.name === "main")!.file;
     const models = createHostModels(host, [model], { signal: new AbortController().signal, async authorize() {}, assertCurrent() { owner.assertCurrentOwner(); } });
     const harness = await Harness.open(await SqliteStorage.open(new BunSqliteDatabase(path, { root: db, assertOwner: () => owner.assertCurrentOwner(), fenceTransactions: true })), { models, registry: createRegistry() }, context);
     try { const app = await harness.root(context); return await app.commit(async tx => {
       const doc = await tx.doc(AgentDoc, app.id), current = doc.tools;
-      if (!Array.isArray(current)) throw Error("Explicit native factory tool array required");
-      const next = change ? change([...current]) : [...current]; if (change) doc.tools = next; return next;
+      const stored:ToolFilter=current===undefined?undefined:JSON.parse(JSON.stringify(current));
+      const next=change?change(stored):stored;if(change){if(next===undefined)delete doc.tools;else doc.tools=next;}return next;
     }, context); } finally { await harness.close(context); }
   };
   try {
@@ -106,13 +107,13 @@ for (const installedLegacy of [false, true]) for (const nested of [false, true])
     expect((await api('POST', { markdown: 'stale' }, tag)).status).toBe(409);
     expect((await api('POST', { markdown: 'missing precondition' })).status).toBe(428);
     await backend.close(); await channel!.stop(); await base.queue.shutdown(); await pool!.shutdown();
-    expect(await inspectTools(tools => tools.filter(name => name !== 'plan'))).not.toContain('plan');
+    expect(await inspectTools(() => ({remove:['plan']}))).toEqual({remove:['plan']});
     backend = await createRecoverableRuntimeBackend(() => createDefaultApplicationRuntime(owner, async () => services)); base = createRuntimeBaseServices({ dataDir: workspace }); await bind();
     expect((await (await api()).json() as any).plan.markdown).toBe('- [-] HTTP');
     expect(db.query("SELECT * FROM extension_kv WHERE extension_id='plan-sidebar'").all()).toEqual(originalLegacyRows);
     expect(existsSync(marker)).toBe(false);
     await backend.close(); await channel!.stop(); await base.queue.shutdown(); await pool!.shutdown();
-    expect(await inspectTools()).toContain('plan');
+    expect(await inspectTools()).toEqual({remove:['plan']});
     expect(await inspectTools(() => ['read'])).toEqual(['read']);
     const custom = await createDefaultApplicationRuntime(owner, async () => services);
     await custom.close();

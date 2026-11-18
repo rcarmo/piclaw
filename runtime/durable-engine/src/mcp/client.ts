@@ -14,7 +14,7 @@ export function mcpEndpoint(value:string,allowHttp=false):string {
   return url.href;
 }
 /** An authenticated Streamable HTTP session. Bearer-token sessions do not require OAuth discovery. */
-export async function connectMcpHttp(config:McpHttpConnection,fetcher:McpFetch = fetch,authProvider?:AuthProvider,signal?:AbortSignal,authority?:Pick<McpAuthority,'assertSend'>) {
+export async function connectMcpHttp(config:McpHttpConnection,fetcher:McpFetch = fetch,authProvider?:AuthProvider,signal?:AbortSignal,authority?:Pick<McpAuthority,'assertSend'|'cleanup'>) {
   const endpoint = mcpEndpoint(config.url,config.allowHttp);
   if (!authProvider && config.auth!=='none' && (!config.bearer || /[\r\n]/.test(config.bearer))) throw new Error("Enter a bearer token without line breaks.");
   const client = new McpClient({name:"piclaw",version:"1",requestTimeoutMs:config.timeoutSeconds*1000});
@@ -27,11 +27,12 @@ export async function connectMcpHttp(config:McpHttpConnection,fetcher:McpFetch =
     return fetcher(input,{...init,redirect:"error"});
   }});
   let closing:Promise<void>|undefined;
-  const abort=()=>{closing??=client.close();};
+  const close=()=>closing??=Promise.resolve().then(()=>authority?authority.cleanup(()=>client.close()):client.close());
+  const abort=()=>{void close().catch(()=>{});};
   signal?.addEventListener("abort",abort,{once:true});
-  try {signal?.throwIfAborted();await client.connect(transport);return {client,tools:client.serverCapabilities?.tools ? await client.listTools({signal}) : []};}
-  catch (error) {await client.close();throw error;}
-  finally {signal?.removeEventListener("abort",abort);await closing;}
+  try {signal?.throwIfAborted();await client.connect(transport);const tools=client.serverCapabilities?.tools?await client.listTools({signal}):[];signal?.throwIfAborted();return{client,tools};}
+  catch (error) {try{await close();}catch(cleanup){throw new AggregateError([error,cleanup],'MCP HTTP startup cleanup uncertain');}throw error;}
+  finally {signal?.removeEventListener("abort",abort);}
 }
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Transport exceptions are external input; expose only known status classes, never raw bodies.
 export function mcpFailure(error:unknown):string {

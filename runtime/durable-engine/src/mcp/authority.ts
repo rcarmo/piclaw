@@ -3,7 +3,7 @@ import type {Context} from '@earendil-works/chord/context';
 import type {ToolExecutionApi} from '@earendil-works/pi-durable';
 type Invocation={kind:'call';check():void}|{kind:'cleanup'};
 /** Invocation-local effect fences around the public SDK transport; the SDK remains the executor. */
-export function createMcpAuthority(options:{assertOwner():void;assertConnection():void;captureSource(api:ToolExecutionApi):Promise<()=>void>}){
+export function createMcpAuthority(options:{assertOwner():void;assertCleanupOwner?():void;assertConnection():void;captureSource(api:ToolExecutionApi):Promise<()=>void>}){
  const scopes=new AsyncLocalStorage<Invocation>();
  const metadata=new Set(['initialize','notifications/initialized','ping','tools/list','resources/list','resources/templates/list']);
  return{
@@ -14,15 +14,16 @@ export function createMcpAuthority(options:{assertOwner():void;assertConnection(
    check();return scopes.run({kind:'call',check},async()=>{const result=await body();check();return result;});
   },
   /** Run only the existing client's disposal under an explicit bounded cleanup grant. */
-  cleanup<T>(body:()=>Promise<T>):Promise<T>{options.assertOwner();return scopes.run({kind:'cleanup'},body);},
+  cleanup<T>(body:()=>Promise<T>):Promise<T>{(options.assertCleanupOwner??options.assertOwner)();return scopes.run({kind:'cleanup'},body);},
   /** Called immediately before each physical fetch/stdin write, after any awaited preparation. */
   assertSend(method:string|undefined,httpMethod='POST'){
-   options.assertOwner();const scope=scopes.getStore();
+   const scope=scopes.getStore();
    if(scope?.kind==='cleanup'){
-    if(httpMethod==='DELETE'||method==='notifications/cancelled')return;
+    (options.assertCleanupOwner??options.assertOwner)();
+    if(httpMethod==='DELETE'&&method===undefined||httpMethod==='POST'&&method==='notifications/cancelled')return;
     throw Error('MCP cleanup cannot invoke a tool or read a resource');
    }
-   options.assertConnection();
+   options.assertOwner();options.assertConnection();
    if(scope?.kind==='call'){scope.check();return;}
    if(httpMethod==='GET'||method!==undefined&&metadata.has(method))return;
    throw Error('MCP invocation source authority is required');

@@ -22,7 +22,7 @@ import {readLegacyMcpServers} from './mcp/legacy-config.ts';
 import {readOwnedBashOutput} from './saved-bash-output.ts';
 export interface ApplicationFeatureBinding {chatJid:string;branchId:string;conversationId:number}
 /** Compose imported public SDK extensions with the one executing application namespace. */
-export function createApplicationOptimizerMcp(options:{root:Database;workspaceRoot:string;registry:ReturnType<typeof createRegistry>;host:RuntimeModelServices;harness():Harness;bindings(harness:Harness):Promise<readonly ApplicationFeatureBinding[]>;assertOwner():void;captureSource(api:ToolExecutionApi):Promise<()=>void>;offlineMaintenance:boolean}){
+export function createApplicationOptimizerMcp(options:{root:Database;workspaceRoot:string;registry:ReturnType<typeof createRegistry>;host:RuntimeModelServices;harness():Harness;bindings(harness:Harness):Promise<readonly ApplicationFeatureBinding[]>;assertOwner():void;assertCleanupOwner?():void;captureSource(api:ToolExecutionApi):Promise<()=>void>;offlineMaintenance:boolean}){
  const workspaceRoot=realpathSync(options.workspaceRoot),workspaceId=createHash('sha256').update(workspaceRoot).digest('hex');
  const environmentRevision=createHash('sha256').update(JSON.stringify([hostname(),process.platform,process.arch,workspaceRoot,getPiclawAgentDir()])).digest('hex');
  const lifetime=new AbortController();let closed=false;
@@ -58,7 +58,7 @@ export function createApplicationOptimizerMcp(options:{root:Database;workspaceRo
   const owner=await identity(host.conversationId);if(!owner||owner.child)return null;const stored=await options.harness().snapshot(PlanDoc,owner.binding.chatJid,context);check();return stored?{revision:stored.revision??0,steps:parsePlanMarkdown(stored.markdown).plan}:null;
  }});
  const authority=createOptimizerAuthority({workspaceId,environmentRevision,registry:options.registry,extension:optimizer.optimizer.extension,assertOwner:check,agents});
- const mcp=createMcpRuntime({workspaceId,registry:options.registry,store:connections,assertOwner:check,async resolveAgent(id){const owner=await identity(id);return owner?{agentId:owner.agentId,readOnly:owner.readOnly}:undefined;},captureSource:options.captureSource,connect(config,grant,signal){return connectMcpConnection(config,check,grant,signal,{id:workspaceId,root:workspaceRoot});}});
+ const mcp=createMcpRuntime({workspaceId,registry:options.registry,store:connections,assertOwner:check,assertCleanupOwner:options.assertCleanupOwner,async resolveAgent(id){const owner=await identity(id);return owner?{agentId:owner.agentId,readOnly:owner.readOnly}:undefined;},captureSource:options.captureSource,connect(config,grant,signal){return connectMcpConnection(config,check,grant,signal,{id:workspaceId,root:workspaceRoot});}});
  const recall=createMcpRecallExtension({workspaceId,harness:options.harness,connections,database,async identityOf(id){const owner=await identity(id);check();if(!owner||owner.readOnly)throw Error('MCP recall identity unavailable');return{owner:JSON.stringify([workspaceId,environmentRevision,owner.binding.chatJid]),agentId:owner.agentId};}});
  options.registry.install(optimizer.optimizer.extension);options.registry.install(recall);
  let migration:Awaited<ReturnType<typeof importLegacyMcpOnce>>|undefined;

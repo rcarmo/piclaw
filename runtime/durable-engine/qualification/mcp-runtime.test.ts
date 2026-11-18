@@ -42,3 +42,12 @@ test('an unsuccessful remote effect is never automatically replayed',async()=>{
 test('uncertain cleanup retains one rejected disposal promise and never certifies or retries it',async()=>{
  const f=await fixture();f.failCleanup();const closing=f.runtime.close();expect(f.runtime.close()).toBe(closing);const first=await closing.then(()=>null,error=>error);expect(first).toBeInstanceOf(AggregateError);expect(JSON.stringify(first.errors.map((error:Error)=>error.message))).not.toContain('CREDENTIAL_DIAGNOSTIC');expect(await f.runtime.close().then(()=>null,error=>error)).toBe(first);expect(f.closes()).toBe(1);
 });
+
+for(const mode of ['late-handle','late-error'] as const)test('close joins stale discovery and retains cleanup uncertainty: '+mode,async()=>{
+ const{McpClient}=await import('@earendil-works/pi-mcp');const db=new Database(':memory:'),store=new McpConnectionStore(db,()=>{});await store.save({id:'late',name:'late',workspaceId:'workspace',agentIds:[],enabled:true,transport:'http',url:'https://fixture.invalid/mcp',auth:'none',allowHttp:false,timeoutSeconds:2});
+ const entered=Promise.withResolvers<void>(),release=Promise.withResolvers<void>();let execution=true,closes=0,settled=false;
+ const runtime=createMcpRuntime({workspaceId:'workspace',registry:createRegistry(),store,assertOwner(){if(!execution)throw Error('Execution sealed');},assertCleanupOwner(){},resolveAgent:async()=>undefined,captureSource:async()=>()=>{},async connect(){entered.resolve();await release.promise;if(mode==='late-error')throw new AggregateError([Error('PRIVATE_CLEANUP')],'Startup cleanup uncertain');const client=new McpClient({name:'fixture',version:'1'});return{client,tools:[],async close(){closes++;await client.close();throw Error('PRIVATE_CLEANUP');}};}});
+ try{
+  await runtime.attach();await entered.promise;execution=false;const closing=runtime.close();void closing.then(()=>{settled=true;},()=>{settled=true;});await Promise.resolve();expect(settled).toBe(false);release.resolve();const failure=await closing.then(()=>null,error=>error);expect(failure).toBeInstanceOf(AggregateError);expect(JSON.stringify(failure.errors.map((error:Error)=>error.message))).not.toContain('PRIVATE_CLEANUP');expect(await runtime.close().then(()=>null,error=>error)).toBe(failure);expect(closes).toBe(mode==='late-handle'?1:0);
+ }finally{release.resolve();await runtime.close().catch(()=>{});db.close();}
+});
