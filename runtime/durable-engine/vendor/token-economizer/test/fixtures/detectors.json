@@ -1,0 +1,2057 @@
+{
+  "upstream": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+  "cases": [
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "ran_tests",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": "confirm",
+        "fired": false,
+        "exercised": true
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "ran_tests",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": "contradict",
+        "fired": true,
+        "exercised": true
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "ran_tests",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": "confirm",
+        "fired": true,
+        "exercised": true
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "ran_tests",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": "contradict",
+        "fired": true,
+        "exercised": true
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "ran_checks",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": "confirm",
+        "fired": false,
+        "exercised": true
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "ran_checks",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": "contradict",
+        "fired": true,
+        "exercised": true
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "ran_checks",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": "confirm",
+        "fired": true,
+        "exercised": true
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "ran_checks",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": "contradict",
+        "fired": true,
+        "exercised": true
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "edited",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "edited",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "edited",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "edited",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "missing_command",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "missing_command",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "missing_command",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "missing_command",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "missing_dependency",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "missing_dependency",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "missing_dependency",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "missing_dependency",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "bad_usage",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "bad_usage",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "bad_usage",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "bad_usage",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "custom",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "custom",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "custom",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": "confirm",
+        "fired": true,
+        "exercised": true
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "custom",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": "contradict",
+        "fired": true,
+        "exercised": true
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "echo é",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": "confirm",
+        "fired": false,
+        "exercised": true
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "echo é",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": "contradict",
+        "fired": true,
+        "exercised": true
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "echo é",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": "confirm",
+        "fired": true,
+        "exercised": true
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "echo é",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": "contradict",
+        "fired": true,
+        "exercised": true
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "^does-not-match$",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "^does-not-match$",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 0
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "^does-not-match$",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": ""
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "detector",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "scope": "^does-not-match$",
+          "fired": "custom",
+          "confirm": "confirm",
+          "contradict": "contradiction"
+        },
+        "digest": {
+          "iid": "session",
+          "resolved": null,
+          "edited_files": [],
+          "n_cmds": 2,
+          "cmd_templates": [
+            "bun test",
+            "echo é"
+          ],
+          "check_commands": [
+            "bun test"
+          ],
+          "failed_commands": [],
+          "missing_command": false,
+          "missing_dependency": false,
+          "bad_usage": false,
+          "_ran_tests": true,
+          "_cmd_blob": "bun test\necho é",
+          "_out_blob": "pass\nconfirm contradiction",
+          "features": {
+            "custom": 2
+          }
+        }
+      },
+      "expected": {
+        "verdict": null,
+        "fired": false,
+        "exercised": false
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    }
+  ]
+}

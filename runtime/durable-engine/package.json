@@ -15,7 +15,10 @@
     "@earendil-works/pi-ai": "1.5.2",
     "@earendil-works/pi-codemode": "1.5.2",
     "@earendil-works/pi-durable": "1.5.2",
+    "@earendil-works/pi-mcp": "1.5.2",
     "@earendil-works/pi-telemetry": "1.5.2",
+    "@noble/hashes": "2.4.0",
+    "re2js": "2.10.0",
     "typebox": "1.4.3"
   },
   "devDependencies": {
@@ -27,6 +30,11 @@
     "@earendil-works/pi-ai": "1.5.2",
     "@earendil-works/pi-codemode": "1.5.2",
     "@earendil-works/pi-durable": "1.5.2",
-    "@earendil-works/pi-telemetry": "1.5.2"
+    "@earendil-works/pi-telemetry": "1.5.2",
+    "@earendil-works/pi-mcp": "1.5.2"
+  },
+  "imports": {
+    "#token-optimizer/core": "./vendor/token-economizer/src/core/index.ts",
+    "#token-optimizer/pi-durable": "./vendor/token-economizer/src/pi-durable/index.ts"
   }
 }

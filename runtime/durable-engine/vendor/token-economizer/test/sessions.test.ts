@@ -1,0 +1,42 @@
+import { expect, test } from "bun:test";
+import { claimFold, contextSection, deferFold, endSession, finishFold, prepareSession, recoverableSessions, replaySections, repositoryActivity, transcriptChanged, type SessionPreparation } from "../src/core/sessions.ts";
+const input: SessionPreparation = {id:"one",scope:{host:"host",repository:"repo",environment:"env"},conversation:"conversation",group:"fork-group",now:0,event:"startup",visibleHistory:false,carriedSections:{},carriedIds:[],cachedSection:"cached\n",cachedIds:["fact"],publishedMask:["rare"],mode:"active"};
+test("fresh injection, inherited empty sections, resume and published masks keep distinct clocks", () => {
+  const fresh = prepareSession(null,input);
+  expect(fresh.section).toBe("cached\n");
+  expect(fresh.injectedIds).toEqual(["fact"]);
+  expect(prepareSession(null,{...input,visibleHistory:true}).section).toBe("");
+  expect(prepareSession(null,{...input,event:"fork",carriedSections:{[contextSection]:"inherited\n"}}).section).toBe("inherited\n");
+  const resumed = prepareSession(fresh,{...input,cachedSection:"changed",publishedMask:["other"],mode:"off",now:10});
+  expect(resumed.section).toBe("cached\n"); expect(resumed.frozenMask).toEqual(["other"]);
+  expect(prepareSession(null,{...input,mode:"observe"}).section).toBe("");
+  expect(prepareSession(null,{...input,mode:"off"}).section).toBe("");
+  expect(replaySections(fresh,{other:"patch"},false,1).section).toBe("cached\n");
+  expect(replaySections(fresh,{other:"summary"},true,1).section).toBe("");
+  expect(replaySections(fresh,{[contextSection]:""},false,1).injectedIds).toEqual([]);
+  expect(replaySections(fresh,{[contextSection]:fresh.section},true,1).injectedIds).toEqual(["fact"]);
+  expect(replaySections(fresh,{[contextSection]:"foreign replacement"},false,1).injectedIds).toEqual([]);
+});
+test("recovery at 600 seconds excludes current, folded and other environments; oldest first", () => {
+  const first = prepareSession(null,input), second = prepareSession(null,{...input,id:"two",now:1});
+  expect(recoverableSessions([first],input.scope,"current",599_999)).toEqual([]);
+  expect(recoverableSessions([second,first],input.scope,"current",600_000).map(s => s.id)).toEqual(["one"]);
+  expect(recoverableSessions([second,first],input.scope,"current",600_001).map(s => s.id)).toEqual(["one","two"]);
+  expect(recoverableSessions([endSession(first,2)],input.scope,"one",3)).toEqual([]);
+  expect(recoverableSessions([endSession(first,2)],{...input.scope,environment:"other"},"current",3)).toEqual([]);
+});
+test("claims, deferral, terminal unreadability and resume after folding do not double count", () => {
+  const initial = prepareSession(null,input), claimed = claimFold(initial,"claim","cutoff",1);
+  expect(claimed.kind).toBe("admitted");
+  if (claimed.kind !== "admitted") throw new Error("Expected claim");
+  expect(claimFold(claimed.session,"other","cutoff",2).kind).toBe("busy");
+  expect(deferFold(claimed.session,"claim",2).folded).toBe(false);
+  expect(() => finishFold(claimed.session,"other",3)).toThrow();
+  const folded = finishFold(claimed.session,"claim",3,"permanently unreadable");
+  expect(folded.foldError).toBe("permanently unreadable");
+  const resumed = transcriptChanged(prepareSession(folded,{...input,now:4}),5);
+  expect(resumed.appendedAfterFold).toBe(true);
+  expect(claimFold(resumed,"again","new",6).kind).toBe("folded");
+  expect(recoverableSessions([resumed],input.scope,"current",700_000)).toEqual([]);
+  expect(repositoryActivity([{...resumed,scope:{...input.scope,environment:"other"},recordActivity:8}],input.scope)).toBe(8);
+});

@@ -1,0 +1,801 @@
+{
+  "upstream": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+  "cases": [
+    {
+      "kind": "spiral",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "steps": [
+          {
+            "name": "edit",
+            "args": {
+              "path": "src/a.ts"
+            },
+            "output": "",
+            "failed": null,
+            "expected": {
+              "state": {
+                "turns": 1,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 0,
+                "test_runs": 0,
+                "fail_sigs": {},
+                "repeated_fail_sigs": 0,
+                "recent": [
+                  "  1: edit a.ts"
+                ]
+              },
+              "snapshot": {
+                "turns": 1,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 0,
+                "test_runs": 0,
+                "stagnation": 0.0,
+                "repeated_fail_sigs": 0
+              },
+              "digest": "turns=1 edit_churn=1 distinct_edit_files=1 error_outputs=0 test_runs=0 repeated_identical_failures=0 stagnation=0.00\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 1 turns = 0.1x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts"
+            }
+          },
+          {
+            "name": "bash",
+            "args": {
+              "command": "pytest"
+            },
+            "output": "AssertionError: value 42 at /repo/a.ts",
+            "failed": null,
+            "expected": {
+              "state": {
+                "turns": 2,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 1,
+                "test_runs": 1,
+                "fail_sigs": {
+                  "96b937c934": 1
+                },
+                "repeated_fail_sigs": 0,
+                "recent": [
+                  "  1: edit a.ts",
+                  "  2: $ pytest  [err#96b937c934]"
+                ]
+              },
+              "snapshot": {
+                "turns": 2,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 1,
+                "test_runs": 1,
+                "stagnation": 0.0,
+                "repeated_fail_sigs": 0
+              },
+              "digest": "turns=2 edit_churn=1 distinct_edit_files=1 error_outputs=1 test_runs=1 repeated_identical_failures=0 stagnation=0.00\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 2 turns = 0.2x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts\n  2: $ pytest  [err#96b937c934]"
+            }
+          },
+          {
+            "name": "bash",
+            "args": {
+              "command": "pytest"
+            },
+            "output": "AssertionError: value 43 at /repo/b.ts",
+            "failed": null,
+            "expected": {
+              "state": {
+                "turns": 3,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 2,
+                "test_runs": 2,
+                "fail_sigs": {
+                  "96b937c934": 2
+                },
+                "repeated_fail_sigs": 1,
+                "recent": [
+                  "  1: edit a.ts",
+                  "  2: $ pytest  [err#96b937c934]",
+                  "  3: $ pytest  [err#96b937c934]"
+                ]
+              },
+              "snapshot": {
+                "turns": 3,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 2,
+                "test_runs": 2,
+                "stagnation": 0.5,
+                "repeated_fail_sigs": 1
+              },
+              "digest": "turns=3 edit_churn=1 distinct_edit_files=1 error_outputs=2 test_runs=2 repeated_identical_failures=1 stagnation=0.50\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 3 turns = 0.4x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts\n  2: $ pytest  [err#96b937c934]\n  3: $ pytest  [err#96b937c934]"
+            }
+          },
+          {
+            "name": "view",
+            "args": {
+              "path": "a.ts"
+            },
+            "output": "assert Error",
+            "failed": null,
+            "expected": {
+              "state": {
+                "turns": 4,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 2,
+                "test_runs": 2,
+                "fail_sigs": {
+                  "96b937c934": 2
+                },
+                "repeated_fail_sigs": 1,
+                "recent": [
+                  "  1: edit a.ts",
+                  "  2: $ pytest  [err#96b937c934]",
+                  "  3: $ pytest  [err#96b937c934]",
+                  "  4: view a.ts"
+                ]
+              },
+              "snapshot": {
+                "turns": 4,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 2,
+                "test_runs": 2,
+                "stagnation": 0.5,
+                "repeated_fail_sigs": 1
+              },
+              "digest": "turns=4 edit_churn=1 distinct_edit_files=1 error_outputs=2 test_runs=2 repeated_identical_failures=1 stagnation=0.50\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 4 turns = 0.5x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts\n  2: $ pytest  [err#96b937c934]\n  3: $ pytest  [err#96b937c934]\n  4: view a.ts"
+            }
+          },
+          {
+            "name": "grep",
+            "args": {
+              "pattern": "Error"
+            },
+            "output": "Error",
+            "failed": null,
+            "expected": {
+              "state": {
+                "turns": 5,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 2,
+                "test_runs": 2,
+                "fail_sigs": {
+                  "96b937c934": 2
+                },
+                "repeated_fail_sigs": 1,
+                "recent": [
+                  "  1: edit a.ts",
+                  "  2: $ pytest  [err#96b937c934]",
+                  "  3: $ pytest  [err#96b937c934]",
+                  "  4: view a.ts",
+                  "  5: grep Error"
+                ]
+              },
+              "snapshot": {
+                "turns": 5,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 2,
+                "test_runs": 2,
+                "stagnation": 0.5,
+                "repeated_fail_sigs": 1
+              },
+              "digest": "turns=5 edit_churn=1 distinct_edit_files=1 error_outputs=2 test_runs=2 repeated_identical_failures=1 stagnation=0.50\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 5 turns = 0.6x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts\n  2: $ pytest  [err#96b937c934]\n  3: $ pytest  [err#96b937c934]\n  4: view a.ts\n  5: grep Error"
+            }
+          },
+          {
+            "name": "bash",
+            "args": {
+              "command": "echo ok"
+            },
+            "output": "1 passed in 0.1s",
+            "failed": null,
+            "expected": {
+              "state": {
+                "turns": 6,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 2,
+                "test_runs": 2,
+                "fail_sigs": {
+                  "96b937c934": 2
+                },
+                "repeated_fail_sigs": 1,
+                "recent": [
+                  "  1: edit a.ts",
+                  "  2: $ pytest  [err#96b937c934]",
+                  "  3: $ pytest  [err#96b937c934]",
+                  "  4: view a.ts",
+                  "  5: grep Error",
+                  "  6: $ echo ok"
+                ]
+              },
+              "snapshot": {
+                "turns": 6,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 2,
+                "test_runs": 2,
+                "stagnation": 0.5,
+                "repeated_fail_sigs": 1
+              },
+              "digest": "turns=6 edit_churn=1 distinct_edit_files=1 error_outputs=2 test_runs=2 repeated_identical_failures=1 stagnation=0.50\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 6 turns = 0.8x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts\n  2: $ pytest  [err#96b937c934]\n  3: $ pytest  [err#96b937c934]\n  4: view a.ts\n  5: grep Error\n  6: $ echo ok"
+            }
+          }
+        ]
+      },
+      "expected": null,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "spiral",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "steps": [
+          {
+            "name": "edit",
+            "args": {
+              "path": "src/a.ts"
+            },
+            "output": "",
+            "failed": false,
+            "expected": {
+              "state": {
+                "turns": 1,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 0,
+                "test_runs": 0,
+                "fail_sigs": {},
+                "repeated_fail_sigs": 0,
+                "recent": [
+                  "  1: edit a.ts"
+                ]
+              },
+              "snapshot": {
+                "turns": 1,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 0,
+                "test_runs": 0,
+                "stagnation": 0.0,
+                "repeated_fail_sigs": 0
+              },
+              "digest": "turns=1 edit_churn=1 distinct_edit_files=1 error_outputs=0 test_runs=0 repeated_identical_failures=0 stagnation=0.00\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 1 turns = 0.1x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts"
+            }
+          },
+          {
+            "name": "bash",
+            "args": {
+              "command": "pytest"
+            },
+            "output": "AssertionError: value 42 at /repo/a.ts",
+            "failed": false,
+            "expected": {
+              "state": {
+                "turns": 2,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 0,
+                "test_runs": 1,
+                "fail_sigs": {},
+                "repeated_fail_sigs": 0,
+                "recent": [
+                  "  1: edit a.ts",
+                  "  2: $ pytest"
+                ]
+              },
+              "snapshot": {
+                "turns": 2,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 0,
+                "test_runs": 1,
+                "stagnation": 0.0,
+                "repeated_fail_sigs": 0
+              },
+              "digest": "turns=2 edit_churn=1 distinct_edit_files=1 error_outputs=0 test_runs=1 repeated_identical_failures=0 stagnation=0.00\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 2 turns = 0.2x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts\n  2: $ pytest"
+            }
+          },
+          {
+            "name": "bash",
+            "args": {
+              "command": "pytest"
+            },
+            "output": "AssertionError: value 43 at /repo/b.ts",
+            "failed": false,
+            "expected": {
+              "state": {
+                "turns": 3,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 0,
+                "test_runs": 2,
+                "fail_sigs": {},
+                "repeated_fail_sigs": 0,
+                "recent": [
+                  "  1: edit a.ts",
+                  "  2: $ pytest",
+                  "  3: $ pytest"
+                ]
+              },
+              "snapshot": {
+                "turns": 3,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 0,
+                "test_runs": 2,
+                "stagnation": 0.0,
+                "repeated_fail_sigs": 0
+              },
+              "digest": "turns=3 edit_churn=1 distinct_edit_files=1 error_outputs=0 test_runs=2 repeated_identical_failures=0 stagnation=0.00\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 3 turns = 0.4x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts\n  2: $ pytest\n  3: $ pytest"
+            }
+          },
+          {
+            "name": "view",
+            "args": {
+              "path": "a.ts"
+            },
+            "output": "assert Error",
+            "failed": false,
+            "expected": {
+              "state": {
+                "turns": 4,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 0,
+                "test_runs": 2,
+                "fail_sigs": {},
+                "repeated_fail_sigs": 0,
+                "recent": [
+                  "  1: edit a.ts",
+                  "  2: $ pytest",
+                  "  3: $ pytest",
+                  "  4: view a.ts"
+                ]
+              },
+              "snapshot": {
+                "turns": 4,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 0,
+                "test_runs": 2,
+                "stagnation": 0.0,
+                "repeated_fail_sigs": 0
+              },
+              "digest": "turns=4 edit_churn=1 distinct_edit_files=1 error_outputs=0 test_runs=2 repeated_identical_failures=0 stagnation=0.00\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 4 turns = 0.5x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts\n  2: $ pytest\n  3: $ pytest\n  4: view a.ts"
+            }
+          },
+          {
+            "name": "grep",
+            "args": {
+              "pattern": "Error"
+            },
+            "output": "Error",
+            "failed": false,
+            "expected": {
+              "state": {
+                "turns": 5,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 0,
+                "test_runs": 2,
+                "fail_sigs": {},
+                "repeated_fail_sigs": 0,
+                "recent": [
+                  "  1: edit a.ts",
+                  "  2: $ pytest",
+                  "  3: $ pytest",
+                  "  4: view a.ts",
+                  "  5: grep Error"
+                ]
+              },
+              "snapshot": {
+                "turns": 5,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 0,
+                "test_runs": 2,
+                "stagnation": 0.0,
+                "repeated_fail_sigs": 0
+              },
+              "digest": "turns=5 edit_churn=1 distinct_edit_files=1 error_outputs=0 test_runs=2 repeated_identical_failures=0 stagnation=0.00\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 5 turns = 0.6x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts\n  2: $ pytest\n  3: $ pytest\n  4: view a.ts\n  5: grep Error"
+            }
+          },
+          {
+            "name": "bash",
+            "args": {
+              "command": "echo ok"
+            },
+            "output": "1 passed in 0.1s",
+            "failed": false,
+            "expected": {
+              "state": {
+                "turns": 6,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 0,
+                "test_runs": 2,
+                "fail_sigs": {},
+                "repeated_fail_sigs": 0,
+                "recent": [
+                  "  1: edit a.ts",
+                  "  2: $ pytest",
+                  "  3: $ pytest",
+                  "  4: view a.ts",
+                  "  5: grep Error",
+                  "  6: $ echo ok"
+                ]
+              },
+              "snapshot": {
+                "turns": 6,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 0,
+                "test_runs": 2,
+                "stagnation": 0.0,
+                "repeated_fail_sigs": 0
+              },
+              "digest": "turns=6 edit_churn=1 distinct_edit_files=1 error_outputs=0 test_runs=2 repeated_identical_failures=0 stagnation=0.00\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 6 turns = 0.8x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts\n  2: $ pytest\n  3: $ pytest\n  4: view a.ts\n  5: grep Error\n  6: $ echo ok"
+            }
+          }
+        ]
+      },
+      "expected": null,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "spiral",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "steps": [
+          {
+            "name": "edit",
+            "args": {
+              "path": "src/a.ts"
+            },
+            "output": "",
+            "failed": true,
+            "expected": {
+              "state": {
+                "turns": 1,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 0,
+                "test_runs": 0,
+                "fail_sigs": {},
+                "repeated_fail_sigs": 0,
+                "recent": [
+                  "  1: edit a.ts"
+                ]
+              },
+              "snapshot": {
+                "turns": 1,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 0,
+                "test_runs": 0,
+                "stagnation": 0.0,
+                "repeated_fail_sigs": 0
+              },
+              "digest": "turns=1 edit_churn=1 distinct_edit_files=1 error_outputs=0 test_runs=0 repeated_identical_failures=0 stagnation=0.00\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 1 turns = 0.1x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts"
+            }
+          },
+          {
+            "name": "bash",
+            "args": {
+              "command": "pytest"
+            },
+            "output": "AssertionError: value 42 at /repo/a.ts",
+            "failed": true,
+            "expected": {
+              "state": {
+                "turns": 2,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 1,
+                "test_runs": 1,
+                "fail_sigs": {
+                  "96b937c934": 1
+                },
+                "repeated_fail_sigs": 0,
+                "recent": [
+                  "  1: edit a.ts",
+                  "  2: $ pytest  [err#96b937c934]"
+                ]
+              },
+              "snapshot": {
+                "turns": 2,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 1,
+                "test_runs": 1,
+                "stagnation": 0.0,
+                "repeated_fail_sigs": 0
+              },
+              "digest": "turns=2 edit_churn=1 distinct_edit_files=1 error_outputs=1 test_runs=1 repeated_identical_failures=0 stagnation=0.00\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 2 turns = 0.2x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts\n  2: $ pytest  [err#96b937c934]"
+            }
+          },
+          {
+            "name": "bash",
+            "args": {
+              "command": "pytest"
+            },
+            "output": "AssertionError: value 43 at /repo/b.ts",
+            "failed": true,
+            "expected": {
+              "state": {
+                "turns": 3,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 2,
+                "test_runs": 2,
+                "fail_sigs": {
+                  "96b937c934": 2
+                },
+                "repeated_fail_sigs": 1,
+                "recent": [
+                  "  1: edit a.ts",
+                  "  2: $ pytest  [err#96b937c934]",
+                  "  3: $ pytest  [err#96b937c934]"
+                ]
+              },
+              "snapshot": {
+                "turns": 3,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 2,
+                "test_runs": 2,
+                "stagnation": 0.5,
+                "repeated_fail_sigs": 1
+              },
+              "digest": "turns=3 edit_churn=1 distinct_edit_files=1 error_outputs=2 test_runs=2 repeated_identical_failures=1 stagnation=0.50\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 3 turns = 0.4x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts\n  2: $ pytest  [err#96b937c934]\n  3: $ pytest  [err#96b937c934]"
+            }
+          },
+          {
+            "name": "view",
+            "args": {
+              "path": "a.ts"
+            },
+            "output": "assert Error",
+            "failed": true,
+            "expected": {
+              "state": {
+                "turns": 4,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 3,
+                "test_runs": 2,
+                "fail_sigs": {
+                  "96b937c934": 2,
+                  "82937c6301": 1
+                },
+                "repeated_fail_sigs": 1,
+                "recent": [
+                  "  1: edit a.ts",
+                  "  2: $ pytest  [err#96b937c934]",
+                  "  3: $ pytest  [err#96b937c934]",
+                  "  4: view a.ts  [err#82937c6301]"
+                ]
+              },
+              "snapshot": {
+                "turns": 4,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 3,
+                "test_runs": 2,
+                "stagnation": 0.333,
+                "repeated_fail_sigs": 1
+              },
+              "digest": "turns=4 edit_churn=1 distinct_edit_files=1 error_outputs=3 test_runs=2 repeated_identical_failures=1 stagnation=0.33\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 4 turns = 0.5x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts\n  2: $ pytest  [err#96b937c934]\n  3: $ pytest  [err#96b937c934]\n  4: view a.ts  [err#82937c6301]"
+            }
+          },
+          {
+            "name": "grep",
+            "args": {
+              "pattern": "Error"
+            },
+            "output": "Error",
+            "failed": true,
+            "expected": {
+              "state": {
+                "turns": 5,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 4,
+                "test_runs": 2,
+                "fail_sigs": {
+                  "96b937c934": 2,
+                  "82937c6301": 1,
+                  "902b0d55fd": 1
+                },
+                "repeated_fail_sigs": 1,
+                "recent": [
+                  "  1: edit a.ts",
+                  "  2: $ pytest  [err#96b937c934]",
+                  "  3: $ pytest  [err#96b937c934]",
+                  "  4: view a.ts  [err#82937c6301]",
+                  "  5: grep Error  [err#902b0d55fd]"
+                ]
+              },
+              "snapshot": {
+                "turns": 5,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 4,
+                "test_runs": 2,
+                "stagnation": 0.25,
+                "repeated_fail_sigs": 1
+              },
+              "digest": "turns=5 edit_churn=1 distinct_edit_files=1 error_outputs=4 test_runs=2 repeated_identical_failures=1 stagnation=0.25\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 5 turns = 0.6x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts\n  2: $ pytest  [err#96b937c934]\n  3: $ pytest  [err#96b937c934]\n  4: view a.ts  [err#82937c6301]\n  5: grep Error  [err#902b0d55fd]"
+            }
+          },
+          {
+            "name": "bash",
+            "args": {
+              "command": "echo ok"
+            },
+            "output": "1 passed in 0.1s",
+            "failed": true,
+            "expected": {
+              "state": {
+                "turns": 6,
+                "edit_counts": {
+                  "a.ts": 1
+                },
+                "edit_order": [
+                  "a.ts"
+                ],
+                "error_outputs": 4,
+                "test_runs": 2,
+                "fail_sigs": {
+                  "96b937c934": 2,
+                  "82937c6301": 1,
+                  "902b0d55fd": 1
+                },
+                "repeated_fail_sigs": 1,
+                "recent": [
+                  "  1: edit a.ts",
+                  "  2: $ pytest  [err#96b937c934]",
+                  "  3: $ pytest  [err#96b937c934]",
+                  "  4: view a.ts  [err#82937c6301]",
+                  "  5: grep Error  [err#902b0d55fd]",
+                  "  6: $ echo ok"
+                ]
+              },
+              "snapshot": {
+                "turns": 6,
+                "edit_churn": 1,
+                "distinct_edit_files": 1,
+                "error_outputs": 4,
+                "test_runs": 2,
+                "stagnation": 0.25,
+                "repeated_fail_sigs": 1
+              },
+              "digest": "turns=6 edit_churn=1 distinct_edit_files=1 error_outputs=4 test_runs=2 repeated_identical_failures=1 stagnation=0.25\nrepo_context: tasks here usually RESOLVE within ~8 turns; this trajectory is at 6 turns = 0.8x that typical length. Tests are still NOT green. A trajectory far past the typical resolved length with recurring failures is likely a dead-end loop, even if it touches many files.\nRecent actions (oldest->newest):\n  1: edit a.ts\n  2: $ pytest  [err#96b937c934]\n  3: $ pytest  [err#96b937c934]\n  4: view a.ts  [err#82937c6301]\n  5: grep Error  [err#902b0d55fd]\n  6: $ echo ok"
+            }
+          }
+        ]
+      },
+      "expected": null,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    }
+  ]
+}

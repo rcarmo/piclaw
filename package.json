@@ -11,7 +11,9 @@
     "imgcat": "runtime/scripts/imgcat.ts"
   },
   "imports": {
-    "#editor-vendor/codemirror": "./runtime/extensions/viewers/editor/vendor/codemirror.js"
+    "#editor-vendor/codemirror": "./runtime/extensions/viewers/editor/vendor/codemirror.js",
+    "#token-optimizer/core": "./runtime/durable-engine/vendor/token-economizer/src/core/index.ts",
+    "#token-optimizer/pi-durable": "./runtime/durable-engine/vendor/token-economizer/src/pi-durable/index.ts"
   },
   "pi": {
     "skills": [
@@ -46,7 +48,13 @@
     "docs/install-from-repo.md",
     "docs/mcp.md",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "runtime/durable-engine/vendor/token-economizer/src",
+    "runtime/durable-engine/vendor/token-economizer/LICENSE",
+    "runtime/durable-engine/vendor/token-economizer/NOTICE",
+    "runtime/durable-engine/vendor/token-economizer/package.json",
+    "runtime/durable-engine/vendor/token-economizer/SOURCE.json",
+    "runtime/durable-engine/vendor/token-economizer/MODIFICATIONS.json"
   ],
   "scripts": {
     "postinstall": "bun run scripts/postinstall.ts",

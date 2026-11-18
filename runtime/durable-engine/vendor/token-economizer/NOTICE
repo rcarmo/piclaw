@@ -1,0 +1,185 @@
+Kintsugi is an opinionated fork of AgentsInTheCloud by Lucas Meijer.
+Original source: https://github.com/lucasmeijer/AgentsInTheCloud
+License: MIT (see LICENSE). Original copyright retained.
+
+The Docker runtime is pinned to an upstream AgentsInTheCloud image.
+
+Kintsugi includes portions adapted from @earendil-works/gondolin.
+
+Source: https://github.com/earendil-works/gondolin
+License: Apache License 2.0
+
+Adapted components include HTTP secret placeholder substitution, host pattern matching,
+and internal IP detection helpers.
+
+Kintsugi's Codex-compatible subagent tool descriptions and message envelopes are adapted
+from OpenAI Codex (https://github.com/openai/codex), commit
+574a36ff99f0807a24f5b043f593122bf151908d, licensed under Apache License 2.0.
+Copyright OpenAI. The license is included in docs/licenses/codex-LICENSE.
+
+The Draw.io Work view uses the embed protocol approach of Rui Carmo's piclaw-addons
+(drawio-editor), MIT licensed, and bundles draw.io v31.4.2, Apache-2.0 licensed.
+Source: https://github.com/rcarmo/piclaw-addons and https://github.com/jgraph/drawio
+Licenses and vendor provenance are included in packages/drawio/vendor/.
+
+Selected UI/syntax/ANSI palettes are adapted from PiClaw by Rui Carmo:
+https://github.com/rcarmo/piclaw/tree/34516cabd8e56f61bd1b7150e0c87c244694533e
+(runtime/src/core/ui-theme-catalogue.ts and runtime/web/src/ui/theme-palette.ts).
+Includes Catppuccin Mocha, Monokai Pro, Dracula, Gruvbox, Noctis, Lumon, AS/400,
+SynthWave ’84 and Petrol & Copper (named Fallout in Kintsugi).
+UI/ANSI contrast adjustments are baked into CSS; no PiClaw runtime is loaded.
+
+MIT License
+
+Copyright (c) 2026 Rui Carmo
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+=== catppuccin/palette ===
+
+MIT License
+
+Copyright (c) 2021 Catppuccin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+=== robb0wen/synthwave-vscode ===
+
+MIT License
+
+Copyright (c) 2019 Robb Owen
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+=== https://github.com/OldJobobo/lumon-theme.vscode @ 3ae3621478aa4bffe2fd34f514195fb86d797bf7 ===
+
+MIT License
+
+Copyright (c) 2026 OldJobobo
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+=== https://github.com/jordandiazdiaz/as400-cursor @ 18fa422922e9786d8bf4144a79f34098c9458482 ===
+
+MIT License
+
+Copyright (c) 2026 Jordan Diaz
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+=== https://github.com/liviuschera/noctis @ 4a82370b2c064e36726c23e94f27ed3782bd6ecd ===
+
+
+
+MIT License
+
+Copyright (c) 2018 Liviu Schera
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Kintsugi includes a modified TypeScript port of Microsoft TokenEconomizer.
+Source: https://github.com/microsoft/TokenEconomizer
+Pinned revision: 81e32e56bb3c4c1b4c9756b429be91e3960116ca
+License: Apache License 2.0 (packages/token-economizer/LICENSE).
+Adaptations include durable SDK storage/steering, provider-independent inference,
+redaction, safe detectors, opt-in controls, classifiers and bounded call savers.
+The upstream checkout has no separate NOTICE file.
+
+Selected test-runner and compiler output reducers are adapted from mcp-recall,
+Copyright 2026 sakebomb, Apache License 2.0.
+Source: https://github.com/sakebomb/mcp-recall
+Pinned revision: 2db17d6d01d965e4181a8f18c674561baa588a24 (post-1.21.0).
+Adapted files: src/handlers/bash-test.ts, src/handlers/bash-compilers.ts,
+src/secrets.ts and src/denylist.ts.
+Changes: typed inputs, local adapters, conservative diagnostic-preservation gates,
+recall storage exclusion and explicit exact-name tool filters (upstream #486).
+License and upstream notice: packages/token-economizer/src/core/output/mcp-recall/.
+
+TokenEconomizer loop-guard fixes for Git global options, env/nice wrappers and Ruby
+verification are backported from 7042ea89dd5e5ecbc67ad865ad6e256e61be8bf0
+(upstream #212, #213, #209). The broader port retains its stated baseline.

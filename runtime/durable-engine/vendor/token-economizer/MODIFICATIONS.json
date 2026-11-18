@@ -1,0 +1,24 @@
+{
+  "upstream": "rcarmo/kintsugi",
+  "commit": "b8469c29b404806376a76ebfd1a95b2dabcf4ab9",
+  "productionEngineUnchanged": true,
+  "adaptedTests": [
+    {
+      "path": "test/boundaries.test.ts",
+      "sha256": "6c16ddfdd71f92335137d659a22a6b958424c3c7d6cd0ae232234d9948f4abfe"
+    },
+    {
+      "path": "test/durable.test.ts",
+      "sha256": "b7366f0465727050bdc7c80618c97e8ae9027812fc1d37fb60aee3c5feca11a5"
+    }
+  ],
+  "changes": [
+    "Distribution checks target Piclaw package files/import aliases and pin the upstream NOTICE hash without a local checkout dependency.",
+    "SQLite tests reuse Piclaw BunSqliteDatabase and the public SDK export; portable JSONL remains fixture-only.",
+    "No test skipped and no numerical threshold or deadline changed."
+  ],
+  "addedNotice": {
+    "path": "NOTICE",
+    "sha256": "b13ad82143cf3148f4a840f32efb2da7426da7a87924bc964e252d3bd1bdf443"
+  }
+}
