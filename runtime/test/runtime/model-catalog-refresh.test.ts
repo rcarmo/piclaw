@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { ModelsError } from "@earendil-works/pi-ai";
-import { refreshModelCatalogs } from "../../src/runtime/model-catalog-refresh.js";
+import { refreshModelCatalogs, refreshModelCatalogForSelection, resolveLiveModelSelection } from "../../src/runtime/model-catalog-refresh.js";
 
 function runtime(result: () => Promise<{ aborted: boolean; errors: ReadonlyMap<string, Error> }>) {
   const calls: Array<Record<string, unknown>> = [];
@@ -50,6 +50,43 @@ test("a refresh that outlives the deadline is aborted and reported", async () =>
     signal.addEventListener("abort", () => resolve({ aborted: true, errors: new Map() }));
   }));
   expect(await refreshModelCatalogs(fake, { timeoutMs: 20 })).toEqual({ status: "timed_out", skipped: [], failed: [] });
+});
+
+test("selection refreshes a missing model once and reads the newly authenticated catalogue", async () => {
+  let models = [{ provider: "one", id: "old" }], calls = 0;
+  const refresh = async () => { calls++; models = [...models, { provider: "one", id: "new" }]; };
+  expect(await resolveLiveModelSelection("ONE/NEW", () => models, refresh)).toEqual([{ provider: "one", id: "new" }]);
+  expect(await resolveLiveModelSelection("new", () => models, refresh)).toHaveLength(1);
+  expect(calls).toBe(1);
+  expect(await resolveLiveModelSelection("missing", () => models, refresh)).toEqual([]);
+  expect(calls).toBe(2);
+});
+
+test("ambiguous authenticated matches do not trigger another network refresh", async () => {
+  let calls = 0;
+  const models = [{ provider: "one", id: "new" }, { provider: "two", id: "new" }];
+  expect(await resolveLiveModelSelection("new", () => models, async () => { calls++; })).toHaveLength(2);
+  expect(calls).toBe(0);
+});
+
+test("selection uses the same coalesced provider refresh and rejects failed activation", async () => {
+  const fake = runtime(async () => ({ aborted: false, errors: new Map() }));
+  await refreshModelCatalogForSelection(fake);
+  expect(fake.calls[0]).toMatchObject({ allowNetwork: true, force: true });
+  const failed = runtime(async () => { throw Error("provider failed"); });
+  await expect(refreshModelCatalogForSelection(failed)).rejects.toThrow("catalogue refresh failed");
+});
+
+test("caller cancellation reaches the shared provider refresh without detached work", async () => {
+  const caller = new AbortController(); let finished = false;
+  const fake = runtime(() => new Promise(resolve => {
+    const signal = fake.calls[0]!.signal as AbortSignal;
+    signal.addEventListener("abort", () => { finished = true; resolve({ aborted: true, errors: new Map() }); });
+  }));
+  const pending = refreshModelCatalogForSelection(fake, { signal: caller.signal });
+  caller.abort(Error("cancel catalogue update"));
+  await expect(pending).rejects.toThrow("catalogue refresh failed");
+  expect(finished).toBe(true);
 });
 
 test("a thrown refresh is a failure, not an exception", async () => {

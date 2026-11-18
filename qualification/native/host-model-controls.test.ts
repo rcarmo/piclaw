@@ -14,8 +14,10 @@ function fixture(sections: any[] = [], messages: any[] = [], prepareContext?: Pa
   const catalog = [model("first", "one"), model("second", "two"), model("second", "tiny", 100)];
   let state: any = { model: { provider: "first", modelId: "one" }, thinkingLevel: "off", tools: ["bash"] };
   let valid = true, available = true, guards = 0, reads = 0, duringDoc: ((current: any) => void) | undefined;
+  let refreshes = 0, onRefresh: ((signal?: AbortSignal) => Promise<void>) | undefined;
   const tools = createHostModelTools({ assertCurrent() { if (!valid) throw Error("revoked"); }, available: () => catalog as any,
     assertModel(choice) { if (!available || !catalog.some(m => m.provider === choice.provider && m.id === choice.modelId)) throw Error("unavailable"); },
+    async refresh(signal) { refreshes++; await onRefresh?.(signal); },
     prepareContext: prepareContext ?? (async (call, model, thinkingLevel) => {
       expect(call.conversationId).toBe(conversationId); reads++;
       const projected = await projectModelContext({ messages, entries: [], contributions: [] } as any,
@@ -34,7 +36,10 @@ function fixture(sections: any[] = [], messages: any[] = [], prepareContext?: Pa
     const result: any = await tool.execute(args, api, ctx); return JSON.parse(result.output[0].text);
   };
   return { tools, run, state: () => state, revoke() { valid = false; }, unapprove() { available = false; },
-    duringDoc(fn: (current: any) => void) { duringDoc = fn; }, stats: () => ({ guards, reads }) };
+    duringDoc(fn: (current: any) => void) { duringDoc = fn; }, stats: () => ({ guards, reads, refreshes }),
+    onRefresh(fn: (signal?: AbortSignal) => Promise<void>) { onRefresh = fn; },
+    publish(provider: string, id: string) { const next = model(provider, id); catalog.push(next); return next; },
+    catalog };
 }
 test("native model controls are registered, model-only and nonreplayable, with native discovery guidance", () => {
   const f = fixture(); expect(f.tools.map(t => t.name)).toEqual([...hostModelToolNames]);
@@ -186,5 +191,44 @@ test("set_model succeeds after viewed images and persists only the requested mod
   // A target that cannot hold the measured context is still refused unchanged.
   const before = structuredClone(f.state());
   await expect(f.run("set_model", { model: "second/tiny" })).rejects.toThrow("compact first");
+  expect(f.state()).toEqual(before);
+});
+
+for (const name of ["set_model", "switch_model"]) test(`${name} refreshes and selects a newly published authenticated model in the same owned call`, async () => {
+  const f = fixture();
+  f.onRefresh(async () => { f.publish("second", "new-sol"); });
+  expect((await f.run(name, { model: "second/new-sol" })).model).toBe("second/new-sol");
+  expect(f.state().model).toEqual({ provider: "second", modelId: "new-sol" });
+  expect(f.stats().refreshes).toBe(1);
+  expect(f.stats().reads).toBe(1);
+  expect((await f.run("list_models", { query: "new-sol" })).total).toBe(1);
+  expect(f.stats().refreshes).toBe(1);
+});
+
+test("list_models explicit refresh uses the same live catalogue without changing the conversation", async () => {
+  const f = fixture(), before = structuredClone(f.state());
+  f.onRefresh(async () => { f.publish("second", "new-sol"); });
+  expect((await f.run("list_models", { refresh: true, query: "new-sol" })).total).toBe(1);
+  expect(f.stats().refreshes).toBe(1);
+  expect(f.state()).toEqual(before);
+});
+
+for (const phase of ["cancel", "revoke", "fail"]) test(`catalogue refresh ${phase} cannot commit a model change`, async () => {
+  const f = fixture(), before = structuredClone(f.state()), controller = new AbortController();
+  f.onRefresh(async signal => {
+    expect(signal).toBe(controller.signal);
+    f.publish("second", "new-sol");
+    if (phase === "cancel") controller.abort(Error("cancel refresh"));
+    if (phase === "revoke") f.revoke();
+    if (phase === "fail") throw Error("refresh failed");
+  });
+  await expect(f.run("set_model", { model: "second/new-sol" }, withAbortSignal(controller.signal, context))).rejects.toThrow();
+  expect(f.state()).toEqual(before);
+});
+
+test("model capability changes during context admission reject stale tool selection", async () => {
+  const f = fixture(), before = structuredClone(f.state());
+  f.duringDoc(() => { f.catalog.find(m => m.id === "two")!.contextWindow = 200; });
+  await expect(f.run("set_model", { model: "second/two" })).rejects.toThrow("catalogue changed");
   expect(f.state()).toEqual(before);
 });

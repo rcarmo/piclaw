@@ -26,6 +26,7 @@ import { readAccessConfig } from "../core/config-access.js";
 import { getExecutionIdentity } from "../core/execution-context.js";
 import { createLogger } from "../utils/logger.js";
 import { requestGracefulShutdown } from "../runtime/shutdown-registry.js";
+import { refreshModelCatalogForSelection, resolveLiveModelSelection } from "../runtime/model-catalog-refresh.js";
 
 /** Direct session mutations have no owner-aware admission contract yet. */
 function requireSingleUserDirectExecution(label: string): void {
@@ -514,7 +515,16 @@ export class AgentRuntimeFacade {
         if (!port.setModel) throw new Error("Durable model mutation unavailable");
         if (command.compact) return { status: "error", message: "Durable model compaction unavailable" };
         const { resolveControlModelSelection } = await import("../agent-control/agent-control-helpers.js");
-        const selected = resolveControlModelSelection(this.options.modelRegistry, command);
+        let matches: readonly Model<Api>[];
+        try {
+          matches = await resolveLiveModelSelection(command.provider ? `${command.provider}/${command.modelId}` : command.modelId,
+            () => resolveModelScope(this.options.modelRegistry.getAvailable(), this.options.settingsManager).models,
+            () => refreshModelCatalogForSelection(this.options.modelRuntime));
+          requireSingleUserDirectExecution("Direct model commands");
+        } catch {
+          return { status: "error", message: "Model catalogue refresh failed; retry or inspect the cached catalogue." };
+        }
+        const selected = resolveControlModelSelection({ getAll: () => [...matches] }, command);
         if ("status" in selected) return selected;
         revokeAddonLocalAgent(chatJid);
         const release = this.options.acquireCommandProtection?.(chatJid);

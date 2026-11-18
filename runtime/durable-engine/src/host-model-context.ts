@@ -1,6 +1,11 @@
 import type { Api, Message, Model, Models, SimpleStreamOptions, Tool, TranscriptContext } from "@earendil-works/pi-ai";
 import type { SimpleRequestPreview } from "../../src/agent-pool/model-request-preview.js";
 export interface PreviewModels extends Models { previewSimple?(model: Model<Api>, context: Pick<TranscriptContext, "messages">, options?: SimpleStreamOptions): Promise<SimpleRequestPreview> }
+
+/** Shared UI/tool capability fence. Pricing is observational, not a fit limit. */
+export function modelSelectionFrame(model: Model<Api>): string {
+  return JSON.stringify([model.api, model.contextWindow, model.maxTokens, model.reasoning, model.thinkingLevelMap, model.input, model.inputLimits]);
+}
 import { estimateContextTokens } from "@earendil-works/pi-ai/utils/estimate";
 import { SystemEntry, type ContextView, type PromptInput } from "@earendil-works/pi-durable";
 import { declarationsEqual, getCurrentTools, toToolDeclaration } from "@earendil-works/pi-ai/utils/transcript";

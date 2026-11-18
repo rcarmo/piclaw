@@ -5,7 +5,7 @@ import { captureInterruptedScheduledHarness } from "./host-scheduled-terminal.js
 import { taskModelHookScope, taskModelToolScope, withTaskModelRequestScope } from "./task-model-boundary-shim.js";
 import { createTrackedBashOperations } from "../../src/tools/tracked-bash.js";
 import { withChatContext } from "../../src/core/chat-context.js";
-import { assertModelContextFits, projectModelContext, prepareModelContextAdmission, type ModelContextAdmission } from "./host-model-context.js";
+import { assertModelContextFits, modelSelectionFrame, projectModelContext, prepareModelContextAdmission, type ModelContextAdmission } from "./host-model-context.js";
 import { readNativeExitReceipt, nativeExitNotice, type NativeExitReceipt } from "./host-process-receipt.js";
 import { modelFailureNotice, parseModelFailure } from "./host-model-failure.js";
 import { createLogger } from "../../src/utils/logger.js";
@@ -684,16 +684,22 @@ export class HostConversationRuntime {
     this.fence();
     const o = this.options, copy = Object.freeze({ ...binding });
     const id = o.existingConversationIds.find(id => id === copy.conversationId);
+    const choice = Object.freeze({ provider: model.provider, modelId: model.modelId });
+    let expected: string | undefined;
     const check = () => {
       this.fence();
       if (copy.incarnation !== o.incarnation || id === undefined || o.conversationFor(copy.chatJid, copy.branchId) !== id) throw new Error("Host binding conflict");
       if (this.changingModel || this.maintenanceBinding) throw new Error("Runtime is not idle");
+      if (expected) {
+        const current = currentHarnessModels(o.harnessOptions).getModel(choice.provider, choice.modelId);
+        if (!current || modelSelectionFrame(current) !== expected) throw Error("Model catalogue changed; retry the command.");
+      }
     };
     check();
-    const choice = Object.freeze({ provider: model.provider, modelId: model.modelId });
     const target = currentHarnessModels(o.harnessOptions).getModel(choice.provider, choice.modelId);
     if (!target || !Number.isFinite(target.contextWindow) || target.contextWindow <= 0 ||
       !Number.isFinite(target.maxTokens) || target.maxTokens < 0) throw new Error("Model context unavailable");
+    expected = modelSelectionFrame(target);
     if (thinkingLevel !== undefined && !getSupportedThinkingLevels(target).includes(thinkingLevel as ModelThinkingLevel)) throw new Error("Unsupported thinking level");
     // SDK configure changes the persisted conversation choice for the next
     // request. A prepared/in-flight request retains its captured model/thinking.
@@ -711,6 +717,8 @@ export class HostConversationRuntime {
       await conversation.commit(async tx => {
         check();
         const agent = await tx.doc(AgentDoc, id!);
+        const level = thinkingLevel ?? agent.thinkingLevel;
+        if (level !== undefined && !getSupportedThinkingLevels(target).some(supported => supported === level)) throw Error("Unsupported thinking level for the selected model; specify a supported thinking level.");
         const changesModel = agent.model?.provider !== choice.provider || agent.model?.modelId !== choice.modelId;
         if (selectingModel && changesModel) {
           if (!admission) throw new Error("Host model changed");
