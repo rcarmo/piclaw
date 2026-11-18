@@ -1,9 +1,10 @@
 import { assertHostToolDeclaration } from "./host-tools.js";
+import { readToolCallSummary, type ToolCallSummary } from "../../src/tool-call-summary.js";
 import { InstalledAddonSourceChanged } from "./host-model-failure.js";
 import { installedAddonProfiles, type InstalledAddonProfile } from "./host-installed-addon-profiles.js";
 import { DefaultResourceLoader, type LoadExtensionsResult, type SettingsManager, type ToolDefinition, type RegisteredCommand } from "../../src/durable-legacy-sdk.js";
 import { getInstalledAddonExtensionPaths, resolveAddonPackageEntries, isRetiredCoreAddon, listInstalledAddonPackageDirs, readInstalledAddonPackage } from "../../src/addons/package-entries.js";
-import { join, resolve, relative, isAbsolute } from "node:path";
+import { join, resolve, relative, isAbsolute, posix } from "node:path";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
@@ -11,91 +12,111 @@ import type { CodeReviewNativeExports } from "./host-code-review-tool.js";
 import type { EditableTableNativeExports } from "./host-editable-table-tool.js";
 import type { DrawioNativeExports } from "./host-drawio-tool.js";
 // Candidate source profile; qualification tests exercise every backend import.
+function backendSourceShadows(files: Readonly<Record<string, string>>): string[] {
+  const shadows = new Set<string>();
+  for (const file of Object.keys(files).filter(file => file.endsWith('.ts'))) {
+    for (const suffix of ['.js', '.json', '/index.js', '/package.json']) shadows.add(file.replace(/\.ts$/, suffix));
+    for (let directory = posix.dirname(file); directory !== '.'; directory = posix.dirname(directory)) shadows.add(`${directory}/package.json`);
+  }
+  return [...shadows].filter(file => !Object.hasOwn(files, file));
+}
 const approvedCodeReviewFiles = Object.freeze({
-  "index.ts": "e7b5acf09dcf9bbb2f1cad2e9d4dc5d52fff2606d18254d42470051b3dfb0558",
-  "tool.ts": "6432109f40bc37858bbcc71038a92bf9d8d6904804259a3a17bbc96d7e859d53",
-  "runtime.ts": "82531a50fbaec5adc9f353d8b623c3542d81db932bb30c4bd8239296f3c68f9c",
   "anchors.ts": "0c1504ff42fdd49b1d320fae4d8eafbf969a5dadb7d867cdc8fb81d737242453",
+  "compat/tool-call-summary.ts": "a3b717a0538e5fae5e8572b02e289d5b799574ba9bff51b63a6bb29ff5772051",
   "contracts.ts": "f1a6eaf8ad1d4b532ccb509b287991668ce8368a0167cd9e8bf83c2dea727f10",
   "database.ts": "b0b2c9fe4f547a6be5bdffca90a1f4e328701bd6a5fe6e96ea496d44edaa3a58",
   "dispatch.ts": "637dd8f2ac750b9065fb0a482c8d66de507a1fe8b6a44d9e5a346bc971010a2f",
   "host.ts": "5d8db59386fabeda32bb65b4db97e13aa03d5bf98adf7d91b67077d37dd618a2",
+  "index.ts": "e7b5acf09dcf9bbb2f1cad2e9d4dc5d52fff2606d18254d42470051b3dfb0558",
   "markdown.ts": "ab04e2573e426cbb0aad7975eafbb058db1a5e29355c35df485253ebd6a7520b",
   "render-source.ts": "200645c447550f5a33b472f4c6962a272b574ee23a2a74f59572d8a69c9cd2d0",
+  "runtime.ts": "82531a50fbaec5adc9f353d8b623c3542d81db932bb30c4bd8239296f3c68f9c",
   "source.ts": "67ded478500c6b51d4344e86c1d68d6f0b2b50f1aa2f92aa5478c5981567157e",
   "store.ts": "f8a2977d1376c43c3e576c8c471433c1c77083bc40ebd79a1f663162d4a2d5ff",
+  "summary.ts": "2ee46b8f4bb3d0ca7d76faac7760b59a4e202ba59cf137165d963b6a08016f8b",
+  "tool.ts": "c638d66108cb62a7175e3722c9f1a58805588d51e7dea1a3b43cc8a2cec8406e",
   "validation.ts": "6520c981ea388f70e0278cf73583e0c80871aa346b2abd50dab3003d90c9d1a8"
 });
 const approvedEditableTableFiles = Object.freeze({
-  "package.json": "4810df9f1d7d8f5f34cf21eaccb398c574f0b7e8b5f4ee5511a1e01a26eb9e4c",
+  "compat/tool-call-summary.ts": "a3b717a0538e5fae5e8572b02e289d5b799574ba9bff51b63a6bb29ff5772051",
   "index.ts": "878b9886c824d3a451153975e6fb92f73903e628add2ad754ad5c9c633de5acb",
-  "tool.ts": "1d6752181e680055236302c57e9a100aa78d2c6033074034be83f36551814ceb",
-  "shared.ts": "ce18a28856afc7d554d015dfeaf6b04d2deb918762040d0ee9dd030a7909b9f4"
+  "package.json": "9e6eec0865b16aa6bc7ea7005aeec64566a258c9c52b8d2f5334923e8e6df4f9",
+  "shared.ts": "ce18a28856afc7d554d015dfeaf6b04d2deb918762040d0ee9dd030a7909b9f4",
+  "summary.ts": "b0af1a98acf5da6069294a4b1c6d7400d63421aaed54cfd8bb055ffe027612a6",
+  "tool.ts": "36752b016c508e72e63b812ac2fb1c8ffee500cd5f45fc65788f7caeadab9274"
 });
 // Execution-only profile: index imports only node:fs/path. Static route/status
 // registration is approved; vendor browser assets are not an execution proof.
 const approvedOfficeViewerFiles = Object.freeze({
-  "package.json": "fe62110bc5f59674973065afee279f34f7e0ff1cfc078718f8fad14a5973b155",
-  "index.ts": "c6d302ab289c6ce97967da40d97aac14f70b04aeb6a8be77c63bcde7e7d97565"
+  "compat/tool-call-summary.ts": "a3b717a0538e5fae5e8572b02e289d5b799574ba9bff51b63a6bb29ff5772051",
+  "index.ts": "5df05cb6c14cb0c17ecae30bfaa81f107046a885291c19ff7cf69b0f760f9191",
+  "package.json": "0ae57bea87b1e574f044471196a24c827431399ace7567ea98844935067ec5c1",
+  "summary.ts": "646046e9a4e102c04ce5426e426c9f3f291346110367d346ebe38d2c7620b62b"
 });
 // Execution source only. Installed vendor assets remain trusted installation
 // content, not integrity-qualified source or a filesystem sandbox.
 const approvedDrawioFiles = Object.freeze({
-  "package.json": "2942b1e169541326fd83c9bec29f3365c2f1efabfd13511667da503e7cde67d8",
+  "compat/tool-call-summary.ts": "a3b717a0538e5fae5e8572b02e289d5b799574ba9bff51b63a6bb29ff5772051",
   "index.ts": "ab1ffba287828ed37db87288c7f1feb47a12efb2c66aa983941643575bdf2790",
-  "tool.ts": "7a47e648d93d396c5b959795056885353f34fa04322390e35b0e989d95e81a8b"
+  "package.json": "39ec7ee67bacae0850683ee92c18043973e1c76a3601d0e3766cf8a6e9598f0b",
+  "summary.ts": "55a20f6767ba224e3b2b22a357c86b1d96438b6305e310d8e63bc8e5d52c1678",
+  "tool.ts": "cd80bb436521d90f5d5b602f4ae58a56c778841c65fb09ecb4a4d77001b14920"
 });
 const approvedGoalFiles = Object.freeze({
-  "index.ts": "887fd5457c104940a4e1ce132a621a16ef3ab4026f187fb4a576cae6ca86ec62",
-  "deadline-checkpoint.ts": "e94f7cb065f321b06de33bfd7963011f03714c73437eedab634bce69f199c1db",
   "compat/chat-context.ts": "90e20fa38d72915a7cbf4eea4e4134788271e6eb52dfbcb813df05b6d60c3c44",
-  "compat/extension-kv.ts": "04240517e9e8664cae2d2badb99f382100a7af3e12679cfce97087870881551c"
+  "compat/extension-kv.ts": "04240517e9e8664cae2d2badb99f382100a7af3e12679cfce97087870881551c",
+  "compat/tool-call-summary.ts": "a3b717a0538e5fae5e8572b02e289d5b799574ba9bff51b63a6bb29ff5772051",
+  "deadline-checkpoint.ts": "e94f7cb065f321b06de33bfd7963011f03714c73437eedab634bce69f199c1db",
+  "index.ts": "f4e2f2cb4c640e626063dc363e741d30f92987d7c562823a050f6230f35254c0",
+  "summary.ts": "4f3b3c80faecff868c7df9a7a3a79f1b8ae19216dbb1a6ffc94ea68afb2a6d31"
 });
 const approvedObservabilityFiles = Object.freeze({
-  "usage-telemetry.ts": "15b3290c3a70edd3109e423eb96c098057b262a6a8a05d698c39dcad07c583c4",
-  "package.json": "514d8a5fd6fc33ecb9860d64833ff67a85d3023a4410de2563976b551eea4bd0",
-  "model-speed-telemetry.ts": "3bb502620a527baa86e87a3766afa9f6ca4171fbfefab81db55da22e6a8207fa",
-  "compat/extension-kv.ts": "04240517e9e8664cae2d2badb99f382100a7af3e12679cfce97087870881551c",
-  "compat/log-sink.ts": "b7f04b776dc33ec8a2bbe4d803b2d7c2783b8d16b5fa4a1b54c85fb30d1ee19e",
-  "compat/config.ts": "b6b5f488fc7c537185d0144de8fa58029a56c8de33ab2972683556eb989e0768",
-  "compat/logger.ts": "de0fddbd49d7b4d48e3b4ae8c0cf1ab188b4ba542f77c87d57ccb510318f85fa",
-  "compat/keychain.ts": "db449b3c8fb9d0008d85b05c9f7717da0b728e0f9c033bac7b86f9e17eb93bb6",
   "compaction-telemetry.ts": "232f9fd4d9db73405502495ff8a9887248cc34b6cb4b1ba45d014b4c91a73417",
+  "compat/config.ts": "b6b5f488fc7c537185d0144de8fa58029a56c8de33ab2972683556eb989e0768",
+  "compat/extension-kv.ts": "04240517e9e8664cae2d2badb99f382100a7af3e12679cfce97087870881551c",
+  "compat/keychain.ts": "db449b3c8fb9d0008d85b05c9f7717da0b728e0f9c033bac7b86f9e17eb93bb6",
+  "compat/log-sink.ts": "b7f04b776dc33ec8a2bbe4d803b2d7c2783b8d16b5fa4a1b54c85fb30d1ee19e",
+  "compat/logger.ts": "de0fddbd49d7b4d48e3b4ae8c0cf1ab188b4ba542f77c87d57ccb510318f85fa",
   "index.ts": "c715b0667528f9a14e3afb39f9ddd7146bd541f2298bec7a2c6d4af8d3328ce9",
+  "model-speed-telemetry.ts": "3bb502620a527baa86e87a3766afa9f6ca4171fbfefab81db55da22e6a8207fa",
   "native-telemetry.ts": "d2d3b92cab5aaba662ef64634d7934ddd02788eaf287f6fe700d86f51ba70a79",
+  "package.json": "1d5a1679088ba7a636dfc8646ea984ab9a6328c64fc200698e95f8b2811e5ea6",
   "usage-telemetry-job.ts": "64b885525e6fdf8f746719a5342772c9b9b05242b4d1e20af2e55f7ba27f9f82",
-  "usage-telemetry-worker.ts": "d4d58ce8883ddc2fe369a6b8bd5b85a291fabb212d1a69e44cebe34d9f7e56e3"
+  "usage-telemetry-worker.ts": "d4d58ce8883ddc2fe369a6b8bd5b85a291fabb212d1a69e44cebe34d9f7e56e3",
+  "usage-telemetry.ts": "15b3290c3a70edd3109e423eb96c098057b262a6a8a05d698c39dcad07c583c4"
 });
 const approvedResticFiles = Object.freeze({
   "binary.ts": "ff426c8c97d6e7873fce405d948db9e89138f16a948885cd6f97cce77ca9c082",
-  "job-config.ts": "16f6a73e858897608aaa0abd5b40ad0d4dffc7ea9d30ee9b0cf0bee71c69c873",
-  "paths.ts": "1a1e090b0bc57498dc4574632aa06ba14a0c93e6a36448ffba2b07d256f3f0e0",
+  "compat/tool-call-summary.ts": "a3b717a0538e5fae5e8572b02e289d5b799574ba9bff51b63a6bb29ff5772051",
   "config.ts": "2da245b75137c0307f93d8ecc0f248d5f21bcb76b5f06954ba53e18874f9f1b8",
-  "staging.ts": "ef2bbb6730aab585cb8471ebf808c729b29e266c1f79c9d37d963f5497fe0f7c",
-  "runtime-state.ts": "c7fcbc2eb88b2b05dd46ae928e2e3d50d96ad1a5c8ab5ddce25ba0c2b0d02681",
-  "runner.ts": "913c3af0646f5d98657d1a40d19eaee5685f9fcfda0075869c39a966b4cd3a0e",
-  "sqlite-snapshot.ts": "4a5faac2d37fcd82fb7c993a56e25885f98868ba16d8ecda184d01b52767118f",
+  "contracts.ts": "d73eea35af0c00b1dc36a98c352389804147447b5228c18cee807110fbddb27c",
+  "index.ts": "6341ba5ff82dea705e89ac17b2757e766d3379fd2e20d845f6e363f39c52b886",
+  "job-config.ts": "16f6a73e858897608aaa0abd5b40ad0d4dffc7ea9d30ee9b0cf0bee71c69c873",
+  "package.json": "6075a2ca28f5c5b4d66d948513f29dd0c6c6c5c44206e61a8d8abc8b27cb4015",
+  "paths.ts": "1a1e090b0bc57498dc4574632aa06ba14a0c93e6a36448ffba2b07d256f3f0e0",
   "repository.ts": "2545decc728f76f0c200983acf8267dd12d4229e65bff132014943f02a74327d",
-  "index.ts": "fd9d9106ace5bf13560a78caa6e51467053df84e82c03b02aa3c15df98ee46b2",
+  "runner.ts": "913c3af0646f5d98657d1a40d19eaee5685f9fcfda0075869c39a966b4cd3a0e",
+  "runtime-state.ts": "c7fcbc2eb88b2b05dd46ae928e2e3d50d96ad1a5c8ab5ddce25ba0c2b0d02681",
   "runtime.ts": "9e2d4959aade2908843c18b40ceceae0c524f716ca724d6a273210ea87c2c8eb",
   "service.ts": "f1ed6ee19bdce8d8e72e0d4e6b64fd3dad8f7fe4713f25203e386145d0a72190",
-  "package.json": "48fab80b368fe9491e559011fd89d2a97de0b2d0312ab70a9372d86a7bd45777",
-  "contracts.ts": "d73eea35af0c00b1dc36a98c352389804147447b5228c18cee807110fbddb27c"
+  "sqlite-snapshot.ts": "4a5faac2d37fcd82fb7c993a56e25885f98868ba16d8ecda184d01b52767118f",
+  "staging.ts": "ef2bbb6730aab585cb8471ebf808c729b29e266c1f79c9d37d963f5497fe0f7c",
+  "summary.ts": "049e593f6d203d46eabb377731a5da7595a28e0c9b4109ff0c4c0e02bf9334e4"
 });
 const profiles = {
-  observability: { label: "Observability", name: "@rcarmo/piclaw-addon-observability", version: "0.1.25", files: approvedObservabilityFiles,
-    shadows: [...Object.keys(approvedObservabilityFiles).filter(file => file.endsWith(".ts")).flatMap(file => [file.replace(/\.ts$/, ".js"), file.replace(/\.ts$/, ".json"), file.replace(/\.ts$/, "/index.js"), file.replace(/\.ts$/, "/package.json")]), "compat/package.json"],
+  observability: { label: "Observability", name: "@rcarmo/piclaw-addon-observability", version: "0.1.26", files: approvedObservabilityFiles,
+    shadows: backendSourceShadows(approvedObservabilityFiles),
     events: ["resources_discover", "session_start", "before_agent_start"] },
-  restic: { label: "Restic", name: "@rcarmo/piclaw-addon-restic", version: "0.1.5", files: approvedResticFiles,
-    shadows: Object.keys(approvedResticFiles).filter(file => file.endsWith(".ts")).flatMap(file => [file.replace(/\.ts$/, ".js"), file.replace(/\.ts$/, ".json"), file.replace(/\.ts$/, "/index.js"), file.replace(/\.ts$/, "/package.json")]), events: [] as readonly string[] },
-  goal: { label: "Goal", name: "@rcarmo/piclaw-addon-goal", version: "0.1.50", files: approvedGoalFiles,
-    shadows: [...Object.keys(approvedGoalFiles).flatMap(file => [file.replace(/\.ts$/, ".js"), file.replace(/\.ts$/, ".json"), file.replace(/\.ts$/, "/index.js"), file.replace(/\.ts$/, "/package.json")]), "compat/package.json"],
+  restic: { label: "Restic", name: "@rcarmo/piclaw-addon-restic", version: "0.1.6", files: approvedResticFiles,
+    shadows: backendSourceShadows(approvedResticFiles), events: [] as readonly string[] },
+  goal: { label: "Goal", name: "@rcarmo/piclaw-addon-goal", version: "0.1.52", files: approvedGoalFiles,
+    shadows: backendSourceShadows(approvedGoalFiles),
     events: ["before_agent_start", "tool_execution_end", "session_compact", "input", "message_end", "agent_end"] },
-  open_drawio_editor: { label: "Draw.io", name: "@rcarmo/piclaw-addon-drawio-editor", version: "31.4.4", files: approvedDrawioFiles, shadows: ["index.js", "tool.js", "tool.json", "tool/index.js", "tool/package.json"], events: [] as readonly string[] },
-  open_office_viewer: { label: "Office Viewer", name: "@rcarmo/piclaw-addon-office-viewer", version: "0.1.3", files: approvedOfficeViewerFiles, shadows: ["index.js"], events: [] as readonly string[] },
-  editable_table: { label: "Editable Table", name: "@rcarmo/piclaw-addon-editable-table", version: "0.1.4", files: approvedEditableTableFiles, shadows: ["index.js", "tool.js", "tool.json", "tool/index.js", "tool/package.json", "shared.js", "shared.json", "shared/index.js", "shared/package.json"], events: ["resources_discover"] },
-  code_review: { label: "Code Review", name: "@rcarmo/piclaw-addon-code-review", version: "0.1.11", files: approvedCodeReviewFiles,
-    shadows: [...Object.keys(approvedCodeReviewFiles).flatMap(file => [file.replace(/\.ts$/, ".js"), file.replace(/\.ts$/, ".json"), file.replace(/\.ts$/, "/index.js"), file.replace(/\.ts$/, "/package.json")])], events: ["resources_discover"] },
+  open_drawio_editor: { label: "Draw.io", name: "@rcarmo/piclaw-addon-drawio-editor", version: "31.4.5", files: approvedDrawioFiles, shadows: backendSourceShadows(approvedDrawioFiles), events: [] as readonly string[] },
+  open_office_viewer: { label: "Office Viewer", name: "@rcarmo/piclaw-addon-office-viewer", version: "0.1.4", files: approvedOfficeViewerFiles, shadows: backendSourceShadows(approvedOfficeViewerFiles), events: [] as readonly string[] },
+  editable_table: { label: "Editable Table", name: "@rcarmo/piclaw-addon-editable-table", version: "0.1.5", files: approvedEditableTableFiles, shadows: backendSourceShadows(approvedEditableTableFiles), events: ["resources_discover"] },
+  code_review: { label: "Code Review", name: "@rcarmo/piclaw-addon-code-review", version: "0.1.13", files: approvedCodeReviewFiles,
+    shadows: backendSourceShadows(approvedCodeReviewFiles), events: ["resources_discover"] },
 } as const;
 type Profile = keyof typeof profiles;
 export const applicationAddonSourceProfiles = { ...profiles, ...installedAddonProfiles };
@@ -110,7 +131,7 @@ type InstalledRegistration = Readonly<{
   declaration: string | undefined;
   handlerMap: Extension["handlers"];
   handlers: ReadonlyMap<string, readonly unknown[]>;
-  tools: readonly { name: string; definition: ToolDefinition; execute: unknown; declaration: string }[];
+  tools: readonly { name: string; definition: ToolDefinition; execute: unknown; summary: ToolCallSummary; declaration: string }[];
   commands: readonly { name: string; command: RegisteredCommand; handler: RegisteredCommand["handler"]; completions: RegisteredCommand["getArgumentCompletions"]; declaration: string }[];
 }>;
 const loadedProfileSources = new WeakMap<LoadExtensionsResult, ReadonlyMap<SourceProfile, InstalledSource>>();
@@ -202,7 +223,7 @@ function qualifyInstalled(catalog: LoadExtensionsResult, cwd: string, kind: Prof
       !sameSource(source, captureApprovedSource(cwd, getInstalledAddonExtensionPaths(cwd), kind))) throw new InstalledAddonSourceChanged(profile.label, profile.version);
     const names = kind === "observability" ? [] : kind === "goal" ? ["get_goal", "create_goal", "goal_complete", "goal_stop", "update_goal"] : [kind];
     if (definition?.name !== names[0] || extension.tools.size !== names.length || tools.length !== names.length ||
-      names.some(name => !tools.some(prior => prior.name === name && extension.tools.get(name)?.definition === prior.definition && prior.definition.execute === prior.execute && JSON.stringify(prior.definition) === prior.declaration)) ||
+      names.some(name => !tools.some(prior => prior.name === name && extension.tools.get(name)?.definition === prior.definition && prior.definition.execute === prior.execute && readToolCallSummary(prior.definition) === prior.summary && JSON.stringify(prior.definition) === prior.declaration)) ||
       definition?.execute !== execute || JSON.stringify(definition) !== declaration || extension.handlers !== handlerMap ||
       extension.handlers.size !== profile.events.length || (profile.events as readonly string[]).some(event => {
         const current = extension.handlers.get(event) ?? [], prior = handlers.get(event) ?? [];
@@ -241,7 +262,7 @@ export async function qualifyInstalledGoal(catalog: LoadExtensionsResult, cwd: s
   const native = addon.createGoalTools(() => { throw Error("Invocation-local Goal scope required"); }) as ToolDefinition[];
   if (native.length !== qualified.extension.tools.size || new Set(native.map(tool => tool.name)).size !== native.length || native.some(tool => {
     const loaded = qualified.extension.tools.get(tool.name)?.definition;
-    return !loaded || typeof tool.execute !== "function" || JSON.stringify(tool) !== JSON.stringify(loaded);
+    return !loaded || typeof tool.execute !== "function" || !readToolCallSummary(tool) || JSON.stringify(tool) !== JSON.stringify(loaded);
   })) throw Error("Goal native/legacy declarations differ");
   return Object.freeze({ ...qualified, addon, assertCurrent() {
     qualified.assertCurrent();
@@ -260,7 +281,7 @@ export async function qualifyInstalledCodeReview(catalog: LoadExtensionsResult, 
   const addon = Object.freeze(Object.fromEntries(names.map(name => [name, exports[name]]))) as unknown as CodeReviewNativeExports;
   const native = addon.createCodeReviewTool({ async resolve() { throw Error("Invocation-local review scope required"); } });
   const declaration = (value: Pick<typeof native, "name" | "label" | "description" | "parameters">) => JSON.stringify({ name: value.name, label: value.label, description: value.description, parameters: value.parameters });
-  if (declaration(native) !== declaration(qualified.definition)) throw Error("Code Review native/legacy declarations differ");
+  if (!readToolCallSummary(native) || declaration(native) !== declaration(qualified.definition)) throw Error("Code Review native/legacy declarations differ");
   const assertCurrent = () => {
     qualified.assertCurrent();
     if (names.some(name => exports[name] !== addon[name])) throw Error("Code Review public exports changed");
@@ -277,7 +298,8 @@ export async function qualifyInstalledDrawio(catalog: LoadExtensionsResult, cwd:
   if (names.some(name => typeof exports[name] !== "function")) throw Error("Draw.io public native exports required");
   const addon = Object.freeze(Object.fromEntries(names.map(name => [name, exports[name]]))) as unknown as DrawioNativeExports;
   const declaration = (tool: Pick<ReturnType<DrawioNativeExports["createDrawioEditorTool"]>, "name" | "label" | "description" | "parameters">) => JSON.stringify({ name: tool.name, label: tool.label, description: tool.description, parameters: tool.parameters });
-  if (declaration(addon.createDrawioEditorTool()) !== declaration(qualified.definition)) throw Error("Draw.io native/legacy declarations differ");
+  const native = addon.createDrawioEditorTool();
+  if (!readToolCallSummary(native) || declaration(native) !== declaration(qualified.definition)) throw Error("Draw.io native/legacy declarations differ");
   return Object.freeze({ ...qualified, addon, assertCurrent() {
     qualified.assertCurrent();
     if (names.some(name => exports[name] !== addon[name])) throw Error("Draw.io public exports changed");
@@ -297,7 +319,7 @@ export async function qualifyInstalledEditableTable(catalog: LoadExtensionsResul
   const factory = exports.createEditableTableTool;
   const native = factory();
   const declaration = (tool: typeof native) => JSON.stringify({ name: tool.name, label: tool.label, description: tool.description, parameters: tool.parameters });
-  if (declaration(native) !== declaration(qualified.definition as typeof native)) throw Error("Editable table native/legacy declarations differ");
+  if (!readToolCallSummary(native) || declaration(native) !== declaration(qualified.definition as typeof native)) throw Error("Editable table native/legacy declarations differ");
   return Object.freeze({ ...qualified, addon: Object.freeze({ createEditableTableTool: factory }), assertCurrent() { qualified.assertCurrent(); if (exports.createEditableTableTool !== factory) throw Error("Editable table factory changed"); } });
 }
 
@@ -371,7 +393,11 @@ export async function loadApplicationExtensionCatalog(options: {
       const definition = extension.tools.get(kind === "goal" ? "get_goal" : kind)?.definition;
       if (resolve(extension.resolvedPath) === before.entry && (definition || kind === "observability" || kind in installedAddonProfiles)) sources.set(extension, Object.freeze({
         source: before, definition, execute: definition?.execute, declaration: JSON.stringify(definition), handlerMap: extension.handlers,
-        tools: [...extension.tools].map(([name, { definition }]) => Object.freeze({ name, definition, execute: definition.execute, declaration: JSON.stringify(definition) })),
+        tools: [...extension.tools].map(([name, { definition }]) => {
+          const summary = readToolCallSummary(definition);
+          if (!summary) throw Error(`Add-on tool requires a synchronous callSummary provider: ${name}`);
+          return Object.freeze({ name, definition, execute: definition.execute, summary, declaration: JSON.stringify(definition) });
+        }),
         commands: [...extension.commands].map(([name, command]) => Object.freeze({ name, command, handler: command.handler, completions: command.getArgumentCompletions, declaration: JSON.stringify(command) })),
         handlers: new Map([...extension.handlers].map(([event, handlers]) => [event, Object.freeze([...handlers])])),
       }));
@@ -389,7 +415,8 @@ export async function qualifyInstalledRestic(catalog: LoadExtensionsResult, cwd:
   qualified.assertCurrent();
   if (typeof exports.createResticTool !== "function") throw Error("Restic native factory required");
   const factory = exports.createResticTool;
-  if (JSON.stringify(factory(() => { throw Error("Invocation-local Restic authority required"); })) !== JSON.stringify(qualified.definition)) throw Error("Restic native/legacy declarations differ");
+  const native = factory(() => { throw Error("Invocation-local Restic authority required"); });
+  if (!readToolCallSummary(native) || JSON.stringify(native) !== JSON.stringify(qualified.definition)) throw Error("Restic native/legacy declarations differ");
   return Object.freeze({ ...qualified, addon: Object.freeze({ createResticTool: factory }), assertCurrent() {
     qualified.assertCurrent(); if (exports.createResticTool !== factory) throw Error("Restic public factory changed");
   } });
@@ -476,7 +503,7 @@ export async function qualifyInstalledAddon(catalog: LoadExtensionsResult, cwd: 
     if (extension) {
       if (!prior || !catalog.extensions.includes(extension) || extension.handlers !== prior.handlerMap ||
         extension.tools.size !== prior.tools.length || extension.commands.size !== prior.commands.length || extension.shortcuts.size ||
-        prior.tools.some(tool => extension.tools.get(tool.name)?.definition !== tool.definition || tool.definition.execute !== tool.execute || JSON.stringify(tool.definition) !== tool.declaration) ||
+        prior.tools.some(tool => extension.tools.get(tool.name)?.definition !== tool.definition || tool.definition.execute !== tool.execute || readToolCallSummary(tool.definition) !== tool.summary || JSON.stringify(tool.definition) !== tool.declaration) ||
         prior.commands.some(command => extension.commands.get(command.name) !== command.command || command.command.handler !== command.handler || command.command.getArgumentCompletions !== command.completions || JSON.stringify(command.command) !== command.declaration) ||
         extension.handlers.size !== prior.handlers.size || [...prior.handlers].some(([event, handlers]) => {
           const current = extension.handlers.get(event);

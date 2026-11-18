@@ -129,6 +129,8 @@ export interface DurableTurnEntries {
   readonly entries: readonly DurableTurnEntry[];
   readonly tasks: Readonly<Record<number, DurableTurnTask>>;
   readonly truncated: boolean;
+  /** Argument-only presentation supplied by the conversation's registered tools. */
+  readonly toolSummaries?: import('../tool-call-summary.js').ToolCallSummaryFacts;
 }
 
 export interface DurableConversationBinding {

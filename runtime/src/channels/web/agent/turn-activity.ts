@@ -84,15 +84,15 @@ function resultText(message: ModelMessage | undefined): string {
   return blocks(message).filter((block) => block.type === "text").map((block) => block.text ?? "").join("\n");
 }
 
-function nestedCalls(details: unknown): TurnNestedCall[] | undefined {
+function nestedCalls(details: unknown, summaries?: readonly (string | null | undefined)[]): TurnNestedCall[] | undefined {
   const calls = (details as { calls?: unknown } | undefined)?.calls;
   if (!Array.isArray(calls) || !calls.length) return undefined;
-  return calls.slice(0, 200).map((call) => {
+  return calls.slice(0, 200).map((call, index) => {
     const record = call as { name?: unknown; args?: unknown; status?: unknown; durationMs?: unknown };
     const name = typeof record.name === "string" ? record.name : "tool";
     return {
       name,
-      title: formatToolTitle(name, record.args),
+      title: formatToolTitle(name, record.args, summaries?.[index]),
       status: record.status === "ok" ? "ok" : record.status === "error" ? "error" : "running",
       duration_ms: finite(record.durationMs) ? record.durationMs : null,
     };
@@ -144,7 +144,8 @@ export function projectTurnActivity(turn: DurableTurnEntries, answerEntryId: num
           steps.push({ id: `text:${entry.id}:${index}`, kind: "text", text: clip(block.text, TEXT_PREVIEW), chars: block.text.length });
         } else if (block.type === "toolCall" && block.id && block.name) {
           const args = argsText(block.arguments);
-          const tool = { call_id: block.id, name: block.name, title: formatToolTitle(block.name, block.arguments),
+          const summary = turn.toolSummaries && Object.hasOwn(turn.toolSummaries, block.id) ? turn.toolSummaries[block.id]?.text : undefined;
+          const tool = { call_id: block.id, name: block.name, title: formatToolTitle(block.name, block.arguments, summary),
             status: "running" as TurnStepStatus, duration_ms: null, args_preview: clip(args, ARGS_PREVIEW),
             output_preview: "", output_chars: 0, output_lines: 0, images: 0 };
           toolSteps.set(block.id, tool);
@@ -168,7 +169,8 @@ export function projectTurnActivity(turn: DurableTurnEntries, answerEntryId: num
       tool.output_chars = output.length;
       tool.output_lines = output ? output.split("\n").length : 0;
       tool.images = blocks(message).filter((block) => block.type === "image").length;
-      const nested = nestedCalls(message.details);
+      const summaries = turn.toolSummaries && Object.hasOwn(turn.toolSummaries, message.toolCallId) ? turn.toolSummaries[message.toolCallId]?.nested : undefined;
+      const nested = nestedCalls(message.details, summaries);
       if (nested) tool.nested = nested;
     }
   }

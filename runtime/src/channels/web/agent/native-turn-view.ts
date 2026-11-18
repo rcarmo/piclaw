@@ -1,6 +1,7 @@
 import type Database from "bun:sqlite";
 import { readNativeDelegateProgress, formatNativeDelegateProgress } from "../../../agent-pool/delegate-progress.js";
 import { buildPreview, createToolTitleTracker } from "./agent-utils.js";
+import type { ToolCallSummaryResolver } from "../../../tool-call-summary.js";
 
 /** Projection of the public pi-durable conversation watch onto existing web events. */
 export interface NativeTurnViewChannel {
@@ -40,7 +41,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
     const append = previous.length > 0 && text.startsWith(previous);
     channel.broadcastEvent(`agent_${kind}_delta`, { ...base, delta: append ? text.slice(previous.length) : text, reset: !append, ...(!append ? { text } : {}) });
   }
-  return (view: any, startedAt?: number) => {
+  return (view: any, startedAt?: number, summaries?: ToolCallSummaryResolver) => {
     const entries=view.entries??[];
     for(const entry of entries){
       if(entryFrontier!==undefined&&entry.id>entryFrontier&&entry.kind==="host.accepted"&&entry.conversationId===view.conversation?.id&&entry.data?.chatJid===chat&&typeof entry.data.sourceId==="string")channel.publishInput?.(entry.data.sourceId);
@@ -54,7 +55,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
     for(const id of queuedIds)if(!nextQueuedIds.has(id))channel.broadcastEvent("agent_followup_consumed",{chat_jid:chat,row_id:id});
     queuedIds=nextQueuedIds;queued=inbox.length;
     if (!live.run) {
-      runId = undefined;
+      runId = undefined; titles.clear();
       if (live.compactions?.length) {
         base = undefined;
         status({ type: "intent", state: "active", title: "Compacting context", phase: "compaction", intent_key: "compaction",
@@ -79,7 +80,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
         thread_id: input.thread_id ?? input.rowid,
         operation_id: input.operation_id.startsWith("native-message:") ? `sdk-run:${view.conversation.id}:${live.run.inputs[0]}` : input.operation_id,
         source: "durable_runtime", ...(startedAt !== undefined ? { started_at: new Date(startedAt).toISOString() } : {}) };
-      thought = draft = completedThought = completedDraft = partialThought = partialDraft = lastStatus = ""; tools.clear(); delegates.clear();
+      thought = draft = completedThought = completedDraft = partialThought = partialDraft = lastStatus = ""; tools.clear(); delegates.clear(); titles.clear();
       status({ type: "thinking", title: "Thinking...", phase: "thinking" });
     }
     const message = live.generation?.message;
@@ -123,7 +124,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
     const delegatesActive = slots.some((slot: any) => slot.name === "delegate" && slot.status !== "done");
     const delegateOutput = delegateProgress.map(progress => formatNativeDelegateProgress(progress, delegateIds.indexOf(progress.tool_call_id) + 1, delegateIds.length)).join("\n\n");
     const activeTools = slots.filter((slot: any) => slot.status !== "done").map((slot: any) => ({
-      tool_call_id: slot.callId, tool_name: slot.name, title: titles.remember(slot.callId, slot.name, slot.arguments ?? (calls.get(slot.callId) as any)?.arguments), status: slot.status,
+      tool_call_id: slot.callId, tool_name: slot.name, title: titles.remember(slot.callId, slot.name, slot.arguments ?? (calls.get(slot.callId) as any)?.arguments, summaries), status: slot.status,
       ...(slot.arguments ? { tool_args: slot.arguments } : {}),
       ...(slot.output ? { output_preview: slot.output.slice(-4000), output_preview_lines: slot.output.split("\n").length } : {}),
     }));
@@ -139,7 +140,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
       const signature = JSON.stringify([slot.name, slot.status, args, output]);
       const previous = tools.get(slot.callId);
       if (previous?.signature === signature) { currentTool = previous.payload; continue; }
-      currentTool = { type: output || slot.status === "done" ? "tool_status" : "tool_call", title: titles.remember(slot.callId, slot.name, args), tool_call_id: slot.callId, tool_name: slot.name,
+      currentTool = { type: output || slot.status === "done" ? "tool_status" : "tool_call", title: titles.remember(slot.callId, slot.name, args, summaries), tool_call_id: slot.callId, tool_name: slot.name,
         tool_args: args, status: slot.status, active_tools: activeTools, active_tool_count: activeTools.length, last_event_at: new Date().toISOString(),
         ...(delegateProgress.length ? { delegate_progress: delegateProgress } : {}),
         ...(output ? { output_preview: output.slice(-16000), output_preview_lines: output.split("\n").length } : {}) };

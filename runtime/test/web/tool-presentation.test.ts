@@ -7,6 +7,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getDb, initDatabase } from "../../src/db/connection.js";
 import { EMITTED_PAGE_BYTES, emittedToolOutput, formatShellCommand, isBashOutputLog, originalToolInput, readableToolInput } from "../../src/channels/web/agent/tool-presentation.js";
+import { createToolCallSummaryResolver, toolCallSummary } from "../../src/tool-call-summary.js";
+import { summariseDelegateCall } from "../../src/delegate/tool-summary.js";
+import { summarisePlanCall } from "../../src/plan/tool-summary.js";
 
 describe("shell commands", () => {
   test("split top-level chains onto continued lines", () => {
@@ -127,7 +130,9 @@ describe("delegate calls", () => {
   };
 
   test("title summarises the delegated task in one line", async () => {
-    const { formatToolTitle } = await import("../../src/channels/web/agent/agent-utils.js");
+    const { formatToolTitle: genericTitle } = await import("../../src/channels/web/agent/agent-utils.js");
+    const summaries = createToolCallSummaryResolver([{ name: 'delegate', ...toolCallSummary(summariseDelegateCall) }]);
+    const formatToolTitle = (name: string, input: unknown) => genericTitle(name, input, summaries(name, input));
     expect(formatToolTitle("delegate", args)).toBe("delegate: Review the timeline scroll fix for regressions.");
     expect(formatToolTitle("delegate", { prompt: `## Task\n\n- ${"word ".repeat(40)}` })).toBe(`delegate: Task`);
     // A one-paragraph brief is summarised by its first sentence, not cut mid-thought.
@@ -157,7 +162,9 @@ describe("delegate calls", () => {
 
 describe("plan calls", () => {
   test("titles say what changed in the plan, in one line", async () => {
-    const { formatToolTitle } = await import("../../src/channels/web/agent/agent-utils.js");
+    const { formatToolTitle: genericTitle } = await import("../../src/channels/web/agent/agent-utils.js");
+    const summaries = createToolCallSummaryResolver([{ name: 'plan', ...toolCallSummary(summarisePlanCall) }]);
+    const formatToolTitle = (name: string, input: unknown) => genericTitle(name, input, summaries(name, input));
     expect(formatToolTitle("plan", { action: "read" })).toBe("plan: read the checklist");
     expect(formatToolTitle("plan", { action: "update", plan: [
       { step: "Baseline", status: "completed" },
