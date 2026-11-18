@@ -81,3 +81,8 @@ for(const fixture of [
  }]);
  expect((await(await root.submit({type:'input',content:'Synthetic MCP contract'},context)).wait(context)).status).toBe('done');expect(c.calls()).toBe(1);
 });
+
+test('explicit anonymous HTTP uses the public client without forwarding any bearer material',async()=>{
+ let requests=0;const server=Bun.serve({hostname:'127.0.0.1',port:0,async fetch(request){requests++;expect(request.headers.get('authorization')).toBeNull();if(request.method!=='POST')return new Response(null,{status:202});const rpc=await request.json() as any;if(rpc.id===undefined)return new Response(null,{status:202});return Response.json({jsonrpc:'2.0',id:rpc.id,result:rpc.method==='initialize'?{protocolVersion:rpc.params.protocolVersion,capabilities:{},serverInfo:{name:'public',version:'1'}}:{}});}});cleanups.push(async()=>{server.stop(true);});
+ const connected=await connectMcpHttp({...config,url:server.url.href,allowHttp:true,auth:'none',bearer:'MUST_NOT_BE_FORWARDED'});cleanups.push(()=>connected.client.close());expect(connected.tools).toEqual([]);expect(requests).toBeGreaterThan(0);
+});

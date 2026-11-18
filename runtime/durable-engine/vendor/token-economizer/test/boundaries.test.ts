@@ -53,6 +53,7 @@ test("distribution retains the pinned upstream licence, attribution and modified
   expect(projectPackage.imports ?? {}).toMatchObject({
     "#token-optimizer/core": "./runtime/durable-engine/vendor/token-economizer/src/core/index.ts",
     "#token-optimizer/pi-durable": "./runtime/durable-engine/vendor/token-economizer/src/pi-durable/index.ts",
+    "#token-optimizer/state": "./runtime/durable-engine/vendor/token-economizer/src/pi-durable/documents.ts",
   });
 });
 
@@ -65,7 +66,7 @@ test("the Piclaw host uses only the package's public entry points", async () => 
       ...Array.from(source.matchAll(/\bimport\s+["']([^"']+)["']/g), match => match[1]),
     ];
     for (const name of names) {
-      if (name.startsWith("#token-optimizer/")) expect(name).toMatch(/^#token-optimizer\/(?:core|pi-durable)$/);
+      if (name.startsWith("#token-optimizer/")) expect(name).toMatch(/^#token-optimizer\/(?:core|pi-durable|state)$/);
       if (name.includes("token-economizer")) {
         expect(name).not.toContain("/src/");
         expect(name).not.toMatch(/^@kintsugi\//);

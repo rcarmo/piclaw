@@ -1,6 +1,7 @@
 import { html, render, useCallback, useMemo, useState } from '../vendor/preact-htm.js';
 import { SettingsDialogContent } from '../components/settings-dialog.js';
 import { registerSettingsPane } from '../components/settings/pane-registry.js';
+import { defaultPolicy, defaultMcpRecallSettings, outputOffload } from '#token-optimizer/core';
 
 const mockIcon = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>`;
 
@@ -151,20 +152,14 @@ const mockKeychainPayload = {
   ],
 };
 
-const mockMcpServers = [
-  { name: 'knowledge-service', enabled: true, localOverride: false, source: 'user', withheldFields: ['headers'], patch: { url: 'https://knowledge.example.test/mcp', auth: 'bearer', bearerTokenKeychain: 'services/reader', lifecycle: 'lazy', directTools: false } },
-  { name: 'local-tools', enabled: false, localOverride: true, source: 'project', withheldFields: ['args', 'env'], patch: { command: 'example-service', disabled: true } },
+const mockMcpConnections = [
+  { id: 'knowledge', name: 'knowledge_service', workspaceId: 'fixture', agentIds: [], enabled: true, revision: 1, transport: 'http', url: 'https://knowledge.example.test/mcp', auth: 'bearer', hasSavedCredentials: true, allowHttp: false, timeoutSeconds: 30, recall: defaultMcpRecallSettings(), status: { state: 'connected', tools: ['read'], message: 'Connected' } },
+  { id: 'local', name: 'local_tools', workspaceId: 'fixture', agentIds: [], enabled: false, revision: 1, transport: 'stdio', url: '', auth: 'bearer', command: ['example-service'], hasSavedCredentials: false, allowHttp: false, timeoutSeconds: 30, recall: defaultMcpRecallSettings() },
 ];
-const mockMcpPolicy = {
-  ok: true, revision: 'fixture', effect: 'abort_active_turns_and_update_codemode',
-  nativeBlockReason: 'Native is unavailable for this configuration.', nativeBlockers: [],
-  persisted: { policy: { engine: 'adapter', codemode: 'auto' } },
-  runtime: { configuredFactory: 'adapter', observedPolicy: { engine: 'adapter', codemode: 'auto' }, connectionStatus: 'unknown', applyAvailable: true },
-  readiness: { adapter: true, native: false, codemode: true },
-  servers: mockMcpServers.map((server) => ({ name: server.name, nativeProjectionStatus: 'mapped' })),
-  plan: { policy: { engine: 'adapter', codemode: 'auto' }, applicable: true, codemodeEnabled: false, issues: [] },
-  applyAvailable: true,
-};
+const mockMcpSnapshot = () => ({ ok: true, workspaceId: 'fixture', connections: mockMcpConnections, agents: [{ id: 'default', label: 'Default' }], defaults: { recall: defaultMcpRecallSettings() } });
+let mockOptimizerConfig = { version: 1, hasEnabled: false, policy: { ...defaultPolicy(), oversightMode: 'off', oversightInferenceInObserve: false, offload: outputOffload(defaultPolicy()) }, workspaces: {}, agents: {}, oversightWorkspaces: {}, oversightAgents: {} };
+let mockOptimizerRevision = 'fixture-1';
+const mockOptimizerSnapshot = () => ({ ok: true, workspaceId: 'fixture', config: mockOptimizerConfig, revision: mockOptimizerRevision, models: [{ provider: 'fixture', id: 'small', type: 'chat' }], agents: [{ id: 'web:default', label: 'Default' }], status: [] });
 
 let mockMode = new URLSearchParams(window.location.search).get('real') !== '1';
 const originalFetch = window.fetch.bind(window);
@@ -187,6 +182,17 @@ function installMockFetch() {
     }
     if (url.pathname === '/agent/models') return json(mockModelsPayload);
     if (url.pathname === '/agent/addons') return json(mockAddonsPayload);
+    if (url.pathname === '/agent/addons/api/token-optimizer/config') {
+      if (method === 'POST') {
+        const body = JSON.parse(String(init?.body || '{}'));
+        if (body.expectedRevision !== mockOptimizerRevision) return json({ error: 'Settings changed; reload before saving' }, 409);
+        const next = structuredClone(body.config);
+        if (next.policy.enabled && !mockOptimizerConfig.hasEnabled) next.policy.mode = 'observe';
+        next.hasEnabled = mockOptimizerConfig.hasEnabled || next.policy.enabled;
+        mockOptimizerConfig = next; mockOptimizerRevision = crypto.randomUUID();
+      }
+      return json(mockOptimizerSnapshot());
+    }
     if (url.pathname.startsWith('/agent/addons/')) return json({ ok: true, message: 'Fixture add-on action accepted.', ...mockAddonsPayload });
     if (url.pathname === '/agent/keychain') {
       if (method === 'GET') return json(mockKeychainPayload);
@@ -201,8 +207,20 @@ function installMockFetch() {
       Object.assign(mockSettingsData, JSON.parse(String(init?.body || '{}')));
       return json({ ok: true, settings: mockSettingsData });
     }
-    if (url.pathname === '/agent/settings/mcp') return json(mockMcpPolicy);
-    if (url.pathname === '/agent/settings/mcp/servers') return json({ ok: true, revision: 'fixture', servers: mockMcpServers, preview: null, applyAvailable: true, phase: 'ready' });
+    if (url.pathname === '/agent/settings/mcp') {
+      if (method === 'POST') {
+        const body = JSON.parse(String(init?.body || '{}'));
+        if (body.action === 'save') {
+          const index = mockMcpConnections.findIndex(row => row.id === body.connection.id), previous = mockMcpConnections[index];
+          if (body.expectedRevision !== (previous?.revision || 0)) return json({ error: 'Connection changed; reload before saving' }, 409);
+          const next = { ...previous, ...body.connection, revision: (previous?.revision || 0) + 1 };
+          if (index < 0) mockMcpConnections.push(next); else mockMcpConnections[index] = next;
+        } else if (body.action === 'remove') {
+          const index = mockMcpConnections.findIndex(row => row.id === body.id); if (index >= 0) mockMcpConnections.splice(index, 1);
+        } else if (body.action === 'sign_in') return json({ ok: true, message: 'Already signed in' });
+      }
+      return json(mockMcpSnapshot());
+    }
     if (url.pathname.startsWith('/agent/settings/')) return json({ ok: true, settings: mockSettingsData, items: [], entries: [] });
     if (url.pathname === '/agent/client-perf') return json({ ok: true });
 
@@ -241,7 +259,7 @@ function FixtureApp() {
   const [renderKey, setRenderKey] = useState(0);
 
   const sections = useMemo(() => [
-    'general', 'theme', 'sessions', 'compaction', 'keyboard', 'quick-actions', 'workspace', 'environment', 'keychain', 'providers', 'models', 'mcp', 'tools', 'authentication', 'scheduled-tasks', 'addons', 'editor', 'developer',
+    'general', 'theme', 'sessions', 'compaction', 'keyboard', 'quick-actions', 'workspace', 'environment', 'keychain', 'providers', 'models', 'mcp', 'optimizer', 'tools', 'authentication', 'scheduled-tasks', 'addons', 'editor', 'developer',
     'fixture-b-cheapskate', 'fixture-z-observability', 'fixture-a-portainer', 'fixture-m-proxmox',
   ], []);
 

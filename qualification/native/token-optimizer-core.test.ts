@@ -25,3 +25,7 @@ import "../../runtime/durable-engine/qualification/token-optimizer-host.test.ts"
 import "../../runtime/durable-engine/qualification/optimizer-model-source.test.ts";
 import "../../runtime/durable-engine/qualification/optimizer-model-bridge.test.ts";
 import "../../runtime/durable-engine/qualification/token-optimizer-oversight.test.ts";
+
+import "../../runtime/durable-engine/qualification/saved-bash-output.test.ts";
+import "../../runtime/durable-engine/qualification/application-feature-identity.test.ts";
+import "../../runtime/durable-engine/qualification/optimizer-authority.test.ts";

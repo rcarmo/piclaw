@@ -21,7 +21,7 @@ type Slot={config:McpConnection;failures:number;connection?:ConnectedMcp;authori
 export function createMcpRuntime(options:McpRuntimeOptions){
  const slots=new Map<string,Slot>(),queue=new Set<Slot>(),pending=new Set<Promise<void>>(),waiters=new Set<()=>void>(),statuses=new Map<string,McpConnectionStatus>(),cleanupErrors:unknown[]=[];
  let closed=false,active=0,unwatch:(()=>void)|undefined,closing:Promise<void>|undefined;
- const current=(slot:Slot)=>!closed&&slots.get(slot.config.id)===slot&&options.store.credential(slot.config.id)?.revision===slot.config.revision;
+ const current=(slot:Slot)=>!closed&&slots.get(slot.config.id)===slot&&options.store.credential(slot.config.id)?.revision===slot.config.revision&&options.store.credential(slot.config.id)?.accessEpoch===slot.config.accessEpoch;
  function drained(){if(!pending.size&&!queue.size&&!active){for(const resolve of waiters)resolve();waiters.clear();}}
  function ready(){return!pending.size&&!queue.size&&!active?Promise.resolve():new Promise<void>(resolve=>waiters.add(resolve));}
  function closeConnection(slot:Slot){slot.unlisten?.();slot.unlisten=undefined;const connection=slot.connection;slot.connection=undefined;if(!connection)return;const job=(async()=>slot.authority.cleanup(()=>connection.close()))().catch(error=>{cleanupErrors.push(new Error(mcpFailure(error)));}).finally(()=>{pending.delete(job);drained();});pending.add(job);}
@@ -48,7 +48,7 @@ export function createMcpRuntime(options:McpRuntimeOptions){
  function pump(){while(!closed&&active<4&&queue.size){const slot=queue.values().next().value!;queue.delete(slot);if(!current(slot))continue;active++;const job=discover(slot).finally(()=>{active--;pending.delete(job);pump();drained();});pending.add(job);}drained();}
  function refresh(){
   options.assertOwner();if(closed)return;const desired=options.store.list().filter(row=>mcpWorkspaceAllowed(row,options.workspaceId));
-  for(const[id,slot]of slots)if(!desired.some(row=>row.id===id&&row.revision===slot.config.revision)){slots.delete(id);withdraw(slot);statuses.delete(id);}
+  for(const[id,slot]of slots)if(!desired.some(row=>row.id===id&&row.revision===slot.config.revision&&row.accessEpoch===slot.config.accessEpoch)){slots.delete(id);withdraw(slot);statuses.delete(id);}
   for(const row of desired)if(!slots.has(row.id)){
    const config=options.store.credential(row.id)!;let slot:Slot;
    const authority=createMcpAuthority({assertOwner:options.assertOwner,assertConnection(){if(!current(slot))throw Error('MCP connection changed');slot.connection?.assertCurrent?.();},captureSource:async api=>{
@@ -61,6 +61,7 @@ export function createMcpRuntime(options:McpRuntimeOptions){
  }
  return{
   async attach(){options.assertOwner();if(unwatch||closed)throw Error('MCP runtime already attached or closed');unwatch=options.store.watch(async()=>refresh());refresh();},ready,
+  reconnect(id:string){options.assertOwner();const slot=slots.get(id);if(slot){slots.delete(id);withdraw(slot);statuses.delete(id);}refresh();},
   status(id:string){options.assertOwner();return statuses.get(id)?structuredClone(statuses.get(id)!):undefined;},
   async visibleAgent(id:ConversationId,agent:Agent,context:Context):Promise<Agent>{
    const identity=await options.resolveAgent(id);context.abortSignal?.throwIfAborted();options.assertOwner();const prefixes=identity&&!identity.readOnly?options.store.list().filter(row=>mcpAgentAllowed(row,options.workspaceId,identity.agentId)).map(row=>mcpNamespace(row.name)):[];

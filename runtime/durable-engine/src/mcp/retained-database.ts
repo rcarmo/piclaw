@@ -18,8 +18,15 @@ export function checkpointDeletes(database:Database){
  if(result.busy)log.warn('Retained-output WAL checkpoint is busy; deleted rows are already inaccessible',{operation:'mcp.retained_checkpoint_busy'});
 }
 /** Forget only disposable copies. SDK journals and historical file-backed outputs are never touched. */
-export async function forgetRetainedCopies(database:AgentDatabase){
- await(await database()).withSync(db=>{db.transaction(()=>{for(const table of ['retained_tool_output_chunks','retained_tool_outputs','mcp_recall'])if(db.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table))db.run(`DELETE FROM ${table}`);})();checkpointDeletes(db);});
+export async function forgetRetainedCopies(database:AgentDatabase,owner?:string){
+ await(await database()).withSync(db=>{db.transaction(()=>{
+  const exists=(table:string)=>!!db.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table);
+  if(exists('retained_tool_outputs')){
+   if(exists('retained_tool_output_chunks'))db.run('DELETE FROM retained_tool_output_chunks WHERE outputId IN (SELECT id FROM retained_tool_outputs'+(owner===undefined?'':' WHERE owner=?')+')',owner===undefined?[]:[owner]);
+   db.run('DELETE FROM retained_tool_outputs'+(owner===undefined?'':' WHERE owner=?'),owner===undefined?[]:[owner]);
+  }
+  if(exists('mcp_recall'))db.run('DELETE FROM mcp_recall'+(owner===undefined?'':' WHERE owner=?'),owner===undefined?[]:[owner]);
+ })();checkpointDeletes(db);});
 }
 export type Lineage=readonly{conversationId:number;before:number|null}[];
 export async function conversationLineage(harness:Harness,id:ConversationId,context:Context):Promise<Lineage>{

@@ -23,7 +23,6 @@
  *   - providerRequestSanitizer: defensive provider payload cleanup before HTTP requests.
  *   - openRouterRequestFilter: bounded OpenRouter output budgets and adaptive retry overrides.
  *   - llmContextNormalizer: defensive LLM message-shape cleanup before provider conversion.
- *   - mcpTimeoutPatch: Piclaw-compatible outer timeout/abort guard for MCP tools.
  *   - localLitePromptProfile: compact prompt for local OpenAI-compatible models.
  *
  * Packaged integration declarations remain under runtime/extensions/integrations.
@@ -58,7 +57,6 @@ import { openRouterRequestFilter } from "./openrouter-request-filter.js";
 import { llmContextNormalizer } from "./llm-context-normalizer.js";
 import { persistedToolResultSanitizer } from "./persisted-tool-result-sanitizer.js";
 import { createContextPruneExtension } from "./context-prune.js";
-import { mcpTimeoutPatch } from "./mcp-timeout-patch.js";
 import { localLitePromptProfile } from "./local-lite-prompt-profile.js";
 import { createUiPromptWatchdogExtension } from "./ui-prompt-watchdog.js";
 
@@ -96,7 +94,6 @@ export function createBuiltinExtensionFactories(options?: {
     persistedToolResultSanitizer,
     createContextPruneExtension({ modelRuntime: options?.modelRuntime }),
     llmContextNormalizer,
-    mcpTimeoutPatch,
     localLitePromptProfile,
     createUiPromptWatchdogExtension(options?.chatJid),
   ];

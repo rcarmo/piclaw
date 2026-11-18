@@ -92,7 +92,7 @@ for (const accounted of [false, true]) test(`all six remaining add-on consumers 
     backend = await createDefaultApplicationRuntime(owner, async () => ({ modelRuntime: runtime, modelRegistry: new ModelRegistry(runtime) } as RuntimeModelServices));
     const configUrl = "http://fixture/agent/addons/api/observability/config";
     const admitted = (request: Request) => {
-      admitAddonLocalRequest(request, { userId: "default", mode: "single-user" }, () => !request.signal.aborted);
+      admitAddonLocalRequest(request, { kind: "local", userId: "default", username: "default", displayName: "Fixture", role: "admin", mode: "single-user", homeChatJid: "web:default", authentication: { method: "fixture", sessionId: null, expiresAt: null } }, () => !request.signal.aborted);
       return request;
     };
     const respond = (body: unknown, status = 200) => Response.json(body, { status });

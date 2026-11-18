@@ -56,6 +56,8 @@ export function createMcpRecallExtension(options:{workspaceId:string;harness:()=
       return saved?{...result,details:{...result.details,mcpResultId:saved.id}}:result;
     }
     if(call.parent||call.name!=="codemode"||result.isError||!Value.Check(callsSchema,result.details)||result.details.calls.some(item=>!item.name.startsWith("mcp__")))return result;
+    const agent=await(await options.harness().conversation(api.conversationId,context))?.agent(context);
+    if(!agent?.tools.some(tool=>tool.name==='codemode')||!agent.callable.some(tool=>tool.name==='mcp_recall_retrieve'))return result;
     const memo=await api.memo<{id:string;text:string;mode:string;handler:string}|null>("mcp-recall-projection-v1",context);
     if(memo!==undefined)return memo?modelProjection(result,memo.text,memo.id,memo.mode,memo.handler):result;
     const entries=(await api.entries({order:"descending"},256,undefined,context)).items.filter(entry=>entry.byTaskId===api.taskId&&codemodeCallEntry.is(entry));

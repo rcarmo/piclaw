@@ -1,6 +1,6 @@
 import {afterEach,expect,test} from 'bun:test';
 import {Database} from 'bun:sqlite';import{mkdtempSync,rmSync}from'node:fs';import{join}from'node:path';import{tmpdir}from'node:os';
-import {createRegistry,defineExtension,Harness,type ConversationId} from '@earendil-works/pi-durable';
+import {createRegistry,defineExtension,Harness,AgentDoc,type ConversationId} from '@earendil-works/pi-durable';
 import {SqliteStorage} from '@earendil-works/pi-durable/storage/sqlite';
 import {BACKGROUND_CONTEXT as context} from '@earendil-works/chord/context';
 import {createModels,fauxProvider,fauxAssistantMessage,fauxToolCall,contentText} from '@earendil-works/pi-ai';
@@ -32,3 +32,9 @@ test('MCP-only script projection shortens only the model view and original pages
  expect((await(await f.root.submit({type:'input',content:'Synthetic MCP recall'},context)).wait(context)).status).toBe('done');expect(f.calls()).toBe(1);expect(f.db.query('SELECT count(*) AS n FROM mcp_recall').get()).toEqual({n:2});
 });
 for(const mode of ['off','observe'] as const)test('MCP recall '+mode+' preserves script and model values',async()=>{const f=await fixture(mode);f.faux.setResponses([fauxAssistantMessage([fauxToolCall('codemode',{code:script})],{stopReason:'toolUse'}),request=>{const output=request.messages.filter(m=>m.role==='toolResult').map(m=>contentText(m.content)).at(-1)!;expect(output).toContain('RAW_VALUE_MARKER');expect(output).not.toContain('[MCP recall ');return fauxAssistantMessage('Done');}]);expect((await(await f.root.submit({type:'input',content:'Synthetic MCP recall'},context)).wait(context)).status).toBe('done');expect(f.calls()).toBe(1);if(mode==='off'){const row=f.db.query("SELECT name FROM sqlite_master WHERE name='mcp_recall'").get();if(row)expect(f.db.query('SELECT count(*) AS n FROM mcp_recall').get()).toEqual({n:0});}});
+
+test('an explicit SDK filter excluding recall keeps the complete MCP script result',async()=>{
+ const f=await fixture('active');await f.harness.commit(async tx=>{(await tx.doc(AgentDoc,f.root.id)).tools=['codemode','mcp__fixture__items'];},context);
+ f.faux.setResponses([fauxAssistantMessage([fauxToolCall('codemode',{code:script})],{stopReason:'toolUse'}),request=>{const output=request.messages.filter(message=>message.role==='toolResult').map(message=>contentText(message.content)).at(-1)!;expect(output).toContain('RAW_VALUE_MARKER');expect(output).not.toContain('[MCP recall ');return fauxAssistantMessage('Done');}]);
+ expect((await(await f.root.submit({type:'input',content:'Read permitted MCP values'},context)).wait(context)).status).toBe('done');expect(f.calls()).toBe(1);
+});

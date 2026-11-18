@@ -31,8 +31,6 @@ function bootstrapDepsForFailure(overrides: Partial<RuntimeBootstrapDeps> = {}):
     pollIntervalMs: 1,
     signalRegistrar: { on: () => {} },
     initializeRuntimeEnvironment: () => {},
-    hydrateMcpCredentials: async () => [{ serverName: "mcp", envName: "PICLAW_MCP_SECRET", keychainName: "mcp/test" }],
-    clearMcpCredentials: () => {},
     createAgentPool: async () => agentPool,
     startWebChannel: async () => web,
     startBackgroundModelRefresh: () => {},
@@ -136,11 +134,6 @@ describe("runtime bootstrap", () => {
       pollIntervalMs: 123,
       signalRegistrar: { on: () => {} },
       initializeRuntimeEnvironment: () => events.push("init-runtime-env"),
-      hydrateMcpCredentials: async () => {
-        events.push("hydrate-mcp-credentials");
-        return [];
-      },
-      clearMcpCredentials: () => events.push("clear-mcp-credentials"),
       createAgentPool: async () => {
         events.push("create-agent-pool");
         return agentPool;
@@ -195,7 +188,6 @@ describe("runtime bootstrap", () => {
     expect(capturedShutdownDeps).not.toBeNull();
     expect(events).toEqual([
       "init-runtime-env",
-      "hydrate-mcp-credentials",
       "create-agent-pool",
       "log-banner",
       "start-web",
@@ -209,26 +201,11 @@ describe("runtime bootstrap", () => {
     ]);
   });
 
-  test("clears hydrated MCP credentials when AgentPool creation fails", async () => {
-    const cleared: string[][] = [];
-    const deps = bootstrapDepsForFailure({
-      createAgentPool: async () => { throw new Error("agent pool failed"); },
-      clearMcpCredentials: (entries) => cleared.push(entries.map((entry) => entry.envName)),
-    });
-
-    await expect(bootstrapRuntime(deps)).rejects.toThrow("agent pool failed");
-    expect(cleared).toEqual([["PICLAW_MCP_SECRET"]]);
-  });
-
-  test("clears hydrated MCP credentials when web startup fails", async () => {
-    const cleared: string[][] = [];
-    const deps = bootstrapDepsForFailure({
-      startWebChannel: async () => { throw new Error("web failed"); },
-      clearMcpCredentials: (entries) => cleared.push(entries.map((entry) => entry.envName)),
-    });
-
-    await expect(bootstrapRuntime(deps)).rejects.toThrow("web failed");
-    expect(cleared).toEqual([["PICLAW_MCP_SECRET"]]);
+  for(const failure of ["pool","web"] as const)test(`bootstrap ${failure} failure never invokes retired ambient MCP hydration or clear hooks`,async()=>{
+    const calls:string[]=[];
+    const deps=bootstrapDepsForFailure(failure==="pool"?{createAgentPool:async()=>{throw Error("agent pool failed");}}:{startWebChannel:async()=>{throw Error("web failed");}});
+    Object.assign(deps,{hydrateMcpCredentials:async()=>{calls.push("hydrate");return[];},clearMcpCredentials:()=>calls.push("clear")});
+    await expect(bootstrapRuntime(deps)).rejects.toThrow(failure==="pool"?"agent pool failed":"web failed");expect(calls).toEqual([]);
   });
 
   test("background refresh is queued and not awaited by bootstrap", async () => {
@@ -244,8 +221,6 @@ describe("runtime bootstrap", () => {
       pollIntervalMs: 1,
       signalRegistrar: { on: () => {} },
       initializeRuntimeEnvironment: () => {},
-      hydrateMcpCredentials: async () => [],
-      clearMcpCredentials: () => {},
       createAgentPool: async () => agentPool,
       startWebChannel: async () => ({ stop: async () => {} } as RuntimeBootstrapWeb),
       startBackgroundModelRefresh: () => {
@@ -280,8 +255,8 @@ describe("runtime bootstrap", () => {
     expect(deps.assistantName.length).toBeGreaterThan(0);
     expect(typeof deps.pollIntervalMs).toBe("number");
     expect(deps.triggerPattern).toBeInstanceOf(RegExp);
-    expect(typeof deps.hydrateMcpCredentials).toBe("function");
-    expect(typeof deps.clearMcpCredentials).toBe("function");
+    expect(deps).not.toHaveProperty("hydrateMcpCredentials");
+    expect(deps).not.toHaveProperty("clearMcpCredentials");
     expect(typeof deps.prepareApplicationBackend).toBe("function");
     expect(typeof deps.createAgentPool).toBe("function");
     expect(typeof deps.startRuntimeLoop).toBe("function");

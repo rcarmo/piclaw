@@ -28,7 +28,6 @@ import type { AgentQueue } from "../queue.js";
 import { validateAccessStartup } from "../db/access-state.js";
 import { startAuthMaintenance } from "./auth-maintenance.js";
 import { readAccessConfig } from "../core/config-access.js";
-import { prepareMcpInstanceConfig } from "../core/config-mcp.js";
 import { createUuid } from "../utils/ids.js";
 import { applyEnvironmentOverrides } from "../environment-overrides.js";
 import { createLogger } from "../utils/logger.js";
@@ -166,9 +165,6 @@ export function initializeRuntimeEnvironment(state: RuntimeState): ReturnType<ty
     log.warn("Failed to seed fresh workspace core add-ons", { operation: "workspace_bootstrap.core_addons", err: error });
   }
   bootstrapWorkspaceFromSkel();
-  const { migration } = prepareMcpInstanceConfig();
-  if (migration === "migrated") log.info("Migrated legacy instance configuration permissions to private mode.", { operation: "mcp_config.permissions_migrated" });
-  if (migration === "unavailable") log.warn("Instance configuration permission migration failed; agents will start without MCP if its policy is unavailable.", { operation: "mcp_config.permissions_migration_failed" });
 
   initDatabase(getRuntimeConfigPaths());
   const access = validateAccessStartup(getDb());

@@ -12,7 +12,7 @@ type MigrationDiagnostic = { name: string; fields: string[]; reason: string };
 /** Read-only cutover planner. Never resolves credentials, executes commands or edits legacy source. */
 export function planLegacyMcpMigration(servers: Record<string, unknown>, workspace: { id: string; root: string }) {
   const connections: McpConnectionInput[] = [], diagnostics: MigrationDiagnostic[] = [];
-  const supported = new Set(["url", "command", "args", "cwd", "env", "disabled", "directTools", "bearerTokenKeychain", "bearerTokenEnv"]);
+  const supported = new Set(["url", "command", "args", "cwd", "env", "disabled", "directTools", "bearerTokenKeychain", "bearerTokenEnv", "auth"]);
   for (const [name, raw] of Object.entries(servers).sort(([a], [b]) => a.localeCompare(b))) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
       diagnostics.push({ name, fields: [], reason: "Invalid legacy server definition; original source is unchanged" });
@@ -36,12 +36,15 @@ export function planLegacyMcpMigration(servers: Record<string, unknown>, workspa
         continue;
       }
       const reference = typeof row.bearerTokenKeychain === "string" ? row.bearerTokenKeychain : undefined;
-      if (!reference) fields.push("bearerTokenKeychain");
+      const anonymous=(row.auth===false||row.auth==='none')&&!reference;
+      if(!anonymous&&!reference)fields.push('bearerTokenKeychain');
+      if(row.auth!==undefined&&row.auth!==false&&row.auth!=='none'&&row.auth!=='bearer'||row.auth==='none'&&reference)fields.push('auth');
       // Direct-tool exposure is now deferred. Never quietly reinterpret an explicit legacy request.
       if (row.directTools === true) fields.push("directTools");
       for (const key of ["args", "cwd", "env"]) if (row[key] !== undefined) fields.push(key);
-      candidate = { ...common, transport: "http", url: row.url, credentialUrl: row.url, auth: "bearer", bearerTokenKeychain: reference, allowHttp: url.protocol === "http:" };
+      candidate = { ...common, transport: "http", url: row.url, credentialUrl: row.url, auth: anonymous?'none':'bearer', bearerTokenKeychain: reference, allowHttp: url.protocol === "http:" };
     } else if (typeof row.command === "string") {
+      if(row.auth!==undefined)fields.push('auth');
       if (row.args !== undefined && (!Array.isArray(row.args) || row.args.some(arg => typeof arg !== "string"))) {
         diagnostics.push({ name, fields: ["args"], reason: "Invalid legacy command arguments; original source is unchanged" });
         continue;
@@ -70,6 +73,7 @@ export function planLegacyMcpMigration(servers: Record<string, unknown>, workspa
     }
     if (fields.length) {
       candidate.enabled = false;
+      if(fields.includes('legacyCredentialApprovalRequired')){if(candidate.transport==='http')candidate.credentialUrl='';else candidate.credentialCommand='';}
       diagnostics.push({ name, fields: [...new Set(fields)].sort(), reason: "Imported disabled; review legacy fields before connecting. Original source is unchanged" });
     }
     try { Value.Assert(McpConnectionInputSchema, candidate); connections.push(candidate); }

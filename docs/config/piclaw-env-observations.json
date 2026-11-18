@@ -51,7 +51,7 @@
   },
   "current": {
     "production": {
-      "referencedNames": 132,
+      "referencedNames": 131,
       "directReaderNames": 7,
       "directReaderOccurrences": 11,
       "helperReaderNames": 10,
@@ -60,7 +60,7 @@
       "semanticReaderOccurrences": 21
     },
     "runtimeSrc": {
-      "referencedNames": 131,
+      "referencedNames": 130,
       "directReaderNames": 7,
       "directReaderOccurrences": 11,
       "helperReaderNames": 10,
@@ -87,7 +87,7 @@
       "semanticReaderOccurrences": 58
     },
     "docsDeploy": {
-      "referencedNames": 156,
+      "referencedNames": 154,
       "directReaderNames": 18,
       "directReaderOccurrences": 42,
       "helperReaderNames": 0,
@@ -129,42 +129,6 @@
           "files": [
             "runtime/src/core/config-runtime.ts",
             "runtime/src/core/config-sources.ts"
-          ],
-          "readerFiles": []
-        }
-      }
-    },
-    {
-      "name": "PICLAW_ADDITIONAL_DEFAULT_TOOLS",
-      "scopes": {
-        "docsDeploy": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "docs/configuration.md",
-            "docs/tools-and-skills.md"
-          ],
-          "readerFiles": []
-        },
-        "production": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/core/config-tools.ts"
-          ],
-          "readerFiles": []
-        },
-        "runtimeSrc": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/core/config-tools.ts"
           ],
           "readerFiles": []
         }
@@ -2679,21 +2643,6 @@
       }
     },
     {
-      "name": "PICLAW_MCP_MEMORY_TOKEN",
-      "scopes": {
-        "docsDeploy": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "docs/mcp.md"
-          ],
-          "readerFiles": []
-        }
-      }
-    },
-    {
       "name": "PICLAW_MCP_TOOL_TIMEOUT_MS",
       "scopes": {
         "docsDeploy": {
@@ -2702,8 +2651,7 @@
           "helperReaders": 0,
           "semanticReaders": 0,
           "files": [
-            "docs/development.md",
-            "docs/mcp.md"
+            "docs/development.md"
           ],
           "readerFiles": []
         },

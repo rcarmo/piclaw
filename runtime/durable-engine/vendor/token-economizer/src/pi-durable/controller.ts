@@ -152,7 +152,7 @@ export function createTokenEconomizer(options:TokenEconomizerOptions) {
       const decision = folded.state.held;
       if (decision?.reason === "goal-drift" && priorStamp && !decision.goalStamp) decision.goalStamp = priorStamp;
       run.guard = folded.state;
-      if (decision && toolBoundary && decision.reason !== "goal-drift") {
+      if (decision && judgeBoundary && decision.reason !== "goal-drift") {
         const previous = run.decisions.find(item => item.id === decision.id);
         const entry:GuardDecisionRecord = previous ?? {id:decision.id,runId:observation.runId,action:decision.action,mode:policy.mode === "observe" ? "observe" : "active",status:"proposed",submissionId:null,reason:decision.reason,text:decision.action === "redirect" ? decisionText(folded.state) : stillStuck,at:clock()};
         if (!previous || previous.status === "proposed") {
@@ -166,7 +166,7 @@ export function createTokenEconomizer(options:TokenEconomizerOptions) {
           await reportDecision(tx,host,entry);
         }
       }
-      if (decision && (!toolBoundary || decision.reason === "goal-drift") && !run.decisions.some(item => item.id === decision.id)) run.decisions.push({id:decision.id,runId:observation.runId,action:decision.action,mode:policy.mode === "observe" ? "observe" : "active",status:"proposed",submissionId:null,reason:decision.reason,text:decision.action === "redirect" ? decisionText(folded.state) : stillStuck,at:clock()});
+      if (decision && (!judgeBoundary || decision.reason === "goal-drift") && !run.decisions.some(item => item.id === decision.id)) run.decisions.push({id:decision.id,runId:observation.runId,action:decision.action,mode:policy.mode === "observe" ? "observe" : "active",status:"proposed",submissionId:null,reason:decision.reason,text:decision.action === "redirect" ? decisionText(folded.state) : stillStuck,at:clock()});
       if (folded.judge) {
         const features = folded.state.featureCoverage ? loopFeatures(folded.state.window,{repositoryRoot:host.repositoryRoot,calls:folded.state.cum_turns,callsSinceGreen:folded.state.callsSinceGreen,callsSinceNewFailure:folded.state.sinceNewFailure,p90:percentile(knowledge.envelope.resolved_turns,90)}) : null;
         const fullDigest = folded.judge.digest;

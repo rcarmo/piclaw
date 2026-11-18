@@ -151,3 +151,14 @@ test('new retained copies never replace or prune historical output metadata or S
   await save(f);await forgetRetainedCopies(f.database);
   await(await f.database()).withSync(db=>{expect(db.query('SELECT evidence FROM tool_outputs WHERE id=?').get('historical')).toEqual({evidence:'ORIGINAL_OUTPUT'});expect(db.query('SELECT evidence FROM documents WHERE id=1').get()).toEqual({evidence:'SDK_HISTORY'});});
 });
+
+test('Agent-scoped forgetting preserves other Agents, workspaces, chunks and recall copies',async()=>{
+ const f=await fixture();await save(f);
+ const other=await save(f,'out_'+'e'.repeat(32),'FOREIGN NEEDLE',{owner:'other',conversation:7,after:10});
+ await(await f.database()).withSync(db=>{db.exec("CREATE TABLE mcp_recall(id TEXT PRIMARY KEY,owner TEXT NOT NULL,raw TEXT NOT NULL)");db.run('INSERT INTO mcp_recall VALUES(?,?,?),(?,?,?)',['mine','agent','OWN COPY','foreign','other','FOREIGN COPY']);});
+ await forgetRetainedCopies(f.database,'agent');
+ expect(await f.store.search(scope,{query:'NEEDLE'})).toEqual([]);
+ expect((await f.store.read({...scope,owner:'other'},{id:other.id})).text).toBe('FOREIGN NEEDLE');
+ expect(await f.store.search({...scope,owner:'other'},{query:'FOREIGN'})).toHaveLength(1);
+ await(await f.database()).withSync(db=>expect(db.query('SELECT id,owner,raw FROM mcp_recall').all()).toEqual([{id:'foreign',owner:'other',raw:'FOREIGN COPY'}]));
+});

@@ -209,11 +209,6 @@ import {
   WORKSPACE_DIR,
 } from "../core/config.js";
 import { stopIpcWatcher } from "../ipc.js";
-import {
-  clearHydratedMcpCredentials,
-  hydrateMcpKeychainCredentials,
-  type HydratedMcpCredential,
-} from "../secure/mcp-keychain.js";
 import type { SchedulerDeps } from "../task-scheduler.js";
 import { stopSchedulerLoop } from "../task-scheduler.js";
 import { createLogger } from "../utils/logger.js";
@@ -272,8 +267,6 @@ export interface RuntimeBootstrapDeps {
   pollIntervalMs: number;
   signalRegistrar: RuntimeSignalRegistrar;
   initializeRuntimeEnvironment(state: RuntimeBootstrapState): { effectiveMode: "single-user" } | void;
-  hydrateMcpCredentials(): Promise<HydratedMcpCredential[]>;
-  clearMcpCredentials(entries: HydratedMcpCredential[]): void;
   createAgentPool(sessionOptions?: RuntimeBackend["sessionOptions"]): Promise<RuntimeBootstrapAgentPool>;
   startWebChannel(queue: RuntimeBootstrapQueue, agentPool: RuntimeBootstrapAgentPool, bind?: RuntimeBackend["bind"]): Promise<RuntimeBootstrapWeb>;
   startBackgroundModelRefresh(agentPool: RuntimeBootstrapAgentPool): void;
@@ -351,8 +344,6 @@ export function createDefaultRuntimeBootstrapDeps(
     pollIntervalMs: getRuntimeTimingConfig().pollIntervalMs,
     signalRegistrar: process,
     initializeRuntimeEnvironment: () => initializeRuntimeEnvironment(base.state),
-    hydrateMcpCredentials: () => hydrateMcpKeychainCredentials(WORKSPACE_DIR),
-    clearMcpCredentials: clearHydratedMcpCredentials,
     createAgentPool: async (sessionOptions) => {
       const modelServices = await models();
       installRuntimeModelExecutor(modelServices.modelRuntime);
@@ -414,7 +405,6 @@ export async function bootstrapRuntime(deps: RuntimeBootstrapDeps, runtimeOwner?
   };
 
   const access = deps.initializeRuntimeEnvironment(state);
-  const hydratedMcpCredentials = await deps.hydrateMcpCredentials();
   try {
     if (prepareApplicationBackend) {
       assert(runtimeOwner?.enabled && runtimeOwner.strictOwnership, "Strict runtime owner required");
@@ -447,13 +437,7 @@ export async function bootstrapRuntime(deps: RuntimeBootstrapDeps, runtimeOwner?
         shutdownCompletion.complete();
       },
     });
-    const shutdown = async (signal: string): Promise<void> => {
-      try {
-        await baseShutdown(signal);
-      } finally {
-        deps.clearMcpCredentials(hydratedMcpCredentials);
-      }
-    };
+    const shutdown = baseShutdown;
     published = true;
     registerShutdownHandler(shutdown);
     deps.registerRuntimeShutdownSignals(deps.signalRegistrar, shutdown);
@@ -476,7 +460,6 @@ export async function bootstrapRuntime(deps: RuntimeBootstrapDeps, runtimeOwner?
     // injected process.exit may return while shutdown is still unwinding.
     if (messageLoopController.signal.aborted) await shutdownCompletion.promise;
   } catch (error) {
-    deps.clearMcpCredentials(hydratedMcpCredentials);
     if (backend && !published) {
       try {
         if (error instanceof RuntimeStartupCleanupError) throw error;

@@ -10,7 +10,17 @@ import { decodeArguments, decodeResult } from "#token-optimizer/pi-durable";
 import { runnerVerdict, statusOfTests } from "#token-optimizer/core";
 import type { HostSession, Trajectory, ToolResultData } from "#token-optimizer/pi-durable";
 import type { Observation } from "#token-optimizer/core";
-import {optimizerCallEntry as codemodeCallEntry,type OptimizerCallStart as CallStart} from "./optimizer-output-source.ts";
+import {optimizerBashOutput,optimizerCallEntry as codemodeCallEntry,type OptimizerCallStart as CallStart} from "./optimizer-output-source.ts";
+/** Preserve actual Root SDK shell status without changing the tool's script value. */
+export function nativeOptimizerResult(result:ToolResultData){
+  if(result.name==='bash'){
+    let structured:unknown=result.structured;
+    if(structured===null){try{structured=JSON.parse(result.output);}catch{}}
+    const bash=optimizerBashOutput(structured,result.details);
+    if(bash)return decodeResult({...result,structured:{output:bash.output,exitCode:bash.exitCode,truncated:bash.truncated??false,timedOut:bash.timedOut??false,aborted:bash.aborted??false}});
+  }
+  return decodeResult(result);
+}
 export function nativeOptimizerTool(name:string):ToolMapping {
   if (name === "codemode") return {semantic:"wrapper",readOnly:false};
   if (name === "bash") return {semantic:"shell",readOnly:false};
@@ -76,7 +86,7 @@ function readSource(entries:readonly EntryRecord[],host:HostSession) {
     }
     function capture(name:string,args:JsonObject|null,result:ToolResultData,outer:string,nested:string|null,runId:string,at:number) {
       const mapping = nativeOptimizerTool(name);if (mapping.semantic === "wrapper") return;
-      const decoded = decodeResult(result), arguments_ = args === null ? {command:"",targets:[],coverage:"partial" as const} : decodeArguments(args), status = mapping.semantic === "shell" ? statusOfTests(arguments_.command) : null, verdict = runnerVerdict(decoded.output);
+      const decoded = nativeOptimizerResult(result), arguments_ = args === null ? {command:"",targets:[],coverage:"partial" as const} : decodeArguments(args), status = mapping.semantic === "shell" ? statusOfTests(arguments_.command) : null, verdict = runnerVerdict(decoded.output);
       observed.push(makeObservation({source:{conversation:String(entry.conversationId),outerCall:outer,nestedKey:nested,phase:"result"},sessionId:host.id,runId,tool:name,mapping,completedNonProcess:mapping.semantic !== "shell",command:arguments_.command,targets:arguments_.targets,output:decoded.output.slice(-16_384),isError:result.isError,exitCode:decoded.exitCode,timedOut:decoded.timedOut,aborted:decoded.aborted,coverage:decoded.output.length > 16_384 || arguments_.coverage === "partial" ? "partial" : decoded.coverage,at,verification:status === null ? null : verdict !== null ? verdict ? "failed" : "passed" : status === "own" && decoded.exitCode !== null ? decoded.exitCode === 0 ? "passed" : "failed" : null}));activity = Math.max(activity,at);
     }
     if (codemodeCallEntry.is(entry)) {

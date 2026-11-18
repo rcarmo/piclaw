@@ -11,7 +11,7 @@ import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import type {Models} from "@earendil-works/pi-ai";
 import {AgentDoc,AssistantEntry,CompactionEntry,defineDoc,defineEntry,LiveDoc,SystemEntry,type AgentState,type Conversation,type ConversationId,type Harness,type RegistryReader} from "@earendil-works/pi-durable";
 import {Type} from "typebox";import{Value}from"typebox/value";
-import {carriedSnapshotIds,lastAssistantEntry,latestOptimizerEntry,nativeOptimizerTool,nativeOptimizerTrajectory,optimizerSections} from "./token-optimizer-source.ts";
+import {carriedSnapshotIds,lastAssistantEntry,latestOptimizerEntry,nativeOptimizerTool,nativeOptimizerResult,nativeOptimizerTrajectory,optimizerSections} from "./token-optimizer-source.ts";
 import type {TokenOptimizerConfiguration} from "./token-optimizer-config.ts";
 import {recordOptimizerOperation} from "./token-optimizer-operations.ts";
 export interface CoreOptimizerAgent {agentId:string;durableId:ConversationId;branches?:ConversationId[];parentId?:string;rootId?:string;readOnly?:boolean;oneShotCallId?:string;title?:string;label?:string}
@@ -92,12 +92,12 @@ export function createNativeTokenOptimizer(options:{workspaceId:string;harness:(
     const host = hosts.get(id);if (!host) return subagentHost(id);
     if (modelFree.get(id)) return {...host,delegated:true};
     return host;
-  },tool:nativeOptimizerTool,arguments:(_name,args) => decodeArguments(args),decode:decodeResult,
+  },tool:nativeOptimizerTool,arguments:(_name,args) => decodeArguments(args),decode:nativeOptimizerResult,
     async catalogue(host) {
       const conversation = await options.harness().conversation(host.conversationId,context);if (!conversation) throw new Error("Optimizer conversation is absent");
       const agent = await conversation.agent(context), stored = await options.harness().snapshot(NativeMask,host.conversationId,context), settings = await options.harness().snapshot(AgentDoc,host.conversationId,context), baseline = stored?.initialized ? stored.baseline : settings?.tools ?? null;
       const extensions = new Set(agent.extensions.map(extension => extension.name)), exposed = new Set([...agent.tools,...agent.callable,...agent.deferred].map(tool => tool.name));
-      const tools = [...new Map(options.registry.snapshot().tools().filter(item => extensions.has(item.extension.name)).map(item => [item.tool.name,item.tool])).values()].filter(tool => Array.isArray(baseline) ? baseline.includes(tool.name) : !baseline?.remove.includes(tool.name)).map(tool => ({name:tool.name,description:tool.description.slice(0,4096),revision:fingerprint(JSON.stringify([tool.name,tool.description,tool.parameters,tool.callers])),protected:/plan|goal|user|ask|permission|agent|delegat|message|stop|cancel|credential|recover|codemode|tool_search|tool_output|history|session_status|exit_process|switch_model|switch_thinking|set_model/i.test(tool.name),highRisk:!nativeOptimizerTool(tool.name).readOnly,exposed:exposed.has(tool.name)}));
+      const tools = [...new Map(options.registry.snapshot().tools().filter(item => extensions.has(item.extension.name)).map(item => [item.tool.name,item.tool])).values()].filter(tool => Array.isArray(baseline) ? baseline.includes(tool.name) : !baseline?.remove.includes(tool.name)).map(tool => ({name:tool.name,description:tool.description.slice(0,4096),revision:fingerprint(JSON.stringify([tool.name,tool.description,tool.parameters,tool.callers])),protected:/plan|goal|user|ask|permission|agent|delegat|message|stop|cancel|credential|recover|codemode|tool_search|tool_output|mcp_recall|history|session_status|exit_process|switch_model|switch_thinking|set_model/i.test(tool.name),highRisk:!nativeOptimizerTool(tool.name).readOnly,exposed:exposed.has(tool.name)}));
       return {revision:fingerprint(JSON.stringify(tools.map(({exposed:_exposed,...tool}) => tool))),source:"native-registry-and-agent-filter",complete:true,tools};
     },
     async setTools(host,excluded,expiresAt) {
@@ -105,7 +105,12 @@ export function createNativeTokenOptimizer(options:{workspaceId:string;harness:(
       await options.harness().commit(async tx => {
         const owner = await tx.doc(NativeMask,host.conversationId), agent = await tx.doc(AgentDoc,host.conversationId), current:Filter = agent.tools === undefined ? null : detach({value:agent.tools}).value;
         if (!owner.initialized) {owner.baseline = current;owner.rendered = current;owner.initialized = true;}
-        if (JSON.stringify(current) !== JSON.stringify(owner.rendered)) throw new Error("The tool filter changed outside the optimizer; refusing to overwrite another owner's restrictions");
+        if (JSON.stringify(current) !== JSON.stringify(owner.rendered)) {
+          if(excluded.length||owner.owned.length)throw new Error("The tool filter changed outside the optimizer; refusing to overwrite another owner's restrictions");
+          // Restoring nothing owns no permissions. Keep a new external filter,
+          // including a persisted default-shaped array, instead of widening it.
+          owner.baseline=current;owner.rendered=current;
+        }
         const baseline:Filter = detach({value:owner.baseline}).value, next:Filter = Array.isArray(baseline) ? baseline.filter(name => !safe.includes(name)) : safe.length ? {remove:[...new Set([...(baseline?.remove ?? []),...safe])]} : baseline;
         if (JSON.stringify(current) !== JSON.stringify(next) && !preparing.has(host.conversationId) && (await tx.doc(LiveDoc,host.conversationId)).run) throw new Error("Task preparation expired while the Agent started work");
         if (expiresAt !== undefined && Date.now() >= expiresAt) throw new Error("Task preparation expired before tool changes committed");
@@ -134,7 +139,11 @@ export function createNativeTokenOptimizer(options:{workspaceId:string;harness:(
   const outputStore = createToolOutputStore(options.database);
   const outputScope = async (id:ConversationId) => {const host = await domain.session(id);return host ? {owner:JSON.stringify([options.workspaceId,options.environmentRevision,actor(host)]),lineage:await conversationLineage(options.harness(),id,context)} : null;};
   const outputExtension = createOptimizerOutputExtension({
-    policyFor:async id => {const host = await domain.session(id);return host && !host.delegated ? options.configuration.policy(options.workspaceId,actor(host)) : null;},
+    policyFor:async id => {
+      const host=await domain.session(id);if(!host||host.delegated)return null;const policy=options.configuration.policy(options.workspaceId,actor(host));
+      if(policy.offloadOutputs){const agent=await(await options.harness().conversation(id,context))?.agent(context);if(!agent?.tools.some(tool=>tool.name==='read_tool_output')&&!(agent?.tools.some(tool=>tool.name==='codemode')&&agent.callable.some(tool=>tool.name==='read_tool_output')))policy.offloadOutputs=false;}
+      return policy;
+    },
     scope:outputScope,mark:id => captureMark(options.harness(),id,context),store:outputStore,readSaved:options.readSavedOutput,
     summarize:(id,input,timeoutMs) => optimizer.summarizeOutput(id,input,timeoutMs),
   });

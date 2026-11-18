@@ -29,7 +29,6 @@ import {
   handleRestartAddonRuntime,
   handleUninstallAddon,
 } from "../handlers/addons.js";
-import { handleMcpSettings } from "../handlers/mcp-settings.js";
 import { handleModelCatalogRefresh } from "../handlers/model-catalog-refresh.js";
 import { getCompactionSettingsData, saveCompactionSettings } from "../handlers/compaction-settings.js";
 import {
@@ -77,12 +76,6 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
   { method: "GET", path: "/agent/plan", handle: handlePlan },
   { method: "POST", path: "/agent/plan", handle: handlePlan },
   { method: "POST", path: "/agent/models/refresh", handle: handleModelCatalogRefresh },
-  { method: "GET", path: "/agent/settings/mcp", handle: handleMcpSettings },
-  { method: "POST", path: "/agent/settings/mcp/preview", handle: handleMcpSettings },
-  { method: "POST", path: "/agent/settings/mcp/apply", handle: handleMcpSettings },
-  { method: 'GET', path: '/agent/settings/mcp/servers', handle: handleMcpSettings },
-  { method: 'POST', path: '/agent/settings/mcp/servers/preview', handle: handleMcpSettings },
-  { method: 'POST', path: '/agent/settings/mcp/servers/apply', handle: handleMcpSettings },
   { method: "GET", path: "/agent/settings/workspace/indexing", handle: (channel, req, url) => handleWorkspaceIndexingSettings(channel, req, url) as Promise<Response> },
   ...["preview", "save", "refresh"].map(action => ({
     method: "POST", path: `/agent/settings/workspace/indexing/${action}`,

@@ -3,13 +3,7 @@ import {
   assertAutoCompactionSettingWritable,
   getLocalLitePromptProfileEnabled,
   setLocalLitePromptProfileEnabled,
-  getToolResultCompactionEnabled,
-  getToolResultCompactionTools,
-  getToolResultSemanticSummaryConfig,
   setCompactionRuntimeConfig,
-  setToolResultCompactionEnabled,
-  setToolResultCompactionTools,
-  setToolResultSemanticSummaryConfig,
 } from "../../../core/config.js";
 import { getTrackedPhasesSnapshot } from "../../../runtime/progress-watchdog.js";
 import {
@@ -23,12 +17,6 @@ export interface CompactionSettingsData {
   progressWatchdogEnabled: boolean;
   progressWatchdogTimeoutSec: number;
   localLitePromptProfileEnabled: boolean;
-  toolResultCompactionEnabled: boolean;
-  toolResultCompactionTools: string[];
-  toolResultSemanticSummaryEnabled: boolean;
-  toolResultSemanticSummaryMaxInputChars: number;
-  toolResultSemanticSummaryMaxTokens: number;
-  toolResultSemanticSummaryTimeoutSec: number;
   progressWatchdogPhases: Array<{
     chatJid: string;
     phase: string;
@@ -43,12 +31,6 @@ export interface CompactionSettingsInput {
   progressWatchdogEnabled?: unknown;
   progressWatchdogTimeoutSec?: unknown;
   localLitePromptProfileEnabled?: unknown;
-  toolResultCompactionEnabled?: unknown;
-  toolResultCompactionTools?: unknown;
-  toolResultSemanticSummaryEnabled?: unknown;
-  toolResultSemanticSummaryMaxInputChars?: unknown;
-  toolResultSemanticSummaryMaxTokens?: unknown;
-  toolResultSemanticSummaryTimeoutSec?: unknown;
 }
 
 function normalizeOptionalInt(value: unknown, min: number, max: number): number | undefined {
@@ -62,29 +44,14 @@ function normalizeOptionalBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
-function normalizeOptionalStringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value
-    .filter((entry): entry is string => typeof entry === "string")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-}
-
 export function getCompactionSettingsData(): CompactionSettingsData {
   const config = getCompactionRuntimeConfig();
-  const summaryConfig = getToolResultSemanticSummaryConfig();
   return {
     compactionPolicy: "pi-durable",
     autoCompactionEnabled: config.autoCompactionEnabled,
     progressWatchdogEnabled: config.progressWatchdogEnabled,
     progressWatchdogTimeoutSec: Math.max(0, Math.round(config.progressWatchdogTimeoutMs / 1000)),
     localLitePromptProfileEnabled: getLocalLitePromptProfileEnabled(),
-    toolResultCompactionEnabled: getToolResultCompactionEnabled(),
-    toolResultCompactionTools: [...getToolResultCompactionTools()],
-    toolResultSemanticSummaryEnabled: summaryConfig.enabled,
-    toolResultSemanticSummaryMaxInputChars: summaryConfig.maxInputChars,
-    toolResultSemanticSummaryMaxTokens: summaryConfig.maxTokens,
-    toolResultSemanticSummaryTimeoutSec: Math.max(1, Math.round(summaryConfig.timeoutMs / 1000)),
     progressWatchdogPhases: getTrackedPhasesSnapshot()
       .sort((left, right) => left.chatJid.localeCompare(right.chatJid) || left.startedAt - right.startedAt)
       .map((entry) => ({
@@ -100,6 +67,8 @@ export function getCompactionSettingsData(): CompactionSettingsData {
 // Retired values remain in historical configuration, but cannot be saved as
 // effective native policy. Validate the whole request before any setter runs.
 export const UNSUPPORTED_NATIVE_COMPACTION_FIELDS = [
+  "toolResultCompactionEnabled", "toolResultCompactionTools", "toolResultSemanticSummaryEnabled",
+  "toolResultSemanticSummaryMaxInputChars", "toolResultSemanticSummaryMaxTokens", "toolResultSemanticSummaryTimeoutSec",
   "smartCompactionMethod", "compactionModel", "remoteCompactionEnabled",
   "remoteCompactionTimeoutSec", "compactionTimeoutSec", "compactionBackoffBaseMin",
   "compactionBackoffMaxMin", "compactionThresholdPercent", "compactionBackoffDecayFactor",
@@ -134,13 +103,6 @@ export async function saveCompactionSettings(input: CompactionSettingsInput): Pr
 
   const nextLocalLite = normalizeOptionalBoolean(input.localLitePromptProfileEnabled);
   if (nextLocalLite !== undefined) setLocalLitePromptProfileEnabled(nextLocalLite);
-  const nextToolResultCompactionEnabled = normalizeOptionalBoolean(input.toolResultCompactionEnabled);
-  const nextToolResultCompactionTools = normalizeOptionalStringArray(input.toolResultCompactionTools);
-  const nextToolResultSemanticSummaryEnabled = normalizeOptionalBoolean(input.toolResultSemanticSummaryEnabled);
-  const nextToolResultSemanticSummaryMaxInputChars = normalizeOptionalInt(input.toolResultSemanticSummaryMaxInputChars, 500, 200_000);
-  const nextToolResultSemanticSummaryMaxTokens = normalizeOptionalInt(input.toolResultSemanticSummaryMaxTokens, 64, 4_096);
-  const nextToolResultSemanticSummaryTimeoutSec = normalizeOptionalInt(input.toolResultSemanticSummaryTimeoutSec, 1, 300);
-
   if (Object.keys(patch).length > 0) {
     const saved = setCompactionRuntimeConfig(patch);
     if (saved.progressWatchdogEnabled && saved.progressWatchdogTimeoutMs > 0) {
@@ -148,28 +110,6 @@ export async function saveCompactionSettings(input: CompactionSettingsInput): Pr
     } else {
       await stopExternalProgressWatchdogMonitor();
     }
-  }
-
-  if (nextToolResultCompactionEnabled !== undefined) {
-    setToolResultCompactionEnabled(nextToolResultCompactionEnabled);
-  }
-
-  if (nextToolResultCompactionTools !== undefined) {
-    setToolResultCompactionTools(nextToolResultCompactionTools);
-  }
-
-  if (
-    nextToolResultSemanticSummaryEnabled !== undefined
-    || nextToolResultSemanticSummaryMaxInputChars !== undefined
-    || nextToolResultSemanticSummaryMaxTokens !== undefined
-    || nextToolResultSemanticSummaryTimeoutSec !== undefined
-  ) {
-    setToolResultSemanticSummaryConfig({
-      ...(nextToolResultSemanticSummaryEnabled !== undefined ? { enabled: nextToolResultSemanticSummaryEnabled } : {}),
-      ...(nextToolResultSemanticSummaryMaxInputChars !== undefined ? { maxInputChars: nextToolResultSemanticSummaryMaxInputChars } : {}),
-      ...(nextToolResultSemanticSummaryMaxTokens !== undefined ? { maxTokens: nextToolResultSemanticSummaryMaxTokens } : {}),
-      ...(nextToolResultSemanticSummaryTimeoutSec !== undefined ? { timeoutMs: nextToolResultSemanticSummaryTimeoutSec * 1000 } : {}),
-    });
   }
 
   return getCompactionSettingsData();

@@ -24,3 +24,18 @@ test('stdio metadata rejects loader injection, malformed names and empty referen
  expect(f.store.list()).toEqual([]);expect(JSON.stringify(f.db.query('SELECT * FROM mcp_connections_v1').all())).not.toContain('DO_NOT_STORE');
 });
 test('owner revocation and aborted admission write nothing',async()=>{const f=fixture();const controller=new AbortController();controller.abort();await expect(f.store.save(config,{signal:controller.signal})).rejects.toThrow();expect(f.store.list()).toEqual([]);f.revoke();await expect(f.store.save(config)).rejects.toThrow('owner');expect(()=>f.store.list()).toThrow('owner');});
+
+test('anonymous HTTP is explicit, clears connection credential bindings and still revokes endpoint epochs',async()=>{
+ const f=fixture();await f.store.save(config);
+ const first=await f.store.save({...config,auth:'none'});expect(first.bearerTokenKeychain).toBeUndefined();expect(first.oauth).toBeUndefined();expect(f.store.list()[0]?.hasSavedCredentials).toBe(false);
+ const changed=await f.store.save({...config,url:'https://public.invalid/mcp',auth:'none'},{expectedRevision:first.revision});expect(changed.enabled).toBe(true);expect(changed.accessEpoch).not.toBe(first.accessEpoch);expect(f.store.list()[0]?.needsCredentialApproval).toBe(false);
+});
+test('stdio command, arguments and directory edits cannot silently reuse saved keychain env refs',async()=>{
+ for(const change of [{command:['different','server']},{command:['bun','changed.ts']},{workdir:'/workspace/other'}]){
+  const f=fixture(),input={...config,transport:'stdio' as const,url:'',command:['bun','server.ts'],workdir:'/workspace',env:{API_KEY:'keychain:stdio/token'}};const first=await f.store.save(input);
+  expect(f.store.list()[0]?.hasSavedCredentials).toBe(true);expect(f.store.list()[0]?.needsCredentialApproval).toBe(false);
+  const changed=await f.store.save({...input,...change},{expectedRevision:first.revision});expect(changed.enabled).toBe(false);expect(f.store.list()[0]?.needsCredentialApproval).toBe(true);
+  const toggled=await f.store.save({...input,...change,enabled:true},{expectedRevision:changed.revision});expect(toggled.enabled).toBe(false);
+  const approved=await f.store.save({...input,...change,enabled:true},{expectedRevision:toggled.revision,approveCredentialReuse:true});expect(approved.enabled).toBe(true);expect(f.store.list()[0]?.needsCredentialApproval).toBe(false);expect(approved.accessEpoch).not.toBe(toggled.accessEpoch);
+ }
+});

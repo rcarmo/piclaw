@@ -13,7 +13,8 @@
   "imports": {
     "#editor-vendor/codemirror": "./runtime/extensions/viewers/editor/vendor/codemirror.js",
     "#token-optimizer/core": "./runtime/durable-engine/vendor/token-economizer/src/core/index.ts",
-    "#token-optimizer/pi-durable": "./runtime/durable-engine/vendor/token-economizer/src/pi-durable/index.ts"
+    "#token-optimizer/pi-durable": "./runtime/durable-engine/vendor/token-economizer/src/pi-durable/index.ts",
+    "#token-optimizer/state": "./runtime/durable-engine/vendor/token-economizer/src/pi-durable/documents.ts"
   },
   "pi": {
     "skills": [

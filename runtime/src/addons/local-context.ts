@@ -83,7 +83,7 @@ let isActive: (chatJid: string) => boolean = chatJid => Boolean(getSessionActivi
 /** Called only by the HTTP guard after authentication, CSRF and access-mode checks. */
 export function admitAddonLocalRequest(req: Request, principal: WebPrincipal | null, stillValid: () => boolean): void {
   requests.delete(req);
-  if (readAccessConfig().mode !== "single-user" || principal?.userId !== "default" || principal.mode !== "single-user") return;
+  if (readAccessConfig().mode !== "single-user" || principal?.userId !== "default" || principal.mode !== "single-user" || principal.role !== "admin") return;
   requests.set(req, { principal: Object.freeze({ ...principal }), stillValid });
 }
 export function setAddonLocalContextHost(host: {

@@ -28,3 +28,8 @@ test('capacity failure occurs before any partial import or completion marker is 
 test('corrupt migration markers fail visibly instead of silently adopting an empty configuration',async()=>{
  const db=new Database(':memory:');try{db.exec("PRAGMA busy_timeout=0;CREATE TABLE router_state(key TEXT PRIMARY KEY,value TEXT NOT NULL);INSERT INTO router_state VALUES('native.mcp-config-import.v1','{\"version\":2}');");const store=new McpConnectionStore(db,()=>{});await expect(importLegacyMcpOnce(db,store,{},workspace,()=>{})).rejects.toThrow();expect(store.list()).toEqual([]);}finally{db.close();}
 });
+
+test('explicit legacy anonymous HTTP remains usable without inferring anonymous access from a missing credential',()=>{
+ const plan=planLegacyMcpMigration({public:{url:'https://public.invalid/mcp',auth:false,directTools:false},missing:{url:'https://private.invalid/mcp',directTools:false}},workspace);
+ expect(plan.connections.find(row=>row.name==='public')).toMatchObject({auth:'none',enabled:true});expect(plan.connections.find(row=>row.name==='missing')?.enabled).toBe(false);expect(plan.diagnostics.map(row=>row.name)).toEqual(['missing']);
+});

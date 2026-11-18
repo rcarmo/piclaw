@@ -6,7 +6,7 @@ import { Type } from "typebox";
 import { Value } from "typebox/value";
 import type { Context } from "@earendil-works/chord/context";
 import type {McpAuthority} from './authority.ts';
-export type McpHttpConnection = {id:string;name:string;url:string;bearer:string;allowHttp:boolean;timeoutSeconds:number};
+export type McpHttpConnection = {id:string;name:string;url:string;bearer:string;auth?:'none'|'bearer'|'oauth';allowHttp:boolean;timeoutSeconds:number};
 export function mcpEndpoint(value:string,allowHttp=false):string {
   const url = new URL(value);
   if (!["https:","http:"].includes(url.protocol) || url.username || url.password || url.hash || url.search) throw new Error("Use an HTTP(S) MCP endpoint without credentials, query or fragment.");
@@ -16,9 +16,9 @@ export function mcpEndpoint(value:string,allowHttp=false):string {
 /** An authenticated Streamable HTTP session. Bearer-token sessions do not require OAuth discovery. */
 export async function connectMcpHttp(config:McpHttpConnection,fetcher:McpFetch = fetch,authProvider?:AuthProvider,signal?:AbortSignal,authority?:Pick<McpAuthority,'assertSend'>) {
   const endpoint = mcpEndpoint(config.url,config.allowHttp);
-  if (!authProvider && (!config.bearer || /[\r\n]/.test(config.bearer))) throw new Error("Enter a bearer token without line breaks.");
+  if (!authProvider && config.auth!=='none' && (!config.bearer || /[\r\n]/.test(config.bearer))) throw new Error("Enter a bearer token without line breaks.");
   const client = new McpClient({name:"piclaw",version:"1",requestTimeoutMs:config.timeoutSeconds*1000});
-  const transport = new StreamableHttpTransport({url:endpoint,headers:authProvider?undefined:{Authorization:`Bearer ${config.bearer}`},authProvider,fetch:async (input,init) => {
+  const transport = new StreamableHttpTransport({url:endpoint,headers:authProvider||config.auth==='none'?undefined:{Authorization:`Bearer ${config.bearer}`},authProvider,fetch:async (input,init) => {
     const target = new URL(input instanceof Request ? input.url : String(input));
     if (target.href !== endpoint) throw new Error("MCP request left the configured endpoint.");
     const httpMethod=init?.method??(input instanceof Request?input.method:'GET');

@@ -3,7 +3,6 @@ import { SettingsManager } from '@earendil-works/pi-coding-agent';
 import { createAgentPoolServices } from '../../src/agent-pool/service-factory.js';
 import { createAgentPoolModelOptions } from '../model-services-fixture.js';
 import { initDatabase,getDb } from '../../src/db.js';
-import { readMcpInstancePolicy } from '../../src/core/config-mcp.js';
 import { spyOn } from 'bun:test';
 import { AgentPool } from '../../src/agent-pool.js';
 import '../helpers.js';
@@ -33,18 +32,11 @@ test('no implicit legacy selection, mixed authority, native GC timer or fabricat
   }finally{await pool?.shutdown();intervals.mockRestore();}
 });
 
-test('native MCP config inspection cannot certify an empty legacy shutdown as live reconfiguration',async()=>{
+test('native host services and public facade expose no obsolete MCP engine/apply owner',async()=>{
   initDatabase();const model=createAgentPoolModelOptions();
   const services=createAgentPoolServices({pool:new Map(),authStorage:model.credentialStore!,modelRuntime:model.modelRuntime!,modelRegistry:{} as any,
     settingsManager:SettingsManager.inMemory(),workspaceDir:process.env.PICLAW_WORKSPACE!,getDurableSession:()=>undefined});
-  const before=readMcpInstancePolicy(),database=getDb().serialize();
-  const preview=services.mcpSettings.inspect();
-  expect(preview.applyAvailable).toBe(false);expect(preview.runtime.applyAvailable).toBe(false);
-  expect(services.mcpSettings.inspectServers().applyAvailable).toBe(false);
-  await expect(services.mcpSettings.apply({policy:before.policy,revision:preview.revision,acknowledgeInterruptions:true},()=>{}))
-    .rejects.toThrow('Native MCP live reconfiguration unavailable');
-  await expect(services.mcpSettings.applyServers({revision:preview.revision,acknowledgeInterruptions:true},()=>{},new AbortController().signal))
-    .rejects.toThrow('Native MCP live reconfiguration unavailable');
-  expect(preview.runtime.observedPolicy).toBeNull();
-  expect(readMcpInstancePolicy()).toEqual(before);expect(getDb().serialize()).toEqual(database);
+  const database=getDb().serialize();expect(services).not.toHaveProperty('mcpSettings');
+  for(const name of ['inspectMcpSettings','applyMcpSettings','inspectMcpServers','applyMcpServers'])expect(AgentPool.prototype).not.toHaveProperty(name);
+  expect(getDb().serialize()).toEqual(database);
 });

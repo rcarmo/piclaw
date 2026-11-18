@@ -127,6 +127,8 @@
     "sqlite-admission-workload.test.ts",
     "sqlite-restic-restore.test.ts",
     "session-history-import.test.ts",
-    "native-session-history-bootstrap.test.ts"
+    "native-session-history-bootstrap.test.ts",
+    "native-optimizer-cutover.test.ts",
+    "mcp-default-cutover.test.ts"
   ]
 }

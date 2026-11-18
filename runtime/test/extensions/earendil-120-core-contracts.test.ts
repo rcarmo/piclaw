@@ -37,9 +37,12 @@ test("exact 1.5.2 root closure includes SDK schema and excludes durable", () => 
 test("1.5.2 native MCP composition excludes the retired session constructor and generic adapter", () => {
   expect(pkg.dependencies["pi-mcp-adapter"]).toBe("github:piclaw-bot/pi-mcp-adapter#dddfcf630508f42c169889c11dee94e69b746e7c");
   expect(existsSync(resolve(root, "runtime/src/agent-pool/session.ts"))).toBe(false);
-  const host = readFileSync(resolve(root, "runtime/durable-engine/src/host-mcp.ts"), "utf8");
-  expect(host).toContain("createHostMcp");
+  expect(existsSync(resolve(root, 'runtime/durable-engine/src/host-mcp.ts'))).toBe(false);
+  const host = readFileSync(resolve(root, 'runtime/durable-engine/src/application-optimizer-mcp.ts'), 'utf8');
+  expect(host).toContain('createMcpRuntime');
   expect(host).not.toMatch(/pi-mcp-adapter|createAgentSession|AgentHarness|Pico3/);
+  const migration = readFileSync(resolve(root, 'runtime/durable-engine/src/mcp/legacy-config.ts'), 'utf8');
+  expect(migration).toContain('Read-only, one-shot migration parser');
   expect(typeof createMcpExtension).toBe("function");
   expect(typeof createToolSearchExtension).toBe("function");
   expect(typeof createCodemodeExtension).toBe("function");
