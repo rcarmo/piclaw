@@ -154,3 +154,28 @@ describe("delegate calls", () => {
     });
   });
 });
+
+describe("plan calls", () => {
+  test("titles say what changed in the plan, in one line", async () => {
+    const { formatToolTitle } = await import("../../src/channels/web/agent/agent-utils.js");
+    expect(formatToolTitle("plan", { action: "read" })).toBe("plan: read the checklist");
+    expect(formatToolTitle("plan", { action: "update", plan: [
+      { step: "Baseline", status: "completed" },
+      { step: "Fix the footer", status: "in_progress" },
+      { step: "Merge", status: "pending" },
+    ] })).toBe("plan: 1/3 done, now ‘Fix the footer’");
+    expect(formatToolTitle("plan", { action: "update", plan: [{ step: "A", status: "completed" }, { step: "B", status: "completed" }] }))
+      .toBe("plan: 2/2 done");
+    expect(formatToolTitle("plan", { action: "patch", patches: [
+      { operation: "update", match: "Resolve conflicts", status: "completed" },
+      { operation: "update", index: 4, status: "in_progress" },
+      { operation: "add", step: "Notes" },
+      { operation: "remove", match: "Old step" },
+      { operation: "update", match: "Merge", step: "Merge after CI" },
+    ] })).toBe("plan: completed ‘Resolve conflicts’, started step 4, added ‘Notes’, removed ‘Old step’, reworded ‘Merge’");
+    expect(formatToolTitle("plan", { action: "write", markdown: "- [x] One\n- [-] Two\n- [ ] Three\n\nNotes" })).toBe("plan: wrote 3 steps");
+    expect(formatToolTitle("plan", { action: "edit", edits: [{ oldText: "a", newText: "b" }, { operation: "append", text: "- [ ] c" }] }))
+      .toBe("plan: edited the checklist (2 changes)");
+    expect(formatToolTitle("plan", {})).toBe("plan");
+  });
+});
