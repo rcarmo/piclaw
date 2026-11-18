@@ -32,6 +32,7 @@ import {
   resolveUiOnlyCommandNotice,
 } from '../../web/src/components/compose-box.ts';
 import { CONTROL_COMMAND_DEFINITIONS } from '../../src/agent-control/command-registry.ts';
+import { translate } from '../../web/src/utils/i18n.ts';
 
 test('getComposeHistoryStorageKey keeps the legacy default key for the default chat', () => {
   expect(getComposeHistoryStorageKey()).toBe('piclaw_compose_history');
@@ -438,6 +439,12 @@ test('parseQueuedContent normalizes backtick-wrapped file refs from Files blocks
     'piclaw/runtime/extensions/viewers/editor/markdown/code-block.ts',
     'piclaw/runtime/web/static/classic/dist/editor.bundle.js',
   ]);
+});
+
+test('queued steering labels describe the tool-call boundary rather than a plan step', () => {
+  expect(translate('compose.queueSteering', undefined, 'en')).toBe('After current tool calls');
+  expect(translate('compose.queueSteering', undefined, 'zh-CN')).toBe('当前工具调用完成后');
+  expect(translate('compose.queueSteering', undefined, 'ja')).toBe('実行中のツール呼び出しが完了した後');
 });
 
 test('QueuedFollowupStack renders move-up before move-down controls', () => {

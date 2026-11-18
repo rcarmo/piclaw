@@ -2,6 +2,8 @@ import { AssistantEntry, configure, defineTool, type ModelRef, type ToolRegistra
 import { watchNativeDelegateProgress } from "./host-delegate-progress.js";
 import { validateDelegateFiles } from "./host-delegate-files.js";
 import { delegateDescription, delegateParameters } from "../../src/delegate/parameters.js";
+import { toolCallSummary } from "../../src/tool-call-summary.js";
+import { summariseDelegateCall } from "../../src/delegate/tool-summary.js";
 import type { Static } from "typebox";
 import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
 import type { HostConversationRuntime } from "./host-runtime.js";
@@ -39,7 +41,7 @@ export function createHostDelegateTool(options: {
     throw Error("Native Delegate requires standard host builtins only");
   if (standardExtensions.some(extension => extension.hooks?.length || extension.sections?.length || extension.tools?.some(tool => !standard.includes(tool))))
     throw Error("Native Delegate child extensions must contain only approved standard tools");
-  return defineTool({ name: "delegate", description: delegateDescription, parameters: delegateParameters,
+  return defineTool({ ...toolCallSummary(summariseDelegateCall), name: "delegate", description: delegateDescription, parameters: delegateParameters,
     callers: ["model"], replay: "safe", executionMode: "parallel",
     prepareArguments(raw) {
       // SDK validation coerces numeric strings/fractions into integers. Reject

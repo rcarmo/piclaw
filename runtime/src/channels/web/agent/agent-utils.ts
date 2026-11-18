@@ -8,6 +8,7 @@
  */
 
 import { buildPreviewLines, countSoftLines, splitLines } from "../../../utils/preview.js";
+import { normaliseToolCallSummary, type ToolCallSummaryResolver } from "../../../tool-call-summary.js";
 
 /** Function type that decorates payloads with chat + profile metadata fields. */
 export type AgentProfileBuilder = <T extends object>(payload: T) => T & {
@@ -57,21 +58,19 @@ function extractToolArgs(args: unknown): Record<string, unknown> | null {
   if (typeof args === "string") {
     try {
       const parsed = JSON.parse(args);
-      if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>;
+      if (parsed && typeof parsed === "object") return extractToolArgs(parsed);
     } catch {
       return null;
     }
   }
-  if (typeof args === "object") {
+  if (typeof args === "object" && !Array.isArray(args)) {
     const record = args as Record<string, unknown>;
-    const nested =
-      (record.arguments as Record<string, unknown> | undefined) ||
-      (record.input as Record<string, unknown> | undefined) ||
-      (record.params as Record<string, unknown> | undefined) ||
-      (record.parameters as Record<string, unknown> | undefined) ||
-      (record.args as Record<string, unknown> | undefined) ||
-      (record.payload as Record<string, unknown> | undefined);
-    return nested ?? record;
+    if (["action", "workflow", "command", "cmd"].some(key => typeof record[key] === "string")) return record;
+    for (const key of ["arguments", "input", "params", "parameters", "args", "payload"]) {
+      const nested = record[key];
+      if (nested && typeof nested === "object" && !Array.isArray(nested)) return nested as Record<string, unknown>;
+    }
+    return record;
   }
   return null;
 }
@@ -150,31 +149,19 @@ export function resolveMcpToolStatusIdentity(toolName: string, args: unknown): M
   return { operation: "status", server, tool: null, target: server, label: server ? `mcp: ${server} → status` : "mcp: status" };
 }
 
-/**
- * First sentence of a prompt's first non-empty line, without Markdown
- * heading/list/quote markers. A sentence ends at . ! or ? before a capital.
- */
-function firstPromptLine(prompt: string): string | null {
-  for (const line of prompt.split("\n")) {
-    const text = line.replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|>\s*|\d+[.)]\s+)/, "").trim();
-    if (text) return text.match(/^.+?[.!?](?=\s+[A-Z])/)?.[0] ?? text;
-  }
-  return null;
-}
-
 /** Short "tool: detail" label shared by live status and the turn activity log. */
-export function formatToolTitle(toolName: string, args: unknown): string {
+export function formatToolTitle(toolName: string, args: unknown, suppliedSummary?: string | null): string {
+  if (suppliedSummary !== undefined) {
+    const summary = normaliseToolCallSummary(suppliedSummary);
+    return summary ? `${toolName}: ${summary}` : toolName;
+  }
   const mcpIdentity = resolveMcpToolStatusIdentity(toolName, args);
   if (mcpIdentity) return mcpIdentity.label;
-  const record = extractToolArgs(args);
-  if (!record) return toolName;
+  const record = extractToolArgs(args) ?? {};
   let detail: string | null = null;
 
-  // Delegate's brief is a long prompt; its first line names the task.
-  if (toolName === "delegate" && typeof record.prompt === "string") detail = firstPromptLine(record.prompt);
-
-  const command = record.command ?? (toolName === "exec_command" ? record.cmd : undefined);
-  if (typeof command === "string") detail = command;
+  const command = record.command ?? record.cmd;
+  if (!detail && typeof command === "string") detail = command;
 
   if (!detail && Array.isArray(record.commands)) {
     detail = record.commands.filter((item) => typeof item === "string").join(" && ");
@@ -206,21 +193,25 @@ export function formatToolTitle(toolName: string, args: unknown): string {
 
 /** Track and return the title of the last tool call for status display. */
 export function createToolTitleTracker() {
-  const toolTitles = new Map<string, string>();
+  const toolTitles = new Map<string, { name: string; argsKey?: string; resolver?: ToolCallSummaryResolver; title: string }>();
 
-  const remember = (toolCallId: string, toolName: string, args: unknown): string => {
-    const title = formatToolTitle(toolName, args);
-    toolTitles.set(toolCallId, title);
+  const remember = (toolCallId: string, toolName: string, args: unknown, resolver?: ToolCallSummaryResolver): string => {
+    let argsKey: string | undefined;
+    try { argsKey = JSON.stringify(args) ?? ""; } catch { argsKey = undefined; }
+    const previous = toolTitles.get(toolCallId);
+    if (argsKey !== undefined && previous?.name === toolName && previous.argsKey === argsKey && previous.resolver === resolver) return previous.title;
+    const title = formatToolTitle(toolName, args, resolver?.(toolName, args));
+    toolTitles.set(toolCallId, { name: toolName, argsKey, resolver, title });
     return title;
   };
 
   const lookup = (toolCallId: string, toolName: string, args?: unknown): string => {
-    return toolTitles.get(toolCallId) ?? formatToolTitle(toolName, args);
+    return toolTitles.get(toolCallId)?.title ?? formatToolTitle(toolName, args);
   };
 
   const forget = (toolCallId: string): void => {
     toolTitles.delete(toolCallId);
   };
 
-  return { remember, lookup, forget };
+  return { remember, lookup, forget, clear: () => toolTitles.clear() };
 }

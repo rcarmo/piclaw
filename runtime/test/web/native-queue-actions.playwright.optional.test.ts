@@ -76,3 +76,51 @@ for(const engine of ['chromium','webkit'])for(const touch of [false,true])browse
   denied=false;await page.reload();for(const item of items)await page.getByText(item.content,{exact:true}).waitFor();expect(await page.locator('.compose-queue-stack-item').count()).toBe(2);expect(aborts).toBe(1);expect(errors).toEqual([]);
  }finally{await page.close();server.stop(true);}
 },15000);
+
+for (const engine of ['chromium', 'webkit']) for (const width of [320, 390, 1194]) {
+  browserTest(`${engine}/${width}px: tool-boundary input uses the standard queue border and a plain timing label`, async () => {
+    const items = [
+      { row_id: 17, content: 'Please check the footer', source: 'native_sdk', mode: 'steer' },
+      { row_id: 18, content: 'Then check the settings', source: 'native_sdk', mode: 'followUp' },
+    ];
+    const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
+      const path = new URL(request.url).pathname;
+      if (path === '/fixture.js') return new Response(bundles.get('classic'), { headers: { 'content-type': 'text/javascript' } });
+      if (path === '/style.css') return new Response(Bun.file(resolve(root, 'web/static/classic/dist/app.bundle.css')));
+      if (path === '/agent/queue-state') return Response.json({ count: items.length, items });
+      return new Response('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"><div id="root"></div><script type="module" src="/fixture.js"></script>', { headers: { 'content-type': 'text/html' } });
+    } });
+    const page = await browsers.get(engine)!.newPage({ viewport: { width, height: 834 }, hasTouch: width < 640 });
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    try {
+      await page.goto(`${server.url}?chat_jid=web:queue-browser`);
+      const row = page.locator('[data-queue-mode="steer"]');
+      await row.waitFor();
+      for (const theme of ['dark', 'light']) {
+        await page.evaluate(theme => {
+          document.documentElement.classList.remove('dark', 'light');
+          document.documentElement.classList.add(theme);
+        }, theme);
+        const borders = await page.locator('.compose-queue-stack-item').evaluateAll(rows => rows.map(row => {
+          const css = getComputedStyle(row);
+          return ['Top', 'Right', 'Bottom', 'Left'].map(side => [
+            css.getPropertyValue(`border-${side.toLowerCase()}-width`),
+            css.getPropertyValue(`border-${side.toLowerCase()}-style`),
+            css.getPropertyValue(`border-${side.toLowerCase()}-color`),
+          ]);
+        }));
+        expect(borders[0]).toEqual(borders[1]);
+        expect(borders[0]).toEqual(Array(4).fill(borders[0][0]));
+        expect(borders[0][0].slice(0, 2)).toEqual(['1px', 'solid']);
+        expect(await row.locator('.compose-queue-stack-mode').innerText()).toBe('After current tool calls');
+        expect(await row.locator('.compose-queue-stack-text').innerText()).toBe(items[0].content);
+        expect(await row.locator('.compose-queue-stack-steer-btn').count()).toBe(0);
+        expect(await row.getByRole('button', { name: 'Return queued message to editor' }).isVisible()).toBe(true);
+        expect(await row.getByRole('button', { name: 'Cancel queued message' }).isVisible()).toBe(true);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      }
+      expect(errors).toEqual([]);
+    } finally { await page.close(); server.stop(true); }
+  }, 15000);
+}

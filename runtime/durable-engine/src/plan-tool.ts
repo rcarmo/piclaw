@@ -1,5 +1,7 @@
 import { defineTool, LiveDoc } from '@earendil-works/pi-durable';
 import { OptimizerPlanBinding, optimizerPlanTask } from './optimizer-plan-binding.ts';
+import { toolCallSummary } from '../../src/tool-call-summary.js';
+import { summarisePlanCall } from '../../src/plan/tool-summary.js';
 import { planParameters } from '../../src/plan/parameters.js';
 import { applyPlanEdits, applyPlanPatches, DEFAULT_PLAN, normalizeStoredPlanMarkdown,
   structuredPlanDetails, updatePlanArgsToMarkdown, type SessionPlan } from '../../src/plan/markdown.js';
@@ -34,6 +36,7 @@ export function createPlanTool(options: {
   changed(plan: SessionPlan, action: PlanAction): void;
 }) {
   return defineTool({
+    ...toolCallSummary(summarisePlanCall),
     name: 'plan',
     description: "Read or update the current session's Plan sidebar. Prefer action=patch for multi-item add/update/remove operations; use action=update for full-plan replacement and action=edit only for exact Markdown edits. All mutations are normalized with at most one in_progress item.",
     parameters: planParameters, callers: ['model', 'tools'], replay: 'unsafe',
