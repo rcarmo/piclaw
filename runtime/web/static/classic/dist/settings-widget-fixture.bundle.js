@@ -1716,5 +1716,5 @@ ${U}`;if(!window.confirm(z))return;if(H&&!window.confirm(n("settings.tasks.confi
     </div>
   `}function ef(){Jp(),Yp(),Xp();let e=new URLSearchParams(window.location.search);Al(e.get("section")||"general");let t=document.getElementById("settings-widget-fixture-root")||document.body.appendChild(document.createElement("div"));t.id="settings-widget-fixture-root",Mt(u`<${Zp} />`,t),window.piclawWidget?.ready?.({title:"Settings fixture",mockMode:Xt})}ef();
 
-//# debugId=E1C3F3F057F2D87B64756E2164756E21
+//# debugId=8B46BEBE9F6F7EC864756E2164756E21
 //# sourceMappingURL=settings-widget-fixture.bundle.js.map
