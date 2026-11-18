@@ -18,59 +18,13 @@ Core tools (from `pi`):
 - `edit` — replace exact text
 - `write` — write files
 
-Piclaw keeps the agent's always-active baseline intentionally small and uses `list_tools` plus `activate_tools` to expand capabilities on demand. The baseline helps preserve prompt context by keeping only frequent, high-value schemas in-band by default.
+The SDK owns tool availability for each execution scope. Manual activation and
+reset controls, configurable default lists and automatic read-only promotion
+have been removed. Discovery is read-only. Optimizer pruning cannot broaden MCP
+access grants, Delegate capability limits or explicit SDK restrictions.
 
-#### Why this matters for token usage
-
-- **Default-active tools** are sent as full tool schemas in the prompt.
-- **On-demand tools** are discoverable via compact metadata and only contribute their full schema once activated.
-
-The practical tradeoff is predictable context spend:
-
-| Tool tier | Typical prompt impact |
-| --- | --- |
-| Default-active | `~50-200` tokens each |
-| On-demand catalog entry | `~10-15` tokens each |
-
-Fixed baseline (always in active defaults):
-
-- `read`
-- `edit`
-- `write`
-- `bash` on Linux/macOS, or `powershell` plus `bun_run` on Windows
-- `list_tools`
-- `activate_tools`
-- `reset_active_tools`
-- `attach_file`
-- `messages`
-- `keychain`
-- `exit_process`
-
-At session start, piclaw also auto-promotes additional safe tools to the effective default set:
-
-- available **read-only + lightweight** tools (for example `grep`, `find`, `ls`, `get_model_state`)
-- message/scheduling/attachment helpers when present:
-  - `messages`, `schedule_task`, `scheduled_tasks`, `read_attachment`, `export_attachment`
-- `attach_file` and `keychain` remain part of baseline tooling
-
-This preserves low-latency common inspection workflows while keeping heavier tools opt-in.
-
-Add `tools.additionalDefaultTools` to `.piclaw/config.json` for more persistent defaults:
-
-```json
-{
-  "tools": {
-    "additionalDefaultTools": [
-      "search_workspace",
-      "list_models"
-    ]
-  }
-}
-```
-
-A comma-separated string is also accepted, and env var `PICLAW_ADDITIONAL_DEFAULT_TOOLS` is equivalent.
-
-`reset_active_tools` restores this configured default set (not just the fixed baseline). Unknown tool names are ignored. New activations are session-scoped and reset on restart/session rotation.
+Settings → Tools lists capability metadata without selection or per-tool
+compaction checkboxes. Local-lite mode changes the prompt only.
 
 ### Built-in Delegate
 
@@ -124,9 +78,9 @@ For internal-tool discovery, prefer this order:
 1. **Recommend / narrow** — call `list_tools` with `intent` when you know the goal but not the tool name, or use `query` when you already know the rough capability area.
 2. **Read compact summaries** — use the default summary/recommendation output first instead of requesting full schemas for everything.
 3. **Request detail only when needed** — use `include_parameters=true` only for the specific shortlisted tool you are about to use or inspect more deeply.
-4. **Activate / use** — call `activate_tools` only for the tool(s) you actually need beyond the effective default set.
+4. **Use** — call a tool only when the current SDK execution scope allows it.
 
-That keeps discovery separate from activation and avoids bulky “dump every tool schema first” behavior.
+Discovery does not change the execution scope or tool filter.
 
 `list_tools(intent=...)` scores explicit tool metadata first (`name`, `description`, `promptSnippet`, toolsets, and capability profiles). When a tool also exposes structured discovery docs/JDocs (for example aliases, domains, verbs, nouns, keywords, guidance, or examples), those are treated as supplemental low-weight hints rather than overrides.
 
@@ -249,8 +203,7 @@ Example:
 1. list_tools(intent="inspect recent messages")
 2. inspect the compact recommendations
 3. list_tools(query="messages", include_parameters=true)
-4. if needed beyond the effective default set, activate_tools(names=["messages"])
-5. use the tool
+4. use the tool within the current SDK execution scope
 ```
 
 Image-editing example:
@@ -259,18 +212,7 @@ Image-editing example:
 1. list_tools(intent="regenerate transparent favicons from a PNG icon")
 2. inspect the compact recommendations (image_process should rank highly)
 3. list_tools(query="favicon transparent png", include_parameters=true)
-4. if needed, activate_tools(names=["image_process"])
-5. use the tool
-```
-
-You can extend that baseline with `.piclaw/config.json`:
-
-```json
-{
-  "tools": {
-    "additionalDefaultTools": ["search_workspace"]
-  }
-}
+4. use the tool within the current SDK execution scope
 ```
 
 `piclaw` extensions:
@@ -298,8 +240,6 @@ You can extend that baseline with `.piclaw/config.json`:
 The legacy `introspect_sql` executor is retired. Native conversations do not register arbitrary SQL execution; use the existing authorised `messages` query surface.
 - `list_tools` — list available tools with compact summaries, active-state markers, toolset membership, capability metadata, and intent-based recommendations via `intent`
 - `list_scripts` — discover packaged skill scripts plus workspace skill/note scripts with compact summaries, role markers (`entrypoint` vs `module`), Bun invocation hints, and the same kind of query/intent shortlisting used for tool discovery
-- `activate_tools` — activate one or more available tools for the current session
-- `reset_active_tools` — restore the configured default active-tool set for the current session
 - `open_office_viewer` — open an Office document (`.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`) in the built-in JS Office viewer (`/office-viewer/*`)
 - `send_adaptive_card` — post an agent-owned Adaptive Card message in the web UI timeline
 - `send_dashboard_widget` — post an interactive widget with agent-authored HTML to the web timeline (opens in floating pane with piclawWidget bridge; vendored libs: Babylon.js, ECharts, D3). See [vendored-widget-libraries.md](vendored-widget-libraries.md) for API reference.
@@ -309,7 +249,7 @@ The legacy `introspect_sql` executor is retired. Native conversations do not reg
 - `image_process` — workspace image manipulation via sharp: resize, crop, convert, optimise, transform colours and geometry, add text or composites, inspect metadata, extract frames, and assemble spritesheet GIFs
 - `exec_batch` — run multiple shell commands and return concise summaries for each
 - `powershell` — Windows-only replacement for the default shell tool; active instead of `bash` on Windows hosts
-- `bun_run` — run a workspace Bun script directly; kept in the default active baseline on Windows so there is still a first-party script runner alongside PowerShell
+- `bun_run` — run a workspace Bun script directly when permitted by the current SDK execution scope
 - `session_status` — inspect native task/submission ownership and restart safety without changing execution state
 - `exit_process` — request graceful termination after committed native completion and confirmed cleanup; the configured service manager owns restart
 - `ssh` — get, set, or clear the session-scoped SSH profile used by remote-backed core tools (`read`, `write`, `edit`, `bash`); live redirection is turn-scoped and is cleared automatically at the end of each agent turn

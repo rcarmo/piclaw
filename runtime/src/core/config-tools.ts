@@ -363,11 +363,6 @@ export function getToolsIntegrationConfig(): Readonly<ToolsIntegrationConfig> {
 }
 
 
-const configAdditionalDefaultTools = pickStringArray(toolsConfig, [
-  "additionalDefaultTools",
-  "additional_default_tools",
-  "PICLAW_ADDITIONAL_DEFAULT_TOOLS",
-]);
 /** Max tool result chars before auto-externalization. Default 5000. */
 export let TOOL_OUTPUT_STORE_THRESHOLD = getToolsIntegrationConfig().toolOutputStoreBytes;
 
@@ -574,25 +569,6 @@ export function setToolResultCompactionEnabled(enabled: boolean): boolean {
   const resolved = writeDomainConfigField(toolsIntegrationDomainSchema, getDomainConfigOptions(), "toolResultCompactionEnabled", next);
   TOOL_RESULT_COMPACTION_ENABLED = resolved.toolResultCompactionEnabled;
   return TOOL_RESULT_COMPACTION_ENABLED;
-}
-
-// ---------------------------------------------------------------------------
-// Tool activation defaults – used by lazy tool activation.
-// ---------------------------------------------------------------------------
-
-/** Typed tool-activation config grouped for default active-tool selection. */
-export interface ToolActivationConfig {
-  additionalDefaultTools: string[];
-}
-
-/** Grouped tool-activation config loaded from `.piclaw/config.json`. */
-export const TOOL_ACTIVATION_CONFIG = Object.freeze<ToolActivationConfig>({
-  additionalDefaultTools: configAdditionalDefaultTools ?? [],
-});
-
-/** Return grouped tool-activation config for runtime wiring and tests. */
-export function getToolActivationConfig(): Readonly<ToolActivationConfig> {
-  return TOOL_ACTIVATION_CONFIG;
 }
 
 /** Typed workspace-search config grouped for FTS root and extension selection. */

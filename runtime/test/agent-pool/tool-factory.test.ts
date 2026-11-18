@@ -1,25 +1,7 @@
-import { expect, test } from "bun:test";
-
-import { AgentToolFactory } from "../../src/agent-pool/tool-factory.js";
-import { getDefaultActiveToolNames } from "../../src/extensions/tool-activation.js";
-
-test("AgentToolFactory matches the intended default active-tool baseline on non-Windows", () => {
-  const factory = new AgentToolFactory({ workspaceDir: "/workspace", platform: "linux" });
-  const tools = factory.createDefaultTools();
-
-  expect(tools).toEqual(getDefaultActiveToolNames("linux"));
-  expect(tools).toContain("list_tools");
-  expect(tools).toContain("activate_tools");
-  expect(tools).toContain("attach_file");
-  expect(tools).toContain("chat");
-});
-
-test("AgentToolFactory matches the intended default active-tool baseline on Windows", () => {
-  const factory = new AgentToolFactory({ workspaceDir: "/workspace", platform: "win32" });
-  const tools = factory.createDefaultTools();
-
-  expect(tools).toEqual(getDefaultActiveToolNames("win32"));
-  expect(tools).toContain("powershell");
-  expect(tools).toContain("bun_run");
-  expect(tools).not.toContain("bash");
+import {expect,test} from 'bun:test';
+import {AgentToolFactory} from '../../src/agent-pool/tool-factory.js';
+for(const platform of ['linux','win32'] as const)test(`AgentToolFactory ${platform} has no competing default-tool selector`,()=>{
+ const factory=new AgentToolFactory({workspaceDir:'/workspace',platform});
+ expect('createDefaultTools' in factory).toBe(false);
+ expect(factory.createCustomToolOverrides().map(tool=>tool.name)).toEqual(['grep']);
 });

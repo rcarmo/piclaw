@@ -39,7 +39,6 @@ const SAFE_PARAMETER_EXCEPTIONS = Object.freeze([
   safeException("ls", ["limit"], "The bounded result count is an operational control; path and returned filesystem names remain protected."),
   safeException("list_tools", ["limit", "include_parameters"], "Bounded catalog pagination and a boolean detail switch contain no free-form request content."),
   safeException("list_scripts", ["scope", "role", "limit", "include_metadata"], "Closed scope/role selectors, a bounded count, and a metadata boolean carry no user-authored content."),
-  safeException("activate_tools", ["names", "mode"], "Tool names come from the public catalog and mode is a closed activation enum, not private payload data."),
   safeException("attach_file", ["content_type", "kind"], "MIME classification and the closed attachment-kind enum do not reveal file paths, names, or bytes."),
   safeException("read_attachment", ["mode", "max_bytes"], "The read mode and bounded byte limit are operational controls; attachment identity and content remain protected."),
   safeException("messages", ["action", "role", "after", "before", "since", "after_row", "before_row", "limit", "excerpt_chars", "offset", "context_before", "context_after", "details_max_chars", "content_lines", "regex", "context_lines", "max_matches", "capture_group", "dedupe", "sort", "type", "dry_run", "force"], "Closed actions, pagination bounds, time/row cursors, and matching switches expose query mechanics but no message content or identities."),

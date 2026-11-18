@@ -3,13 +3,12 @@ import {expect,test} from 'bun:test';
 import {readFileSync} from 'node:fs';
 import {createFakeExtensionApi} from './fake-extension-api.js';
 import {createMemorySearchExtension} from '../../src/extensions/memory-search.js';
-import {getAutoActiveToolNames} from '../../src/extensions/tool-activation.js';
 
 test('recall guidance is opt-in tool metadata, not a preflight or bootstrap hook',()=>{
  const fake=createFakeExtensionApi();createMemorySearchExtension('web:guidance')(fake.api);
  expect([...fake.tools.keys()]).toEqual(['memory_query','memory_get']);
  expect(fake.handlers.map(h=>h.event)).toEqual(['session_start','session_shutdown']);
- expect(getAutoActiveToolNames(['memory_query','memory_get'])).toEqual([]);
+ expect(fake.handlers.some(h=>h.event==='before_agent_start')).toBe(false);
  const query=fake.tools.get('memory_query').promptGuidelines.join('\n');
  const get=fake.tools.get('memory_get').promptGuidelines.join('\n');
  for(const token of ['MEMORY.md','notes/index.md','search_workspace','chunk_id','source_revision','line range','parent','untrusted','partial','contradicted','unrecorded','no','single-user'])expect(query.toLowerCase()).toContain(token.toLowerCase());

@@ -152,9 +152,9 @@ export function CompactionSection({ settingsData, setStatus, mergeSettingsData }
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
                 <label class="settings-dense-check" for=${fieldId('check-1')}>
                     <input id=${fieldId('check-1')} type="checkbox" checked=${localLitePromptProfileEnabled} onChange=${e => setLocalLitePromptProfileEnabled(Boolean(e.target.checked))} />
-                    <span>Local-lite prompt and tools</span>
+                    <span>Local-lite prompt</span>
                 </label>
-                <span class="settings-hint">Off by default. When enabled, local endpoints use a compact prompt and start with only read and tool discovery. Changes apply on the next turn.</span>
+                <span class="settings-hint">Off by default. When enabled, local endpoints use a compact prompt without changing tool availability. Changes apply on the next turn.</span>
             </div>
             <h3>${t('settings.compaction.autoHeading')}</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">

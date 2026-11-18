@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { getToolCapability } from "../../src/extensions/tool-capabilities.js";
-import { TOOLSETS } from "../../src/extensions/tool-activation.js";
+import { TOOLSETS } from "../../src/extensions/tool-capabilities.js";
 
 describe("tool-capabilities registry", () => {
   test("known tools return specific metadata", () => {

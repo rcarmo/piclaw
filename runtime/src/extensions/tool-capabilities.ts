@@ -7,7 +7,86 @@
 
 export type ToolKind = "read-only" | "mutating" | "mixed";
 export type ToolWeight = "lightweight" | "standard" | "heavy";
-export type ToolActivation = "default" | "on-demand";
+
+export type ToolsetDefinition = {
+  name: string;
+  description: string;
+  toolNames: string[];
+};
+
+export const TOOLSETS: ToolsetDefinition[] = [
+  {
+    name: "core",
+    description: "Default coding tools for reading, editing, and shell work.",
+    toolNames: ["read", "bash", "powershell", "edit", "write"],
+  },
+  {
+    name: "discovery",
+    description: "Tool and script discovery.",
+    toolNames: ["list_tools", "list_scripts"],
+  },
+  {
+    name: "attachments",
+    description: "Workspace file delivery and uploaded-attachment access.",
+    toolNames: ["attach_file", "read_attachment", "export_attachment"],
+  },
+  {
+    name: "model-control",
+    description: "Inspect and switch the current model and thinking level.",
+    toolNames: ["get_model_state", "list_models", "set_model", "switch_model", "switch_thinking", "provider_quota"],
+  },
+  {
+    name: "data",
+    description: "Structured message access and keychain controls.",
+    toolNames: ["messages", "keychain"],
+  },
+  {
+    name: "workspace",
+    description: "Workspace search, document/diagram viewing, and image processing.",
+    toolNames: [
+      "search_workspace",
+      "memory_get",
+      "memory_query",
+      "open_office_viewer",
+      "office_read",
+      "office_write",
+      "image_process",
+    ],
+  },
+  {
+    name: "automation",
+    description: "Automation helpers for scripts, scheduled tasks, and large-output inspection.",
+    toolNames: ["schedule_task", "bun_run", "exec_batch", "search_tool_output"],
+  },
+  {
+    name: "remote",
+    description: "Remote execution configuration and remote-capable infrastructure tools.",
+    toolNames: ["ssh"],
+  },
+  {
+    name: "browser",
+    description: "Browser automation via Chrome DevTools Protocol.",
+    toolNames: ["cdp_browser"],
+  },
+  {
+    name: "ui",
+    description: "PiClaw web UI posting tools and cross-session relay.",
+    toolNames: ["send_adaptive_card", "send_dashboard_widget", "chat"],
+  },
+  {
+    name: "experiments",
+    description: "Autonomous experiment orchestration.",
+    toolNames: ["start_autoresearch", "stop_autoresearch", "autoresearch_status"],
+  },
+  {
+    name: "lifecycle",
+    description: "Managed process and cross-session lifecycle control.",
+    toolNames: ["exit_process", "session_status", "session_control"],
+  },
+];
+
+/** Read-only catalogue grouping; never changes the SDK tool filter. */
+export function getToolsetsForTool(toolName:string):string[]{return TOOLSETS.filter(group=>group.toolNames.includes(toolName)).map(group=>group.name);}
 
 export interface ToolRecommendationProfile {
   /** Higher-level domain phrases matched against the requested intent. */
@@ -136,24 +215,6 @@ const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
       domains: ["scripts", "discovery", "automation"],
       verbs: ["list", "discover", "find", "inspect"],
       nouns: ["scripts", "script", "entrypoints", "helpers", "catalog"],
-    }),
-  },
-  activate_tools: {
-    kind: "mutating",
-    weight: "lightweight",
-    recommend: rec({
-      domains: ["tools", "discovery"],
-      verbs: ["activate", "enable"],
-      nouns: ["tools", "tool", "capabilities"],
-    }),
-  },
-  reset_active_tools: {
-    kind: "mutating",
-    weight: "lightweight",
-    recommend: rec({
-      domains: ["tools", "discovery"],
-      verbs: ["reset", "restore"],
-      nouns: ["tools", "defaults", "tool set"],
     }),
   },
 

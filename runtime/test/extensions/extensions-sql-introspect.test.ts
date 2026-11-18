@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { createBuiltinExtensionFactories } from '../../src/extensions/index.js';
-import { TOOLSETS } from '../../src/extensions/tool-activation.js';
+import { TOOLSETS } from '../../src/extensions/tool-capabilities.js';
 import { createFakeExtensionApi } from './fake-extension-api.js';
 
 test('retired legacy SQL execution has no built-in registration, data toolset entry or packaged source', () => {

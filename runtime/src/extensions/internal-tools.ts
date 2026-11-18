@@ -7,7 +7,7 @@ import type {
   ExtensionAPI,
   ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
-import { getToolsetsForTool, getEffectiveDefaultActiveToolNames } from "./tool-activation.js";
+import { getToolsetsForTool } from "./tool-capabilities.js";
 import {
   addDiscoveryExactPhraseMatches,
   addDiscoveryTokenMatches,
@@ -17,7 +17,7 @@ import {
   tokenizeDiscoveryText,
   uniqueDiscoveryStrings,
 } from "./discovery-match.js";
-import { getToolCapability, type ToolActivation, type ToolCapability } from "./tool-capabilities.js";
+import { getToolCapability, type ToolCapability } from "./tool-capabilities.js";
 import type { ToolJDoc } from "./discovery-jdoc.js";
 
 const InternalToolsSchema = Type.Object({
@@ -60,7 +60,6 @@ type ToolCatalogEntry = {
   promptSnippet?: string;
   parameters?: unknown;
   active: boolean;
-  activation: ToolActivation;
   kind: string;
   weight: string;
   summary: string;
@@ -220,11 +219,9 @@ function buildCatalog(api: ExtensionAPI, includeParameters: boolean): ToolCatalo
   const platformVisibleTools = process.platform === "win32" && api.getAllTools().some((tool) => tool.name === "powershell")
     ? api.getAllTools().filter((tool) => tool.name !== "bash")
     : api.getAllTools();
-  const defaultSet = new Set(getEffectiveDefaultActiveToolNames(platformVisibleTools));
   return platformVisibleTools
     .map((tool) => {
       const capability = getToolCapability(tool.name);
-      const activation: ToolActivation = defaultSet.has(tool.name) ? "default" : "on-demand";
       return {
         name: tool.name,
         description: summarizeDescription(tool.description),
@@ -233,7 +230,6 @@ function buildCatalog(api: ExtensionAPI, includeParameters: boolean): ToolCatalo
           : undefined,
         parameters: includeParameters ? tool.parameters : undefined,
         active: activeSet.has(tool.name),
-        activation,
         kind: capability.kind,
         weight: capability.weight,
         summary: capability.summary || summarizeDescription(tool.description),
@@ -422,9 +418,6 @@ function scoreIntent(tool: ToolCatalogEntry, intent: string): RecommendationMatc
   if (tool.active) {
     match.score += 2;
     match.reasons.push("already active");
-  } else if (tool.activation === "default") {
-    match.score += 1;
-    match.reasons.push("default active");
   }
   if (tool.kind === "read-only" && readIntent) {
     match.score += 1;
@@ -447,10 +440,10 @@ function scoreIntent(tool: ToolCatalogEntry, intent: string): RecommendationMatc
 const HINT = [
   "## Internal Tool Discovery",
   "If you are unsure about available tools, call list_tools.",
-  "Prefer the staged flow: query-filtered discovery → compact summary → on-demand parameters/details → activate/use.",
+  "Prefer the staged flow: query-filtered discovery → compact summary → on-demand parameters/details → use.",
   "Use intent when you know the goal but not the tool name; use query when you already know the capability area.",
   "Use include_parameters only for the specific tool you are about to use or inspect in detail.",
-  "Discovery is separate from activation: use activate_tools only when you actually need additional tools beyond the effective default set.",
+  "Discovery never changes tool availability; the current SDK execution scope and optimizer policy determine which tools may be used.",
   "",
   "## Baseline working principles",
   "These apply even when no AGENTS.md or project instructions are present:",
@@ -464,7 +457,7 @@ const HINT = [
 ].join("\n");
 
 const PRIMARY_TOOL_NAME = "list_tools";
-const PRIMARY_TOOL_DESCRIPTION = "List available internal tools with brief descriptions. Each result includes capability metadata (kind: read-only/mutating/mixed, weight: lightweight/standard/heavy, activation: default/on-demand) and toolset groupings. Start with query-filtered compact summaries; use intent for compact recommendations when you know the goal but not the tool name.";
+const PRIMARY_TOOL_DESCRIPTION = "List available internal tools with brief descriptions. Each result includes capability metadata (kind: read-only/mutating/mixed, weight: lightweight/standard/heavy) and toolset groupings. Start with query-filtered compact summaries; use intent for compact recommendations when you know the goal but not the tool name.";
 const PRIMARY_TOOL_PROMPT_SNIPPET = "list_tools: Discover available tools with compact summaries first, or use intent for a compact recommendation shortlist before requesting schema details.";
 const VISIBLE_TOOL_HINT = "Hint: use query when you know the capability area, use intent when you know the goal, and request parameters only after shortlisting a tool.";
 /** Extension factory that registers list_tools. */
@@ -511,7 +504,7 @@ export const internalTools: ExtensionFactory = (pi: ExtensionAPI) => {
         const lines = recommendations.map(({ tool, reasons }) => {
           const active = tool.active ? " [active]" : "";
           const toolsets = tool.toolsets.length > 0 ? ` {${tool.toolsets.join(", ")}}` : "";
-          const meta = `[${tool.kind}, ${tool.weight}, ${tool.activation}]`;
+          const meta = `[${tool.kind}, ${tool.weight}]`;
           const reasonText = reasons.length > 0 ? ` — ${joinReasonList(reasons)}` : "";
           return `• ${tool.name} — ${tool.summary}${reasonText}${active}${toolsets} ${meta}`;
         });
@@ -532,7 +525,6 @@ export const internalTools: ExtensionFactory = (pi: ExtensionAPI) => {
               matched_sources: matchedSources,
               reason_summary: joinReasonList(reasons),
               active: tool.active,
-              activation: tool.activation,
               kind: tool.kind,
               weight: tool.weight,
               toolsets: tool.toolsets,
@@ -565,7 +557,7 @@ export const internalTools: ExtensionFactory = (pi: ExtensionAPI) => {
       const lines = tools.map((tool) => {
         const active = tool.active ? " [active]" : "";
         const toolsets = tool.toolsets.length > 0 ? ` {${tool.toolsets.join(", ")}}` : "";
-        const meta = `[${tool.kind}, ${tool.weight}, ${tool.activation}]`;
+        const meta = `[${tool.kind}, ${tool.weight}]`;
         return `• ${tool.name} — ${tool.summary}${active}${toolsets} ${meta}`;
       });
 
@@ -581,7 +573,6 @@ export const internalTools: ExtensionFactory = (pi: ExtensionAPI) => {
             description: tool.description,
             ...(tool.parameters !== undefined ? { parameters: tool.parameters } : {}),
             active: tool.active,
-            activation: tool.activation,
             kind: tool.kind,
             weight: tool.weight,
             summary: tool.summary,
