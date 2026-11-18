@@ -69,6 +69,11 @@ The hamburger menu button uses `position: fixed` and appears:
   - Effort providers (Anthropic) display "max" for xhigh
   - Updates available levels when switching models
 
+### Delegate (order 30.25)
+- Built into Core and listed immediately after Models in the main group, before and after the pane loads.
+- Uses the existing provider approvals and model exclusions; no Delegate add-on is required.
+- The old Delegate add-on is deprecated and absent from the active catalogue. Version 0.2.22 remains byte-for-byte unchanged for older installations.
+
 ### Appearance (order 40)
 - **Default theme** card at top with native color picker for tint
   - Tint applies immediately; clear button to reset

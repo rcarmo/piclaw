@@ -258,6 +258,6 @@ function DelegateSettings() {
     </div>`;
 }
 
-registerSettingsPane({ id: 'delegate', label: 'Delegate', icon: html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7h10v10H7z"/><path d="M4 4h4m8 0h4M4 20h4m8 0h4"/></svg>`, component: DelegateSettings, order: 169 });
+registerSettingsPane({ id: 'delegate', label: 'Delegate', icon: html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7h10v10H7z"/><path d="M4 4h4m8 0h4M4 20h4m8 0h4"/></svg>`, component: DelegateSettings, order: 30.25 });
 notifySettingsPanesChanged();
 }

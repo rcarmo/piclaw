@@ -159,6 +159,7 @@ const MODEL_CLASSIFICATION_RULES: ClassificationRule[] = [
   rule("gemini-flash", 2, "gemini", 40, "Gemini Flash fast family", /^gemini-.*(?:^|-)flash(?:-|$)/),
   rule("gemini-pro", 3, "gemini", 60, "Gemini Pro general-purpose family", /^gemini-.*(?:^|-)pro(?:-|$)/),
   rule("mai-code-flash", 2, "mai", 50, "MAI Code Flash fast coding family", /^mai-.*flash(?:-|$)/),
+  rule("mai-code-2", 3, "mai", 55, "MAI Code 2 coding model", /^mai-code-2$/),
   rule("grok-code-fast", 1, "grok", 40, "Grok Code Fast family", /^(?:grok|xai)-.*fast(?:-|$)/),
   rule("grok-4-7", 3, "grok", 65, "Grok 4.7 general-purpose model", /^grok-4-7$/),
 
