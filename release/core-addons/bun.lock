@@ -231,13 +231,13 @@
 
     "@protobufjs/utf8": ["@protobufjs/utf8@1.1.2", "", {}, "sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug=="],
 
-    "@rcarmo/piclaw-addon-code-review": ["@rcarmo/piclaw-addon-code-review@code-review.tgz", { "dependencies": { "@lezer/common": "1.5.1", "@lezer/highlight": "1.2.3", "@lezer/javascript": "1.5.4", "@lezer/json": "1.0.3", "@lezer/markdown": "1.6.3", "@lezer/python": "1.1.18", "diff": "9.0.0", "marked": "18.1.0" } }, "sha512-WTBL/tJ+MekBuFm4TmkSfp2eqKCLQnq6zFY3HgDexkNJix6+NNiorRjblYSOxLh8LIH1W8+jXGljjIygTAQosw=="],
+    "@rcarmo/piclaw-addon-code-review": ["@rcarmo/piclaw-addon-code-review@code-review.tgz", { "dependencies": { "@lezer/common": "1.5.1", "@lezer/highlight": "1.2.3", "@lezer/javascript": "1.5.4", "@lezer/json": "1.0.3", "@lezer/markdown": "1.6.3", "@lezer/python": "1.1.18", "diff": "9.0.0", "marked": "18.1.0" } }, "sha512-APrahcDz/ZDxNAzqAffje0BctD5IzyYEdppWAbomgcrt80c3yXIzD4i1th75SRBhe5mYanOdfTaOQFv1v8T6YQ=="],
 
-    "@rcarmo/piclaw-addon-goal": ["@rcarmo/piclaw-addon-goal@goal.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-TLwaBgxZAqemuwenvhjGCKtBksz5q9+o/qMMbDiSadxs5f4P1/TCBmDC8+wqQFDYswHRDH2TrFUMGvIlw3yqzg=="],
+    "@rcarmo/piclaw-addon-goal": ["@rcarmo/piclaw-addon-goal@goal.tgz", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" } }, "sha512-+wTlCfGmDyltUu6u9TqHY3UMp657arDZYCKPsR3pbClKH1NSj4tkaoC1forzEL7GTtUsvqDYPMkf1TS22YhR+g=="],
 
     "@rcarmo/piclaw-addon-observability": ["@rcarmo/piclaw-addon-observability@observability.tgz", { "dependencies": { "@azure/monitor-opentelemetry": "1.21.0", "@opentelemetry/api": "1.9.1", "@opentelemetry/resources": "2.12.1" }, "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "@earendil-works/pi-telemetry": "*" }, "optionalPeers": ["@earendil-works/pi-telemetry"] }, "sha512-YirUBuiQfJ1aB3WHXuyjX3JOvuhgnKr+5osSDcruQQhJWEXa6RqQ91puTJQaDybRW+6wUPfTel6PKiQBsjE87w=="],
 
-    "@rcarmo/piclaw-addon-restic": ["@rcarmo/piclaw-addon-restic@restic.tgz", {}, "sha512-qrwl42zcNZuSGZv++qhge9suz9oEemi6NuuWTCvQbFKsdru/HCxXR9MMD2HzriYFASYb31rUK3m71j/O3TtXNw=="],
+    "@rcarmo/piclaw-addon-restic": ["@rcarmo/piclaw-addon-restic@restic.tgz", {}, "sha512-vYiHxsn/ZNDve8pVj31o8edeCR6xRYOJS9yfdbsgyH3EHkq9q0khcZHuytzh1wvZXaDVfmYF+pLjkKumcmIZZA=="],
 
     "@silvia-odwyer/photon-node": ["@silvia-odwyer/photon-node@0.3.4", "", {}, "sha512-bnly4BKB3KDTFxrUIcgCLbaeVVS8lrAkri1pEzskpmxu9MdfGQTy8b8EgcD83ywD3RPMsIulY8xJH5Awa+t9fA=="],
 
