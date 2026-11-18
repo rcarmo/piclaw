@@ -54,7 +54,7 @@ async function fixture(run: (f: { root: Database; request(method: string, action
     await run({ root, revoke() { current = false; }, snapshot: (namespace = 'goal') => root.query('SELECT * FROM extension_kv WHERE extension_id=? ORDER BY key').all(namespace),
       request(method, action, body, signal, namespace = 'goal') {
         const req = new Request(baseUrl + namespace + '/' + action + '?chat_jid=' + encodeURIComponent(chat), { method, signal, ...(method === 'POST' ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}) });
-        admitAddonLocalRequest(req, { userId: 'default', mode: 'single-user' }, () => current && !req.signal.aborted);
+        admitAddonLocalRequest(req, { kind: "local", userId: "default", username: "default", displayName: "Fixture", role: "admin", mode: "single-user", homeChatJid: "web:default", authentication: { method: "fixture", sessionId: null, expiresAt: null } }, () => current && !req.signal.aborted);
         return req;
       } });
     expect(providerCalls).toBe(0); expect(noHttp).not.toHaveBeenCalled(); expect(noSocket).not.toHaveBeenCalled();

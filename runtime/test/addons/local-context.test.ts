@@ -192,6 +192,9 @@ test('foreign execution identity cannot borrow local request authority',async()=
   const untrusted=new Request('http://local/agent/addons/api/example/action');
   admitAddonLocalRequest(untrusted,{...principal,userId:'other'},()=>true);
   await withAddonLocalRequest(untrusted,async ctx=>expect(ctx).toBeNull());
+  const member=new Request('http://local/agent/addons/api/example/action');
+  admitAddonLocalRequest(member,{...principal,role:'member'},()=>true);
+  await withAddonLocalRequest(member,async ctx=>expect(ctx).toBeNull());
  });
 });
 

@@ -132,8 +132,9 @@ describe("check-import-boundaries", () => {
       );
 
       expect(findPackagedExtensionImportViolations(dir)).toEqual([
-        "extensions/integrations/bad.ts: direct pi-mcp-adapter subpath import must use src/extensions/mcp-status-hint-adapter.ts (pi-mcp-adapter/config.ts)",
-        "src/extensions/bad.ts: direct pi-mcp-adapter subpath import must use src/extensions/mcp-status-hint-adapter.ts (pi-mcp-adapter/metadata-cache.ts)",
+        "extensions/integrations/bad.ts: retired MCP adapter is forbidden in extensions (pi-mcp-adapter/config.ts)",
+        "src/extensions/bad.ts: retired MCP adapter is forbidden in extensions (pi-mcp-adapter/metadata-cache.ts)",
+        "src/extensions/mcp-status-hint-adapter.ts: retired MCP adapter is forbidden in extensions (pi-mcp-adapter/config.ts)",
       ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });

@@ -348,7 +348,6 @@ describe("feature: tool catalog", () => {
       "attach_file", "read_attachment", "export_attachment", "messages",
       "get_model_state", "list_models", "switch_model", "switch_thinking",
       "list_tools", "list_scripts",
-      "activate_tools", "reset_active_tools",
       "search_workspace", "refresh_workspace_index",
       "send_adaptive_card", "send_dashboard_widget", "session_control",
       "open_workspace_file", "env",
@@ -359,19 +358,9 @@ describe("feature: tool catalog", () => {
     expect(registered.has("exit_process")).toBe(false);
   });
 
-  featureTest("bootstrap tools in default active baseline", async () => {
-    const { getDefaultActiveToolNames } = await import("../../src/extensions/tool-activation.js");
-    for (const name of ["list_tools", "activate_tools", "reset_active_tools", "attach_file", "messages", "chat", "exit_process"]) {
-      expect(getDefaultActiveToolNames("linux")).toContain(name);
-    }
-  });
-
-  featureTest("AgentToolFactory not stuck on 4-tool fallback", async () => {
+  featureTest("tool registration has no manual activation baseline", async () => {
     const { AgentToolFactory } = await import("../../src/agent-pool/tool-factory.js");
-    const tools = new AgentToolFactory({ workspaceDir: "/workspace", platform: "linux" }).createDefaultTools();
-    expect(tools).toContain("list_tools");
-    expect(tools).toContain("activate_tools");
-    expect(tools).toContain("attach_file");
-    expect(tools.length).toBeGreaterThan(4);
+    const factory = new AgentToolFactory({ workspaceDir: "/workspace", platform: "linux" });
+    expect("createDefaultTools" in factory).toBe(false);
   });
 });

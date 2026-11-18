@@ -1,145 +1,52 @@
-import "./src/test-guard.js";
-import { test, expect, spyOn } from "bun:test";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { getConfigPath } from "../../runtime/src/core/config-context.js";
-import { hydrateMcpKeychainCredentials, clearHydratedMcpCredentials } from "../../runtime/src/secure/mcp-keychain.js";
-import { createHostMcp } from "../../runtime/durable-engine/src/host-mcp.js";
-import { BACKGROUND_CONTEXT, withAbortSignal } from "../../runtime/durable-engine/qualification/context.ts";
-import * as credentials from "../../runtime/src/secure/mcp-keychain.js";
-import { StreamableHttpTransport } from "../../node_modules/@earendil-works/pi-mcp";
-
-test("native HTTP MCP uses the captured keychain lease and fences actual sends", async () => {
-  let calls = 0, revoked = false;
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const req = new Request(input, init);
-    expect(req.url).toBe("http://127.0.0.1:18081/mcp");
-    expect(req.headers.get("authorization")).toBe("Bearer fixture-secret");
-    if (req.method !== "POST") return new Response(null, { status: 202 });
-    const message = await req.json() as { id?: number; method: string; params?: { protocolVersion?: string; arguments?: unknown } };
-    if (message.id === undefined) return new Response(null, { status: 202 });
-    const result = message.method === "initialize" ? { protocolVersion: message.params?.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: "fixture", version: "1" } }
-      : message.method === "tools/list" ? { tools: [{ name: "echo", description: "Echo", inputSchema: { type: "object", properties: { message: { type: "string" } }, required: ["message"] } }] }
-      : message.method === "tools/call" ? (++calls, { content: [{ type: "text", text: JSON.stringify(message.params?.arguments) }] }) : {};
-    return Response.json({ jsonrpc: "2.0", id: message.id, result });
-  }, { preconnect() {} }) as typeof fetch;
-  const workspace = process.env.PICLAW_WORKSPACE!;
-  mkdirSync(join(workspace, ".pi"), { recursive: true });
-  writeFileSync(getConfigPath(), JSON.stringify({ domains: { mcp: { engine: "native", codemode: "on" } } }), { mode: 0o600 });
-  writeFileSync(join(workspace, ".pi/mcp.json"), JSON.stringify({ mcpServers: { fixture: { url: "http://127.0.0.1:18081/mcp", bearerTokenKeychain: "fixture/token", bearerTokenEnv: "PICLAW_NATIVE_HTTP_TEST_TOKEN", directTools: false } } }));
-  const entries = await hydrateMcpKeychainCredentials(workspace, async name => ({ name, type: "token", secret: "fixture-secret", username: null }));
-  let mcp: Awaited<ReturnType<typeof createHostMcp>> | undefined;
-  const check = () => { if (revoked) throw Error("source revoked"); };
-  try {
-    mcp = await createHostMcp({ assertCurrent() {}, captureSource: async () => check });
-    expect(mcp.tools.map(tool => tool.name)).toEqual(["mcp__fixture__echo"]);
-    const tool = mcp.tools[0]!;
-    const result = await tool.execute({ message: "NATIVE_HTTP_OK" }, {} as never, BACKGROUND_CONTEXT);
-    expect(JSON.stringify(result)).toContain("NATIVE_HTTP_OK");
-    expect(calls).toBe(1);
-    revoked = true;
-    await expect(tool.execute({ message: "FORBIDDEN" }, {} as never, BACKGROUND_CONTEXT)).rejects.toThrow();
-    expect(calls).toBe(1);
-  } finally { await mcp?.close(); clearHydratedMcpCredentials(entries); globalThis.fetch = originalFetch; }
-});
-
-// A JSON-RPC endpoint fixture, not a session/owner substitute. Every case below
-// constructs the actual native owner, public MCP client and constrained transport.
-async function endpoint(onCall: (message: string, signal?: AbortSignal | null) => Promise<void>) {
-  const previous = globalThis.fetch;
-  const workspace = process.env.PICLAW_WORKSPACE!;
-  mkdirSync(join(workspace, '.pi'), { recursive: true });
-  writeFileSync(getConfigPath(), JSON.stringify({ domains: { mcp: { engine: 'native', codemode: 'on' } } }), { mode: 0o600 });
-  writeFileSync(join(workspace, '.pi/mcp.json'), JSON.stringify({ mcpServers: { fixture: { url: 'http://127.0.0.1:18081/mcp', bearerTokenKeychain: 'fixture/token', bearerTokenEnv: 'PICLAW_NATIVE_HTTP_TEST_TOKEN', directTools: false } } }));
-  const entries = await hydrateMcpKeychainCredentials(workspace, async name => ({ name, type: 'token', secret: 'fixture-secret', username: null }));
-  globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const request = new Request(input, init);
-    expect(request.url).toBe('http://127.0.0.1:18081/mcp');
-    expect(request.headers.get('authorization')).toBe('Bearer fixture-secret');
-    if (request.method !== 'POST') return new Response(null, { status: 202 });
-    const rpc = await request.json() as { id?: number; method: string; params?: { protocolVersion?: string; arguments?: { message?: string } } };
-    if (rpc.id === undefined) return new Response(null, { status: 202 });
-    let result: unknown = {};
-    if (rpc.method === 'initialize') result = { protocolVersion: rpc.params?.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'fixture', version: '1' } };
-    if (rpc.method === 'tools/list') result = { tools: [{ name: 'echo', description: 'Echo', inputSchema: { type: 'object', properties: { message: { type: 'string' } }, required: ['message'] } }] };
-    if (rpc.method === 'tools/call') {
-      const message = rpc.params?.arguments?.message ?? '';
-      await onCall(message, init?.signal);
-      init?.signal?.throwIfAborted();
-      result = { content: [{ type: 'text', text: message }], privateDiagnostic: 'server-private-do-not-publish' };
-    }
-    return Response.json({ jsonrpc: '2.0', id: rpc.id, result });
-  }, { preconnect() {} }) as typeof fetch;
-  return () => { globalThis.fetch = previous; clearHydratedMcpCredentials(entries); };
+import './src/test-guard.js';
+import {expect,test,spyOn} from 'bun:test';
+import {Database} from 'bun:sqlite';
+import {connectMcpHttp} from '../../runtime/durable-engine/src/mcp/client.ts';
+import {createMcpAuthority} from '../../runtime/durable-engine/src/mcp/authority.ts';
+import {createMcpRuntime} from '../../runtime/durable-engine/src/mcp/runtime.ts';
+import {McpConnectionStore} from '../../runtime/durable-engine/src/mcp/connections.ts';
+import {createRegistry} from '../../runtime/durable-engine/qualification/durable.ts';
+import {BACKGROUND_CONTEXT as context,withAbortSignal} from '../../runtime/durable-engine/qualification/context.ts';
+import {StreamableHttpTransport} from '../../runtime/durable-engine/node_modules/@earendil-works/pi-mcp';
+const config={id:'fixture',name:'fixture',url:'https://mcp.fixture.invalid/mcp',bearer:'SYNTHETIC_ONLY',allowHttp:false,timeoutSeconds:2};
+// Synthetic JSON-RPC endpoint only; public SDK client and constrained transport are real.
+function endpoint(onCall:(message:string)=>Promise<void>){
+ const prior=globalThis.fetch;
+ globalThis.fetch=Object.assign(async(input:RequestInfo|URL,init?:RequestInit)=>{
+  const request=new Request(input,init);expect(request.url).toBe(config.url);expect(request.headers.get('authorization')).toBe('Bearer '+config.bearer);
+  if(request.method!=='POST')return new Response(null,{status:202});const rpc=await request.json() as any;if(rpc.id===undefined)return new Response(null,{status:202});let result:unknown={};
+  if(rpc.method==='initialize')result={protocolVersion:rpc.params.protocolVersion,capabilities:{tools:{}},serverInfo:{name:'fixture',version:'1'}};
+  if(rpc.method==='tools/list')result={tools:[{name:'echo',description:'Echo',inputSchema:{type:'object',properties:{message:{type:'string'}},required:['message']}}]};
+  if(rpc.method==='tools/call'){await onCall(rpc.params.arguments.message);init?.signal?.throwIfAborted();result={content:[{type:'text',text:rpc.params.arguments.message}]};}
+  return Response.json({jsonrpc:'2.0',id:rpc.id,result});
+ },{preconnect(){}}) as typeof fetch;
+ return()=>{globalThis.fetch=prior;};
 }
-
-for (const mode of ['abort', 'revocation'] as const) test(`native MCP concurrent calls keep ${mode} and source authority invocation-local`, async () => {
-  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
-  const calls: string[] = [];
-  const restore = await endpoint(async message => { calls.push(message); if (message === 'held') { entered.resolve(); await release.promise; } });
-  const firstApi = {}, secondApi = {};
-  const controller = new AbortController();
-  let revoked = false;
-  let owner: Awaited<ReturnType<typeof createHostMcp>> | undefined;
-  let pending: Promise<{ value: unknown } | { error: unknown }> | undefined;
-  try {
-    owner = await createHostMcp({ assertCurrent() {}, captureSource: async api => {
-      expect(api === firstApi || api === secondApi).toBe(true);
-      return () => { if (api === firstApi && revoked) throw Error('first source revoked'); };
-    } });
-    const tool = owner.tools[0]!;
-    pending = tool.execute({ message: 'held' }, firstApi as never, withAbortSignal(controller.signal, BACKGROUND_CONTEXT)).then(value => ({ value }), error => ({ error }));
-    await entered.promise;
-    const second = await tool.execute({ message: 'independent' }, secondApi as never, BACKGROUND_CONTEXT);
-    expect(JSON.stringify(second)).toContain('independent');
-    expect(JSON.stringify(second)).not.toContain('server-private-do-not-publish');
-    if (mode === 'abort') controller.abort(Error('first invocation cancelled')); else revoked = true;
-    release.resolve();
-    const outcome = await pending;
-    expect('error' in outcome).toBe(true);
-    expect('value' in outcome).toBe(false);
-    const later = await tool.execute({ message: 'still-authorised' }, secondApi as never, BACKGROUND_CONTEXT);
-    expect(JSON.stringify(later)).toContain('still-authorised');
-    expect(calls).toEqual(['held', 'independent', 'still-authorised']);
-  } finally {
-    release.resolve(); await pending;
-    try { await owner?.close(); } finally { restore(); }
-  }
+test('current native HTTP sends require source authority and retain endpoint confinement',async()=>{
+ let calls=0,revoked=false;const restore=endpoint(async()=>{calls++;});const authority=createMcpAuthority({assertOwner(){},assertConnection(){},captureSource:async()=>()=>{if(revoked)throw Error('Source revoked');}});
+ const connected=await connectMcpHttp(config,fetch,undefined,undefined,authority);
+ try{
+  await expect(connected.client.callTool('echo',{message:'FORBIDDEN'})).rejects.toThrow();expect(calls).toBe(0);
+  const result=await authority.invoke({} as never,context,()=>connected.client.callTool('echo',{message:'NATIVE_HTTP_OK'}));expect(JSON.stringify(result)).toContain('NATIVE_HTTP_OK');expect(calls).toBe(1);
+  revoked=true;await expect(authority.invoke({} as never,context,()=>connected.client.callTool('echo',{message:'FORBIDDEN'}))).rejects.toThrow();expect(calls).toBe(1);
+ }finally{await authority.cleanup(()=>connected.client.close());restore();}
 });
-
-test('native MCP uncertain close retains its credential lease and never certifies or retries disposal', async () => {
-  const restore = await endpoint(async () => {});
-  let lease: ReturnType<typeof credentials.acquireMcpSessionBridge> | undefined;
-  const acquireLease = credentials.acquireMcpSessionBridge;
-  const acquire = spyOn(credentials, 'acquireMcpSessionBridge').mockImplementation(() => {
-    lease = acquireLease(); return lease;
-  });
-  const originalClose = StreamableHttpTransport.prototype.close;
-  const failure = Error('synthetic post-close uncertainty');
-  const close = spyOn(StreamableHttpTransport.prototype, 'close').mockImplementation(async function (this: StreamableHttpTransport) {
-    await originalClose.call(this); throw failure;
-  });
-  let owner: Awaited<ReturnType<typeof createHostMcp>> | undefined;
-  let released: ReturnType<typeof spyOn> | undefined;
-  try {
-    owner = await createHostMcp({ assertCurrent() {}, captureSource: async () => () => {} });
-    expect(acquire).toHaveBeenCalledTimes(1);
-    released = spyOn(lease!, 'release');
-    const pending = owner.close();
-    expect(owner.close()).toBe(pending);
-    const outcome = await pending.then(() => null, error => error);
-    expect(outcome).toBeInstanceOf(AggregateError);
-    expect(outcome.errors).toContain(failure);
-    expect(await owner.close().then(() => null, error => error)).toBe(outcome);
-    expect(close).toHaveBeenCalledTimes(1);
-    expect(released).not.toHaveBeenCalled();
-    expect(() => owner!.assertCurrent()).toThrow('no longer current');
-    await expect(owner.tools[0]!.execute({ message: 'forbidden-after-close' }, {} as never, BACKGROUND_CONTEXT)).rejects.toThrow();
-  } finally {
-    close.mockRestore(); acquire.mockRestore(); released?.mockRestore();
-    // The real inner endpoint is already closed; the injected failure was after
-    // confirmation. Release only the disposable fixture's retained lease here.
-    lease?.release(); restore();
-  }
+for(const mode of ['abort','revocation'] as const)test(`current native HTTP concurrent calls keep ${mode} and source authority invocation-local`,async()=>{
+ const entered=Promise.withResolvers<void>(),release=Promise.withResolvers<void>(),calls:string[]=[],first={},second={},abort=new AbortController();let revoked=false;
+ const restore=endpoint(async message=>{calls.push(message);if(message==='held'){entered.resolve();await release.promise;}}),authority=createMcpAuthority({assertOwner(){},assertConnection(){},captureSource:async api=>()=>{if(api===first&&revoked)throw Error('First source revoked');}});
+ const connected=await connectMcpHttp(config,fetch,undefined,undefined,authority);let pending:Promise<boolean>|undefined;
+ try{
+  pending=authority.invoke(first as never,withAbortSignal(abort.signal,context),()=>connected.client.callTool('echo',{message:'held'},{signal:abort.signal})).then(()=>false,()=>true);await entered.promise;
+  expect(JSON.stringify(await authority.invoke(second as never,context,()=>connected.client.callTool('echo',{message:'independent'})))).toContain('independent');
+  if(mode==='abort')abort.abort();else revoked=true;release.resolve();expect(await pending).toBe(true);
+  expect(JSON.stringify(await authority.invoke(second as never,context,()=>connected.client.callTool('echo',{message:'still-authorised'})))).toContain('still-authorised');expect(calls).toEqual(['held','independent','still-authorised']);
+ }finally{release.resolve();await pending;await authority.cleanup(()=>connected.client.close());restore();}
+});
+test('current native HTTP uncertain disposal retains one rejected runtime close without certification or retry',async()=>{
+ const restore=endpoint(async()=>{}),database=new Database(':memory:'),store=new McpConnectionStore(database,()=>{});await store.save({id:config.id,name:config.name,url:config.url,workspaceId:'fixture',agentIds:[],enabled:true,transport:'http',auth:'bearer',bearerTokenKeychain:'fixture/reference',allowHttp:false,timeoutSeconds:2});
+ const runtime=createMcpRuntime({workspaceId:'fixture',registry:createRegistry(),store,assertOwner(){},resolveAgent:async()=>undefined,captureSource:async()=>()=>{},async connect(_row,authority,signal){const connected=await connectMcpHttp(config,fetch,undefined,signal,authority);return{...connected,close:()=>connected.client.close()};}});
+ const original=StreamableHttpTransport.prototype.close,failure=Error('Synthetic post-close uncertainty');const close=spyOn(StreamableHttpTransport.prototype,'close').mockImplementation(async function(this:StreamableHttpTransport){await original.call(this);throw failure;});
+ try{
+  await runtime.attach();await runtime.ready();expect(runtime.status('fixture')?.state).toBe('connected');const pending=runtime.close();expect(runtime.close()).toBe(pending);const outcome=await pending.then(()=>null,error=>error);expect(outcome).toBeInstanceOf(AggregateError);expect(await runtime.close().then(()=>null,error=>error)).toBe(outcome);expect(close).toHaveBeenCalledTimes(1);expect(runtime.status('fixture')).toBeUndefined();
+ }finally{close.mockRestore();database.close();restore();}
 });

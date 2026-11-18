@@ -3,8 +3,7 @@
  *
  * Hosted models can amortize large static prompts via provider-side prefix caches.
  * Local OpenAI-compatible endpoints often cannot, so this profile keeps startup
- * context to a compact policy digest and lets the model discover/activate extra
- * tools only when the task actually needs them.
+ * context to a compact policy digest without changing SDK tool availability.
  */
 import type {
   BeforeAgentStartEvent,
@@ -16,10 +15,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { getLocalLitePromptProfileEnabled } from "../core/config-tools.js";
-import { createLogger, debugSuppressedError } from "../utils/logger.js";
 
-const log = createLogger("local-lite-prompt-profile");
-const LOCAL_LITE_ACTIVE_TOOLS = ["list_tools", "activate_tools", "read"] as const;
 const ALWAYS_LOCAL_PROVIDER_IDS = new Set(["llama-cpp", "ollama"]);
 const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
 const PRIVATE_172_SECOND_OCTET_MIN = 16;
@@ -146,9 +142,9 @@ export function buildLocalLiteSystemPrompt(
     formatActiveTools(options),
     "",
     "Tool policy:",
-    "- The active tool set is intentionally minimal for local-model latency.",
-    "- Use list_tools to discover optional tools and activate_tools with mode='append' for only the tools needed now.",
-    "- Avoid activating broad/heavy tools unless the user task requires them.",
+    "- The active tool set is intentionally left to the parent runtime and SDK/optimizer restrictions.",
+    "- Keep tool usage narrow and explicit; only ask for or rely on tools that are truly needed for the task.",
+    "- Do not assume broad tool access or a reconfigured tool registry is available.",
     "",
     "## Context files available on demand",
     ...contextFilePointers,
@@ -166,67 +162,19 @@ export function buildLocalLiteSystemPrompt(
   ].join("\n");
 }
 
-function filterAvailableTools(api: ExtensionAPI, requested: readonly string[]): string[] {
-  const available = new Set(api.getAllTools().map((tool) => tool.name));
-  return requested.filter((name) => available.has(name));
-}
-
-function sameToolSet(left: readonly string[], right: readonly string[]): boolean {
-  if (left.length !== right.length) return false;
-  return left.every((value, index) => value === right[index]);
-}
-
-/** Extension factory that applies local-lite prompt/tool behavior to local models. */
+/** Extension factory that applies local-lite prompt behavior to local models. */
 export function createLocalLitePromptProfile(isEnabled = getLocalLitePromptProfileEnabled): ExtensionFactory {
-return function localLitePromptProfile(pi: ExtensionAPI) {
-  let localProfileActive = false;
-  let previousActiveTools: string[] | null = null;
-
-  const applyToolProfile = (ctx?: Pick<ExtensionContext, "model">): void => {
-    const model = ctx?.model as Model<Api> | undefined;
-    try {
-      if (isEnabled() && isLocalLitePromptModel(model)) {
-        const localTools = filterAvailableTools(pi, LOCAL_LITE_ACTIVE_TOOLS);
-        if (localTools.length === 0) return;
-        const activeTools = pi.getActiveTools();
-        if (!localProfileActive) previousActiveTools = activeTools;
-        localProfileActive = true;
-        if (!sameToolSet(activeTools, localTools)) pi.setActiveTools(localTools);
-        return;
-      }
-
-      if (!localProfileActive) return;
-      localProfileActive = false;
-      const restoreTools = previousActiveTools ? filterAvailableTools(pi, previousActiveTools) : [];
-      previousActiveTools = null;
-      if (restoreTools.length > 0 && !sameToolSet(pi.getActiveTools(), restoreTools)) pi.setActiveTools(restoreTools);
-    } catch (error) {
-      debugSuppressedError(log, "Failed to apply local-lite active tool profile; continuing with existing tool set.", error, {
-        operation: "local_lite_prompt_profile.apply_tools",
-      });
-    }
+  return function localLitePromptProfile(pi: ExtensionAPI) {
+    pi.on("before_agent_start", async (
+      event: BeforeAgentStartEvent,
+      ctx?: ExtensionContext,
+    ): Promise<BeforeAgentStartEventResult | undefined> => {
+      const model = ctx?.model as Model<Api> | undefined;
+      if (!isEnabled() || !isLocalLitePromptModel(model)) return undefined;
+      return {
+        systemPrompt: buildLocalLiteSystemPrompt(event.systemPromptOptions, model),
+      };
+    });
   };
-
-  pi.on("session_start", async (_event, ctx) => {
-    applyToolProfile(ctx);
-  });
-
-  pi.on("model_select", async (_event, ctx) => {
-    applyToolProfile(ctx);
-  });
-
-  pi.on("before_agent_start", async (
-    event: BeforeAgentStartEvent,
-    ctx?: ExtensionContext,
-  ): Promise<BeforeAgentStartEventResult | undefined> => {
-    const model = ctx?.model as Model<Api> | undefined;
-    if (!isEnabled() || !localProfileActive) applyToolProfile(ctx);
-    if (!isEnabled() || !isLocalLitePromptModel(model)) return undefined;
-    return {
-      systemPrompt: buildLocalLiteSystemPrompt(event.systemPromptOptions, model),
-    };
-  });
-};
-
 }
 export const localLitePromptProfile = createLocalLitePromptProfile();

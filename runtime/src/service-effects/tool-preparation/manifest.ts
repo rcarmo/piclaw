@@ -19,7 +19,6 @@ const source = {
   core: "@earendil-works/pi-coding-agent core tools; runtime/src/agent-pool/tool-factory.ts; runtime/src/extensions/ssh-core.ts",
   effectiveSearch: "@earendil-works/pi-coding-agent read-only tool definitions; effective Piclaw execution surface advertised by runtime/src/extensions/ssh.ts; no branch-local direct constructor",
   context: "runtime/extensions/integrations/context-mode.ts; runtime/src/tools/context-tools.ts",
-  activation: "runtime/src/extensions/tool-activation.ts",
   attachments: "runtime/src/extensions/file-attachments.ts",
   models: "runtime/src/extensions/model-control.ts",
   scheduling: "runtime/src/extensions/scheduled-tasks.ts",
@@ -130,15 +129,6 @@ export const TOOL_PREPARATION_MANIFEST: readonly ToolPreparationSpec[] = Object.
     serviceEffector: null,
     abortExpectation: "may_finish_late",
     protectedFields: ["params.query", "params.intent", "result.content"],
-  }),
-  ...rows(["activate_tools", "reset_active_tools"], {
-    currentSource: source.activation,
-    effectClass: "mutation",
-    replay: "never",
-    contextFields: [],
-    serviceEffector: null,
-    abortExpectation: "may_finish_late",
-    protectedFields: [],
   }),
   ...rows(["attach_file"], {
     currentSource: source.attachments,

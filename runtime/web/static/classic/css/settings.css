@@ -830,20 +830,6 @@
     border-bottom: 1px solid var(--border-color, rgba(128,128,128,0.15));
 }
 
-.settings-toolset-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    flex-shrink: 0;
-}
-
-.settings-toolset-toggle input[type="checkbox"] {
-    margin: 0;
-    accent-color: var(--accent-color, #1d9bf0);
-    cursor: pointer;
-}
-
 .settings-toolset-header strong {
     font-size: 0.9em;
     text-transform: capitalize;
@@ -860,7 +846,7 @@
 
 .settings-tool-row {
     display: grid;
-    grid-template-columns: 20px minmax(120px, 180px) 62px 28px 1fr auto;
+    grid-template-columns: minmax(120px, 180px) 28px 1fr auto;
     align-items: center;
     gap: 8px;
     padding: 3px 6px;
@@ -870,7 +856,7 @@
 
 .settings-toolset .settings-tool-list {
     display: grid;
-    grid-template-columns: auto minmax(7rem, 12rem) auto auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(7rem, 12rem) 2rem minmax(0, 1fr) auto;
     column-gap: 10px;
     row-gap: 2px;
 }
@@ -884,7 +870,6 @@
 
 .settings-dialog-narrow .settings-toolset .settings-tool-summary { display: none; }
 
-.settings-toolset .settings-tool-row > :first-child,
 .settings-toolset .settings-tool-row > .settings-tool-kind {
     justify-self: center;
     text-align: center;
@@ -905,23 +890,6 @@
 
 .settings-tool-row:hover {
     background: var(--bg-hover, rgba(128,128,128,0.06));
-}
-
-.settings-tool-row input[type="checkbox"] {
-    margin: 0;
-    accent-color: var(--accent-color, #1d9bf0);
-}
-
-.settings-tool-status-header {
-    flex-shrink: 0;
-}
-
-.settings-tool-compact,
-.settings-tool-compact-header {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-shrink: 0;
 }
 
 .settings-tool-name {

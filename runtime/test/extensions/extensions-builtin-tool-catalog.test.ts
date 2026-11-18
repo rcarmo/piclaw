@@ -2,12 +2,11 @@
  * test/extensions/extensions-builtin-tool-catalog.test.ts
  *
  * Full regression test: every built-in extension factory must register
- * the expected tools, and the session_start activation must make the
- * bootstrap-critical tools available in the active set.
+ * the expected tools without replacing SDK-owned tool restrictions.
  *
  * This test exists because a previous regression shipped a 4-tool
  * fallback baseline (read/bash/edit/write) that silently dropped
- * list_tools, activate_tools, attach_file, and every other extension
+ * list_tools, attach_file, and every other extension
  * tool.  CI did not catch it because no test verified the full
  * registered catalog against the intended toolset definitions.
  */
@@ -16,10 +15,7 @@ import { describe, expect, test } from "bun:test";
 import "../helpers.js";
 import { createFakeExtensionApi } from "./fake-extension-api.js";
 import { createBuiltinExtensionFactories } from "../../src/extensions/index.js";
-import {
-  TOOLSETS,
-  getDefaultActiveToolNames,
-} from "../../src/extensions/tool-activation.js";
+import { TOOLSETS } from "../../src/extensions/tool-capabilities.js";
 
 /**
  * Every tool name that a built-in extension factory must register.
@@ -51,9 +47,6 @@ const EXPECTED_BUILTIN_TOOL_NAMES = [
   "list_tools",
   // runtime-scripts
   "list_scripts",
-  // tool-activation
-  "activate_tools",
-  "reset_active_tools",
   // workspace-search
   "search_workspace",
   "refresh_workspace_index",
@@ -69,21 +62,6 @@ const EXPECTED_BUILTIN_TOOL_NAMES = [
   "env",
   // image-processing
   "image_process",
-];
-
-/**
- * Bootstrap-critical tools that must be in the default active set.
- * If any of these are missing from a fresh session, the agent loses
- * the ability to discover, activate, or deliver files.
- */
-const BOOTSTRAP_CRITICAL_ACTIVE_TOOLS = [
-  "list_tools",
-  "activate_tools",
-  "reset_active_tools",
-  "attach_file",
-  "messages",
-  "set_model",
-  "provider_quota",
 ];
 
 function runAllBuiltinExtensions() {
@@ -132,35 +110,10 @@ describe("built-in extension tool catalog regression", () => {
     );
   });
 
-  test("bootstrap-critical tools are in the default active tool baseline", () => {
-    const defaults = getDefaultActiveToolNames("linux");
-
-    const missing = BOOTSTRAP_CRITICAL_ACTIVE_TOOLS.filter(
-      (name) => !defaults.includes(name),
-    );
-
-    expect(
-      missing,
-      `Bootstrap-critical tools missing from default active set: ${missing.join(", ")}`,
-    ).toEqual([]);
-  });
-
-  test("bootstrap-critical tools are in the Windows default active tool baseline", () => {
-    const defaults = getDefaultActiveToolNames("win32");
-
-    const missing = BOOTSTRAP_CRITICAL_ACTIVE_TOOLS.filter(
-      (name) => !defaults.includes(name),
-    );
-
-    expect(
-      missing,
-      `Bootstrap-critical tools missing from Windows default active set: ${missing.join(", ")}`,
-    ).toEqual([]);
-  });
-
-  test("session_start activation includes all bootstrap-critical tools in the effective set", async () => {
+  test("session_start preserves SDK-owned tool restrictions", async () => {
     const fake = runAllBuiltinExtensions();
 
+    const before = fake.api.getActiveTools();
     // Fire session_start
     const sessionStartHandlers = fake.handlers.filter(
       (entry) => entry.event === "session_start",
@@ -174,15 +127,9 @@ describe("built-in extension tool catalog regression", () => {
       }
     }
 
-    const activeTools = fake.api.getActiveTools();
-    const missing = BOOTSTRAP_CRITICAL_ACTIVE_TOOLS.filter(
-      (name) => !activeTools.includes(name),
-    );
-
-    expect(
-      missing,
-      `Bootstrap-critical tools missing after session_start: ${missing.join(", ")}`,
-    ).toEqual([]);
+    expect(fake.api.getActiveTools()).toEqual(before);
+    expect(fake.tools.has("activate_tools")).toBe(false);
+    expect(fake.tools.has("reset_active_tools")).toBe(false);
   });
 
   test("every tool referenced in TOOLSETS that is a built-in extension tool is actually registered", () => {
@@ -218,33 +165,8 @@ describe("built-in extension tool catalog regression", () => {
     ).toEqual([]);
   });
 
-  test("AgentToolFactory initial baseline matches getDefaultActiveToolNames", async () => {
-    const { AgentToolFactory } = await import(
-      "../../src/agent-pool/tool-factory.js"
-    );
-
-    const linuxFactory = new AgentToolFactory({
-      workspaceDir: "/workspace",
-      platform: "linux",
-    });
-    const winFactory = new AgentToolFactory({
-      workspaceDir: "/workspace",
-      platform: "win32",
-    });
-
-    expect(linuxFactory.createDefaultTools()).toEqual(
-      getDefaultActiveToolNames("linux"),
-    );
-    expect(winFactory.createDefaultTools()).toEqual(
-      getDefaultActiveToolNames("win32"),
-    );
-
-    // Explicit bootstrap checks — these must never regress
-    expect(linuxFactory.createDefaultTools()).toContain("list_tools");
-    expect(linuxFactory.createDefaultTools()).toContain("activate_tools");
-    expect(linuxFactory.createDefaultTools()).toContain("attach_file");
-    expect(winFactory.createDefaultTools()).toContain("list_tools");
-    expect(winFactory.createDefaultTools()).toContain("activate_tools");
-    expect(winFactory.createDefaultTools()).toContain("attach_file");
+  test("tool construction has no manual default-list mechanism", async () => {
+    const { AgentToolFactory } = await import("../../src/agent-pool/tool-factory.js");
+    for (const platform of ["linux","win32"] as const) expect("createDefaultTools" in new AgentToolFactory({workspaceDir:"/workspace",platform})).toBe(false);
   });
 });

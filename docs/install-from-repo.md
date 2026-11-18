@@ -15,7 +15,7 @@ Pin a tag for repeatable installs; `main` may contain packaging or dependency ch
 
 ## What happens at install time
 
-The package exposes `piclaw`, `pi` and `imgcat`, alongside built web assets, core viewers, skills and bundled extensions such as `cdp_browser` and `pi-mcp-adapter`. The `pi` launcher runs the pinned `@earendil-works/pi-coding-agent` CLI in Bun; Node is not required and the SDK files are not modified. It preserves arguments, terminal streams, signals, the working directory and Pi’s normal configuration paths.
+The package exposes `piclaw`, `pi` and `imgcat`, alongside built web assets, core viewers, skills, bundled extensions such as `cdp_browser`, and the SDK-owned outbound MCP integration. The `pi` launcher runs the pinned `@earendil-works/pi-coding-agent` CLI in Bun; Node is not required and the SDK files are not modified. It preserves arguments, terminal streams, signals, the working directory and Pi’s normal configuration paths.
 
 Check the installed Pi CLI with `pi --version` or `pi --help`. Avoid separately installing `@earendil-works/pi-coding-agent` globally in the same prefix: both packages own the `pi` command. Piclaw already includes the pinned Pi dependency. A `postinstall` repair step handles incomplete source checkouts or damaged package trees. A normal tagged install needs no development dependencies or manual rebuild.
 
@@ -29,7 +29,7 @@ piclaw --workspace "$HOME/piclaw-workspace" --host 127.0.0.1 --port 8080
 
 This example uses a Unix shell. For Windows and for authentication, provider setup, persistent files and service management, follow [getting started](getting-started.md#start-a-native-workspace). Keep the loopback binding until remote access is secured.
 
-The first start seeds missing workspace files from `skel/`, including `AGENTS.md`, `.pi/skills/`, notes and configuration examples. [Dream bootstrap and recovery](dream-memory.md#startup-bootstrap-and-recovery) also apply to direct installs. [MCP configuration](mcp.md) uses shared `.mcp.json` files with optional Pi-specific overrides; no `mcp-cli` installation is required.
+The first start seeds missing workspace files from `skel/`, including `AGENTS.md`, `.pi/skills/`, notes and configuration examples. [Dream bootstrap and recovery](dream-memory.md#startup-bootstrap-and-recovery) also apply to direct installs. [MCP configuration](mcp.md) imports existing shared/Pi configuration once, then uses the native connection controls in Settings and reference-only SQLite metadata; no `mcp-cli` installation is required.
 
 ## Access modes and upgrades
 

@@ -78,8 +78,8 @@ describe("builtin extension factories", () => {
     expect(fake.tools.has("list_tools")).toBe(true);
     expect(fake.tools.has(["list", "internal", "tools"].join("_"))).toBe(false);
     expect(fake.tools.has("list_scripts")).toBe(true);
-    expect(fake.tools.has("activate_tools")).toBe(true);
-    expect(fake.tools.has("reset_active_tools")).toBe(true);
+    expect(fake.tools.has("activate_tools")).toBe(false);
+    expect(fake.tools.has("reset_active_tools")).toBe(false);
     expect(fake.tools.has("introspect_sql")).toBe(false); // Retired legacy SQL execution.
     expect(fake.tools.has("send_adaptive_card")).toBe(true);
     expect(fake.tools.has("send_dashboard_widget")).toBe(true);

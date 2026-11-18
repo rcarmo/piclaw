@@ -79,7 +79,7 @@ export async function createHostController(config: HostControllerOptions, contex
       }
     }
     for (const submission of inspection.submissions) {
-      if (!known.has(submission.id) && (await runtime.ownsMessageSubmission(submission) || await runtime.ownsDreamSubmission(submission))) known.add(submission.id);
+      if (!known.has(submission.id) && (await runtime.ownsMessageSubmission(submission) || await runtime.ownsDreamSubmission(submission) || await runtime.ownsOptimizerSubmission(submission))) known.add(submission.id);
       assert();
     }
     // Foreground Delegate children have SDK inputs, not independent host sources.
@@ -103,8 +103,9 @@ export async function createHostController(config: HostControllerOptions, contex
       if (task) roots.add(task.id);
     }
     const { runs, compactions } = await runtime.inspectAuthority(recovered.map(entry => entry.input)); assert();
-    const backgroundCompactions = new Set<number>();
+    const backgroundCompactions = new Set<number>(),optimizerRoots=new Set<number>();
     for (const { record } of inspection.tasks) {
+      if(await runtime.qualifyOptimizerTask(record)){assert();roots.add(record.id);optimizerRoots.add(record.id);continue;}
       if (record.kind === "pi.compaction" && record.owner === undefined && !record.background &&
           (record.input as { reason?: string }).reason === "manual" && runtime.ownsMaintenance(record.id)) {
         roots.add(record.id); continue;
@@ -136,7 +137,7 @@ export async function createHostController(config: HostControllerOptions, contex
         if (!parent) return deny();
         current = parent;
       }
-      if ((current.background && !backgroundCompactions.has(current.id)) || current.owner !== undefined) return deny();
+      if ((current.background && !backgroundCompactions.has(current.id)&&!optimizerRoots.has(current.id)) || current.owner !== undefined) return deny();
     }
     assert();
   }

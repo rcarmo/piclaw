@@ -1,0 +1,871 @@
+{
+  "upstream": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+  "cases": [
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "pytest -q"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": true,
+        "status": "own"
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "pytest | tail -20"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": false,
+        "status": "hidden"
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "set -o pipefail; npm test | tee out.log"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": true,
+        "status": "own"
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "npm test || true"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": false,
+        "status": "hidden"
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "python -m unittest; echo \"exit=$?\""
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": false,
+        "status": "hidden"
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "pytest -q; git diff"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": false,
+        "status": "mixed"
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "cd web; npx vitest run"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": true,
+        "status": "own"
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "echo pytest"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "pytest --collect-only"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "sed -i \"s/a/b/\" src/main.ts"
+      },
+      "expected": {
+        "edits": [
+          "main.ts"
+        ],
+        "reverts": [],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "sed -i.bak -e 's/a/b/' a.py b.py"
+      },
+      "expected": {
+        "edits": [
+          "a.py",
+          "b.py"
+        ],
+        "reverts": [],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "perl -pi -e 's/a/b/' a.rs"
+      },
+      "expected": {
+        "edits": [
+          "a.rs"
+        ],
+        "reverts": [],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "echo text > src/a.ts"
+      },
+      "expected": {
+        "edits": [
+          "a.ts"
+        ],
+        "reverts": [],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "echo text > out.log"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "echo text | tee src/a.ts"
+      },
+      "expected": {
+        "edits": [
+          "a.ts"
+        ],
+        "reverts": [],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "python - <<'PY'\nfrom pathlib import Path\nPath('src/a.ts').write_text('x')\nPY"
+      },
+      "expected": {
+        "edits": [
+          "a.ts"
+        ],
+        "reverts": [],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "python - <<'PY'\nfor p in ['a.py', 'b.py']:\n p.write_text('x')\nPY"
+      },
+      "expected": {
+        "edits": [
+          "a.py",
+          "b.py"
+        ],
+        "reverts": [],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "apply_patch <<'PATCH'\n*** Begin Patch\n*** Update File: src/a.ts\n*** End Patch\nPATCH"
+      },
+      "expected": {
+        "edits": [
+          "a.ts"
+        ],
+        "reverts": [],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "git restore src/a.ts"
+      },
+      "expected": {
+        "edits": [
+          "a.ts"
+        ],
+        "reverts": [
+          "a.ts"
+        ],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "git checkout -- src/a.ts"
+      },
+      "expected": {
+        "edits": [
+          "a.ts"
+        ],
+        "reverts": [
+          "a.ts"
+        ],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "git checkout main"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "python repro.py 2>&1 | tail -20"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": false,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "rg Error src | head"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "find src -delete; echo done"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": false,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "bash -lc 'npm test 2>&1 | tail -8'"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": false,
+        "status": "hidden"
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "read x <<< 'test'\npytest"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": false,
+        "status": "own"
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "python - <<'PY'\nprint('; pytest')\nPY"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": true,
+        "status": null
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "shell",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "command": "printf \"literal >\"; pytest"
+      },
+      "expected": {
+        "edits": [],
+        "reverts": [],
+        "covers": true,
+        "status": "own"
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    }
+  ]
+}

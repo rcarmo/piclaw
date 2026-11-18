@@ -10,7 +10,6 @@ import { AgentRuntimeFacade } from "./runtime-facade.js";
 import type { PoolEntry } from "./contracts.js";
 import type { AgentPoolOptions } from "./contracts.js";
 import type { PiclawCredentialStore } from "./credential-store.js";
-import { McpCodemodeController } from "./mcp-codemode-runtime.js";
 
 /** Shared logger callbacks used across extracted AgentPool services. */
 export interface AgentPoolLogHooks {
@@ -36,7 +35,6 @@ type BranchManagerService = Pick<AgentBranchManager,
 
 /** Concrete helper instances composed into AgentPool. */
 export interface AgentPoolServices {
-  mcpSettings: McpCodemodeController;
   attachments: ReturnType<typeof getAttachmentRegistry>;
   runtimeFacade: AgentRuntimeFacade;
   branchManager: BranchManagerService;
@@ -79,7 +77,6 @@ export function createAgentPoolServices(options: AgentPoolServiceFactoryOptions)
   });
 
   return {
-    mcpSettings: new McpCodemodeController(undefined),
     attachments,
     runtimeFacade,
     branchManager,

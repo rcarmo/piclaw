@@ -38,7 +38,7 @@ describe("internal-tools extension", () => {
     expect(all.content[0].text).toContain("bash");
     expect(all.content[0].text).toContain("[active]");
     expect(all.content[0].text).toContain("{core}");
-    expect(all.content[0].text).toContain("[mutating, standard, default]");
+    expect(all.content[0].text).toContain("[mutating, standard]");
 
     const filtered = await tool.execute("t2", { query: "search" });
     expect(filtered.content[0].text).toContain("filtered");
@@ -381,32 +381,32 @@ describe("internal-tools extension", () => {
     const bashTool = tools.find((t: any) => t.name === "bash");
     expect(bashTool.kind).toBe("mutating");
     expect(bashTool.weight).toBe("standard");
-    expect(bashTool.activation).toBe("default");
+    expect(bashTool.activation).toBeUndefined();
     expect(bashTool.summary).toBe("Run a shell command.");  // from tool description
 
     // read: read-only, lightweight, default
     const readTool = tools.find((t: any) => t.name === "read");
     expect(readTool.kind).toBe("read-only");
     expect(readTool.weight).toBe("lightweight");
-    expect(readTool.activation).toBe("default");
+    expect(readTool.activation).toBeUndefined();
 
     // list_models: read-only, lightweight, default via effective read-only baseline
     const listModelsTool = tools.find((t: any) => t.name === "list_models");
     expect(listModelsTool.kind).toBe("read-only");
     expect(listModelsTool.weight).toBe("lightweight");
-    expect(listModelsTool.activation).toBe("default");
+    expect(listModelsTool.activation).toBeUndefined();
 
     // schedule_task: mutating, standard, default via effective scheduling baseline
     const scheduleTaskTool = tools.find((t: any) => t.name === "schedule_task");
     expect(scheduleTaskTool.kind).toBe("mutating");
     expect(scheduleTaskTool.weight).toBe("standard");
-    expect(scheduleTaskTool.activation).toBe("default");
+    expect(scheduleTaskTool.activation).toBeUndefined();
 
     // read_attachment: read-only, lightweight, default via effective attachment baseline
     const readAttachmentTool = tools.find((t: any) => t.name === "read_attachment");
     expect(readAttachmentTool.kind).toBe("read-only");
     expect(readAttachmentTool.weight).toBe("lightweight");
-    expect(readAttachmentTool.activation).toBe("default");
+    expect(readAttachmentTool.activation).toBeUndefined();
   });
 
   test("unknown tools get sensible default capabilities", async () => {
@@ -423,7 +423,7 @@ describe("internal-tools extension", () => {
     const custom = result.details.tools[0];
     expect(custom.kind).toBe("mixed");
     expect(custom.weight).toBe("standard");
-    expect(custom.activation).toBe("on-demand");
+    expect(custom.activation).toBeUndefined();
     // summary falls back to the tool's own description
     expect(custom.summary).toBe("A custom tool.");
   });

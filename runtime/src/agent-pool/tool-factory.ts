@@ -1,5 +1,5 @@
 /**
- * agent-pool/tool-factory.ts – Creates the default built-in tool set for agent sessions.
+ * agent-pool/tool-factory.ts – Constructs guarded host tool overrides.
  *
  * Keeps tool construction separate from AgentPool orchestration so the pool can
  * compose a focused factory instead of owning direct SDK tool wiring.
@@ -9,7 +9,6 @@ import { createBashTool, createBashToolDefinition } from "@earendil-works/pi-cod
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 
 import { createSshAwareBashOperations } from "../extensions/ssh-core.js";
-import { getDefaultActiveToolNames } from "../extensions/tool-activation.js";
 import { createHostGrepDefinition } from "./host-grep.js";
 
 /** The tracked bash operations injected into the built-in bash tool. */
@@ -22,22 +21,10 @@ export interface AgentToolFactoryOptions {
   platform?: NodeJS.Platform;
 }
 
-/**
- * Creates the default built-in tool set for agent sessions.
- *
- * This must match the intended default active-tool baseline closely enough that
- * a fresh session still has discovery/recovery primitives even if extension
- * session_start activation is delayed or skipped. Otherwise the agent can get
- * stranded on the raw read/bash/edit/write fallback while the prompt assumes
- * list_tools / activate_tools / attach_file and related baseline tools exist.
- */
+/** Constructs host tool overrides; SDK configuration owns tool availability. */
 export class AgentToolFactory {
   constructor(private readonly options: AgentToolFactoryOptions) {}
 
-  createDefaultTools(): string[] {
-    const { platform = process.platform } = this.options;
-    return getDefaultActiveToolNames(platform);
-  }
 
   /**
    * Returns custom ToolDefinitions that override the built-in tools.

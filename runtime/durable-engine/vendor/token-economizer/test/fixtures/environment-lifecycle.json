@@ -1,0 +1,8371 @@
+{
+  "upstream": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+  "cases": [
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f0.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f1.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f2.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f3.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f4.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "f2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "f2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "f3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "f2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "f3.ts"
+                ]
+              ],
+              [
+                4,
+                [
+                  "f4.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 5,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                4,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 5,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ],
+              [
+                2,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ],
+              [
+                2,
+                []
+              ],
+              [
+                3,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ],
+              [
+                2,
+                []
+              ],
+              [
+                3,
+                []
+              ],
+              [
+                4,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 5,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "0.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "1.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "2.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 1,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "0.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "1.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "2.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "3.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 5,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 6,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 7,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 8,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 9,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 10,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 11,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 12,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 13,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 6,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 7,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 8,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 9,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 10,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 11,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 12,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 13,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 14,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "0.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "1.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "2.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "3.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 1,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 3,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 4,
+            "promoted_at": 3,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                4,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 5,
+            "promoted_at": 3,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "é.ts",
+              "模块.ts",
+              "😀.ts",
+              ".ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "模块.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": false,
+            "files": []
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "b.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "模块.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "模块.ts"
+                ]
+              ],
+              [
+                2,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 2,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "模块.ts"
+                ]
+              ],
+              [
+                2,
+                []
+              ],
+              [
+                3,
+                [
+                  "b.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 1,
+            "verdict": null,
+            "fired": false,
+            "exercised": false,
+            "files": []
+          },
+          {
+            "now": 2,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 1,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 1,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [],
+            "contradicts": [
+              2
+            ],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 2,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f0.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f1.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f2.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f3.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f4.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "f2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "f2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "f3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "f2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "f3.ts"
+                ]
+              ],
+              [
+                4,
+                [
+                  "f4.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 5,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                4,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 5,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ],
+              [
+                2,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ],
+              [
+                2,
+                []
+              ],
+              [
+                3,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ],
+              [
+                2,
+                []
+              ],
+              [
+                3,
+                []
+              ],
+              [
+                4,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 5,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "0.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "1.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "2.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 1,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "0.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "1.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "2.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "3.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 5,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 6,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 7,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 8,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 9,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 10,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 11,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 12,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 13,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 6,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 7,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 8,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 9,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 10,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 11,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 12,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 13,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 14,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "0.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "1.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "2.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "3.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 1,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 3,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 4,
+            "promoted_at": 3,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                4,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 5,
+            "promoted_at": 3,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "é.ts",
+              "模块.ts",
+              "😀.ts",
+              ".ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "模块.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": false,
+            "files": []
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "b.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "模块.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "模块.ts"
+                ]
+              ],
+              [
+                2,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 2,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "模块.ts"
+                ]
+              ],
+              [
+                2,
+                []
+              ],
+              [
+                3,
+                [
+                  "b.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "form_repair",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 1,
+            "verdict": null,
+            "fired": false,
+            "exercised": false,
+            "files": []
+          },
+          {
+            "now": 2,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 1,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 1,
+          "family": "form_repair"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "RETIRED",
+            "confirms": [],
+            "contradicts": [
+              2
+            ],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": 2
+          },
+          "contradictionStreak": 2,
+          "family": "form_repair"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f0.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f1.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f2.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f3.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f4.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "f2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "f2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "f3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "f2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "f3.ts"
+                ]
+              ],
+              [
+                4,
+                [
+                  "f4.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 5,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                4,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 5,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ],
+              [
+                2,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ],
+              [
+                2,
+                []
+              ],
+              [
+                3,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ],
+              [
+                2,
+                []
+              ],
+              [
+                3,
+                []
+              ],
+              [
+                4,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 5,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "0.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "1.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "2.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "RETIRED",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [
+              3
+            ],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": 3
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "0.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "1.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "2.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "3.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 5,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 6,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 7,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 8,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 9,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 10,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 11,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 12,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 13,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 6,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 7,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 8,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 9,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 10,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 11,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 12,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 13,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 14,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "0.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "1.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "2.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "3.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [],
+            "contradicts": [
+              0
+            ],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [
+              0
+            ],
+            "fire_num": 1,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [
+              0
+            ],
+            "fire_num": 1,
+            "fire_den": 3,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [
+              0
+            ],
+            "fire_num": 1,
+            "fire_den": 4,
+            "promoted_at": 3,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                4,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [
+              0
+            ],
+            "fire_num": 1,
+            "fire_den": 5,
+            "promoted_at": 3,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "é.ts",
+              "模块.ts",
+              "😀.ts",
+              ".ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "模块.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": false,
+            "files": []
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "b.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "模块.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "模块.ts"
+                ]
+              ],
+              [
+                2,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 2,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "模块.ts"
+                ]
+              ],
+              [
+                2,
+                []
+              ],
+              [
+                3,
+                [
+                  "b.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": false,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 1,
+            "verdict": null,
+            "fired": false,
+            "exercised": false,
+            "files": []
+          },
+          {
+            "now": 2,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [],
+            "contradicts": [
+              0
+            ],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [],
+            "contradicts": [
+              0
+            ],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": false,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [],
+            "contradicts": [
+              0,
+              2
+            ],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f0.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f1.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f2.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f3.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "f4.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "f2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "f2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "f3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "f0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "f1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "f2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "f3.ts"
+                ]
+              ],
+              [
+                4,
+                [
+                  "f4.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 5,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "same.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "same.ts"
+                ]
+              ],
+              [
+                4,
+                [
+                  "same.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 5,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ],
+              [
+                2,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ],
+              [
+                2,
+                []
+              ],
+              [
+                3,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                []
+              ],
+              [
+                1,
+                []
+              ],
+              [
+                2,
+                []
+              ],
+              [
+                3,
+                []
+              ],
+              [
+                4,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 5,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "0.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "1.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "2.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "RETIRED",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [
+              3
+            ],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": 3
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "0.ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "1.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "2.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "3.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 5,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 6,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 7,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 8,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 9,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 10,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 11,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 12,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 13,
+            "verdict": null,
+            "fired": false,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 3,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 4,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 5,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 6,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 7,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 8,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 9,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 10,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 11,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 12,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 13,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 4,
+            "fire_den": 14,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "0.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "1.ts"
+            ]
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "2.ts"
+            ]
+          },
+          {
+            "now": 4,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "3.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "RETIRED",
+            "confirms": [],
+            "contradicts": [
+              0
+            ],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": 0
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "RETIRED",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ]
+            ],
+            "contradicts": [
+              0
+            ],
+            "fire_num": 1,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": 0
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "RETIRED",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "1.ts"
+                ]
+              ]
+            ],
+            "contradicts": [
+              0
+            ],
+            "fire_num": 1,
+            "fire_den": 3,
+            "promoted_at": null,
+            "retired_at": 0
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "RETIRED",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "2.ts"
+                ]
+              ]
+            ],
+            "contradicts": [
+              0
+            ],
+            "fire_num": 1,
+            "fire_den": 4,
+            "promoted_at": null,
+            "retired_at": 0
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "RETIRED",
+            "confirms": [
+              [
+                1,
+                [
+                  "0.ts"
+                ]
+              ],
+              [
+                2,
+                [
+                  "1.ts"
+                ]
+              ],
+              [
+                3,
+                [
+                  "2.ts"
+                ]
+              ],
+              [
+                4,
+                [
+                  "3.ts"
+                ]
+              ]
+            ],
+            "contradicts": [
+              0
+            ],
+            "fire_num": 1,
+            "fire_den": 5,
+            "promoted_at": null,
+            "retired_at": 0
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": true,
+            "files": [
+              "é.ts",
+              "模块.ts",
+              "😀.ts",
+              ".ts"
+            ]
+          },
+          {
+            "now": 1,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "模块.ts"
+            ]
+          },
+          {
+            "now": 2,
+            "verdict": "confirm",
+            "fired": true,
+            "exercised": false,
+            "files": []
+          },
+          {
+            "now": 3,
+            "verdict": "confirm",
+            "fired": false,
+            "exercised": true,
+            "files": [
+              "b.ts"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "CANDIDATE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "模块.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "模块.ts"
+                ]
+              ],
+              [
+                2,
+                []
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 2,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "ACTIVE",
+            "confirms": [
+              [
+                0,
+                [
+                  "é.ts",
+                  "模块.ts",
+                  ".ts",
+                  "😀.ts"
+                ]
+              ],
+              [
+                1,
+                [
+                  "模块.ts"
+                ]
+              ],
+              [
+                2,
+                []
+              ],
+              [
+                3,
+                [
+                  "b.ts"
+                ]
+              ]
+            ],
+            "contradicts": [],
+            "fire_num": 1,
+            "fire_den": 3,
+            "promoted_at": 2,
+            "retired_at": null
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-lifecycle",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "high": true,
+        "family": "absent_tool",
+        "steps": [
+          {
+            "now": 0,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          },
+          {
+            "now": 1,
+            "verdict": null,
+            "fired": false,
+            "exercised": false,
+            "files": []
+          },
+          {
+            "now": 2,
+            "verdict": "contradict",
+            "fired": true,
+            "exercised": true,
+            "files": []
+          }
+        ]
+      },
+      "expected": [
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "RETIRED",
+            "confirms": [],
+            "contradicts": [
+              0
+            ],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": 0
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "RETIRED",
+            "confirms": [],
+            "contradicts": [
+              0
+            ],
+            "fire_num": 1,
+            "fire_den": 1,
+            "promoted_at": null,
+            "retired_at": 0
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        },
+        {
+          "life": {
+            "key": "fixture",
+            "high": true,
+            "drift": false,
+            "state": "RETIRED",
+            "confirms": [],
+            "contradicts": [
+              0,
+              2
+            ],
+            "fire_num": 2,
+            "fire_den": 2,
+            "promoted_at": null,
+            "retired_at": 0
+          },
+          "contradictionStreak": 0,
+          "family": "absent_tool"
+        }
+      ],
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    }
+  ]
+}

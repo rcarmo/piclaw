@@ -1,0 +1,1129 @@
+{
+  "upstream": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+  "cases": [
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [],
+        "incoming": {},
+        "used": []
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [],
+        "streaks": {
+          "rare": 4,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [],
+        "incoming": {},
+        "used": [
+          "rare"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [
+          "rare"
+        ],
+        "streaks": {
+          "rare": 0,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [],
+        "incoming": {},
+        "used": [
+          "new"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [
+          "new"
+        ],
+        "streaks": {
+          "rare": 4,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [],
+        "incoming": {},
+        "used": [
+          "unknown"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [
+          "unknown"
+        ],
+        "streaks": {
+          "rare": 4,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [],
+        "incoming": {
+          "new": "New tool"
+        },
+        "used": []
+      },
+      "expected": {
+        "catalogue": [
+          "new",
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool",
+          "new": "New tool"
+        },
+        "used": [],
+        "streaks": {
+          "rare": 4,
+          "prior": 2,
+          "new": 1
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [],
+        "incoming": {
+          "new": "New tool"
+        },
+        "used": [
+          "rare"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "new",
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool",
+          "new": "New tool"
+        },
+        "used": [
+          "rare"
+        ],
+        "streaks": {
+          "rare": 0,
+          "prior": 2,
+          "new": 1
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [],
+        "incoming": {
+          "new": "New tool"
+        },
+        "used": [
+          "new"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "new",
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool",
+          "new": "New tool"
+        },
+        "used": [
+          "new"
+        ],
+        "streaks": {
+          "rare": 4,
+          "prior": 2,
+          "new": 0
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [],
+        "incoming": {
+          "new": "New tool"
+        },
+        "used": [
+          "unknown"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "new",
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool",
+          "new": "New tool"
+        },
+        "used": [
+          "unknown"
+        ],
+        "streaks": {
+          "rare": 4,
+          "prior": 2,
+          "new": 1
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [],
+        "incoming": {
+          "rare": "Updated description"
+        },
+        "used": []
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Updated description",
+          "prior": "Prior tool"
+        },
+        "used": [],
+        "streaks": {
+          "rare": 4,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [],
+        "incoming": {
+          "rare": "Updated description"
+        },
+        "used": [
+          "rare"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Updated description",
+          "prior": "Prior tool"
+        },
+        "used": [
+          "rare"
+        ],
+        "streaks": {
+          "rare": 0,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [],
+        "incoming": {
+          "rare": "Updated description"
+        },
+        "used": [
+          "new"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Updated description",
+          "prior": "Prior tool"
+        },
+        "used": [
+          "new"
+        ],
+        "streaks": {
+          "rare": 4,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [],
+        "incoming": {
+          "rare": "Updated description"
+        },
+        "used": [
+          "unknown"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Updated description",
+          "prior": "Prior tool"
+        },
+        "used": [
+          "unknown"
+        ],
+        "streaks": {
+          "rare": 4,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [
+          "rare"
+        ],
+        "incoming": {},
+        "used": []
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [],
+        "streaks": {
+          "rare": 4,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [
+          "rare"
+        ],
+        "incoming": {},
+        "used": [
+          "rare"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [
+          "rare"
+        ],
+        "streaks": {
+          "rare": 0,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [
+          "rare"
+        ],
+        "incoming": {},
+        "used": [
+          "new"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [
+          "new"
+        ],
+        "streaks": {
+          "rare": 4,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [
+          "rare"
+        ],
+        "incoming": {},
+        "used": [
+          "unknown"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [
+          "unknown"
+        ],
+        "streaks": {
+          "rare": 4,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [
+          "rare"
+        ],
+        "incoming": {
+          "new": "New tool"
+        },
+        "used": []
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [],
+        "streaks": {
+          "rare": 4,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [
+          "rare"
+        ],
+        "incoming": {
+          "new": "New tool"
+        },
+        "used": [
+          "rare"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [
+          "rare"
+        ],
+        "streaks": {
+          "rare": 0,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [
+          "rare"
+        ],
+        "incoming": {
+          "new": "New tool"
+        },
+        "used": [
+          "new"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [
+          "new"
+        ],
+        "streaks": {
+          "rare": 4,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [
+          "rare"
+        ],
+        "incoming": {
+          "new": "New tool"
+        },
+        "used": [
+          "unknown"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [
+          "unknown"
+        ],
+        "streaks": {
+          "rare": 4,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [
+          "rare"
+        ],
+        "incoming": {
+          "rare": "Updated description"
+        },
+        "used": []
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [],
+        "streaks": {
+          "rare": 4,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [
+          "rare"
+        ],
+        "incoming": {
+          "rare": "Updated description"
+        },
+        "used": [
+          "rare"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [
+          "rare"
+        ],
+        "streaks": {
+          "rare": 0,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [
+          "rare"
+        ],
+        "incoming": {
+          "rare": "Updated description"
+        },
+        "used": [
+          "new"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [
+          "new"
+        ],
+        "streaks": {
+          "rare": 4,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "catalogue-streaks",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "mask": [
+          "rare"
+        ],
+        "incoming": {
+          "rare": "Updated description"
+        },
+        "used": [
+          "unknown"
+        ]
+      },
+      "expected": {
+        "catalogue": [
+          "prior",
+          "rare"
+        ],
+        "descriptions": {
+          "rare": "Rare tool",
+          "prior": "Prior tool"
+        },
+        "used": [
+          "unknown"
+        ],
+        "streaks": {
+          "rare": 4,
+          "prior": 2
+        }
+      },
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    }
+  ]
+}

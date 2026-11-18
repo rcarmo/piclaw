@@ -1,0 +1,650 @@
+{
+  "upstream": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+  "cases": [
+    {
+      "kind": "extractor",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "name": "custom",
+          "kind": "cmd_regex",
+          "pattern": "bun test"
+        },
+        "commands": [
+          {
+            "command": "bun test",
+            "output": "passed"
+          },
+          {
+            "command": "echo é",
+            "output": "confirm"
+          },
+          {
+            "command": "bun test a",
+            "output": "failed"
+          }
+        ]
+      },
+      "expected": true,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "extractor",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "name": "custom",
+          "kind": "cmd_regex",
+          "pattern": "é"
+        },
+        "commands": [
+          {
+            "command": "bun test",
+            "output": "passed"
+          },
+          {
+            "command": "echo é",
+            "output": "confirm"
+          },
+          {
+            "command": "bun test a",
+            "output": "failed"
+          }
+        ]
+      },
+      "expected": true,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "extractor",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "name": "custom",
+          "kind": "cmd_regex",
+          "pattern": "(?i)PASSED"
+        },
+        "commands": [
+          {
+            "command": "bun test",
+            "output": "passed"
+          },
+          {
+            "command": "echo é",
+            "output": "confirm"
+          },
+          {
+            "command": "bun test a",
+            "output": "failed"
+          }
+        ]
+      },
+      "expected": false,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "extractor",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "name": "custom",
+          "kind": "cmd_regex",
+          "pattern": "^$"
+        },
+        "commands": [
+          {
+            "command": "bun test",
+            "output": "passed"
+          },
+          {
+            "command": "echo é",
+            "output": "confirm"
+          },
+          {
+            "command": "bun test a",
+            "output": "failed"
+          }
+        ]
+      },
+      "expected": false,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "extractor",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "name": "custom",
+          "kind": "cmd_regex",
+          "pattern": "(a+)+$"
+        },
+        "commands": [
+          {
+            "command": "bun test",
+            "output": "passed"
+          },
+          {
+            "command": "echo é",
+            "output": "confirm"
+          },
+          {
+            "command": "bun test a",
+            "output": "failed"
+          }
+        ]
+      },
+      "expected": true,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "extractor",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "name": "custom",
+          "kind": "out_regex",
+          "pattern": "bun test"
+        },
+        "commands": [
+          {
+            "command": "bun test",
+            "output": "passed"
+          },
+          {
+            "command": "echo é",
+            "output": "confirm"
+          },
+          {
+            "command": "bun test a",
+            "output": "failed"
+          }
+        ]
+      },
+      "expected": false,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "extractor",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "name": "custom",
+          "kind": "out_regex",
+          "pattern": "é"
+        },
+        "commands": [
+          {
+            "command": "bun test",
+            "output": "passed"
+          },
+          {
+            "command": "echo é",
+            "output": "confirm"
+          },
+          {
+            "command": "bun test a",
+            "output": "failed"
+          }
+        ]
+      },
+      "expected": false,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "extractor",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "name": "custom",
+          "kind": "out_regex",
+          "pattern": "(?i)PASSED"
+        },
+        "commands": [
+          {
+            "command": "bun test",
+            "output": "passed"
+          },
+          {
+            "command": "echo é",
+            "output": "confirm"
+          },
+          {
+            "command": "bun test a",
+            "output": "failed"
+          }
+        ]
+      },
+      "expected": true,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "extractor",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "name": "custom",
+          "kind": "out_regex",
+          "pattern": "^$"
+        },
+        "commands": [
+          {
+            "command": "bun test",
+            "output": "passed"
+          },
+          {
+            "command": "echo é",
+            "output": "confirm"
+          },
+          {
+            "command": "bun test a",
+            "output": "failed"
+          }
+        ]
+      },
+      "expected": false,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "extractor",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "name": "custom",
+          "kind": "out_regex",
+          "pattern": "(a+)+$"
+        },
+        "commands": [
+          {
+            "command": "bun test",
+            "output": "passed"
+          },
+          {
+            "command": "echo é",
+            "output": "confirm"
+          },
+          {
+            "command": "bun test a",
+            "output": "failed"
+          }
+        ]
+      },
+      "expected": false,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "extractor",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "name": "custom",
+          "kind": "cmd_count",
+          "pattern": "bun test"
+        },
+        "commands": [
+          {
+            "command": "bun test",
+            "output": "passed"
+          },
+          {
+            "command": "echo é",
+            "output": "confirm"
+          },
+          {
+            "command": "bun test a",
+            "output": "failed"
+          }
+        ]
+      },
+      "expected": 2,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "extractor",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "name": "custom",
+          "kind": "cmd_count",
+          "pattern": "é"
+        },
+        "commands": [
+          {
+            "command": "bun test",
+            "output": "passed"
+          },
+          {
+            "command": "echo é",
+            "output": "confirm"
+          },
+          {
+            "command": "bun test a",
+            "output": "failed"
+          }
+        ]
+      },
+      "expected": 1,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "extractor",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "name": "custom",
+          "kind": "cmd_count",
+          "pattern": "(?i)PASSED"
+        },
+        "commands": [
+          {
+            "command": "bun test",
+            "output": "passed"
+          },
+          {
+            "command": "echo é",
+            "output": "confirm"
+          },
+          {
+            "command": "bun test a",
+            "output": "failed"
+          }
+        ]
+      },
+      "expected": 0,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "extractor",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "name": "custom",
+          "kind": "cmd_count",
+          "pattern": "^$"
+        },
+        "commands": [
+          {
+            "command": "bun test",
+            "output": "passed"
+          },
+          {
+            "command": "echo é",
+            "output": "confirm"
+          },
+          {
+            "command": "bun test a",
+            "output": "failed"
+          }
+        ]
+      },
+      "expected": 0,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "extractor",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "spec": {
+          "name": "custom",
+          "kind": "cmd_count",
+          "pattern": "(a+)+$"
+        },
+        "commands": [
+          {
+            "command": "bun test",
+            "output": "passed"
+          },
+          {
+            "command": "echo é",
+            "output": "confirm"
+          },
+          {
+            "command": "bun test a",
+            "output": "failed"
+          }
+        ]
+      },
+      "expected": 1,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    }
+  ]
+}

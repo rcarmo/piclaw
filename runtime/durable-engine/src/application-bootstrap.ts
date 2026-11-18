@@ -113,7 +113,9 @@ export interface ApplicationBootstrapOptions {
   requestProcessExit?: (reason: string) => Promise<void>;
   readExecutionPolicy?: () => {autoCompact: boolean; autoRetry: boolean};
   setExecutionPolicy?: (name: "autoCompact" | "autoRetry", enabled: boolean) => void | Promise<void>;
-  onRuntime?: (runtime: import("./host-runtime.js").HostConversationRuntime) => void;
+  onRuntime?: (runtime: import("./host-runtime.js").HostConversationRuntime) => void | Promise<void>;
+  onConversationReady?: (id:ConversationId)=>Promise<void>;
+  preparePrompt?: (id:ConversationId,text:string)=>Promise<void>;
   assertConversationAvailable?: () => void;
   assertAdmission?: RuntimeOptions["assertAdmission"];
   /** Host-owned physical catalog approval; no credentials or provider execution. */
@@ -123,7 +125,7 @@ export interface ApplicationBootstrapOptions {
   assertInputAdmission?: (chatJid: string, content: string) => void;
   prepareInputText?: NonNullable<WebChannelOpts["prepareInputText"]>;
   createConversation?: (tx: import("@earendil-works/pi-durable").Tx, chatJid: string, branchId: string) => Promise<Manifest[number] & { sessionId: string }>;
-  runtime: Pick<HostControllerOptions["runtime"], "incarnation" | "sessionId" | "harnessOptions" | "now" | "codemodeExecute" | "onStorageFailure">;
+  runtime: Pick<HostControllerOptions["runtime"], "incarnation" | "sessionId" | "harnessOptions" | "now" | "codemodeExecute" | "onStorageFailure" | "optimizer" | "onSessionReset">;
   /** Existing application payload store, with immutable answer references. */
   answers: { resolver: EffectPayloadResolver; put(ref: string, text: string): void | Promise<void> };
   /** Optional acknowledgement boundary; the supplied operation still performs the real wait. */
@@ -314,7 +316,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
     // Controller/Harness construction is paused and finite. Activate only after
     // its internal failure drains finish, before runtime exposure or recovery.
     databaseGuard.contentionSignal = contentionSignal ? AbortSignal.any([contentionSignal, shutdown.signal]) : undefined;
-    config.onRuntime?.(runtime);
+    await config.onRuntime?.(runtime);
     const adapter = createDurableConversationAdapter({ incarnation: r.incarnation, manifest, getConversationBinding: lookup, runtime,
       wait: wrapWait?.(runtime.wait.bind(runtime)),
       reconcileMaintenance(binding) {
@@ -356,6 +358,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       const input: AcceptedInput = Object.freeze({incarnation:r.incarnation,conversationId:scope.conversationId as ConversationId,
         chatJid:chat,branchId:scope.branchId,operationId:`native-message:${scope.conversationId}:${source.sourceSeq}`,sourceSeq:source.sourceSeq,
         sourceId:messageId,payloadRef:source.payloadRef,requestId,requestHash:hashCanonicalRequest({type:"input",requestId,content:row.content})});
+      await config.preparePrompt?.(scope.conversationId as ConversationId,row.content);assertLive();
       const id = await runtime.submitMessage(input,whenBusy); assertLive();
       // Observe accepted SDK work even if a later Root cursor ACK is uncertain.
       // No callback here submits or resumes another input.
@@ -593,6 +596,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
         assertRoot();
         // One publication point. Every ingress and session lookup uses this record.
         routeIndex.set(chat, Object.freeze({ ...binding }));
+        await config.onConversationReady?.(binding.conversationId);assertRoot();
       })().then(() => { if (preparing.get(chat) === promise) preparing.delete(chat); }, error => {
         // Only failures proven to precede the public commit attempt are retryable.
         // Any rejection after that boundary (including publication) is uncertain.

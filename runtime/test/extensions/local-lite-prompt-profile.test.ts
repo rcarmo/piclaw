@@ -47,9 +47,11 @@ describe("local-lite prompt profile", () => {
     expect(prompt).toContain("Current date: 2026-06-27");
     expect(prompt).not.toContain("SECRETLY HUGE POLICY BODY");
     expect(prompt).not.toContain("web-search");
+    expect(prompt).not.toContain("activate_tools with mode='append'");
+    expect(prompt).not.toContain("reset_active_tools");
   });
 
-  test("shrinks active tools on local model and restores them after hosted model selection", async () => {
+  test("never mutates active tools during session_start or model_select local/hosted switches", async () => {
     const { createLocalLitePromptProfile } = await import("../../src/extensions/local-lite-prompt-profile.js");
     const fake = createFakeExtensionApi({
       allTools: [
@@ -63,14 +65,21 @@ describe("local-lite prompt profile", () => {
       activeTools: ["read", "bash", "edit", "messages", "list_tools", "activate_tools"],
     });
 
+    const setCalls: string[][] = [];
+    const originalSetActiveTools = fake.api.setActiveTools.bind(fake.api);
+    fake.api.setActiveTools = (next: string[]) => {
+      setCalls.push([...next]);
+      originalSetActiveTools(next);
+    };
+
     createLocalLitePromptProfile(() => true)(fake.api);
 
     const sessionStart = fake.handlers.find((entry) => entry.event === "session_start");
     const modelSelect = fake.handlers.find((entry) => entry.event === "model_select");
-    expect(sessionStart).toBeDefined();
-    expect(modelSelect).toBeDefined();
+    expect(sessionStart).toBeUndefined();
+    expect(modelSelect).toBeUndefined();
 
-    await sessionStart!.handler({}, {
+    await sessionStart?.handler({}, {
       model: {
         provider: "openai-compatible",
         id: "gemma4-e2b-qat-mtp",
@@ -78,10 +87,10 @@ describe("local-lite prompt profile", () => {
         baseUrl: "http://sandbox.local:8090/v1",
       },
     });
+    expect(fake.api.getActiveTools()).toEqual(["read", "bash", "edit", "messages", "list_tools", "activate_tools"]);
+    expect(setCalls).toEqual([]);
 
-    expect(fake.api.getActiveTools()).toEqual(["list_tools", "activate_tools", "read"]);
-
-    await modelSelect!.handler({}, {
+    await modelSelect?.handler({}, {
       model: {
         provider: "github-copilot",
         id: "gpt-5.5",
@@ -89,8 +98,19 @@ describe("local-lite prompt profile", () => {
         baseUrl: "https://api.githubcopilot.com",
       },
     });
-
     expect(fake.api.getActiveTools()).toEqual(["read", "bash", "edit", "messages", "list_tools", "activate_tools"]);
+    expect(setCalls).toEqual([]);
+
+    await modelSelect?.handler({}, {
+      model: {
+        provider: "openai-compatible",
+        id: "gemma4-e2b-qat-mtp",
+        name: "gemma4-e2b-qat-mtp",
+        baseUrl: "http://sandbox.local:8090/v1",
+      },
+    });
+    expect(fake.api.getActiveTools()).toEqual(["read", "bash", "edit", "messages", "list_tools", "activate_tools"]);
+    expect(setCalls).toEqual([]);
   });
 
   test("rewrites system prompt only for local models", async () => {
@@ -142,23 +162,46 @@ describe("local-lite prompt profile", () => {
   });
 });
 
-test("disabled local-lite preserves prompt and tools and restores tools when switched off", async () => {
+test("disabled local-lite preserves prompt and tool state when toggled on and off", async () => {
   const { createLocalLitePromptProfile } = await import("../../src/extensions/local-lite-prompt-profile.js");
-  const fake = createFakeExtensionApi();
+  const fake = createFakeExtensionApi({
+    allTools: [
+      { name: "list_tools" },
+      { name: "activate_tools" },
+      { name: "read" },
+      { name: "bash" },
+      { name: "edit" },
+    ],
+    activeTools: ["read", "bash", "edit", "list_tools", "activate_tools"],
+  });
+
+  const setCalls: string[][] = [];
+  const originalSetActiveTools = fake.api.setActiveTools.bind(fake.api);
+  fake.api.setActiveTools = (next: string[]) => {
+    setCalls.push([...next]);
+    originalSetActiveTools(next);
+  };
+
   let enabled = false;
-  const normal = ["read", "bash", "edit", "list_tools", "activate_tools"];
-  fake.api.getAllTools = () => normal.map(name => ({ name, label: name, description: name, parameters: {} } as any));
-  fake.api.setActiveTools(normal);
   createLocalLitePromptProfile(() => enabled)(fake.api);
+
   const ctx: any = { model: { provider: "ollama", baseUrl: "http://192.168.1.2:11434/v1" } };
-  const before = fake.handlers.find(h => h.event === "before_agent_start")!;
-  const event: any = { systemPromptOptions: { cwd: "/workspace", selectedTools: normal } };
+  const before = fake.handlers.find((h) => h.event === "before_agent_start")!;
+  const event: any = { systemPromptOptions: { cwd: "/workspace", selectedTools: ["read", "bash", "edit", "list_tools", "activate_tools"] } };
+
   expect(await before.handler(event, ctx)).toBeUndefined();
-  expect(fake.api.getActiveTools()).toEqual(normal);
+  expect(fake.api.getActiveTools()).toEqual(["read", "bash", "edit", "list_tools", "activate_tools"]);
+  expect(setCalls).toEqual([]);
+
   enabled = true;
-  expect(await before.handler(event, ctx)).toBeDefined();
-  expect(fake.api.getActiveTools()).toEqual(["list_tools", "activate_tools", "read"]);
+  const localResult = await before.handler(event, ctx);
+  expect(localResult).toBeDefined();
+  expect(localResult.systemPrompt).toContain("local-lite prompt profile");
+  expect(fake.api.getActiveTools()).toEqual(["read", "bash", "edit", "list_tools", "activate_tools"]);
+  expect(setCalls).toEqual([]);
+
   enabled = false;
   expect(await before.handler(event, ctx)).toBeUndefined();
-  expect(fake.api.getActiveTools()).toEqual(normal);
+  expect(fake.api.getActiveTools()).toEqual(["read", "bash", "edit", "list_tools", "activate_tools"]);
+  expect(setCalls).toEqual([]);
 });

@@ -19,7 +19,6 @@ export const ALLOWED_PACKAGED_EXTENSION_SRC_TARGETS = Object.freeze([
 const ALLOWED_ENTRY_SRC_TARGETS = new Set<string>(ALLOWED_PACKAGED_EXTENSION_SRC_TARGETS);
 const LATENT_SERVICE_EFFECTS_DIR = "src/service-effects";
 const SERVICE_EFFECTS_TESTING_DIR = "src/service-effects/testing";
-const MCP_STATUS_HINT_ADAPTER = "src/extensions/mcp-status-hint-adapter.ts";
 const MCP_ADAPTER_SUBPATH_PREFIX = "pi-mcp-adapter/";
 
 function walkFiles(baseDir: string, suffix: string): string[] {
@@ -101,8 +100,8 @@ export function findPackagedExtensionImportViolations(projectDir: string): strin
     const specifiers = extractModuleSpecifiers(readFileSync(file, "utf8"));
 
     for (const specifier of specifiers) {
-      if (specifier.startsWith(MCP_ADAPTER_SUBPATH_PREFIX)) {
-        violations.push(`${rel}: direct pi-mcp-adapter subpath import must use ${MCP_STATUS_HINT_ADAPTER} (${specifier})`);
+      if ((specifier === "pi-mcp-adapter" || specifier.startsWith(MCP_ADAPTER_SUBPATH_PREFIX))) {
+        violations.push(`${rel}: retired MCP adapter is forbidden in extensions (${specifier})`);
       }
       const target = resolveProjectImportTarget(projectDir, file, specifier);
       if (target && target.split("/").includes("node_modules")) {
@@ -124,8 +123,8 @@ export function findPackagedExtensionImportViolations(projectDir: string): strin
       if (specifier.startsWith("@earendil-works/pi-ai/dist/")) {
         violations.push(`${rel}: disallowed pi-ai dist import outside allowlist (${specifier})`);
       }
-      if (specifier.startsWith(MCP_ADAPTER_SUBPATH_PREFIX) && portablePath(rel) !== MCP_STATUS_HINT_ADAPTER) {
-        violations.push(`${rel}: direct pi-mcp-adapter subpath import must use ${MCP_STATUS_HINT_ADAPTER} (${specifier})`);
+      if ((specifier === "pi-mcp-adapter" || specifier.startsWith(MCP_ADAPTER_SUBPATH_PREFIX))) {
+        violations.push(`${rel}: retired MCP adapter is forbidden in extensions (${specifier})`);
       }
     }
   }

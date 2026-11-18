@@ -53,13 +53,16 @@ import { readStoredProviderUsageAccountRef } from "../../src/agent-pool/provider
 import { createHostDreamTools } from './host-dream-tools.js';
 import { buildDreamPrompt } from '../../src/agent-memory/dream-prompt.js';
 import type { NativeDreamRequest,AgentOutput } from '../../src/agent-pool/contracts.js';
-import { createHostMcp } from "./host-mcp.js";
+import { createApplicationOptimizerMcp } from "./application-optimizer-mcp.js";
+import { createMcpSettingsHandler } from "./mcp/settings.js";
+import { optimizerSettingsApi } from "./token-optimizer-settings.js";
+import { createOptimizerCodemodeTool } from "./optimizer-codemode.js";
 import { createHostFetch } from "./host-fetch.js";
 import { taskModelRequestScope, taskModelHookScope, taskModelToolScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
 import { createHostBuiltinTools } from "./host-builtins.js";
-import { createHostModelTools, hostModelToolNames, nativeToolInstructions } from "./host-model-controls.js";
+import { createHostModelTools, nativeToolInstructions } from "./host-model-controls.js";
 import { createHostCommandPolicy } from "./host-command-policy.js";
-import { createHostProcessControls, nativeProcessToolNames, nativeProcessInstructions } from "./host-process-controls.js";
+import { createHostProcessControls, nativeProcessInstructions } from "./host-process-controls.js";
 import { inspectAddonInstall, loadApplicationExtensionCatalog, qualifyInstalledAddon, bindInstalledAddon, qualifyInstalledCodeReview, qualifyInstalledEditableTable, qualifyInstalledOfficeViewer, qualifyInstalledDrawio, qualifyInstalledGoal, qualifyInstalledObservability, qualifyInstalledRestic, assertApplicationExtensionCatalogSupported } from "./host-extension-catalog.js";
 import { createHostDelegateTool } from "./host-delegate-tool.js";
 import { buildModelCandidates, type DelegateConfig } from "../../src/delegate/policy.js";
@@ -129,11 +132,6 @@ function withGuardedCommit(api: ToolExecutionApi, assertCurrent: () => void): To
     return typeof value === "function" ? value.bind(target) : value;
   } });
 }
-const isOldDefault = (tools: unknown) => Array.isArray(tools) &&
-  ((tools.length === 1 && tools[0] === "bash") ||
-    (tools.length === 6 && defaultToolNames.slice(0, 6).every((name, i) => tools[i] === name)));
-
-
 /** Read-only preflight before Harness.open can normalize pending work, also
  * repeated synchronously under the configuration write lock. Opening another
  * Session here would normalise work or re-enter that lock. This compatibility
@@ -395,7 +393,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     } catch { pendingTerminalEvents.add(operationId); /* Committed reply remains available on reload. */ }
   };
   const infrastructure = (await Promise.all((["proxmox", "portainer", "imap"] as const).map(kind => qualifyInstalledAddon(catalog, WORKSPACE_DIR, kind)))).filter(item => item !== undefined);
-  let mcp: Awaited<ReturnType<typeof createHostMcp>> | undefined;
+  let features: ReturnType<typeof createApplicationOptimizerMcp> | undefined;
   let captureRuntime: HostConversationRuntime | undefined;
   let liveChannel: NativeTurnViewChannel | undefined;
   let nativeQueue: Parameters<RuntimeBackend["bind"]>[0]["queue"] | undefined;
@@ -702,18 +700,6 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   } catch (error) { closeResources(); throw error; } finally { catalog.runtime.invalidate("Application extension preflight ended"); }
   let infrastructureClosed = false;
   const closeInfrastructure = () => { if (infrastructureClosed) return; infrastructureClosed = true; for (const qualified of infrastructure) if (qualified.kind === "imap") (qualified.nativeExports["index.ts"]!.disposeImapPool as () => void)(); };
-  const baseApplicationToolNames: readonly string[] = [...defaultToolNames, ...hostModelToolNames, ...nativeProcessToolNames, ...(codexGroup?.tools.map(tool => tool.name) ?? []), "codemode", ...(remotePeer ? ["remote_peer"] : []), ...(regrets ? ["regrets_review"] : []), ...infrastructureTools.map(tool => tool.name), ...(restic ? ["restic"] : []), ...(goal ? ["get_goal", "create_goal", "goal_complete", "goal_stop", "update_goal"] : []), "plan", "delegate", ...(codeReview ? ["code_review"] : []), ...(editableTable ? ["editable_table"] : []), ...(officeViewer ? ["open_office_viewer"] : []), ...(drawio ? ["open_drawio_editor"] : [])];
-  const fetchDefault = [...baseApplicationToolNames, "fetch"];
-  const previousDefault = baseApplicationToolNames.filter(name => name !== "codemode");
-  let previousModelDefault: readonly string[] = [];
-  let previousProcessDefault: readonly string[] = [];
-  const completeToolSet = (value: unknown, names: readonly string[]) => Array.isArray(value) && value.length === names.length && new Set(value).size === names.length && names.every(name => value.includes(name));
-  const isFactoryDefault = (value: unknown) => isOldDefault(value) || [
-    defaultToolNames, previousDefault, fetchDefault, baseApplicationToolNames, previousModelDefault,
-    previousModelDefault.filter(name => name !== "codemode"), previousProcessDefault,
-    previousProcessDefault.filter(name => name !== "fetch"),
-    previousProcessDefault.filter(name => !(hostModelToolNames as readonly string[]).includes(name)),
-  ].some(names => [names, names.filter(name => name !== "plan"), names.filter(name => name !== "delegate"), names.filter(name => name !== "plan" && name !== "delegate")].some(prior => completeToolSet(value, prior)));
   let drawioHost: ReturnType<DrawioNativeExports["bindDrawioVendorHost"]> | undefined;
   let sandbox: CodemodeSandbox | undefined;
   let sandboxClose: Promise<void> | undefined;
@@ -728,7 +714,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     // Native consumers are qualified separately from generic installed add-ons.
     // Keep their exact namespaces and source assertions after legacy preflight ends.
     const nativeConfigOwners = new Map<string, { assertCurrent(): void } | undefined>([
-      ["goal", goal], ["observability", observability],
+      ["goal", goal], ["observability", observability], ["token-optimizer", {assertCurrent:assertCoreDelegate}],
       ["delegate", { assertCurrent: assertCoreDelegate }], ["code-review", codeReview],
     ]);
     releaseAdminKv = registerAddonConfigKvAuthority((extensionId, chatJid, request) => {
@@ -754,11 +740,6 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     assertCurrent: assertObservability, read: readObservabilityConfiguration,
     write(config) { const store = getExtensionKvStore(); return store.write!("observability", () => store.set("observability", "config", config, "global")); },
   });
-  mcp = await createHostMcp({ offlineMaintenance, assertCurrent() { assert(); lifetime.signal.throwIfAborted(); },
-    captureSource: api => captureSource({ conversationId: api.conversationId, taskId: api.taskId, toolCallId: api.callId }) });
-  const applicationToolNames = [...baseApplicationToolNames, "fetch", ...mcp.tools.map(tool => tool.name)];
-  previousModelDefault = applicationToolNames.filter(name => !(hostModelToolNames as readonly string[]).includes(name));
-  previousProcessDefault = applicationToolNames.filter(name => !(nativeProcessToolNames as readonly string[]).includes(name));
   if (drawio) {
     drawioHost = drawio.addon.bindDrawioVendorHost({
       assertCurrent() { assert(); lifetime.signal.throwIfAborted(); drawio.assertCurrent(); },
@@ -808,7 +789,6 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     projectTrusted: true, additionalSkillPaths: [...settings.getSkillPaths(), ...infrastructure.flatMap(item => [...item.skillPaths]), ...resourceQualifications.flatMap(item => [...item.skillPaths]), ...(regrets?.skillPaths ?? [])],
     channelAppendix: [nativeToolInstructions, nativeProcessInstructions, delegateInstructions, chatJid ? buildChannelSystemPromptAppendix(detectChannel(chatJid), chatJid) ?? "" : "", ...infrastructure.map(infrastructurePrompt)].filter(Boolean).join("\n\n") });
   const instructionUpgrades = new Map<number, string>();
-  const toolUpgrades: number[] = [];
   // Validate stored choices without opening/writing SDK documents or bundle ports.
   if (root.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='documents'").get()) {
     const manifest = root.query(`SELECT id FROM documents WHERE kind='"app.application-conversations"' AND owner_id=1 AND retired_at IS NULL`).get() as { id: number };
@@ -825,24 +805,21 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       const stored = storedDocument(root, doc.id) as { model?: { provider: string; modelId: string }; tools?: unknown; extensions?: unknown; instructions?: string };
       if (doc.scope_kind !== "conversation" || !active.has(doc.owner_id)) continue;
       // Resume through pi-durable; current source, model and tool fences apply at execution.
-      // Only the recognised previous factory default converges. Explicit custom
-      // subsets/filters, modelTools, instructions and extensions remain intact.
-      if (!mcp.deferredMaintenance && isFactoryDefault(stored.tools) && Array.isArray(stored.tools) &&
-          (stored.tools.length !== applicationToolNames.length || stored.tools.some(name => !applicationToolNames.includes(name)))) toolUpgrades.push(doc.owner_id);
+      // Array equality cannot prove factory ownership. Every persisted SDK
+      // tool/modelTools/extension filter remains authoritative, even an old default.
       const desired = instructionsFor(mapping.bindings.find(b => b.conversationId === doc.owner_id)?.chatJid);
       const metadata = root.query(`SELECT id FROM documents WHERE kind='"app.host-managed-instructions"' AND scope_kind='conversation' AND owner_id=? AND retired_at IS NULL`).get(doc.owner_id) as { id: number } | null;
       const managedHash = metadata ? storedDocument(root, metadata.id).managedHash : undefined;
       if (shouldManageInstructions(stored.instructions, managedHash) &&
         (stored.instructions !== desired || managedHash !== instructionHash(desired))) instructionUpgrades.set(doc.owner_id, desired);
     }
-    if (toolUpgrades.length || instructionUpgrades.size) {
+    if (instructionUpgrades.size) {
       assert();
       try { assertToolUpgradeIdle(root); }
       catch (error) {
         if (!(error instanceof Error) || !["Host tool upgrade requires idle host work", "Host tool upgrade requires idle SDK work"].includes(error.message)) throw error;
         // Recover admitted work with its persisted configuration before changing
         // tools or instructions. Upgrade guards still apply to explicit changes.
-        toolUpgrades.length = 0;
         instructionUpgrades.clear();
       }
     }
@@ -1019,7 +996,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     const source = await captureSource({ conversationId: api.conversationId, taskId: api.taskId, toolCallId: api.callId });
     return () => { source(); if (readAccessConfig().mode !== "single-user") throw Error("Host fetch permission denied"); };
   } }));
-  tools.push(...mcp.tools);
+
   if (restic) tools.push(createHostResticTool(restic.addon, { root, runtime,
     assertOwner() { assert(); lifetime.signal.throwIfAborted(); restic.assertCurrent(); } }));
   if (goal) tools.push(...createHostGoalTools(goal.addon.createGoalTools, { root, runtime, assertOwner: assertGoal, resolveGoalInput: goal.addon.resolveGoalInput }));
@@ -1075,12 +1052,13 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   sandbox = new CodemodeSandbox({ memoryLimitBytes: 128 * 1024 * 1024 });
   // Native tool description includes discovery instructions. Deliberately no dynamic
   // declaration section: scheduled overrides retain their own model choice.
-  const codemode = createCodemodeTool({ sandbox, models: false });
+  const codemode = createOptimizerCodemodeTool(sandbox);
   tools.push(defineTool<typeof codemode.parameters>({ ...codemode, async execute(args, api, context) {
     const sourceCurrent = await captureSource({ conversationId: api.conversationId, taskId: api.taskId, toolCallId: api.callId });
-    const assertCurrent = () => { sourceCurrent(); mcp!.assertCurrent(); };
+    const assertCurrent = () => { sourceCurrent(); assertCoreDelegate(); };
     assertCurrent();
-    const result = await codemode.execute(args, withGuardedCommit(api, assertCurrent), context);
+    const scoped=new Proxy(withGuardedCommit(api,assertCurrent),{get(target,key){if(key==="agent")return async(ctx:typeof context)=>features!.mcp.visibleAgent(api.conversationId,await target.agent(ctx),ctx);const value=Reflect.get(target,key,target);return typeof value==="function"?value.bind(target):value;}});
+    const result = await codemode.execute(args, scoped, context);
     assertCurrent();
     return result;
   } }));
@@ -1110,6 +1088,9 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   if (observability) registry.install(createHostObservabilityPrompt(observability.addon, { root, runtime,
     assertOwner() { assert(); lifetime.signal.throwIfAborted(); observability.assertCurrent(); }, failClosed(error) { lifetime.abort(error); } }));
   if (goal) registry.install(createHostGoalTerminalFence(goal.addon, { root, runtime, assertOwner: assertGoal }));
+  // Request-only optimiser projections follow source-owned Goal/Plan materialisation.
+  features=createApplicationOptimizerMcp({root,workspaceRoot:WORKSPACE_DIR,registry,host,harness:()=>runtime().coreExtensionHarness(),async bindings(harness){const mapping=await harness.snapshot(ApplicationConversations,1 as ConversationId,context);if(!mapping)throw Error("Application namespace is absent");return mapping.bindings;},assertOwner:assertCoreDelegate,assertCleanupOwner:assert,captureSource:api=>captureSource({conversationId:api.conversationId,taskId:api.taskId,toolCallId:api.callId}),offlineMaintenance});
+  await features.prepare();
   const commandPolicy = createHostCommandPolicy(root, () => { assert(); if (readAccessConfig().mode !== "single-user") throw Error("Native controls require single-user policy"); });
   // Preparation stays paused; the executing HostConversationRuntime installs
   // the single task-source/cancellation adapter when it opens its Harness.
@@ -1131,7 +1112,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     // Only validated, already-native imported history can supply an existing ID.
     const conversation = importedId === undefined ? await tx.createConversation({ ownership: { kind: "ownerless" } }) : { id: importedId as ConversationId };
     const instructions = instructionsFor(chatJid);
-    await configure(tx, conversation.id, { model: { provider: ref.provider, modelId: ref.id }, thinkingLevel: defaultThinking(selected), tools, instructions });
+    await configure(tx, conversation.id, { model: { provider: ref.provider, modelId: ref.id }, thinkingLevel: defaultThinking(selected), tools:null, instructions });
     (await tx.doc(HostManagedInstructions, conversation.id)).managedHash = instructionHash(instructions);
     const binding = { chatJid, branchId, conversationId: conversation.id, sessionId: crypto.randomUUID() };
     const identity = { domain, chatJid, branchId, sessionId: binding.sessionId };
@@ -1169,7 +1150,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       if (doc.domain || doc.bindings.length) throw Error("Application mapping conflict");
       doc.domain = crypto.randomUUID();
       const instructions = instructionsFor();
-      await configure(tx, id, { model: { provider: ref.provider, modelId: ref.id }, thinkingLevel: defaultThinking(selected), tools, instructions });
+      await configure(tx, id, { model: { provider: ref.provider, modelId: ref.id }, thinkingLevel: defaultThinking(selected), tools:null, instructions });
       (await tx.doc(HostManagedInstructions, id)).managedHash = instructionHash(instructions);
       for (const branch of initialBranches) await publishApplicationBinding(tx, doc.domain, branch.jid, branch.branch_id, importedChats.get(branch.jid));
       assertInitial();
@@ -1219,18 +1200,12 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       }, context));
     }
     validateApplicationMapping(root, mapping);
-    if (toolUpgrades.length || instructionUpgrades.size) {
+    if (instructionUpgrades.size) {
       // Same-file BEGIN IMMEDIATE fences host admissions for the whole public
       // commit. Repeat global SDK/host preflight under that lock before ANY
       // configuration, not one conversation at a time after partial writes.
       await storage.withIdleModelGuard(() => app.commit(async tx => {
         assert(); assertToolUpgradeIdle(root);
-        for (const id of toolUpgrades) {
-          const agent = await tx.doc(AgentDoc, id as ConversationId);
-          if (!isFactoryDefault(agent.tools)) throw Error("Persisted host tool selection changed");
-        }
-        assert(); assertToolUpgradeIdle(root);
-        for (const id of toolUpgrades) await configure(tx, id as ConversationId, { tools });
         for (const [id, instructions] of instructionUpgrades) {
           const agent = await tx.doc(AgentDoc, id as ConversationId);
           const metadata = await tx.doc(HostManagedInstructions, id as ConversationId);
@@ -1362,7 +1337,9 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       const row = root.query("SELECT chat_jid FROM service_effect_s01_operations WHERE operation_id=?").get(operationId) as { chat_jid: string } | null;
       if (row) { if (goal) wakeGoalFollowups(row.chat_jid); drainPending(row.chat_jid); }
     },
-    onRuntime(value) { captureRuntime = value; },
+    async onRuntime(value) { captureRuntime = value; await features!.attach(); },
+    onConversationReady:id=>features!.conversationReady(id),
+    preparePrompt:(id,text)=>features!.optimizer.preparePrompt(id,text),
         prepareInputText: goalInput, prepareTerminalEffect: goalSettlement,
         readExecutionPolicy: commandPolicy.read,
         setExecutionPolicy: commandPolicy.set,
@@ -1398,8 +1375,14 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       check(ref, lifetime.signal);
       return binding;
     },
-    runtime: { onStorageFailure: notifyStorageFailure, incarnation: mapping.domain, sessionId: mapping.domain, now: () => new Date().toISOString(), harnessOptions,
+    runtime: { optimizer:features.authority, onSessionReset:id=>features!.reset(id), onStorageFailure: notifyStorageFailure, incarnation: mapping.domain, sessionId: mapping.domain, now: () => new Date().toISOString(), harnessOptions,
       codemodeExecute: tools.find(tool => tool.name === "codemode")!.execute } }, context);
+  if(!offlineMaintenance){
+    const handler=createMcpSettingsHandler(features!,root,()=>{assertAdmission();assertCoreDelegate();});
+    if(registerExtensionRoute('/agent/settings/mcp',handler,'core:outbound-mcp')==='rejected')throw Error('MCP settings route unavailable');
+    const registration=registerOwnedAddonConfigApi('token-optimizer','config',optimizerSettingsApi(features!,root,()=>{assertAdmission();assertCoreDelegate();},(check,body)=>runtime().withSourceWriteGuard(check,body)),'core:token-optimizer');
+    resourceDisposers.push(()=>registration.dispose());
+  }
   if (remotePeer) {
     const native = await import(pathToFileURL(join(remotePeer.source.packageDir, "native.ts")).href);
     assertRemote();
@@ -1561,11 +1544,12 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       // cancellation outcomes. Keep tool/provider dependencies alive until then.
       // If close is uncertain or held maintenance cannot join, retain them and
       // ownership; the operator's process-wide backstop still bounds shutdown.
+      await features?.detach();
       await bundle.close();
       await Promise.allSettled([...usageReports]);
-      const producerResults = await Promise.allSettled([closeRemote(), closeCodex(), observability?.addon.shutdownObservabilityRuntime()]);
+      const producerResults = await Promise.allSettled([closeRemote(), closeCodex(), features?.close(), observability?.addon.shutdownObservabilityRuntime()]);
       terminalLifetime.abort(); lifetime.abort(); closeResources(); releaseAdminKv?.(); closeInfrastructure(); releaseReviewSource?.(); releaseObservabilityConfiguration?.();
-      const results = [...producerResults, ...await Promise.allSettled([mcp?.close(), closeSandbox(), drawioHost?.close()])];
+      const results = [...producerResults, ...await Promise.allSettled([closeSandbox(), drawioHost?.close()])];
       const failures: unknown[] = results.filter((result): result is PromiseRejectedResult => result.status === "rejected").map(result => result.reason);
       if (failures.length) throw new AggregateError(failures, "Native tool cleanup uncertain");
       })();
@@ -1576,10 +1560,11 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     // A post-construction failure still owns a live SDK scheduler/storage graph.
     // Join it before invalidating execution dependencies or releasing ownership.
     if (typeof bundle !== 'undefined') {
-      try { bundle.stop(); await bundle.close(); }
+      try { bundle.stop(); await features?.detach(); await bundle.close(); }
       catch (cleanup) { throw new RuntimeStartupCleanupError([error, cleanup], 'Application startup cleanup uncertain'); }
     }
     const cleanupFailures: unknown[] = [];
+    try { await features?.close(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     for (const release of [() => terminalLifetime.abort(), () => lifetime.abort(), closeResources, releaseAdminKv,
       closeInfrastructure, releaseReviewSource, releaseObservabilityConfiguration]) {
       try { release?.(); } catch (cleanup) { cleanupFailures.push(cleanup); }
@@ -1587,7 +1572,6 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     try { await observability?.addon.shutdownObservabilityRuntime(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     try { await closeRemote(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     try { await closeCodex(); } catch (cleanup) { cleanupFailures.push(cleanup); }
-    try { await mcp?.close(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     try { await closeSandbox(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     try { await drawioHost?.close(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     if (cleanupFailures.length) throw new RuntimeStartupCleanupError([error, ...cleanupFailures], "Native tool preparation cleanup uncertain");

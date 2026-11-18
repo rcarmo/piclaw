@@ -17,7 +17,8 @@
     "service_effect_s01/retire-harness-mirrors-v1": "{\"base\":\"75e5b08d5399beb1c3728e4d96ec6fdbebda08bf\",\"owner\":\"service_effect_s01\",\"id\":\"retire-harness-mirrors-v1\",\"migration_order\":2,\"checksum\":\"eb5306aba410376f94eb9d4a2c9bcdbbf9ba2fad0337b4d06994143640a9d809\"}",
     "service_effect_s01/sdk-scheduled-admission-index-v1": "{\"base\":\"771e500528b3e64cd0634f66d068b7aeff785296\",\"owner\":\"service_effect_s01\",\"id\":\"sdk-scheduled-admission-index-v1\",\"migration_order\":3,\"checksum\":\"c8858ac8795d15c48f46fcf76b77bdc19c78b3e48d240be1c3751150ac9b944a\"}",
     "host.timeline-inline-media/message-inline-media-v1": "{\"base\":\"3b5f4bf0115f9e4ddc03fd431dbb5c0dfe165fb8\",\"owner\":\"host.timeline-inline-media\",\"id\":\"message-inline-media-v1\",\"migration_order\":1,\"checksum\":\"37cade0bed95caf5578755fc811b0a3bc6d35d1f94e914bf3457006ee7b45ed4\"}",
-    "host.timeline-inline-media/link-preview-backfill-v1": "{\"base\":\"3b5f4bf0115f9e4ddc03fd431dbb5c0dfe165fb8\",\"owner\":\"host.timeline-inline-media\",\"id\":\"link-preview-backfill-v1\",\"migration_order\":2,\"checksum\":\"fe1d9437f6c2bb9d20679dbb71402c843b3e1cb2aa349ee27389414731a58c01\"}"
+    "host.timeline-inline-media/link-preview-backfill-v1": "{\"base\":\"3b5f4bf0115f9e4ddc03fd431dbb5c0dfe165fb8\",\"owner\":\"host.timeline-inline-media\",\"id\":\"link-preview-backfill-v1\",\"migration_order\":2,\"checksum\":\"fe1d9437f6c2bb9d20679dbb71402c843b3e1cb2aa349ee27389414731a58c01\"}",
+    "kintsugi-optimizer-mcp": "Kintsugi4afeac1e on public SDK1.5.2; Core cutover source26508ec06 plus explicit metadata/cache ownership. No new execution ledger or live migration."
   },
   "owners": {
     "core:background-contexts": {
@@ -1186,6 +1187,46 @@
         "runtime/durable-engine/src/session-history-import.ts",
         "runtime/src/session-import/source.ts",
         "runtime/src/cli.ts"
+      ]
+    },
+    "cache:mcp-recall": {
+      "category": "projection-cache",
+      "initializer": "runtime/durable-engine/src/mcp/recall-store.ts#createMcpRecallStore",
+      "writers": [
+        "runtime/durable-engine/src/mcp/recall-store.ts"
+      ],
+      "sourceOfTruth": "Disposable owner/branch/grant-epoch-scoped MCP result and emitted-text copies with FTS projections; never an effect replay source.",
+      "replayRetention": "TTL, caps and explicit scoped forgetting affect retained copies only. Never delete SDK history, historical outputs or another workspace owner. Atomic schema components remain complete when preserved.",
+      "references": [
+        "runtime/durable-engine/src/mcp/recall-store.ts",
+        "runtime/durable-engine/src/mcp/retained-database.ts"
+      ]
+    },
+    "cache:retained-tool-output": {
+      "category": "projection-cache",
+      "initializer": "runtime/durable-engine/src/mcp/tool-output-store.ts#createToolOutputStore",
+      "writers": [
+        "runtime/durable-engine/src/mcp/tool-output-store.ts"
+      ],
+      "sourceOfTruth": "Disposable scoped tool-output originals/chunks and FTS projections. SDK receipts and historical file-backed outputs remain authoritative.",
+      "replayRetention": "TTL, caps and explicit scoped forgetting affect retained copies only. Never delete SDK history, historical outputs or another workspace owner. Atomic schema components remain complete when preserved.",
+      "references": [
+        "runtime/durable-engine/src/mcp/tool-output-store.ts",
+        "runtime/durable-engine/src/mcp/retained-database.ts"
+      ]
+    },
+    "core:outbound-mcp": {
+      "category": "core",
+      "initializer": "runtime/durable-engine/src/mcp/connections.ts#McpConnectionStore",
+      "writers": [
+        "runtime/durable-engine/src/mcp/connections.ts"
+      ],
+      "sourceOfTruth": "Reference-only connection metadata, revisions and access/credential destination epochs in the existing application SQLite database. Tool effects and replay remain SDK-owned.",
+      "replayRetention": "Preserve connection metadata and keychain references across reopen. Removing a connection does not delete keychain entries or SDK history. One-shot legacy import never resurrects operator deletions.",
+      "references": [
+        "runtime/durable-engine/src/application-optimizer-mcp.ts",
+        "runtime/durable-engine/src/mcp/settings.ts",
+        "runtime/durable-engine/src/mcp/migration.ts"
       ]
     }
   },
@@ -4685,6 +4726,238 @@
       ],
       "requiredIn": [],
       "table": "budget_request_reservations"
+    },
+    "index:mcp_recall_owner": {
+      "owner": "cache:mcp-recall",
+      "fingerprints": [
+        "173ddf881703ee1ba6c24f3cafde9f3c9a38db1e0449ad676e515d32929097d4"
+      ],
+      "requiredIn": [],
+      "requiredWhenOwnerPresent": true,
+      "table": "mcp_recall"
+    },
+    "index:retained_tool_output_chunks_output": {
+      "owner": "cache:retained-tool-output",
+      "fingerprints": [
+        "c46af99e2adcc1e9fecb2c258a339255f20cfe56e6ad02cddb5ca68d94375230"
+      ],
+      "requiredIn": [
+        "native",
+        "native-addons"
+      ],
+      "requiredWhenOwnerPresent": true,
+      "table": "retained_tool_output_chunks"
+    },
+    "index:retained_tool_outputs_age": {
+      "owner": "cache:retained-tool-output",
+      "fingerprints": [
+        "eac1f13c7b030486a9cd67881fea4f249cb26701517774219f7062b73a43c471"
+      ],
+      "requiredIn": [
+        "native",
+        "native-addons"
+      ],
+      "requiredWhenOwnerPresent": true,
+      "table": "retained_tool_outputs"
+    },
+    "index:retained_tool_outputs_expiry": {
+      "owner": "cache:retained-tool-output",
+      "fingerprints": [
+        "df8cd07b727e70349b7b8535d9be9c7f61059eba35b55f3ebfb775e7a489131f"
+      ],
+      "requiredIn": [
+        "native",
+        "native-addons"
+      ],
+      "requiredWhenOwnerPresent": true,
+      "table": "retained_tool_outputs"
+    },
+    "table:mcp_connections_v1": {
+      "owner": "core:outbound-mcp",
+      "fingerprints": [
+        "f124690434295b80e8426e87c892d7a2f5c49f77ea2fdddc407e7c7ebc88c1c3"
+      ],
+      "requiredIn": [
+        "native",
+        "native-addons"
+      ],
+      "requiredWhenOwnerPresent": true,
+      "derivedIndexes": [
+        "1c4aa95d10237d1ffcb34e05fff7c1e284910accf8aecc1a9275fa8c443fa295"
+      ]
+    },
+    "table:mcp_recall": {
+      "owner": "cache:mcp-recall",
+      "fingerprints": [
+        "a686ff383045bf95700f57079b374366e99a0f41d1d9c7e2d53a7bfc7c151822"
+      ],
+      "requiredIn": [],
+      "requiredWhenOwnerPresent": true,
+      "derivedIndexes": [
+        "00537871ca7e46652ef3b6969b245d41d8a51fb734648e956a9842a6e9a90a47"
+      ]
+    },
+    "table:mcp_recall_search": {
+      "owner": "cache:mcp-recall",
+      "fingerprints": [
+        "726cead6c83227d0263bb98325caa43a678f5b82b398aad353ea10c78ce63346"
+      ],
+      "requiredIn": [],
+      "requiredWhenOwnerPresent": true
+    },
+    "table:mcp_recall_search_config": {
+      "owner": "cache:mcp-recall",
+      "fingerprints": [
+        "b9cee5180e0af4e132c120935a022fa2468259930ce417ee0f44b91f55d75ea7"
+      ],
+      "requiredIn": [],
+      "requiredWhenOwnerPresent": true
+    },
+    "table:mcp_recall_search_data": {
+      "owner": "cache:mcp-recall",
+      "fingerprints": [
+        "2d362bb942ef7562922827c15250285baafdb0975482aebb9a7adcea9dcfe12f"
+      ],
+      "requiredIn": [],
+      "requiredWhenOwnerPresent": true
+    },
+    "table:mcp_recall_search_docsize": {
+      "owner": "cache:mcp-recall",
+      "fingerprints": [
+        "9d39a348ada2bac115dc6b9a727317d8ce9e6410ae950434a7b11a4a149bf9fa"
+      ],
+      "requiredIn": [],
+      "requiredWhenOwnerPresent": true
+    },
+    "table:mcp_recall_search_idx": {
+      "owner": "cache:mcp-recall",
+      "fingerprints": [
+        "d3505ac8b26259785276249cf19cea2019650b07696b6cc29208f84ab687de46"
+      ],
+      "requiredIn": [],
+      "requiredWhenOwnerPresent": true
+    },
+    "table:retained_tool_output_chunks": {
+      "owner": "cache:retained-tool-output",
+      "fingerprints": [
+        "b5bea99efe976dced31d396fc2ec5a40ddf40566fb52729ba51acab93d6ed08a"
+      ],
+      "requiredIn": [
+        "native",
+        "native-addons"
+      ],
+      "requiredWhenOwnerPresent": true
+    },
+    "table:retained_tool_output_search": {
+      "owner": "cache:retained-tool-output",
+      "fingerprints": [
+        "af11c5f61bf899033c9e921043ffb769997682ee10ddc90642393a56e5300b94"
+      ],
+      "requiredIn": [
+        "native",
+        "native-addons"
+      ],
+      "requiredWhenOwnerPresent": true
+    },
+    "table:retained_tool_output_search_config": {
+      "owner": "cache:retained-tool-output",
+      "fingerprints": [
+        "7bc375749b87c79c5fc97fbd702a1afa0317ec27a6e08b55df955da98bb142b8"
+      ],
+      "requiredIn": [
+        "native",
+        "native-addons"
+      ],
+      "requiredWhenOwnerPresent": true
+    },
+    "table:retained_tool_output_search_data": {
+      "owner": "cache:retained-tool-output",
+      "fingerprints": [
+        "6f9d79239de04ef804f574e37d0b65f6f6277193ad9164527c7362bedccb33b4"
+      ],
+      "requiredIn": [
+        "native",
+        "native-addons"
+      ],
+      "requiredWhenOwnerPresent": true
+    },
+    "table:retained_tool_output_search_docsize": {
+      "owner": "cache:retained-tool-output",
+      "fingerprints": [
+        "516601efba8afc65becd42a73d831b9a44469f7c7aaa9508e8b210537fcf37fa"
+      ],
+      "requiredIn": [
+        "native",
+        "native-addons"
+      ],
+      "requiredWhenOwnerPresent": true
+    },
+    "table:retained_tool_output_search_idx": {
+      "owner": "cache:retained-tool-output",
+      "fingerprints": [
+        "7dce11d79c03e8f275fecc6ddab05892ce9923a2a2a8187bd64ab08083e75c08"
+      ],
+      "requiredIn": [
+        "native",
+        "native-addons"
+      ],
+      "requiredWhenOwnerPresent": true
+    },
+    "table:retained_tool_outputs": {
+      "owner": "cache:retained-tool-output",
+      "fingerprints": [
+        "55e34ee0e19bd0abc8763e1bbe36796fa7c5535b83e8b0df20c749796b7bafdf"
+      ],
+      "requiredIn": [
+        "native",
+        "native-addons"
+      ],
+      "requiredWhenOwnerPresent": true,
+      "derivedIndexes": [
+        "1c4aa95d10237d1ffcb34e05fff7c1e284910accf8aecc1a9275fa8c443fa295"
+      ]
+    },
+    "trigger:mcp_recall_delete": {
+      "owner": "cache:mcp-recall",
+      "fingerprints": [
+        "9310b0be256dbe6dd6183313098159db215a80aec9a227e9e1c5fa90b1ed8fe2"
+      ],
+      "requiredIn": [],
+      "requiredWhenOwnerPresent": true,
+      "table": "mcp_recall"
+    },
+    "trigger:mcp_recall_insert": {
+      "owner": "cache:mcp-recall",
+      "fingerprints": [
+        "6449524724674dbc00ef0ec6f8eee34ef5c9f827781846f334e153cd29409ecf"
+      ],
+      "requiredIn": [],
+      "requiredWhenOwnerPresent": true,
+      "table": "mcp_recall"
+    },
+    "trigger:tool_output_chunk_delete": {
+      "owner": "cache:retained-tool-output",
+      "fingerprints": [
+        "a1afb46a659be3a32306a20451a9c7b6047f44332d51bfee2ca1a91ade54b9ca"
+      ],
+      "requiredIn": [
+        "native",
+        "native-addons"
+      ],
+      "requiredWhenOwnerPresent": true,
+      "table": "retained_tool_output_chunks"
+    },
+    "trigger:tool_output_chunk_insert": {
+      "owner": "cache:retained-tool-output",
+      "fingerprints": [
+        "0496ffd328911542c24771ed0d8bd35f6f41834181deac3293cbc243d3a4ba08"
+      ],
+      "requiredIn": [
+        "native",
+        "native-addons"
+      ],
+      "requiredWhenOwnerPresent": true,
+      "table": "retained_tool_output_chunks"
     }
   },
   "documents": [
@@ -4785,6 +5058,146 @@
       "scope": "public SDK document API only; caller selects registered scope",
       "history": "caller registration through SDK public API",
       "fork": "caller registration through SDK public API"
+    },
+    {
+      "kind": "token-economizer.auto-waiters",
+      "owner": "sdk:storage",
+      "scope": "session",
+      "history": "session singleton",
+      "fork": "not applicable to session-scoped document"
+    },
+    {
+      "kind": "token-economizer.classifiers",
+      "owner": "sdk:storage",
+      "scope": "session",
+      "history": "session singleton",
+      "fork": "not applicable to session-scoped document"
+    },
+    {
+      "kind": "token-economizer.guard-jobs",
+      "owner": "sdk:storage",
+      "scope": "session",
+      "history": "session singleton",
+      "fork": "not applicable to session-scoped document"
+    },
+    {
+      "kind": "token-economizer.jobs",
+      "owner": "sdk:storage",
+      "scope": "session",
+      "history": "session singleton",
+      "fork": "not applicable to session-scoped document"
+    },
+    {
+      "kind": "token-economizer.knowledge",
+      "owner": "sdk:storage",
+      "scope": "session",
+      "history": "session singleton",
+      "fork": "not applicable to session-scoped document"
+    },
+    {
+      "kind": "token-economizer.notices",
+      "owner": "sdk:storage",
+      "scope": "session",
+      "history": "session singleton",
+      "fork": "not applicable to session-scoped document"
+    },
+    {
+      "kind": "token-economizer.observations",
+      "owner": "sdk:storage",
+      "scope": "session",
+      "history": "session singleton",
+      "fork": "not applicable to session-scoped document"
+    },
+    {
+      "kind": "token-economizer.reuse",
+      "owner": "sdk:storage",
+      "scope": "session",
+      "history": "session singleton",
+      "fork": "not applicable to session-scoped document"
+    },
+    {
+      "kind": "token-economizer.run",
+      "owner": "sdk:storage",
+      "scope": "session",
+      "history": "session singleton",
+      "fork": "not applicable to session-scoped document"
+    },
+    {
+      "kind": "token-economizer.sessions",
+      "owner": "sdk:storage",
+      "scope": "session",
+      "history": "session singleton",
+      "fork": "not applicable to session-scoped document"
+    },
+    {
+      "kind": "token-economizer.tool-metadata",
+      "owner": "sdk:storage",
+      "scope": "session",
+      "history": "session singleton",
+      "fork": "not applicable to session-scoped document"
+    },
+    {
+      "kind": "piclaw.token-optimizer.notices",
+      "owner": "sdk:storage",
+      "scope": "session",
+      "history": "session singleton",
+      "fork": "not applicable"
+    },
+    {
+      "kind": "piclaw.token-optimizer.sessions",
+      "owner": "sdk:storage",
+      "scope": "session",
+      "history": "session singleton",
+      "fork": "not applicable"
+    },
+    {
+      "kind": "piclaw.token-optimizer.epoch",
+      "owner": "sdk:storage",
+      "scope": "conversation",
+      "history": "latest",
+      "fork": "initial"
+    },
+    {
+      "kind": "piclaw.token-optimizer.mask",
+      "owner": "sdk:storage",
+      "scope": "conversation",
+      "history": "latest",
+      "fork": "current"
+    },
+    {
+      "kind": "piclaw.token-optimizer.goal-state",
+      "owner": "sdk:storage",
+      "scope": "conversation",
+      "history": "latest",
+      "fork": "initial"
+    },
+    {
+      "kind": "piclaw.optimizer-plan-binding",
+      "owner": "sdk:storage",
+      "scope": "conversation",
+      "history": "latest",
+      "fork": "initial"
+    },
+    {
+      "kind": "piclaw.optimizer-call-receipts",
+      "owner": "sdk:storage",
+      "scope": "task",
+      "history": "task-scoped SDK document",
+      "fork": "not applicable"
+    },
+    {
+      "kind": "piclaw.mcp-script-output",
+      "owner": "sdk:storage",
+      "scope": "task",
+      "history": "task-scoped SDK document",
+      "fork": "not applicable"
+    },
+    {
+      "kind": "app.bash-saved-output",
+      "owner": "sdk:storage",
+      "scope": "task",
+      "history": "task-scoped SDK document",
+      "fork": "not applicable"
     }
   ]
 }

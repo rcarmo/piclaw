@@ -17,6 +17,9 @@ export type TaskModelRequestScope = Pick<Runtime, "taskId" | "conversationId" | 
 };
 const requests = new AsyncLocalStorage<TaskModelRequestScope>();
 
+/** Trusted Core composition only. Identity is passive metadata, never an execution grant; callers fence its signal and source. */
+export function currentTaskExecutionScope(): TaskModelRequestScope | undefined { return requests.getStore(); }
+
 export function taskModelRequestScope(signal: AbortSignal | undefined): TaskModelRequestScope | undefined {
   const scope = requests.getStore();
   if (!scope || !signal || scope.signal !== signal) return undefined;
@@ -59,7 +62,8 @@ export function withTaskModelRequestScope(registry: RegistryReader, cancellation
       async (record: Parameters<typeof execute>[0], runtime: Runtime, context: Context) => {
         const requestPhase = definition.name === "pi.generation" && phase === "request"
           || definition.name === "pi.compaction" && phase === "summarize"
-          || definition.name === 'pi.tool' && phase === 'call';
+          || definition.name === 'pi.tool' && phase === 'call'
+          || definition.name === 'token-economizer.inference' && phase === 'invoke';
         const valid = record?.id === runtime.taskId && record.conversationId === runtime.conversationId
           && record.kind === definition.name && record.version === definition.version && record.state?.status === "running"
           && record.state.checkpoint?.phase === phase;

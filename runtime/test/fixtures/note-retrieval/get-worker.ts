@@ -33,7 +33,6 @@ const { createFakeExtensionApi } = await import('../../extensions/fake-extension
 const { withChatContext } = await import('../../../src/core/chat-context.js');
 const { withExecutionIdentity } = await import('../../../src/core/execution-context.js');
 const { setBackgroundWorkspaceIndexRefreshRequesterForTests } = await import('../../../src/workspace-search.js');
-const { getAutoActiveToolNames } = await import('../../../src/extensions/tool-activation.js');
 let refreshes=0;setBackgroundWorkspaceIndexRefreshRequesterForTests(()=>{refreshes++;});
 let sessionId='fixture-session';
 const fake=createFakeExtensionApi({activeTools:['memory_get']});createMemorySearchExtension('web:test')(fake.api);
@@ -48,7 +47,7 @@ await start({},ctx);
 try {
  if(scenario==='roundtrip'){
   const r=await run(),content=JSON.parse(r.content[0].text);assert.equal(content.status,'ok');assert.equal(content.text,original);assert.equal(content.source_revision,row.revision);assert.equal(content.chunk_id,row.chunk_id);assert.equal(content.line_start,1);assert.equal(content.line_end,2);assert.equal(content.path,'notes/a.md');assert.equal(refreshes,0);
-  assert.ok(Buffer.byteLength(JSON.stringify(r))<=32768);assert.ok(!getAutoActiveToolNames(['memory_get']).includes('memory_get'));
+  assert.ok(Buffer.byteLength(JSON.stringify(r))<=32768);assert.deepEqual(fake.api.getActiveTools(),['memory_get']);
   only(await run({...params,chunk_id:'nr1:'+'a'.repeat(64)}),'not_found');
   only(await run({...params,source_revision:'b'.repeat(64)}),'not_found');
   only(await run({...params,path:'notes/a.md'}),'invalid_request');

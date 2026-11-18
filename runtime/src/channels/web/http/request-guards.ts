@@ -168,11 +168,13 @@ export async function enforceRequestGuards(
 
   // Only the actual guarded Request receives local add-on authority. Internal
   // transport calls and client-supplied IDs cannot manufacture this admission.
-  if (!hasInternalAccess && pathname.startsWith("/agent/addons/api/")) {
+  const localConfiguration = pathname.startsWith('/agent/addons/api/') || pathname === '/agent/settings/mcp' || pathname.startsWith('/agent/settings/mcp/');
+  if (!hasInternalAccess && localConfiguration) {
     const principal = channel.authGateway.getPrincipal?.(req) ?? null;
     admitAddonLocalRequest(req, principal, () => {
       const current = channel.authGateway.getPrincipal?.(req, true);
       return Boolean(current && current.userId === principal?.userId && current.kind === principal?.kind
+        && current.role === principal?.role && current.mode === principal?.mode
         && current.authentication.sessionId === principal?.authentication.sessionId
         && current.authentication.method === principal?.authentication.method
         && current.authentication.expiresAt === principal?.authentication.expiresAt);

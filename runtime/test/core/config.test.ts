@@ -127,7 +127,7 @@ describe("core config", () => {
       ].join("\n"), "utf8");
       const snapshot = loadConfigInSubprocess(workspace, [
         "WORKSPACE_DIR", "STORE_DIR", "DATA_DIR",
-        "call:getIdentityConfig", "call:getLoggingConfig", "call:getWebRuntimeConfig", "call:getToolActivationConfig", "call:getWorkspaceSearchConfig",
+        "call:getIdentityConfig", "call:getLoggingConfig", "call:getWebRuntimeConfig", "call:getWorkspaceSearchConfig",
       ], {
         env: {
           PICLAW_ASSISTANT_NAME: "Env Assistant",
@@ -148,7 +148,6 @@ describe("core config", () => {
       expect(snapshot["call:getIdentityConfig"]).toEqual({ assistantName: "Env Assistant", assistantAvatar: "https://env-file.example/avatar.png", userName: "Config User", userAvatar: "https://config.example/user.png", userAvatarBackground: "#123456" });
       expect(snapshot["call:getLoggingConfig"]).toEqual({ level: "debug" });
       expect(snapshot["call:getWebRuntimeConfig"]).toMatchObject({ passkeyMode: "totp-only", sessionTtl: 99, totpWindow: 3, internalSecret: "cfg-secret", terminalEnabled: false, vncAllowDirect: false, vncTargetsRaw: "", debugCardSubmissions: true, trustProxy: false, composeUploadLimitMb: 256, workspaceUploadLimitMb: 256 });
-      expect(snapshot["call:getToolActivationConfig"]).toEqual({ additionalDefaultTools: ["search_workspace", "introspect_sql"] });
       expect(snapshot["call:getWorkspaceSearchConfig"]).toEqual({ roots: ["notes", ".pi/skills", "docs"], extraExtensions: [] });
     } finally {
       workspace.cleanup();

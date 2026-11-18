@@ -39,7 +39,7 @@ describe("config-store helpers", () => {
     } finally { process.umask(previousMask); workspace.cleanup(); }
   });
 
-  test("widget bootstrap persistence does not invalidate the strict MCP config reader", async () => {
+  test("widget bootstrap persistence preserves private permissions and retired MCP metadata", async () => {
     const workspace = createTempWorkspace("piclaw-config-store-widget-");
     const { setEnv } = await import("../helpers.js");
     const restore = setEnv({ PICLAW_WORKSPACE: workspace.workspace });
@@ -49,11 +49,10 @@ describe("config-store helpers", () => {
     try {
       const path = join(workspace.workspace, ".piclaw", "config.json");
       mkdirSync(join(workspace.workspace, ".piclaw"));
-      writeFileSync(path, JSON.stringify({ domains: { access: { mode: "single-user" } } }), { mode: 0o600 });
-      const { readMcpInstancePolicy } = await import("../../src/core/config-mcp.js");
+      writeFileSync(path, JSON.stringify({ domains: { access: { mode: "single-user" }, mcp: { engine: 'adapter', codemode: 'on' } } }), { mode: 0o600 });
       setWebWidgetToken("synthetic-bootstrap-widget-token");
       expect(statSync(path).mode & 0o777).toBe(0o600);
-      expect(readMcpInstancePolicy().policy).toEqual({ engine: "adapter", codemode: "auto" });
+      expect((readJsonConfig(path) as any).domains.mcp).toEqual({ engine: 'adapter', codemode: 'on' });
     } finally { getWebRuntimeConfig().widgetToken = previousToken; process.umask(previousMask); restore(); workspace.cleanup(); }
   });
 
