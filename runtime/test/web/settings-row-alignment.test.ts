@@ -8,9 +8,11 @@ const classicCss = readFileSync(join(repoRoot, "runtime/web/static/classic/css/s
 
 test("Classic Compaction opts into dense rows without changing shared Settings rows", () => {
   expect(classicComponent).toContain('class="settings-section settings-dense-form"');
-  // Count rows, not modifier-class occurrences. Native auto plus the eight
-  // independent local-lite/tool/semantic/watchdog controls remain editable.
-  expect(classicComponent.match(/class="settings-row settings-dense-row[ "]/g)).toHaveLength(9);
+  // All four remaining controls use dense rows. Tool-output controls moved to
+  // Optimisation and must not be duplicated in the native compaction pane.
+  expect(classicComponent.match(/class="settings-row settings-dense-row[ "]/g)).toHaveLength(4);
+  for(const field of ['autoCompactionEnabled','localLitePromptProfileEnabled','progressWatchdogEnabled','progressWatchdogTimeoutSec'])expect(classicComponent).toContain(field);
+  expect(classicComponent).not.toContain('toolResultSemanticSummary');
   expect(classicComponent).toContain("settings.compaction.enableAutomatic");
   expect(classicComponent).not.toContain("compaction-model-picker");
   expect(classicComponent).not.toContain("smartCompactionMethod");

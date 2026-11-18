@@ -127,7 +127,7 @@ describe("WP-3C retained latent registry coverage oracle", () => {
       service: inventory.compositionRoots.filter((root) => root === "src/agent-pool/service-factory.ts"),
     };
     expect(Object.fromEntries(Object.entries(compositionCategories).map(([category, roots]) => [category, roots.length]))).toEqual({
-      builtin: 30,
+      builtin: 29, // obsolete MCP timeout patch removed; frozen v3 fixture stays intact
       optional: 8,
       service: 1,
     });

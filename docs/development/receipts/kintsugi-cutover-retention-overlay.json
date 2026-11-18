@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "sourceParent": "adc5698c1",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "scope": "Subsequent source transformations only. Original receipt,105 rows,37 deletions and financial accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/application-bootstrap.ts",
+      "beforeSha256": "3a5948d7b2e4495a26d443561dbab0ec829b422636e4218eb52800cf20d3ec44",
+      "afterSha256": "5ac03b42bf88bca7b86b46654296086f2a78541f8f83fd40ab0a98a2f7ded088",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "runtime/durable-engine/src/default-application-runtime.ts",
+      "beforeSha256": "85de1db072f2c7e3f5280ca93cab21329da6a2ce8f3052e400202ecee97ce2a7",
+      "afterSha256": "b3e4fed6735b5289227862a9b49f63140ce539796bfc6923e8f9e4c2bdfd3d69",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-models.ts",
+      "beforeSha256": "92e8c15ebdac6c8d4e1df588bd2f316fd1b3a42da4020021ffb3131ea7341d8a",
+      "afterSha256": "557d2501610add9f33ef42863301528fe18c757af085d418f59fcb9afc8e0a1a",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-runtime.ts",
+      "beforeSha256": "6eab0bd0a8cc8a90d068cc08a181aba0730e9c2210cf39cdef4e54d86b8fa54f",
+      "afterSha256": "d3b4c97a95abd296e11c274eda85147a54e44cae5361138367f0e64963927da1",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "runtime/src/agent-pool.ts",
+      "beforeSha256": "d53a0923ce96dd719f5e91a8d209851a64163cde090449ce3022b8f58756c852",
+      "afterSha256": "cf4fa16235bdba7d9300bb23b7ef46f1d12af566059f55b54cbb6597994b6a70",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "runtime/src/channels/web/agent/agent-status.ts",
+      "beforeSha256": "c026d4d88df92c0cb9c3ab4c1fe6758e9f08f89b102139085eee1d042b1b449e",
+      "afterSha256": "9232ebe67f9507188937d9861ae743f3795ed629cddefe57d9f87bd34be6a02c",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "runtime/src/channels/web/core/web-channel-contracts.ts",
+      "beforeSha256": "6addeb6df3f99944d7b3f8048e8f35b1b69c8e3fdd24712d43c5d1a86c5876d7",
+      "afterSha256": "be9fe50e7bc1ef4068e6e14d1b41704464bcc9f35ab3e99e1126bb4e44902485",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "runtime/src/channels/web/http/dispatch-agent.ts",
+      "beforeSha256": "af21c1c0c42fcc3b0d7b3ccc4e18ead534adf90dafe361cc8537a1c3cf544df1",
+      "afterSha256": "31559338352bc039ecb35b2752987bea9cfa7e8c30f8716b02038275dcc85e32",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "runtime/src/extensions/index.ts",
+      "beforeSha256": "08b491d3c83eeb439ce3bf5a8dfc310038a78e1330ed5a90c8870c342018b61a",
+      "afterSha256": "f477edc13e83e37c2b9f39a0425df3cf0dd5c80796c699c4bf98b9547583298a",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "runtime/src/extensions/tool-capabilities.ts",
+      "beforeSha256": "61c5d8b1d5736ea618642509ee730597dada7f49de1f342c29e765e0bf5948b1",
+      "afterSha256": "7b31d9f9e0c8019d7094aa66ee9b0fb679c9a8b827e18078533aa3211ab18707",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "runtime/src/service-effects/tool-preparation/manifest.ts",
+      "beforeSha256": "3243d4482c27f6eaa1dd3c7eb5dc3ce205d575085d775d8d1f2b92f196b04fb7",
+      "afterSha256": "1006de9bcb31926464de177a160512568ba5e8e97cee3719cc692e556aa7258d",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "runtime/src/service-effects/tool-preparation/policy.ts",
+      "beforeSha256": "7e7cee875d878bd7c27d2a57d54ede5c2a4f9466a7c3d2f53efe848d548a42c2",
+      "afterSha256": "175b02636f3bb1f6d145de6419eb8fea0b98388438dd499480456f49d3c618f0",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "runtime/web/src/components/settings-dialog.ts",
+      "beforeSha256": "b6383064b5084bcd046abb4c1c554b5068513c1590c1df21514aaab3eec62ce3",
+      "afterSha256": "0b7f6d85c33575969f5d96d7b5e552e79f2cf7ea5103ee7f7e6d8c4bc9b29d18",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "runtime/web/src/dev/settings-widget-fixture.ts",
+      "beforeSha256": "ad4d62fbdd108af040affde18a82d011fcbb4b09122d57a14869972f55bb2978",
+      "afterSha256": "29cce8c813717d8c39bc5079c5f6ad2cd1aa1a36c1ce2bb49f017d3970273c2e",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "runtime/web/static/classic/css/settings.css",
+      "beforeSha256": "f4ea6b39bbef088bb0bf7ad8df8fb8d120fdec07e483999d5e0239fe54f758d4",
+      "afterSha256": "8092dc8244e7cb6ae6d677a5836d5e06823c3919a6657a5014be977201f9827a",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    },
+    {
+      "path": "docs/tools-and-skills.md",
+      "beforeSha256": "5e3212ee821b5c1f83ddbc3535ebb924c3316133a4cfa9397a70f5ad97fc69f9",
+      "afterSha256": "1a425c0f0f2e94c1adee612a88ddcc87efeeeeb62407e3befef5b980f7db9d61",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+    }
+  ]
+}

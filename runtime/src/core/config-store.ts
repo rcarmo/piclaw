@@ -7,13 +7,26 @@
  * any module that needs simple JSON-file persistence.
  */
 
-import { mkdirSync, renameSync, writeFileSync } from "fs";
+import { closeSync, constants, fchmodSync, fstatSync, openSync, mkdirSync, renameSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
 import { invalidateJsonFileCache, readCachedJsonFile } from "./config-file-cache.js";
 
 const log = createLogger("core.config-store");
+
+/** Tighten an existing owner-owned config without following links or changing
+ * bytes. Unsafe/missing inputs are never replaced. No MCP engine is involved. */
+export function preparePrivateJsonConfig(filePath:string):'absent'|'unchanged'|'migrated'|'unavailable'{
+  let fd:number;
+  try{fd=openSync(filePath,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);}
+  catch(error){return (error as NodeJS.ErrnoException)?.code==='ENOENT'?'absent':'unavailable';}
+  try{
+    const stat=fstatSync(fd);if(!stat.isFile()||stat.nlink!==1||stat.uid!==process.getuid?.())return 'unavailable';
+    if((stat.mode&0o077)===0)return 'unchanged';
+    fchmodSync(fd,0o600);return(fstatSync(fd).mode&0o777)===0o600?'migrated':'unavailable';
+  }catch{return 'unavailable';}finally{closeSync(fd);}
+}
 
 /**
  * Read and parse a JSON file, returning its contents as a plain object.
@@ -48,7 +61,7 @@ export function writeJsonConfig(filePath: string, config: Record<string, unknown
   const next = JSON.stringify(config, null, 2);
   const tempPath = join(parentDir, `.${process.pid}.${Date.now()}.tmp`);
   // Configuration can contain widget/auth material and is also read by the
-  // strict MCP owner. Atomic replacement must never widen it to the umask mode.
+  // startup privacy check. Atomic replacement must never widen it to the umask mode.
   writeFileSync(tempPath, `${next}\n`, { encoding: "utf-8", mode: 0o600, flag: "wx" });
   renameSync(tempPath, filePath);
   invalidateJsonFileCache(filePath);

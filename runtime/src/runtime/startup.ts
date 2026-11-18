@@ -32,6 +32,8 @@ import { createUuid } from "../utils/ids.js";
 import { applyEnvironmentOverrides } from "../environment-overrides.js";
 import { createLogger } from "../utils/logger.js";
 import { seedFreshWorkspaceCoreAddons } from "./core-addon-defaults.js";
+import { getConfigPath } from '../core/config-context.js';
+import { preparePrivateJsonConfig } from '../core/config-store.js';
 import { patchConsoleTimestamps } from "./console-timestamps.js";
 import { startExternalProgressWatchdogMonitor } from "./progress-watchdog-supervisor.js";
 import type { RuntimeState } from "./state.js";
@@ -165,6 +167,7 @@ export function initializeRuntimeEnvironment(state: RuntimeState): ReturnType<ty
     log.warn("Failed to seed fresh workspace core add-ons", { operation: "workspace_bootstrap.core_addons", err: error });
   }
   bootstrapWorkspaceFromSkel();
+  if(preparePrivateJsonConfig(getConfigPath())==='unavailable')log.warn('Instance configuration permissions could not be safely tightened',{operation:'startup.config_permissions_unavailable'});
 
   initDatabase(getRuntimeConfigPaths());
   const access = validateAccessStartup(getDb());
