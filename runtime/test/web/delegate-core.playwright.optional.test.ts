@@ -48,8 +48,24 @@ for (const engine of ['chromium', 'webkit']) for (const width of [390, 1280]) fo
       return route.fulfill({ status: 500, json: { error: 'Unexpected fixture request' } });
     });
     try {
-      await page.goto(server.url.href); await page.evaluate(s => document.documentElement.classList.add(s), scheme);
+      await page.goto(`${server.url.href}?section=general`); await page.evaluate(s => document.documentElement.classList.add(s), scheme);
+      await page.getByRole('button', { name: 'Delegate', exact: true }).waitFor();
+      const placement = () => page.locator('.settings-nav').evaluate(nav => {
+        const nodes = [...nav.children];
+        const labels = nodes.map(node => node.getAttribute('aria-label'));
+        return { nextAfterModels: labels[labels.indexOf('Models') + 1], delegateIndex: labels.indexOf('Delegate'), separatorIndex: nodes.findIndex(node => node.getAttribute('role') === 'separator') };
+      });
+      // The lazy placeholder and the loaded Core registration keep the same
+      // Main-group position directly after Models when the pane registers.
+      const unloaded = await placement();
+      expect(unloaded.nextAfterModels).toBe('Delegate');
+      expect(unloaded.delegateIndex).toBeLessThan(unloaded.separatorIndex);
+      await page.getByRole('button', { name: 'Delegate', exact: true }).click();
       await page.getByRole('heading', { name: 'Approved providers', exact: true }).waitFor();
+      const loaded = await placement();
+      expect(loaded.nextAfterModels).toBe('Delegate');
+      expect(loaded.delegateIndex).toBeLessThan(loaded.separatorIndex);
+      expect(await page.locator('.settings-content').evaluate(node => node.classList.contains('settings-addon-pane'))).toBe(false);
       expect(await page.locator('.settings-nav-item', { hasText: 'Delegate' }).count()).toBe(1);
       expect(await page.getByRole('heading', { name: 'Approved delegate models', exact: true }).count()).toBe(1);
       expect(await page.getByRole('radio', { name: 'Approved', exact: true }).isChecked()).toBe(false);

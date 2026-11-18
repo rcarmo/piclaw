@@ -18,7 +18,7 @@ import { admitAddonLocalRequest } from '../../runtime/src/addons/local-context.j
 import { handleRegisteredAddonConfigApiRequest } from '../../runtime/src/channels/web/handlers/addon-config-api.js';
 
 const applicationTest = isolatedApplicationTest(import.meta.url);
-for (const installedLegacy of [false, true]) for (const approved of [false, true]) for (const credentialed of [false, true]) applicationTest(`Core Delegate fresh tool and Settings; installedLegacy=${installedLegacy}; approved=${approved}; credentialed=${credentialed}`, async () => {
+for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash']) for (const installedLegacy of [false, true]) for (const approved of [false, true]) for (const credentialed of [false, true]) applicationTest(`Core Delegate fresh tool and Settings; child=${childModelId}; installedLegacy=${installedLegacy}; approved=${approved}; credentialed=${credentialed}`, async () => {
   const workspace = process.env.PICLAW_WORKSPACE!;
   const marker = join(workspace, 'retired-delegate-evaluated');
   if (installedLegacy) {
@@ -33,11 +33,13 @@ for (const installedLegacy of [false, true]) for (const approved of [false, true
   const owner = acquireRuntimeLock({ lockPath: join(workspace, 'core-delegate.lock'), strictOwnership: true, disabled: false });
   const common = { provider: 'fixture', api: 'openai-completions', baseUrl: 'https://fixture.invalid', input: ['text'], reasoning: false, contextWindow: 100000, maxTokens: 1000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
   const parent = { ...common, provider: credentialed ? 'fixture-parent' : 'fixture', id: 'gpt-6.1-sol', name: 'Parent' };
-  const child = { ...common, provider: credentialed ? 'fixture-child' : 'fixture', id: 'gpt-5.4-mini', name: 'Child' };
+  const child = { ...common, provider: credentialed ? 'fixture-child' : 'fixture', id: childModelId, name: 'Child' };
   const keys: Record<string, string> = { [parent.provider]: 'SYNTHETIC_PARENT_AUTH', [child.provider]: 'SYNTHETIC_CHILD_AUTH', unrelated: 'SYNTHETIC_UNRELATED_AUTH' };
   const credentials = createTestCredentialStore(credentialed ? Object.fromEntries(Object.entries(keys).map(([id, key]) => [id, { type: 'api_key' as const, key }])) : {});
   const searchable = [...new Set([parent.provider, child.provider])];
-  const expectedCandidates = approved ? [`${child.provider}/${child.id}`, `${parent.provider}/${parent.id}`].sort() : [];
+  const expectedCandidates = !approved ? [] : childModelId === 'mai-code-2'
+    ? [`${parent.provider}/${parent.id}`, `${child.provider}/${child.id}`]
+    : [`${child.provider}/${child.id}`, `${parent.provider}/${parent.id}`];
   const host = await ModelRuntime.create({ credentials, modelsPath: null, modelsStore: { read: async () => undefined, write: async () => {}, delete: async () => {} }, refreshOnCreate: false, allowModelNetwork: false });
   let children = 0; const offered: string[][] = [];
   const requests: { provider: string; model: string; apiKey: string | undefined; options: string; transcript: string }[] = [];
