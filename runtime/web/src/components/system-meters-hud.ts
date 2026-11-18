@@ -65,7 +65,8 @@ export function formatBytesCompact(value) {
     const units = ['B', 'K', 'M', 'G', 'T'];
     let unitIndex = 0;
     let scaled = bytes;
-    while (scaled >= 1024 && unitIndex < units.length - 1) {
+    // Move up a unit from 1000 so values stay at three digits (1001M -> 1.0G).
+    while (scaled >= 1000 && unitIndex < units.length - 1) {
         scaled /= 1024;
         unitIndex += 1;
     }

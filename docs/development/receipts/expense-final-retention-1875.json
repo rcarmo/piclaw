@@ -1903,7 +1903,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "dd4c3fbbbf8d9e5763cbc6811a9f641d11aa9f57e736ac36b47399eae0848418",
       "state": "retained-decoupled",
-      "currentSha256": "f9e3991c609d16a9126a0ac4752ff8b6ef63e0fa0658bedf69287d3ab5f040c5",
+      "currentSha256": "c22cccfe276ddb91a41fc401482e4b8ef607aad189b84f3ab7967e1ce87fc831",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -2528,7 +2528,7 @@
       "deliveryOwner": "#1882",
       "originalSha256": "cf798de30d41b9114ed684033145363088f0fa82695582d96b9213dbe4e9faad",
       "state": "retained-decoupled",
-      "currentSha256": "cf798de30d41b9114ed684033145363088f0fa82695582d96b9213dbe4e9faad",
+      "currentSha256": "0cecd1d1b970d124b0b1731fa7e654d329c26db9f0d459b2d87c50790cb1b97e",
       "currentPurpose": "passive token/cost append, unit/provenance projection, idempotency and optional opaque historical references; no execution allowance",
       "directImportCallers": [
         {

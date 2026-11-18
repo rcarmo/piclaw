@@ -131,7 +131,8 @@ describe("provider usage", () => {
       expect(usage?.secondary?.label).toBe("chat");
       expect(usage?.secondary?.remaining_percent).toBe(80);
       expect(usage?.hint_short).toContain("premium 70%");
-      expect(usage?.hint_short).toContain("chat 80%");
+      // The chat counter stays in the snapshot but not in the short hint.
+      expect(usage?.hint_short).toBe("premium 70%");
     } finally {
       globalThis.fetch = previousFetch;
     }

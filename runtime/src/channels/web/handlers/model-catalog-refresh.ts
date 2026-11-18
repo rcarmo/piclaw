@@ -18,5 +18,8 @@ export async function handleModelCatalogRefresh(channel: WebChannelLike, req: Re
     return reply({ error: "Updating model catalogues is owner-only." }, 403);
   }
   if (url.search) return reply({ error: "Model catalogue refresh does not accept query parameters." }, 400);
-  return reply(await refreshModelCatalogs(channel.agentPool.modelRuntime));
+  const outcome = await refreshModelCatalogs(channel.agentPool.modelRuntime);
+  // The shared runtime already serves the refreshed models; have every open tab reload its model state.
+  if (outcome.status !== "failed" && outcome.status !== "timed_out") channel.broadcastEvent("models_refreshed", { status: outcome.status });
+  return reply(outcome);
 }

@@ -64,6 +64,14 @@ for (const engine of ['chromium', 'webkit']) {
       expect(text).toContain('github-copilot (log in again)');
       expect(requests).toEqual([{ method: 'POST', body: null }]);
       expect(await update.isEnabled()).toBe(true);
+      // A clean update names every provider it covered and the model count change.
+      await page.unroute('**/agent/models/refresh');
+      await page.route('**/agent/models/refresh', route => route.fulfill({ json: { status: 'completed', skipped: [], failed: [],
+        providers: ['anthropic', 'github-copilot', 'openai', 'openrouter'], models: { before: 312, after: 318 } } }));
+      await update.click();
+      await page.locator('.model-catalogue-settings__notice.success').waitFor();
+      expect(await page.locator('.model-catalogue-settings__notice.success').innerText())
+        .toBe('Model catalogues updated for anthropic, github-copilot, openai, openrouter (312 → 318 models).');
       expect(errors).toEqual([]);
     } finally { await page.close(); }
   });

@@ -315,6 +315,12 @@ export function handleAppSseEvent(
     return;
   }
 
+  // Instance-wide: provider catalogues changed (Settings → Models → Update catalogues).
+  if (eventType === 'models_refreshed') {
+    refreshModelAndQueueState();
+    return;
+  }
+
   if (eventType === 'ui_open_tab') {
     const path = typeof data?.path === 'string' ? data.path.trim() : '';
     const label = typeof data?.label === 'string' ? data.label.trim() : undefined;

@@ -146,7 +146,7 @@ test('resolveComposeRunUsageMeta formats latest usage with cache and provider-co
       },
     },
   }, 'openrouter/auto')).toMatchObject({
-    label: 'Last • 5K • CH60.0% • 0.0012 (currency unknown)',
+    label: '5K • CH60.0% • 0.0012 (currency unknown)',
     cacheHitRate: 60,
     costTotal: 0.00123,
     costProvenance: 'provider_reported',
@@ -179,7 +179,7 @@ test('resolveComposeRunUsageMeta preserves explicit 0.0% and unavailable cache s
       costProvenance: 'provider_reported',
     } },
   });
-  expect(explicitZero?.label).toBe('Last • 1K • CH0.0% • 0.0000 (currency unknown)');
+  expect(explicitZero?.label).toBe('1K • CH0.0% • 0.0000 (currency unknown)');
   expect(explicitZero?.cacheHitRate).toBe(0);
 
   const unavailable = resolveComposeRunUsageMeta({
@@ -194,7 +194,7 @@ test('resolveComposeRunUsageMeta preserves explicit 0.0% and unavailable cache s
       costProvenance: 'unavailable',
     } },
   });
-  expect(unavailable?.label).toBe('Last • 1K • CH—');
+  expect(unavailable?.label).toBe('1K • CH—');
   expect(unavailable?.cacheHitRate).toBeNull();
   expect(unavailable?.title).toContain('Prompt cache telemetry unavailable');
   expect(unavailable?.title).toContain('Cost unavailable');
@@ -267,7 +267,7 @@ test('resolveComposeCacheHitMeta keeps legacy positive-cache compatibility', () 
 
 test('compose latest-run usage renders inline with model metadata', () => {
   const source = readFileSync(join(import.meta.dir, '../../web/src/components/compose-box.ts'), 'utf8');
-  expect(source).toContain('runUsageMeta?.label || null');
+  expect(source).toContain("runUsageMeta?.label ? { key: 'run', text: runUsageMeta.label } : null");
   expect(source).not.toContain('compose-cache-hit-chip');
 });
 

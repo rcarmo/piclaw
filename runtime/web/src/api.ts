@@ -1137,6 +1137,7 @@ export class SSEClient {
         bindJsonEvent('picker_pins_changed');
         bindJsonEvent('ui_theme');
         bindJsonEvent('ui_meters');
+        bindJsonEvent('models_refreshed');
 
         [
             'extension_ui_request',

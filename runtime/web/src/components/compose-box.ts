@@ -518,7 +518,8 @@ export function resolveComposeRunUsageMeta(contextUsage, activeModel = null) {
     ].filter(Boolean);
 
     return {
-        label: [runLabel, totalTokens == null ? null : formatK(totalTokens), cacheLabel, costLabel].filter(Boolean).join(' • '),
+        // "Prev" flags a run on a different model; the latest run needs no label.
+        label: [isPreviousModel ? runLabel : null, totalTokens == null ? null : formatK(totalTokens), cacheLabel, costLabel].filter(Boolean).join(' • '),
         title: titleParts.join(' • '),
         cacheHitRate,
         costTotal: finiteNumber(latest.costTotal),
@@ -1569,12 +1570,17 @@ export function ComposeBox({
         .find((option) => areRequestedModelLabelsSame(option.key, activeModel));
     const activeModelPricingLabel = formatModelPickerPricing(activeModelOption?.pricing);
     const openRouterKeyTitle = formatOpenRouterKeyUsageTitle(modelUsage);
-    const modelUsageSectionLabel = [
-        modelThinkingLabel || null,
-        routedModelStatus?.label || null,
-        modelUsageLabel || null,
-        runUsageMeta?.label || null,
-    ].filter(Boolean).join(' • ');
+    const modelUsageParts = [
+        modelThinkingLabel ? { key: 'thinking', text: modelThinkingLabel } : null,
+        routedModelStatus?.label ? { key: 'routed', text: routedModelStatus.label } : null,
+        modelUsageLabel ? { key: 'quota', text: modelUsageLabel } : null,
+        runUsageMeta?.label ? { key: 'run', text: runUsageMeta.label } : null,
+    ].filter(Boolean);
+    const modelUsageSectionLabel = modelUsageParts.map((part) => part.text).join(' • ');
+    // Narrow footers show the model name without its provider prefix.
+    const modelHintSlash = modelHintLabel.indexOf('/');
+    const modelHintProvider = modelHintSlash > 0 ? modelHintLabel.slice(0, modelHintSlash + 1) : '';
+    const modelHintName = modelHintProvider ? modelHintLabel.slice(modelHintSlash + 1) : modelHintLabel;
     const modelUsageTitleParts = [
         activeModel ? `Current model: ${modelHintLabel}${modelHintSuffix}` : null,
         routedModelStatus?.title || null,
@@ -3423,14 +3429,12 @@ export function ComposeBox({
                                         onClick=${toggleModelPopup}
                                         disabled=${switchingModel}
                                     >
-                                        ${switchingModel ? 'Switching…' : modelHintLabel}
+                                        ${switchingModel ? 'Switching…' : html`${modelHintProvider && html`<span class="compose-model-hint-provider">${modelHintProvider}</span>`}<span class="compose-model-hint-name">${modelHintName}</span>`}
                                     </button>
                                 `}
                                 <div class="compose-model-meta-subline">
                                     ${!switchingModel && modelUsageSectionLabel && html`
-                                        <span class="compose-model-usage-hint" title=${modelHintTitle}>
-                                            ${modelUsageSectionLabel}
-                                        </span>
+                                        <span class="compose-model-usage-hint" title=${modelHintTitle}>${modelUsageParts.map((part) => html`<span key=${part.key} class=${`compose-model-usage-part is-${part.key}`}>${part.text}</span>`)}</span>
                                     `}
                                 </div>
                             </div>

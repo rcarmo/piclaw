@@ -178,11 +178,9 @@ function buildCodexHint(primary: ProviderUsageWindow | null, secondary: Provider
   return parts.join(" • ");
 }
 
-function buildCopilotHint(primary: ProviderUsageWindow | null, secondary: ProviderUsageWindow | null): string {
-  return [
-    primary?.remaining_percent != null ? `premium ${compactPercent(primary.remaining_percent)}` : null,
-    secondary?.remaining_percent != null ? `chat ${compactPercent(secondary.remaining_percent)}` : null,
-  ].filter(Boolean).join(" • ");
+/** Premium requests are the limiting Copilot quota; the chat counter stays in the snapshot only. */
+function buildCopilotHint(primary: ProviderUsageWindow | null): string {
+  return primary?.remaining_percent != null ? `premium ${compactPercent(primary.remaining_percent)}` : "";
 }
 
 function buildZaiHint(primary: ProviderUsageWindow | null, secondary: ProviderUsageWindow | null): string {
@@ -266,7 +264,7 @@ async function fetchGitHubCopilotUsage(modelRuntime: UsageModelRuntime, authPath
   } : null;
   const primary = window("premium", payload?.quota_snapshots?.premium_interactions);
   const secondary = window("chat", payload?.quota_snapshots?.chat);
-  return { ...baseUsageSnapshot(), provider: "github-copilot", source: "github-copilot-internal-api", plan: typeof payload?.copilot_plan === "string" ? payload.copilot_plan : null, fetched_at: new Date().toISOString(), primary, secondary, credits_remaining: null, credits_unlimited: false, hint_short: buildCopilotHint(primary, secondary) };
+  return { ...baseUsageSnapshot(), provider: "github-copilot", source: "github-copilot-internal-api", plan: typeof payload?.copilot_plan === "string" ? payload.copilot_plan : null, fetched_at: new Date().toISOString(), primary, secondary, credits_remaining: null, credits_unlimited: false, hint_short: buildCopilotHint(primary) };
 }
 
 async function resolveOpenRouterAuth(modelRuntime: UsageModelRuntime): Promise<OpenRouterAuthResolution> {

@@ -59,7 +59,7 @@ The hamburger menu button uses `position: fixed` and appears:
 
 ### Models (order 30)
 - Searchable model table (filter in title bar) with radio buttons
-- **Refresh** re-reads the current catalogue; **Update catalogues** (owner only) refetches every provider's model list, like `pi update --models` (`POST /agent/models/refresh`, 15 s limit). Providers whose login has expired are skipped and listed; others still update.
+- **Refresh** re-reads the current catalogue; **Update catalogues** (owner only) refetches every configured provider's model list, like `pi update --models` (`POST /agent/models/refresh`, 15 s limit): built-in providers such as OpenAI and Anthropic from the pi.dev catalogue, OpenRouter from the key's own model list, GitHub Copilot from the account's live `/models`. New models are selectable immediately, without a restart, and a `models_refreshed` event makes every open tab reload its model state. Providers whose login has expired are skipped and listed; a provider that fails is reported while the others still update.
 - Model switching via `/model <label>`
 - Columns: Model, Provider, Context window, Reasoning (🧠)
 - **Thinking level slider** pinned to bottom footer:

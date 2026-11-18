@@ -43,6 +43,8 @@ async function open(engine: string, width: number, height: number, query = '?usa
   await page.waitForSelector('.workbench-statusbar .compose-context-pie');
   if (width >= 1024 && width > height) await page.locator('.workbench-activity-button[aria-label="Sessions"]').click();
   await page.waitForTimeout(350);
+  // The footer reserves its measured height after the meters' first sample; let it settle.
+  await page.waitForFunction(() => Math.abs(document.querySelector('.app-shell')!.getBoundingClientRect().bottom - document.querySelector('.workbench-statusbar')!.getBoundingClientRect().top) <= 1, undefined, { timeout: 2000 });
   return { page, errors };
 }
 const layout = (page: Page) => page.evaluate(() => {
@@ -115,16 +117,16 @@ for (const engine of ['chromium', 'webkit']) {
     } finally { await page.close(); }
   }, 30000);
 
-  browserTest(`${engine}: quota text wraps without clipping or extra blank rows`, async () => {
+  browserTest(`${engine}: long quota text truncates on the model line, keeping the full text in its title`, async () => {
     const { page, errors } = await open(engine, 320, 844, '?usage&quota&long-model');
     try {
       const m = await layout(page);
-      expect(m.usage.clippedX || m.usage.clippedY).toBe(false);
+      expect(m.usage.height).toBeLessThanOrEqual(21); // one line; the rest is in the title
       expect(m.meters.top).toBeGreaterThanOrEqual(m.model.bottom - 1);
-      expect(m.bar.height).toBeLessThanOrEqual(81);
+      expect(m.bar.height).toBeLessThanOrEqual(41);
       expect(Math.abs(m.shell.bottom - m.bar.top)).toBeLessThanOrEqual(1);
       expect(m.overflow).toBe(0);
-      expect(await page.locator('.compose-model-usage-hint').innerText()).toContain('resets in 4h 25m');
+      expect(await page.locator('.compose-model-usage-hint').getAttribute('title')).toContain('resets in 4h 25m');
       expect(errors).toEqual([]);
     } finally { await page.close(); }
   }, 30000);
@@ -235,6 +237,67 @@ for (const engine of ['chromium', 'webkit']) {
       expect(bar.y + bar.height).toBe(500);
       expect(bar.height).toBeLessThan(heightWithMeters);
       expect(Math.abs(await page.locator('.app-shell').evaluate(el => el.getBoundingClientRect().bottom) - bar.y)).toBeLessThanOrEqual(1);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+}
+
+// Phones: exactly two lines. Line 1 is the short model summary (no provider
+// prefix, routed model or "Last" label); line 2 is the meters as plain values.
+const phoneMetrics = { buffer_cache_bytes: 1050e6, io_pressure_some_percent: 6.4, io_pressure_full_percent: 1, io_pressure_some_series: [2, 6.4], io_pressure_full_series: [0, 1] };
+for (const engine of ['chromium', 'webkit']) for (const width of [320, 390, 820]) {
+  browserTest(`${engine} ${width}px: the phone footer is two lines - short model info, then meter values`, async () => {
+    const { page, errors } = await open(engine, width, width >= 820 ? 1366 : 844, '?usage&quota&routed&long-model', phoneMetrics);
+    try {
+      const shape = await page.evaluate(() => {
+        const rect = (s: string) => document.querySelector(s)!.getBoundingClientRect();
+        const bar = rect('.workbench-statusbar'), model = rect('.workbench-statusbar-compose'), meters = rect('.workbench-statusbar .system-meters-hud');
+        const usage = document.querySelector('.workbench-statusbar .compose-model-usage-hint') as HTMLElement;
+        const hint = document.querySelector('.workbench-statusbar .compose-model-hint') as HTMLElement;
+        const sparks = [...document.querySelectorAll('.workbench-statusbar .system-meters-spark')].filter(el => el.getBoundingClientRect().width > 0).length;
+        return { barHeight: bar.height, modelHeight: model.height, metersHeight: meters.height, metersBelow: meters.top >= model.bottom - 1,
+          hint: hint.innerText.trim(), usage: usage.innerText.replace(/\s+/g, ' ').trim(), usageTop: usage.getBoundingClientRect().top, hintTop: hint.getBoundingClientRect().top,
+          meterText: (document.querySelector('.workbench-statusbar .system-meters-card') as HTMLElement).innerText.replace(/\s+/g, ' ').trim(), sparks,
+          overflow: document.documentElement.scrollWidth - innerWidth };
+      });
+      expect(shape.barHeight).toBeLessThanOrEqual(41); // two 20px rows plus the border
+      expect(shape.modelHeight).toBeLessThanOrEqual(21);
+      expect(shape.metersHeight).toBeLessThanOrEqual(21);
+      expect(shape.metersBelow).toBe(true);
+      expect(Math.abs(shape.usageTop - shape.hintTop)).toBeLessThanOrEqual(2); // same line
+      expect(shape.hint).toBe('a-long-model-name-with-a-large-context-window');
+      expect(await page.locator('.workbench-statusbar .compose-model-hint').getAttribute('title')).toContain('provider/a-long-model-name-with-a-large-context-window');
+      expect(shape.usage).not.toContain('Routed');
+      expect(shape.usage).not.toContain('Last');
+      expect(shape.usage.startsWith('high')).toBe(true);
+      if (width < 640) { // phones show values; tablets keep their charts on the meter line
+        expect(shape.sparks).toBe(0);
+        expect(shape.meterText).toContain('I/O 6.4%');
+        expect(shape.meterText).toContain('BUF 1.0G');
+      }
+      expect(shape.overflow).toBe(0);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+}
+
+// iPhone home-screen apps set a compose inset for the home indicator. The status
+// bar already clears it, so the inset must not open a gap above the status bar.
+for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine} 390px: the iPhone standalone inset leaves no gap between compose and status bar`, async () => {
+    const { page, errors } = await open(engine, 390, 844);
+    try {
+      const gap = () => page.evaluate(() => document.querySelector('.workbench-statusbar')!.getBoundingClientRect().top
+        - document.querySelector('.chat-surface-compose')!.getBoundingClientRect().bottom);
+      const before = await gap();
+      await page.evaluate(() => {
+        document.documentElement.setAttribute('data-iphone-standalone-compose-inset', '1');
+        document.documentElement.style.setProperty('--iphone-standalone-compose-safe-area-bottom', '34px');
+      });
+      await page.waitForTimeout(100);
+      const after = await gap();
+      expect(Math.abs(after - before)).toBeLessThanOrEqual(1);
+      expect(after).toBeLessThanOrEqual(12);
       expect(errors).toEqual([]);
     } finally { await page.close(); }
   }, 30000);
