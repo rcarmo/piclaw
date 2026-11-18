@@ -3,7 +3,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { defineExtension, defineTask, type Harness, type ConversationId, type Tx } from "@earendil-works/pi-durable";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
-import { inferenceAllowed, observing, type Policy } from "../core/config.ts";
+import { inferenceAllowed, observing, oversightPolicy, type Policy } from "../core/config.ts";
 import { fingerprint } from "../core/identity.ts";
 import { auditSelected } from "../core/savers.ts";
 import { logisticScore } from "../core/classify/logistic.ts";
@@ -20,11 +20,15 @@ import { detach } from "./detach.ts";
 import type { createInferenceQueue } from "./sidecall.ts";
 const classifierSchema = Type.Object({label:Type.Union([Type.String(),Type.Null()]),probabilities:Type.Record(Type.String(),Type.Number())});
 export function createGuardJobs(options: {harness:() => Harness;backgroundOwner?:() => ConversationId;policy:(key:string) => Policy;queue:ReturnType<typeof createInferenceQueue>}) {
-  async function call(job:GuardJob,purpose:"loop-judge"|"writer"|"classifier"|"audit",prompt:string,policy:Policy) {
+  async function call(job:GuardJob,purpose:"loop-judge"|"writer"|"classifier"|"audit",prompt:string,policy:Policy, includesPlan = false) {
     const model = purpose === "classifier" ? job.classifier : purpose === "writer" ? job.writerModel : job.model;if (!model) return null;
     const id = job.effect.id+"/"+purpose;
     const classification = purpose === "classifier" ? {id,model,purpose:"loop" as const,state:job.effect.digest,labels:{productive:"The process is making progress",stuck:"A repetitive unproductive dead-end",uncertain:"Insufficient evidence"},deadlineMs:policy.budget.deadlineMs} : undefined;
     const request:InferenceRequest = {id,purpose,model,prompt,maxOutputTokens:policy.budget.maxOutputTokens,deadlineMs:policy.budget.deadlineMs};
+    if (includesPlan) {
+      request.includesPlan = true;
+      if (job.goal && job.planTask) request.planBinding = fingerprint(JSON.stringify({plan:job.goal,task:job.planTask}));
+    }
     if (classification) request.classification = classification;
     if (purpose === "audit") request.auditFor = "loop";
     const admitted = await options.queue.enqueue(job.host.conversationId,request,{sessionKey:job.sessionKey,account:JSON.stringify([job.host.scope.host,model.provider]),runId:job.effect.runId,revision:job.revision,digest:fingerprint(job.effect.digest),estimatedMaximumCost:null});
@@ -34,7 +38,7 @@ export function createGuardJobs(options: {harness:() => Harness;backgroundOwner?
   }
   const worker = defineTask<{id:string},{phase:"judge"},null>({name:"token-economizer.guard-judge",version:1,initial:() => ({phase:"judge"}),phases:{async judge(task,runtime,context) {
     const source = (await runtime.snapshot(GuardJobsDoc,context))!.jobs[task.input.id];if (!source) throw new Error("Missing guard pipeline");
-    const job = structuredClone(source), policy = options.policy(job.sessionKey), scope = scopeKey(job.host.scope);
+    const job = structuredClone(source), policy = oversightPolicy(options.policy(job.sessionKey)), scope = scopeKey(job.host.scope);
     if (!observing(policy) || policy.loop !== "judge") {
       await runtime.commit(async tx => {const row = (await tx.doc(GuardJobsDoc)).jobs[job.effect.id];row.status = "complete";row.result = {id:job.effect.id,runId:job.effect.runId,segment:job.effect.segment,verdict:null,writer:null};return {status:"terminal",outcome:{status:"completed",result:null}};},context);return;
     }
@@ -64,24 +68,25 @@ export function createGuardJobs(options: {harness:() => Harness;backgroundOwner?
       }
     }
     if (!verdict && ["generative","cascade"].includes(policy.judge) && inferenceAllowed(policy)) {
-      const result = await call(job,"loop-judge",judgePrompt(job.effect.digest),policy);reference = result ? parseJudge(result.text) : null;if (result) referenceModel = result.model;verdict = reference;
+      const goal = policy.goalChecks && policy.sharePlanWithJudge === true ? job.goal : undefined;
+      const result = await call(job,"loop-judge",judgePrompt(job.effect.digest,goal),policy,!!goal);reference = result ? parseJudge(result.text,!!goal) : null;if (result) referenceModel = result.model;verdict = reference;
     }
-    const audited = (local || job.compactFull !== null) && auditSelected(scope,job.effect.id,policy.savers.auditPercent) && inferenceAllowed(options.policy(job.sessionKey));
+    const audited = (local || job.compactFull !== null) && auditSelected(scope,job.effect.id,policy.savers.auditPercent) && inferenceAllowed(oversightPolicy(options.policy(job.sessionKey)));
     if (audited) {const result = await call(job,"audit",judgePrompt(job.compactFull ?? job.effect.digest),policy);reference = result ? parseJudge(result.text) : null;if (result) referenceModel = result.model;}
     if (job.compactFull && !audited) reference = null;
     // Deliberately no run-freshness/budget-count check here: reference worker writing precedes publication,
     // even when the originating run already ended. The queue still enforces current master and spend limits.
-    if (!reused && verdict?.stuck && verdict.confidence >= job.threshold && !job.template && inferenceAllowed(options.policy(job.sessionKey))) {
+    if (!reused && verdict?.stuck && verdict.confidence >= job.threshold && !job.template && inferenceAllowed(oversightPolicy(options.policy(job.sessionKey)))) {
       const result = await call(job,"writer",writerPrompt(job.effect.digest),policy);written = result ? parseWriter(result.text) : null;
     }
     runtime.signal.throwIfAborted();
     await runtime.commit(async tx => {
       const jobs = await tx.doc(GuardJobsDoc), current = jobs.jobs[job.effect.id], classifiers = await tx.doc(ClassifiersDoc,scope,null);
-      const enabled = observing(options.policy(job.sessionKey)) && options.policy(job.sessionKey).loop === "judge";
+      const enabled = observing(oversightPolicy(options.policy(job.sessionKey))) && options.policy(job.sessionKey).loop === "judge";
       current.status = "complete";current.result = {id:job.effect.id,runId:job.effect.runId,segment:job.effect.segment,verdict:enabled ? verdict : null,writer:enabled ? written : null};
       const run = await tx.doc(RunDoc,job.sessionKey,null), fresh = !run.closed && run.guard?.runId === job.effect.runId && run.guard.segment === job.effect.segment && run.guard.judge_pending?.id === job.effect.id;
       const sample = classifiers.samples.find(row => row.id === job.sampleId);
-      if (enabled && fresh && sample && reference && (reference.stuck === false || reference.stuck === true && reference.confidence >= job.threshold)) {
+      if (enabled && fresh && sample && (!job.goal || audited) && reference && (reference.stuck === false || reference.stuck === true && reference.confidence >= job.threshold)) {
         sample.label = reference.stuck ? 1 : 0;sample.source = audited ? "audit" : "reference";
         sample.uniform = audited || !local && !(policy.savers.localLoop && artifact?.identity.state === "active_bands") && !data?.text.some(artifact => artifact.state === "active_bands" && artifact.provenance.featureVersion === frozenSample?.featureVersion && artifact.provenance.backend?.id === job.classifier?.id);
         sample.teacher = referenceModel;sample.classifier = classifierModel;sample.textScore = textScore;
@@ -98,7 +103,7 @@ export function createGuardJobs(options: {harness:() => Harness;backgroundOwner?
   }});
   async function schedule(tx:Tx,job:GuardJob,sample:Sample) {
     const jobs = await tx.doc(GuardJobsDoc);if (Object.hasOwn(jobs.jobs,job.effect.id)) return true;
-    if (!observing(options.policy(job.sessionKey)) || options.policy(job.sessionKey).loop !== "judge") return false;
+    if (!observing(oversightPolicy(options.policy(job.sessionKey))) || options.policy(job.sessionKey).loop !== "judge") return false;
     const classifiers = await tx.doc(ClassifiersDoc,scopeKey(job.host.scope),null);classifiers.samples = retainSamples(detach({samples:classifiers.samples}).samples,[sample]);
     jobs.jobs[job.effect.id] = job;
     await tx.createTask(worker,{id:job.effect.id},{ownership:{kind:"conversation"},conversationId:options.backgroundOwner?.() ?? job.host.conversationId,background:true});

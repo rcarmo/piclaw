@@ -17,7 +17,7 @@ function cost(value:SdkUsage|undefined,model:AnyModel):number|null {
 }
 /** Direct, tool-free SDK calls. No agent prompt, registry, workspace environment or execution model fallback. */
 export function createSdkModelTransport(models:Models) {
-  const sideCall:SideCall = async (request,signal) => {
+  const sideCall:SideCall = async (request,signal,beforeSend) => {
     const model = models.getModel(request.model.provider,request.model.id), start = Date.now();
     if (!model) return {text:"",model:request.model,usage:null,cost:0,durationMs:0,authUnavailable:false,error:"Selected generation model is unavailable"};
     // Effort-based adapters must not default to an expensive reasoning level.
@@ -25,7 +25,14 @@ export function createSdkModelTransport(models:Models) {
     // an extra thinking budget there or silently raise the user's response cap.
     const reasoning = model.reasoning && !["anthropic-messages","bedrock-converse-stream"].includes(model.api)
       ? getSupportedThinkingLevels(model).find((level):level is ThinkingLevel => level !== "off") : undefined;
-    const message = await models.completeSimple(model,{messages:[{role:"user",content:request.prompt,timestamp:Date.now()}]},{signal,maxTokens:request.maxOutputTokens,reasoning,maxRetries:0,cacheRetention:"short",sessionId:`token-economizer:${fingerprint(JSON.stringify([request.cacheScope ?? request.id,request.purpose,request.auditFor ?? request.classification?.purpose ?? null,request.model.provider,request.model.id])).slice(0,40)}`});
+    const options:NonNullable<Parameters<Models["completeSimple"]>[2]> = {signal,maxTokens:request.maxOutputTokens,reasoning,maxRetries:0,cacheRetention:"short",sessionId:`token-economizer:${fingerprint(JSON.stringify([request.cacheScope ?? request.id,request.purpose,request.auditFor ?? request.classification?.purpose ?? null,request.model.provider,request.model.id])).slice(0,40)}`};
+    if (beforeSend) {
+      // Auth resolution can wait on a delegated provider token exchange. Check
+      // once it finishes and again where the adapter serializes the body.
+      options.transformHeaders = async headers => {await beforeSend();return headers;};
+      options.onPayload = async payload => {await beforeSend();return payload;};
+    }
+    const message = await models.completeSimple(model,{messages:[{role:"user",content:request.prompt,timestamp:Date.now()}]},options);
     const text = message.content.filter(part => part.type === "text").map(part => part.text).join("\n");
     const error = message.stopReason === "length" ? `Optimizer response reached its ${request.maxOutputTokens}-token limit. Use a lower-reasoning model or adjust the output limit; no automatic retry was made.`
       : message.stopReason !== "stop" ? message.errorMessage ?? `Unexpected optimizer stop: ${message.stopReason}`

@@ -24,3 +24,4 @@ import "../../runtime/durable-engine/vendor/token-economizer/test/upstream-fixes
 import "../../runtime/durable-engine/qualification/token-optimizer-host.test.ts";
 import "../../runtime/durable-engine/qualification/optimizer-model-source.test.ts";
 import "../../runtime/durable-engine/qualification/optimizer-model-bridge.test.ts";
+import "../../runtime/durable-engine/qualification/token-optimizer-oversight.test.ts";

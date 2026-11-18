@@ -5,7 +5,7 @@ import { PlanDoc } from './plan-document.js';
 import { DEFAULT_PLAN, normalizeStoredPlanMarkdown, structuredPlanDetails, type SessionPlan } from '../../src/plan/markdown.js';
 import { createLogger } from '../../src/utils/logger.js';
 const log = createLogger('plan');
-export const planEtag = (plan: SessionPlan) => '"' + createHash('sha256').update(JSON.stringify(plan)).digest('hex') + '"';
+export const planEtag = (plan: SessionPlan) => '"' + createHash('sha256').update(JSON.stringify({chat_jid:plan.chat_jid,markdown:plan.markdown,updated_at:plan.updated_at})).digest('hex') + '"';
 
 /** Authenticated HTTP composition over the existing SDK Session, never a store. */
 export async function handleNativePlanRequest(session: Session, request: Request, chat: string, context: Context,
@@ -50,7 +50,7 @@ export async function handleNativePlanRequest(session: Session, request: Request
     current(); const draft = await tx.doc(PlanDoc, chat, initial); current();
     if (request.headers.get('if-match') !== planEtag(snapshot(draft))) { conflict = true; throw Error('Stale Plan write'); }
     const next = { chat_jid: chat, markdown, updated_at: new Date().toISOString() };
-    draft.markdown = markdown; draft.updated_at = next.updated_at; current(); return next;
+    draft.markdown = markdown; draft.updated_at = next.updated_at; draft.revision = (draft.revision ?? 0)+1; current(); return next;
   }, context).catch(error => { if (!conflict) throw error; return undefined; });
   if (!plan) return reply({ error: 'Plan changed; refresh before saving. Your edits were not saved.' }, 409);
   current();

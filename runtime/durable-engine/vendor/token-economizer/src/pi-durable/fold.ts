@@ -52,16 +52,18 @@ export function createMechanismFolder(options: {harness:() => Harness;domain:Hos
     const renders:NonNullable<Knowledge["renders"]> = knowledge.renders ? structuredClone(knowledge.renders) : {environment:"",distilled:"",ids:[]};
     const free = renderEnvironment(environment,policy.maxFacts,policy.maxFactTokens,knowledge.factReviews);
     const distillObservations = learning ? observations.slice(-64).map(call => ({...call,command:call.command.slice(0,2048),output:call.output.slice(-1024)})) : observations;
+    const digest = hasEvidence || !relevant.length ? genericDigest(distillObservations,evidenceGroup,[host.repositoryRoot],"") : null;
+    if (digest && trajectory.work && !incomplete) digest.work = trajectory.work;
     if (paidSelected && (!learning || hasEvidence || !incremental)) {
       const model = modelFor(policy,"proposer"), account = model ? JSON.stringify([host.scope.host,model.provider]) : "";
       const paused = (await options.harness().snapshot(JobsDoc,BACKGROUND_CONTEXT))?.paused.includes(account) ?? false;
       diagnostics.proposer = !hasEvidence && incomplete ? "incomplete-evidence" : !inferenceAllowed(policy) ? "inference-disabled" : !model ? "no-model" : paused ? "auth-paused" : !proposalDue ? learning?.lastProposalAt ? "cooldown-or-cadence" : "waiting-for-checkpoints" : "waiting-for-cadence";
-      const tick = learning && !hasEvidence ? {state:distiller,prompt:!incomplete && proposalDue && inferenceAllowed(policy) && model && !paused && distiller.window.length && distiller.now-distiller.last_propose >= policy.proposeEvery ? buildProposerPrompt(host.scope.repository,distiller,[],envSelected ? free.claims : []) : null} : updateDistiller(distiller,hasEvidence || !relevant.length ? genericDigest(distillObservations,evidenceGroup,[host.repositoryRoot],"") : null,distillObservations.filter(call => call.semantic === "shell").map(call => ({command:call.command,output:call.output})),policy.proposeEvery,(hasEvidence || !learning) && inferenceAllowed(policy) && model !== null && !paused && proposalDue,host.scope.repository,envSelected ? free.claims : [],learning?.credits);
+      const tick = learning && !hasEvidence ? {state:distiller,prompt:!incomplete && proposalDue && inferenceAllowed(policy) && model && !paused && distiller.window.length && distiller.now-distiller.last_propose >= policy.proposeEvery ? buildProposerPrompt(host.scope.repository,distiller,[],envSelected ? free.claims : []) : null} : updateDistiller(distiller,digest,distillObservations.filter(call => call.semantic === "shell").map(call => ({command:call.command,output:call.output})),policy.proposeEvery,(hasEvidence || !learning) && inferenceAllowed(policy) && model !== null && !paused && proposalDue,host.scope.repository,envSelected ? free.claims : [],learning?.credits);
       distiller = tick.state;
       if (tick.prompt && model && (!policy.savers.novelty || distiller.now-novelty.lastSkip >= policy.proposeEvery)) {
-        const signals = [host.environmentRevision,JSON.stringify(distiller.window.map(({iid:_iid,...digest}) => digest)),JSON.stringify(distiller.facts.map(fact => fact.spec)),JSON.stringify(distiller.extractors),JSON.stringify(distiller.raw_window)];
+        const signals = [host.environmentRevision,JSON.stringify(distiller.window.map(({iid:_iid,work:_work,...digest}) => digest)),JSON.stringify(distiller.facts.map(fact => fact.spec)),JSON.stringify(distiller.extractors),JSON.stringify(distiller.raw_window)];
         const proposalDigest = fingerprint(JSON.stringify([host.environmentRevision,
-          distiller.window.map(({iid:_iid,n_cmds:_count,_cmd_blob:_commands,_out_blob:_output,...digest}) => digest),
+          distiller.window.map(({iid:_iid,n_cmds:_count,_cmd_blob:_commands,_out_blob:_output,work:_work,...digest}) => digest),
           distiller.facts.map(fact => fact.spec),distiller.extractors,
           [...new Set(distiller.raw_window.flat().map(call => JSON.stringify(call)))].sort()]));
         const unchanged = learning?.lastProposalDigest === proposalDigest;

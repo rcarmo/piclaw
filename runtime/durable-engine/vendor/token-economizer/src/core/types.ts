@@ -21,9 +21,9 @@ export type Decision<L extends string> = { kind: "label"; label: L; rawScore: nu
 export type LoopLabel = "productive" | "stuck";
 export type ToolLabel = "keep" | "drop_candidate";
 export type InferencePurpose = "proposer" | "loop-judge" | "writer" | "tool-judge" | "classifier" | "audit" | "output-summary";
-export type InferenceRequest = { id: string; cacheScope?: string; purpose: InferencePurpose; model: ModelRef; prompt: string; maxOutputTokens: number; deadlineMs: number; classification?: ClassifyRequest; auditFor?:"loop"|"tools"|"proposer" };
+export type InferenceRequest = { id: string; cacheScope?: string; includesPlan?: boolean; planBinding?: string; purpose: InferencePurpose; model: ModelRef; prompt: string; maxOutputTokens: number; deadlineMs: number; classification?: ClassifyRequest; auditFor?:"loop"|"tools"|"proposer" };
 export type InferenceResult = { text: string; model: ModelRef; usage: Usage | null; cost: number | null; authUnavailable: boolean; error: string | null; durationMs: number };
-export type SideCall = (request: InferenceRequest, signal: AbortSignal) => Promise<InferenceResult>;
+export type SideCall = (request: InferenceRequest, signal: AbortSignal, beforeSend?: () => Promise<void>) => Promise<InferenceResult>;
 export type ClassifyRequest = { id: string; model: ModelRef; purpose: "loop" | "tools"; state: string; labels: Record<string, string>; deadlineMs: number };
 export type ClassifyResult = { label: string | null; probabilities: Record<string, number>; model: ModelRef; usage: Usage | null; cost: number | null; error: string | null; authUnavailable: boolean; durationMs: number };
 export type DecisionClassifier = (request: ClassifyRequest, signal: AbortSignal) => Promise<ClassifyResult>;

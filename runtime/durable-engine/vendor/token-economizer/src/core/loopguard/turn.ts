@@ -8,7 +8,7 @@ import { assess, gateForJudge, isStuck, nudgeText, type JudgeVerdict, type Thres
 import { canonicalTool, emptySpiral, errorMarker, recentDigest, spiralSignals, updateSpiral, type SpiralState } from "./state.ts";
 import { shellEditTargets, shellRevertTargets } from "./shell-edits.ts";
 import { runnerVerdict, statusOfTests } from "./verification.ts";
-export type GuardDecision = {action:"redirect" | "notice";reason:string;id:string};
+export type GuardDecision = {action:"redirect" | "notice";reason:string;id:string;goalStamp?:string};
 export type Guard = {
   runId:string;segment:number;st:SpiralState;whole:SpiralState;cum_turns:number;nudges_done:number;aborted:boolean;noticeDelivered:boolean;
   judge_last:number;judge_gap:number;judge_calls:number;last_edit:number;last_verify:number;last_verify_failed:boolean;edits:number;verifications:number;
@@ -57,22 +57,31 @@ export function foldGuard(prior: Guard,call: Observation,envelope: number | null
     state.judge_gap = ready.verdict?.stuck === false ? Math.min(20,state.judge_gap+5) : 5;
     const assessment = assess(signals,envelope,thr,{verdict:ready.verdict});
     if (assessment.redirect) return decide(assessment.reason);
+    const goal = ready.verdict?.goal;
+    if (goal?.drift === true && goal.confidence >= thr.judge_confidence && call.verification !== "passed" && state.edits === prior.edits && state.nudges_done < budget) return decide("goal-drift");
     if (thr.nudge_on_ambiguous && assessment.reason === "judge-ambiguous-spared" && state.nudges_done < budget) return decide("ambiguous-past-envelope");
     return {state,judge:null,decision:null};
   }
   if (pending && now-pending.since < 300_000) return {state,judge:null,decision:null};
   state.judge_pending = null;
   if (state.st.turns-state.judge_last < state.judge_gap) return {state,judge:null,decision:null};
-  state.judge_last = state.st.turns;state.judge_calls++;
   if (!runnerAvailable) return {state,judge:null,decision:null};
+  state.judge_last = state.st.turns;state.judge_calls++;
   const effect: GuardEffect = {id:JSON.stringify([state.runId,state.segment,state.judge_calls]),runId:state.runId,segment:state.segment,digest:recentDigest(state.st,envelope,verificationState(state))};
   state.judge_pending = {id:effect.id,since:now,segment:state.segment};return {state,judge:effect,decision:null};
 }
-export function decisionText(guard: Guard): string {return guard.nudge_ready ?? nudgeText(spiralSignals(guard.st),guard.st.edit_counts,guard.st.edit_order);}
+export function decisionText(guard: Guard): string {
+  if (guard.held?.reason === "goal-drift") return "Task check (automated, advisory): Recent actions may not be advancing the active plan item. Reconcile the latest user request with the plan before choosing another action. If the current action is a prerequisite, continue with it. Do not change scope or assume the work is done.";
+  return guard.nudge_ready ?? nudgeText(spiralSignals(guard.st),guard.st.edit_counts,guard.st.edit_order);
+}
 /** Apply only at a live boundary, including a simulated Observe boundary; held replay does not spend. */
 export function consumeDecision(prior: Guard): Guard {
   const state = structuredClone(prior);if (!state.held) return state;
-  if (state.held.action === "redirect") {
+  if (state.held.reason === "goal-drift") {
+    // The same side call supplied two assessments. A goal advisory spends one
+    // nudge, but must not reset the loop judge's cadence and cause another call.
+    state.nudges_done++;state.nudge_ready = null;
+  } else if (state.held.action === "redirect") {
     state.nudges_done++;state.segment++;state.st = emptySpiral();state.window = [];state.sinceNewFailure = null;state.exactSignatures = [];state.featureCoverage = true;state.judge_last = -999;state.judge_gap = 5;state.judge_pending = null;state.nudge_ready = null;
   } else state.noticeDelivered = true;
   state.held = null;return state;

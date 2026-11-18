@@ -18,6 +18,9 @@ export const PolicySchema = Type.Object({
   autoToolPicks: Type.Optional(Type.Boolean()),
   reduceOutputs: Type.Optional(Type.Boolean()),
   goalChecks: Type.Optional(Type.Boolean()),
+  oversightMode: Type.Optional(Type.Enum(["off", "observe", "active"])),
+  oversightInferenceInObserve: Type.Optional(Type.Boolean()),
+  sharePlanWithJudge: Type.Optional(Type.Boolean()),
   /** Store long tool outputs outside model context, with bounded search and reads. Optional so older settings load. */
   offloadOutputs: Type.Optional(Type.Boolean()),
   /** Ask the optimizer model to summarise each stored output; a deterministic preview is the fallback. */
@@ -50,8 +53,15 @@ export function effectivePolicy(policy: Policy, workspace: Override = "inherit",
 }
 export function modelFor(policy:Policy,purpose:keyof Policy["models"]) {return policy.models[purpose] ?? (purpose === "loopClassifier" || purpose === "toolClassifier" ? policy.classifierModel : policy.generativeModel);}
 export function inferenceAllowed(policy: Policy): boolean { return policy.enabled && (policy.mode === "active" || policy.mode === "observe" && policy.inferenceInObserve); }
+export function oversightPolicy(policy:Policy):Policy {
+  const mode = policy.oversightMode ?? (policy.enabled && (policy.goalChecks || policy.loop !== "off") ? policy.mode : "off");
+  return {...policy,enabled:mode !== "off",mode,inferenceInObserve:policy.oversightInferenceInObserve ?? policy.inferenceInObserve};
+}
+export function observingWork(policy:Policy):boolean {return observing(policy) || observing(oversightPolicy(policy));}
 export function purposeAllowed(policy:Policy,request:InferenceRequest):boolean {
-  if (!inferenceAllowed(policy)) return false;
+  const loop = request.purpose === "loop-judge" || request.purpose === "writer" || request.classification?.purpose === "loop" || request.auditFor === "loop";
+  if (request.includesPlan && (policy.sharePlanWithJudge !== true || policy.goalChecks !== true)) return false;
+  if (!inferenceAllowed(loop ? oversightPolicy(policy) : policy)) return false;
   const paidFacts = policy.microSkills === "distiller" || policy.microSkills === "both";
   if (request.purpose === "proposer") return paidFacts;
   if (request.purpose === "output-summary") return policy.offloadOutputs === true && policy.outputSummaries === true;

@@ -1,11 +1,11 @@
-// Kintsugi b8469c29 MIT port; attribution in mcp/UPSTREAM-LICENSE.
+// Kintsugi 4afeac1e MIT port; attribution in mcp/UPSTREAM-LICENSE.
 const isDurableUserEntry=(entry:import("@earendil-works/pi-durable").EntryRecord)=>entry.kind==="pi.user"||entry.kind==="host.accepted";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { contentText, type JsonObject, type Message } from "@earendil-works/pi-ai";
 import { AssistantEntry, LiveDoc, ToolResultEntry, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type Harness } from "@earendil-works/pi-durable";
 import { ContextSnapshotEntry, FactContextEntry } from "#token-optimizer/pi-durable";
 const isJsonObject=(value:unknown):value is import("@earendil-works/pi-durable").JsonObject=>value!==null&&typeof value==="object"&&!Array.isArray(value);
-import { makeObservation, type ToolMapping } from "#token-optimizer/core";
+import { makeObservation, workEvidence, type ToolMapping } from "#token-optimizer/core";
 import { decodeArguments, decodeResult } from "#token-optimizer/pi-durable";
 import { runnerVerdict, statusOfTests } from "#token-optimizer/core";
 import type { HostSession, Trajectory, ToolResultData } from "#token-optimizer/pi-durable";
@@ -67,10 +67,13 @@ export function optimizerSections(entries:readonly EntryRecord[]) {
 /** One conversation's committed tool results within a session range. */
 function readSource(entries:readonly EntryRecord[],host:HostSession) {
   const observed:Observation[] = [], calls = new Map<string,{name:string;args:JsonObject;runId:string}>(), starts = new Map<string,{start:CallStart;entry:EntryRecord}>();
-  let prompts = 0, activity = 0;
+  let prompts = 0, activity = 0, answeredTurns = 0, answeredEnd = 0, awaitingAnswer = false;
   for (const entry of entries) {
-    if (isDurableUserEntry(entry)) prompts++;
-    if (AssistantEntry.is(entry)) for (const message of entry.model ?? []) if (message.role === "assistant") for (const call of message.content) if (call.type === "toolCall") calls.set(call.id,{name:call.name,args:call.arguments,runId:String(entry.byTaskId ?? "unknown")});
+    if (isDurableUserEntry(entry)) {prompts++;awaitingAnswer = true;}
+    if (AssistantEntry.is(entry)) for (const message of entry.model ?? []) if (message.role === "assistant") {
+      if (awaitingAnswer && message.stopReason === "stop" && message.content.some(block => block.type === "text" && block.text.trim()) && !message.content.some(block => block.type === "toolCall")) {answeredTurns++;answeredEnd = observed.length;awaitingAnswer = false;}
+      for (const call of message.content) if (call.type === "toolCall") calls.set(call.id,{name:call.name,args:call.arguments,runId:String(entry.byTaskId ?? "unknown")});
+    }
     function capture(name:string,args:JsonObject|null,result:ToolResultData,outer:string,nested:string|null,runId:string,at:number) {
       const mapping = nativeOptimizerTool(name);if (mapping.semantic === "wrapper") return;
       const decoded = decodeResult(result), arguments_ = args === null ? {command:"",targets:[],coverage:"partial" as const} : decodeArguments(args), status = mapping.semantic === "shell" ? statusOfTests(arguments_.command) : null, verdict = runnerVerdict(decoded.output);
@@ -89,7 +92,7 @@ function readSource(entries:readonly EntryRecord[],host:HostSession) {
       capture(source.name,source.args,{name:source.name,structured:null,details:JSON.parse(JSON.stringify(message.details ?? null)),output:contentText(message.content),isError:message.isError,diagnostics:entry.data.diagnostics.map(diagnostic => ({code:diagnostic.code ?? "",message:diagnostic.message}))},String(entry.byTaskId),null,source.runId,message.timestamp);
     }
   }
-  return {kind:"read" as const,observations:observed,prompts,activity,unfinished:starts.size > 0};
+  return {kind:"read" as const,observations:observed,prompts,activity,answeredTurns,answeredEnd,unfinished:starts.size > 0};
 }
 /**
  * Reads only the active fork's committed native source; never executes a tool or imports abandoned history. Subagent
@@ -118,5 +121,7 @@ export async function nativeOptimizerTrajectory(harness:Harness,host:HostSession
     if (read.unfinished && (await harness.snapshot(LiveDoc,id,context))?.run) return {kind:"later",reason:"A subagent is still running"};
     observations.push(...read.observations);activity = Math.max(activity,read.activity);
   }
-  return {kind:"ready",cutoff:String(Math.min(maximum,latest ?? begin)),observations,prompts:root.prompts,transcriptActivity:activity};
+  const result:Trajectory = {kind:"ready",cutoff:String(Math.min(maximum,latest ?? begin)),observations,prompts:root.prompts,transcriptActivity:activity};
+  if (root.answeredTurns) result.work = workEvidence(root.observations.slice(0,root.answeredEnd),root.answeredTurns,host.repositoryRoot);
+  return result;
 }

@@ -30,7 +30,7 @@ export function atBackstop(state: SpiralSnapshot, envelope: number | null, thr: 
   const limit = thr.backstop_turns ?? (envelope === null ? null : envelope * thr.backstop_mult);
   return limit !== null && state.turns >= limit && isStuck(state, thr);
 }
-export type JudgeVerdict = { stuck: boolean | null; confidence: number; reason: string };
+export type JudgeVerdict = { stuck: boolean | null; confidence: number; reason: string; goal?: {drift:boolean|null;confidence:number} };
 export type Assessment = { redirect: boolean; reason: string };
 /** A null verdict means a wired judge has no result, not that rule-only mode was selected. */
 export function assess(state: SpiralSnapshot, envelope: number | null, thr: Thresholds, judge: { verdict: JudgeVerdict | null } | null): Assessment {

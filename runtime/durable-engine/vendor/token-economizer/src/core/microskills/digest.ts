@@ -4,6 +4,7 @@ import type { Observation } from "../types.ts";
 import { redact } from "../observations.ts";
 import { compareCodePoints, sliceCodePoints } from "../ordering.ts";
 import type { FactDigest } from "./detectors.ts";
+import { shellEditTargets } from "../loopguard/shell-edits.ts";
 export const checkCommand = /\b(?:pytest|py\.test|tox|nox|unittest|runtests\.py|jest|vitest|mocha|rspec|phpunit|ctest|tsc|eslint|prettier|ruff|flake8|pylint|mypy|pyright|golangci-lint|cmake|ninja|bazel)\b|(?:^|[\s;&|(])make\b|\b(?:npm|yarn|pnpm|bun)\s+(?:run\s+)?(?:test|build|lint|check|typecheck)\b|\b(?:cargo|go|mvn|gradle|gradlew|dotnet|mix|swift)\s+(?:test|build|check|vet|clippy|compile|package|verify)\b/;
 const testCommand = /\b(?:pytest|py\.test|tox|nox|unittest|runtests\.py|jest|vitest|mocha|rspec|phpunit|ctest)\b|\b(?:make|npm|yarn|pnpm|bun|cargo|go|mvn|gradle|gradlew|dotnet|mix|swift|rake)\s+(?:run\s+)?test\b/;
 const missingCommand = /command not found|: not found\b|is not recognized as/i;
@@ -34,6 +35,14 @@ export function errorSignature(output: string, roots: string[], home: string): s
     return sliceCodePoints(normalized.trim().replace(/\s+/g," "),0,120);
   }
   return "";
+}
+/** Receipts enrich proposals; they do not establish that every requested deliverable was met. */
+export function workEvidence(observations:readonly Observation[],answeredTurns:number,root:string):NonNullable<FactDigest["work"]> {
+  const latest = observations.slice(-64);
+  const tools = [...new Set(latest.filter(call => call.coverage === "complete" && call.outcome === "success").map(call => call.semantic))].sort(compareCodePoints);
+  const boundary = latest.findLastIndex(call => call.semantic === "edit" || call.semantic === "shell" && shellEditTargets(call.command).length > 0 || call.verification === "failed" || call.coverage !== "complete");
+  const checksAfterLastEdit = templates(latest.slice(boundary+1).filter(call => call.semantic === "shell" && call.verification === "passed" && call.outcome === "success" && call.exitCode === 0).map(call => relativeText(redact(call.command),[root],"")),4);
+  return {answeredTurns:Math.min(64,answeredTurns),tools,checksAfterLastEdit};
 }
 export function genericDigest(observations: Observation[], iid: string, roots: string[], home: string): FactDigest {
   const commands = observations.filter(call => call.semantic === "shell"), out = commands.map(call => redact(call.output)).join("\n");

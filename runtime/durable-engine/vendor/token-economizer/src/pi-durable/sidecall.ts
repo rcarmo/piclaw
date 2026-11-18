@@ -10,7 +10,7 @@ import { JobsDoc, type InferenceJob } from "./documents.ts";
 import type { OperationSink } from "./operations.ts";
 export type JobOrigin = { sessionKey: string; account: string; runId: string | null; revision: string; digest: string; estimatedMaximumCost: number | null; expiresAt?: number };
 export type JobAdmission = { accepted: boolean; reason: string; job: InferenceJob | null };
-export function createInferenceQueue(options: { harness: () => Harness; backgroundOwner?:() => ConversationId; policy: (sessionKey: string) => Policy; sideCall: SideCall; maximumCost?:(request:InferenceRequest) => number|null;onAuthPause?:(account:string,revision:number,key:string) => Promise<void>; now?:() => number;onOperation?:OperationSink }) {
+export function createInferenceQueue(options: { harness: () => Harness; backgroundOwner?:() => ConversationId; policy: (sessionKey: string) => Policy; sideCall: SideCall; currentPlan?:(job:InferenceJob) => Promise<boolean>; maximumCost?:(request:InferenceRequest) => number|null;onAuthPause?:(account:string,revision:number,key:string) => Promise<void>; now?:() => number;onOperation?:OperationSink }) {
   async function report(tx:Tx,job:InferenceJob,at:number) {
     if (!options.onOperation || job.conversationId === undefined) return;
     await options.onOperation(tx,job.conversationId,{
@@ -69,16 +69,25 @@ export function createInferenceQueue(options: { harness: () => Harness; backgrou
         const remaining = Math.max(1, job.deadline-runtime.now());
         const clear = runtime.setTimer(() => controller.abort(new Error("Optimisation deadline exceeded")), remaining);
         let result: InferenceResult | null = null, error: string | null = null, attempted = false;
+        const checkBeforeSend = async () => {
+          try {
+            if (job.request.includesPlan && !await options.currentPlan?.(job)) throw new Error("Active plan changed before the judge could run");
+            signal.throwIfAborted();
+            if (!purposeAllowed(options.policy(job.sessionKey),job.request)) throw new Error("Optimisation disabled");
+            if (runtime.now() >= job.deadline) throw new Error("Optimisation deadline exceeded before invocation");
+          } catch (cause) {
+            attempted = false;error = redact(Error.isError(cause) ? cause.message : String(cause));throw cause;
+          }
+        };
         try {
-          if (!purposeAllowed(options.policy(job.sessionKey),job.request)) throw new Error("Optimisation disabled");
-          if (runtime.now() >= job.deadline) throw new Error("Optimisation deadline exceeded before invocation");
+          await checkBeforeSend();
           const aborted = new Promise<never>((_, reject) => {
             if (signal.aborted) reject(signal.reason);
             else signal.addEventListener("abort", () => reject(signal.reason), { once: true });
           });
           attempted = true;
-          const reply = await Promise.race([options.sideCall({...job.request,cacheScope:job.sessionKey}, signal), aborted]);
-          result = checkedResult(job.request,reply);
+          const reply = await Promise.race([options.sideCall({...job.request,cacheScope:job.sessionKey},signal,job.request.includesPlan ? checkBeforeSend : undefined),aborted]);
+          if (attempted) result = checkedResult(job.request,reply);
         } catch (cause) { error = redact(Error.isError(cause) ? cause.message : String(cause)); }
         finally { clear(); controllers.delete(id); }
         // A close cancels this invocation. The next invocation records unknown billing, never retries.

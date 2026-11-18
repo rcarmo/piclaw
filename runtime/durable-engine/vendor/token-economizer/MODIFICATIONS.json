@@ -1,6 +1,6 @@
 {
   "upstream": "rcarmo/kintsugi",
-  "commit": "b8469c29b404806376a76ebfd1a95b2dabcf4ab9",
+  "commit": "4afeac1e9165d05a8d952fd33b3b3ce64672321d",
   "productionEngineUnchanged": true,
   "adaptedTests": [
     {

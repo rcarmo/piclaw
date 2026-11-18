@@ -4,6 +4,7 @@ import { emptyBudget, type BudgetState } from "../core/accounting.ts";
 import { emptyEnvelope, type EnvelopeHistory } from "../core/loopguard/envelope.ts";
 import { emptyEvidence, type ToolEvidence } from "../core/toolprune/evidence.ts";
 import type { LearningSession } from "../core/sessions.ts";
+import type { JudgeGoal } from "../core/goals.ts";
 import type { HostSession } from "./domain.ts";
 import { emptyEnvironment, type EnvironmentState } from "../core/microskills/envfacts.ts";
 import { emptyDistiller, type Distiller } from "../core/microskills/distiller.ts";
@@ -39,7 +40,7 @@ export type GuardDecisionRecord = {id:string;runId:string;action:"redirect"|"not
   /** Added after v1 records existed: older decisions lack the text and time. */
   text?:string;at?:number};
 export const RunDoc = defineDocFamily<{guard:Guard|null;inputs:SubmissionId[];closed:boolean;decisions:GuardDecisionRecord[]},null>({kind:"token-economizer.run",version:1,scope:"session",family:true,initial:() => ({guard:null,inputs:[],closed:true,decisions:[]}),checkpointWhen:() => false});
-export type GuardJob = {effect:GuardEffect;host:HostSession;sessionKey:string;model:ModelRef|null;writerModel:ModelRef|null;classifier:ModelRef|null;threshold:number;template:boolean;status:"queued"|"running"|"complete";result:BackgroundVerdict|null;features:number[]|null;revision:string;artifactId:string|null;sampleId:string;reuse:{key:string;canonical:string}|null;compactFull:string|null};
+export type GuardJob = {effect:GuardEffect;host:HostSession;sessionKey:string;model:ModelRef|null;writerModel:ModelRef|null;classifier:ModelRef|null;threshold:number;template:boolean;status:"queued"|"running"|"complete";result:BackgroundVerdict|null;features:number[]|null;revision:string;artifactId:string|null;sampleId:string;reuse:{key:string;canonical:string}|null;compactFull:string|null;goal?:JudgeGoal;goalStamp?:string;planTask?:string};
 export const GuardJobsDoc = defineDoc<{jobs:Record<string,GuardJob>}>({kind:"token-economizer.guard-jobs",version:1,scope:"session",initial:() => ({jobs:{}}),checkpointWhen:() => false});
 export const ClassifiersDoc = defineDocFamily<{local:{fitMs:number;predictMs:number;predictions:number;lastFitAt:number|null};samples:Sample[];loop:LoopArtifact|null;tools:ToolArtifact[];lexical:BM25|null;text:ArtifactIdentity[];textScores:Record<string,number>;usedAcceptanceGroups:string[];lastFitGroups:number;generation:number;fitTask:TaskId|null;lastError:string|null;skipped:number;audits:number;auditMissing:number;disagreements:number},null>({kind:"token-economizer.classifiers",version:1,scope:"session",family:true,initial:() => ({local:{fitMs:0,predictMs:0,predictions:0,lastFitAt:null},samples:[],loop:null,tools:[],lexical:null,text:[],textScores:{},usedAcceptanceGroups:[],lastFitGroups:0,generation:0,fitTask:null,lastError:null,skipped:0,audits:0,auditMissing:0,disagreements:0}),checkpointWhen:() => false});
 export type InferenceJob = {

@@ -1,4 +1,5 @@
-import { defineTool } from '@earendil-works/pi-durable';
+import { defineTool, LiveDoc } from '@earendil-works/pi-durable';
+import { OptimizerPlanBinding, optimizerPlanTask } from './optimizer-plan-binding.ts';
 import { planParameters } from '../../src/plan/parameters.js';
 import { applyPlanEdits, applyPlanPatches, DEFAULT_PLAN, normalizeStoredPlanMarkdown,
   structuredPlanDetails, updatePlanArgsToMarkdown, type SessionPlan } from '../../src/plan/markdown.js';
@@ -70,6 +71,7 @@ export function createPlanTool(options: {
           return { output: [{ type: 'text', text: `Plan for ${chat}:\n\n${plan.markdown || '(empty)'}` }], details: structuredPlanDetails(plan) };
         }
         const action = args.action as PlanAction;
+        const admittedTask = optimizerPlanTask((await api.snapshot(LiveDoc,api.conversationId,context))?.run);
         const legacy = current ? snapshot(current) : seed();
         const plan = await runtime.withSourceWriteGuard(check, () => api.commit(async tx => {
           check();
@@ -83,7 +85,9 @@ export function createPlanTool(options: {
             : (() => { throw Error('plan action=write requires a markdown string.'); })();
           const next = { chat_jid: chat, markdown, updated_at: new Date(api.now()).toISOString() };
           if (Buffer.byteLength(JSON.stringify(next), 'utf8') > 65_536) throw Error('Plan value exceeds maximum size');
-          draft.markdown = next.markdown; draft.updated_at = next.updated_at;
+          draft.markdown = next.markdown; draft.updated_at = next.updated_at; draft.revision = (draft.revision ?? 0)+1;
+          const task = optimizerPlanTask((await tx.doc(LiveDoc,api.conversationId)).run);
+          if (task !== null && task === admittedTask) Object.assign(await tx.doc(OptimizerPlanBinding,api.conversationId),{revision:draft.revision,task});
           check(); return next;
         }, context));
         check();

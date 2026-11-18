@@ -4,6 +4,7 @@ import type { JsonObject } from "@earendil-works/pi-ai";
 import type { JsonValue } from "@earendil-works/chord/json";
 import type { Observation, Scope, ToolInfo } from "../core/types.ts";
 import type { ToolMapping } from "../core/observations.ts";
+import type { FactDigest } from "../core/microskills/detectors.ts";
 
 /** Trusted host metadata. Never derive these identities from tool/model arguments. */
 export type HostSession = {
@@ -20,7 +21,7 @@ export type CatalogueSnapshot = {
   revision: string; source: string; complete: boolean; tools: ToolInfo[];
 };
 export type Trajectory =
-  | { kind: "ready"; cutoff: string; observations: Observation[]; prompts: number | null; transcriptActivity: number }
+  | { kind: "ready"; cutoff: string; observations: Observation[]; prompts: number | null; transcriptActivity: number; work?: FactDigest["work"] }
   | { kind: "absent"; reason: string }
   | { kind: "later"; reason: string }
   | { kind: "unreadable"; reason: string };

@@ -14,6 +14,7 @@ export type FactDigest = {
   missing_command: boolean; missing_dependency: boolean; bad_usage: boolean;
   _ran_tests: boolean; _cmd_blob: string; _out_blob: string;
   features: Record<string, boolean | number>;
+  work?: {answeredTurns:number;tools:string[];checksAfterLastEdit:string[]};
 };
 export type PatternAdmission = { kind: "valid"; pattern: RE2JS } | { kind: "invalid"; reason: string };
 /** Generated expressions are never passed to JavaScript RegExp/eval. This is the supported dialect. */

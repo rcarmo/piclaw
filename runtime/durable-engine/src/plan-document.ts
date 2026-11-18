@@ -1,7 +1,7 @@
 import { defineDocFamily } from '@earendil-works/pi-durable';
 
 import type { SessionPlan } from '../../src/plan/markdown.js';
-export type PlanDocument = SessionPlan;
+export type PlanDocument = SessionPlan & { revision?: number };
 
 /** One SDK-owned document per exact chat/branch JID, independent of conversation
  * reset or creation. Legacy KV is only an adoption source, never a second writer.

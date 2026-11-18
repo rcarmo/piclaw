@@ -7,7 +7,7 @@ import { contentText } from "@earendil-works/pi-ai";
 import { defineExtension, hook, LiveDoc, NestedCallDoc, ToolResultEntry, ToolTask, type ConversationId, type Harness, type LiveState, type TaskId } from "@earendil-works/pi-durable";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
-import { observing, type Policy } from "../core/config.ts";
+import { observingWork, type Policy } from "../core/config.ts";
 import { makeObservation, redact } from "../core/observations.ts";
 import { sessionKey } from "../core/sessions.ts";
 import type { Observation } from "../core/types.ts";
@@ -28,7 +28,7 @@ export function createCommittedObservations(options: {harness:() => Harness;doma
         const metadata = (await tx.doc(ToolMetadataDoc,String(taskId),null)).value;
         if (!metadata) return null;
         const key = sessionKey(metadata.host.scope,metadata.host.id);
-        if (!observing(options.policy(key)) || metadata.mapping.semantic === "wrapper") return null;
+        if (!observingWork(options.policy(key)) || metadata.mapping.semantic === "wrapper") return null;
         const decoded = options.domain.decode({...result,name:metadata.name}), truncated = decoded.output.length > 16_384;
         const status = metadata.mapping.semantic === "shell" ? statusOfTests(metadata.command) : null, verdict = runnerVerdict(decoded.output);
         const verification = status === null ? null : verdict !== null ? verdict ? "failed" : "passed" : status === "own" && decoded.exitCode !== null ? decoded.exitCode === 0 ? "passed" : "failed" : null;
@@ -49,12 +49,12 @@ export function createCommittedObservations(options: {harness:() => Harness;doma
     extension:defineExtension({name:"token-economizer.observations",hooks:[hook(ToolTask,{
       async afterTool(call,result,api,context) {
         const host = await options.domain.session(api.conversationId);
-        if (!host || host.delegated || !observing(options.policy(sessionKey(host.scope,host.id)))) return result;
+        if (!host || host.delegated || !observingWork(options.policy(sessionKey(host.scope,host.id)))) return result;
         const args = options.domain.arguments(call.name,call.arguments), mapping = options.domain.tool(call.name);
         if (mapping.semantic === "wrapper") return result;
         const stored = await options.harness().commit(async tx => {
           const live = await tx.doc(LiveDoc,api.conversationId);
-          if (!observing(options.policy(sessionKey(host.scope,host.id)))) return false;
+          if (!observingWork(options.policy(sessionKey(host.scope,host.id)))) return false;
           (await tx.doc(ToolMetadataDoc,String(api.taskId),null)).value = {host,key:call.parent ? call.id.split("/").at(-1)! : null,outerTask:call.parent?.taskId ?? api.taskId,taskId:api.taskId,runId:live.run ? runIdentity(live.run) ?? "unanchored" : "ended",name:call.name,command:redact(args.command).slice(0,16_384),targets:args.targets.slice(0,128).map(redact),partial:args.coverage === "partial" || args.command.length > 16_384 || args.targets.length > 128,mapping,at:Date.now()};
           return true;
         },context);
@@ -107,7 +107,7 @@ export function createCommittedObservations(options: {harness:() => Harness;doma
     },
     async recover(host:HostSession) {
       const key = sessionKey(host.scope,host.id);
-      if (!observing(options.policy(key)) || host.delegated) return;
+      if (!observingWork(options.policy(key)) || host.delegated) return;
       const prior = await options.harness().snapshot(ObservationsDoc,key,BACKGROUND_CONTEXT);
       for (const observation of prior?.observations ?? []) await options.onObservation(host,observation,false);
       const live = await options.harness().snapshot(LiveDoc,host.conversationId,BACKGROUND_CONTEXT);

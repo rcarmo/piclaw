@@ -1,10 +1,11 @@
-// Lifecycle host port of Kintsugi b8469c29; MIT — see mcp/UPSTREAM-LICENSE.
+// Lifecycle host port of Kintsugi 4afeac1e; MIT — see mcp/UPSTREAM-LICENSE.
 import {createOptimizerOutputExtension,createToolOutputTools} from "./token-optimizer-output.ts";
 import {createToolOutputStore} from "./mcp/tool-output-store.ts";
 import {captureMark,conversationLineage,type AgentDatabase} from "./mcp/retained-database.ts";
 import type {SavedOutputReader} from "./optimizer-output-source.ts";
 import {createOptimizerGoalsExtension} from "./token-optimizer-goals.ts";
-import {contextSection,fingerprint,scopeKey,sessionKey,type AttachmentType,type LearningSession,type GoalPlan} from "#token-optimizer/core";
+import {OptimizerPlanBinding,optimizerPlanTask} from './optimizer-plan-binding.ts';
+import {contextSection,fingerprint,judgeGoal,scopeKey,sessionKey,type AttachmentType,type LearningSession,type GoalPlan} from "#token-optimizer/core";
 import {createSdkModelTransport,createTokenEconomizer,decodeArguments,decodeResult,detach,KnowledgeDoc,RunDoc,runIdentity,SessionsDoc,type HostDomain,type HostSession,type Knowledge} from "#token-optimizer/pi-durable";
 import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import type {Models} from "@earendil-works/pi-ai";
@@ -121,7 +122,15 @@ export function createNativeTokenOptimizer(options:{workspaceId:string;harness:(
     },
   };
   const transport = createSdkModelTransport(options.models);
-  const optimizer = createTokenEconomizer({harness:options.harness,backgroundOwner:() => {if (maintenance === undefined) throw new Error("Optimizer maintenance owner is not attached");return maintenance;},domain,...transport,onOperation:recordOptimizerOperation,policy:host => options.configuration.policy(options.workspaceId,actor(host)),onNotice:async notice => {if (["tools-applied","tools-restored","tool-publication-refused","still-stuck"].includes(notice.code)) return;const rows = (await options.harness().snapshot(NativeOptimizerSessions,context))?.sessions, host = rows?.[notice.sessionId]?.host ?? [...subagents.values()].find(row => row.id === notice.sessionId);if (host) await options.harness().commit(async tx => {const state = await tx.doc(NativeNotices);if (state.ids.includes(notice.id)) return;await tx.appendEntry(OptimizerNotice,host.conversationId,{data:{id:notice.id,text:notice.text,at:Date.now(),code:notice.code,runId:notice.runId}});state.ids.push(notice.id);},context);},onError:error => console.error("Token optimizer observation failed",error)});
+  async function goalFor(host:HostSession) {
+    const binding = await options.harness().snapshot(OptimizerPlanBinding,host.conversationId,context);
+    const task = optimizerPlanTask((await options.harness().snapshot(LiveDoc,host.conversationId,context))?.run);
+    if (task === null || binding?.task !== task) return null;
+    const plan = await options.plan(host);
+    const goal = plan?.revision === binding.revision ? judgeGoal(plan) : null;
+    return goal ? {plan:goal,task} : null;
+  }
+  const optimizer = createTokenEconomizer({harness:options.harness,backgroundOwner:() => {if (maintenance === undefined) throw new Error("Optimizer maintenance owner is not attached");return maintenance;},domain,...transport,goal:goalFor,onOperation:recordOptimizerOperation,policy:host => options.configuration.policy(options.workspaceId,actor(host)),onNotice:async notice => {if (["tools-applied","tools-restored","tool-publication-refused","still-stuck"].includes(notice.code)) return;const rows = (await options.harness().snapshot(NativeOptimizerSessions,context))?.sessions, host = rows?.[notice.sessionId]?.host ?? [...subagents.values()].find(row => row.id === notice.sessionId);if (host) await options.harness().commit(async tx => {const state = await tx.doc(NativeNotices);if (state.ids.includes(notice.id)) return;await tx.appendEntry(OptimizerNotice,host.conversationId,{data:{id:notice.id,text:notice.text,at:Date.now(),code:notice.code,runId:notice.runId}});state.ids.push(notice.id);},context);},onError:error => console.error("Token optimizer observation failed",error)});
   const outputStore = createToolOutputStore(options.database);
   const outputScope = async (id:ConversationId) => {const host = await domain.session(id);return host ? {owner:JSON.stringify([options.workspaceId,options.environmentRevision,actor(host)]),lineage:await conversationLineage(options.harness(),id,context)} : null;};
   const outputExtension = createOptimizerOutputExtension({
@@ -131,7 +140,7 @@ export function createNativeTokenOptimizer(options:{workspaceId:string;harness:(
   });
   let pruneTimer:ReturnType<typeof setInterval>|undefined,pruning:Promise<number>|undefined;
   const pruneOutputs = () => pruning ??= outputStore.prune().catch(error=>{console.error("Could not prune stored tool outputs",error);return 0;}).finally(()=>{pruning=undefined;});
-  const goalExtension = createOptimizerGoalsExtension({harness:options.harness,host:domain.session,policy:host => options.configuration.policy(options.workspaceId,actor(host)),drained:optimizer.drained,plan:options.plan});
+  const goalExtension = createOptimizerGoalsExtension({harness:options.harness,host:domain.session,policy:host => options.configuration.policy(options.workspaceId,actor(host)),drained:optimizer.drained,plan:options.plan,goal:goalFor});
   optimizer.extension = {...optimizer.extension,tools:[...optimizer.extension.tools ?? [],...createToolOutputTools(outputStore,outputScope)],hooks:[...optimizer.extension.hooks ?? [],...outputExtension.hooks ?? [],...goalExtension.hooks ?? []]};
   async function start(conversation:Conversation,record:Pick<CoreOptimizerAgent,"agentId"|"parentId"|"readOnly"|"oneShotCallId">,event:"startup"|"new"|"resume"|"fork" = "startup",parentGroup?:string) {
     if (record.parentId || record.readOnly || record.oneShotCallId) return;
