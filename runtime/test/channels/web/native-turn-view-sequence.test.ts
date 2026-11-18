@@ -27,9 +27,10 @@ function fixture() {
 test('native command titles retain actual tool names and command parameters', () => {
   const titles = createToolTitleTracker();
   expect(titles.remember('one', 'exec_command', { cmd: 'printf one' })).toBe('exec_command: printf one');
-  expect(titles.remember('two', 'exec_command', undefined)).toBe('exec_command');
-  expect(titles.remember('three', 'write_stdin', { session_id: 1, chars: '' })).toBe('write_stdin');
-  expect(titles.remember('four', 'write_stdin', { session_id: 1, chars: 'sensitive input' })).toBe('write_stdin');
+  expect(titles.remember('two', 'exec_command', undefined)).toBe('exec_command: run shell command');
+  expect(titles.remember('three', 'write_stdin', { session_id: 1, chars: '' })).toBe('write_stdin: read session output · 1');
+  // The intent and session are visible; typed bytes remain out of the title.
+  expect(titles.remember('four', 'write_stdin', { session_id: 1, chars: 'sensitive input' })).toBe('write_stdin: send input to session · 1');
 });
 
 test('successive native tools cannot be replaced by reconstructed older completions', () => {

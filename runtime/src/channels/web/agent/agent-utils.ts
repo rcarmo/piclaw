@@ -8,6 +8,7 @@
  */
 
 import { buildPreviewLines, countSoftLines, splitLines } from "../../../utils/preview.js";
+import { summariseAddonToolCall } from "./addon-tool-titles.js";
 
 /** Function type that decorates payloads with chat + profile metadata fields. */
 export type AgentProfileBuilder = <T extends object>(payload: T) => T & {
@@ -57,21 +58,19 @@ function extractToolArgs(args: unknown): Record<string, unknown> | null {
   if (typeof args === "string") {
     try {
       const parsed = JSON.parse(args);
-      if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>;
+      if (parsed && typeof parsed === "object") return extractToolArgs(parsed);
     } catch {
       return null;
     }
   }
-  if (typeof args === "object") {
+  if (typeof args === "object" && !Array.isArray(args)) {
     const record = args as Record<string, unknown>;
-    const nested =
-      (record.arguments as Record<string, unknown> | undefined) ||
-      (record.input as Record<string, unknown> | undefined) ||
-      (record.params as Record<string, unknown> | undefined) ||
-      (record.parameters as Record<string, unknown> | undefined) ||
-      (record.args as Record<string, unknown> | undefined) ||
-      (record.payload as Record<string, unknown> | undefined);
-    return nested ?? record;
+    if (["action", "workflow", "command", "cmd"].some(key => typeof record[key] === "string")) return record;
+    for (const key of ["arguments", "input", "params", "parameters", "args", "payload"]) {
+      const nested = record[key];
+      if (nested && typeof nested === "object" && !Array.isArray(nested)) return nested as Record<string, unknown>;
+    }
+    return record;
   }
   return null;
 }
@@ -203,16 +202,15 @@ function summarisePlanCall(record: Record<string, unknown>): string | null {
 export function formatToolTitle(toolName: string, args: unknown): string {
   const mcpIdentity = resolveMcpToolStatusIdentity(toolName, args);
   if (mcpIdentity) return mcpIdentity.label;
-  const record = extractToolArgs(args);
-  if (!record) return toolName;
-  let detail: string | null = null;
+  const record = extractToolArgs(args) ?? {};
+  let detail: string | null = summariseAddonToolCall(toolName, record);
 
   // Delegate's brief is a long prompt; its first line names the task.
   if (toolName === "delegate" && typeof record.prompt === "string") detail = firstPromptLine(record.prompt);
   if (toolName === "plan") detail = summarisePlanCall(record);
 
   const command = record.command ?? (toolName === "exec_command" ? record.cmd : undefined);
-  if (typeof command === "string") detail = command;
+  if (!detail && typeof command === "string") detail = command;
 
   if (!detail && Array.isArray(record.commands)) {
     detail = record.commands.filter((item) => typeof item === "string").join(" && ");
