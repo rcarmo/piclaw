@@ -331,6 +331,18 @@ describe("local test entrypoint audit", () => {
     }finally{rmSync(directory,{recursive:true,force:true});}
   });
 
+  test('pinned vendor parser data cannot exempt an adjacent executable runner or package script',async()=>{
+    const directory=mkdtempSync(join(tmpdir(),'piclaw-vendor-data-entrypoint-')),prefix='runtime/durable-engine/vendor/token-economizer/';
+    try{
+      mkdirSync(join(directory,prefix,'test/fixtures'),{recursive:true});
+      for(const name of ['detectors.json','extractors.json'])writeFileSync(join(directory,prefix,'test/fixtures',name),JSON.stringify({command:'bun test'}));
+      writeFileSync(join(directory,prefix,'runner.ts'),"Bun.spawn(['bun', 'test']);\n");writeFileSync(join(directory,prefix,'package.json'),JSON.stringify({scripts:{test:'bun test'}}));
+      expect(await auditLocalTestEntrypoints(directory,[prefix+'test/fixtures/detectors.json',prefix+'test/fixtures/extractors.json',prefix+'runner.ts',prefix+'package.json'])).toEqual([
+        prefix+'package.json:1:'+JSON.stringify({scripts:{test:'bun test'}}),prefix+"runner.ts:1:Bun.spawn(['bun', 'test']);",
+      ]);
+    }finally{rmSync(directory,{recursive:true,force:true});}
+  });
+
   test("detects raw test commands in arbitrary nested scripts, package manifests, and Makefiles", async () => {
     const directory = mkdtempSync(join(tmpdir(), "piclaw-entrypoint-audit-"));
     try {
