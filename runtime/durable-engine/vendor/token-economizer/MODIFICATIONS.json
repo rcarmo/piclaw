@@ -1,6 +1,6 @@
 {
   "upstream": "rcarmo/kintsugi",
-  "commit": "4afeac1e9165d05a8d952fd33b3b3ce64672321d",
+  "commit": "59ca13b42be0b043e4968d35045d8fc49c6d678d",
   "productionEngineUnchanged": false,
   "adaptedTests": [
     {
@@ -27,6 +27,15 @@
       "path": "src/pi-durable/controller.ts",
       "sha256": "4c82b43d5dc6cfe7a0f2f021c418d6c1bff7cf80ce1c767601c1e49e84b7bf95",
       "reason": "Use the existing live judge boundary for ordinary loop redirect delivery after a standalone SDK tool has handed off to the next generation. The original safe admitted-run checks, whenBusy=steer/whenIdle=reject, nudge budget and request-only goal-drift path remain unchanged; no new execution owner or retry."
+    }
+  ],
+  "hostFixes": [
+    {
+      "commit": "9be0a5e266af88279741fa7bd9adeca4587330fc",
+      "source": "packages/builtin-agent/src/server/token-optimizer-source.ts",
+      "target": "runtime/durable-engine/src/token-optimizer-source.ts",
+      "regression": "runtime/durable-engine/qualification/optimizer-checkpoint.test.ts",
+      "reason": "Verify a pre-checkpoint model tool call through its matching same-conversation durable ToolTask record; skip only its boundary-straddling result and continue newer learning. Unverifiable orphan results remain unreadable."
     }
   ]
 }

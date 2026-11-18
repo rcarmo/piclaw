@@ -22,3 +22,4 @@ import "../../durable-engine/qualification/mcp-settings-body.test.ts";
 import "../../durable-engine/qualification/mcp-legacy-config.test.ts";
 import "../../durable-engine/qualification/application-feature-identity.test.ts";
 import "../../durable-engine/qualification/optimizer-authority.test.ts";
+import "../../durable-engine/qualification/optimizer-checkpoint.test.ts";

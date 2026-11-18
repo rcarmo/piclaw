@@ -241,10 +241,10 @@
     "test/training.test.ts": "2feaeff689604a39d3a30f1a52c74aacada2b79add81022d64ff7064f5bf5f05",
     "test/upstream-fixes.test.ts": "9d34a5e2ea8dab71a49ac978a0d0bc7fa4c52a56181807ade796fd9beda75cd2"
   },
-  "status": "Production engine copied unchanged from pinned upstream tip; only the separately recorded Piclaw distribution/SQLite test adaptations remain.",
+  "status": "Pinned v0.7.6 source. Generic package unchanged from4afeac1e; one separately recorded live-boundary compatibility adaptation and two test adaptations. Host learning-checkpoint fix9be0a5e imported through existing public SDK task metadata.",
   "target_path": "runtime/durable-engine/vendor/token-economizer",
-  "upstream_commit": "4afeac1e9165d05a8d952fd33b3b3ce64672321d",
+  "upstream_commit": "59ca13b42be0b043e4968d35045d8fc49c6d678d",
   "upstream_package_path": "packages/token-economizer",
   "upstream_repo": "/workspace/tmp/piclaw/runs/kintsugi-delta-20261118/upstream-tip",
-  "previous_upstream_commit": "b8469c29b404806376a76ebfd1a95b2dabcf4ab9"
+  "previous_upstream_commit": "4afeac1e9165d05a8d952fd33b3b3ce64672321d"
 }

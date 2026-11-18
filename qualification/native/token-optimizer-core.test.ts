@@ -29,3 +29,4 @@ import "../../runtime/durable-engine/qualification/token-optimizer-oversight.tes
 import "../../runtime/durable-engine/qualification/saved-bash-output.test.ts";
 import "../../runtime/durable-engine/qualification/application-feature-identity.test.ts";
 import "../../runtime/durable-engine/qualification/optimizer-authority.test.ts";
+import "../../runtime/durable-engine/qualification/optimizer-checkpoint.test.ts";

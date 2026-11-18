@@ -1,8 +1,8 @@
-// Kintsugi 4afeac1e MIT port; attribution in mcp/UPSTREAM-LICENSE.
+// Kintsugi 9be0a5e MIT port; attribution in mcp/UPSTREAM-LICENSE.
 const isDurableUserEntry=(entry:import("@earendil-works/pi-durable").EntryRecord)=>entry.kind==="pi.user"||entry.kind==="host.accepted";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { contentText, type JsonObject, type Message } from "@earendil-works/pi-ai";
-import { AssistantEntry, LiveDoc, ToolResultEntry, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type Harness } from "@earendil-works/pi-durable";
+import { AssistantEntry, LiveDoc, ToolResultEntry, ToolTask, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type Harness } from "@earendil-works/pi-durable";
 import { ContextSnapshotEntry, FactContextEntry } from "#token-optimizer/pi-durable";
 const isJsonObject=(value:unknown):value is import("@earendil-works/pi-durable").JsonObject=>value!==null&&typeof value==="object"&&!Array.isArray(value);
 import { makeObservation, workEvidence, type ToolMapping } from "#token-optimizer/core";
@@ -11,6 +11,8 @@ import { runnerVerdict, statusOfTests } from "#token-optimizer/core";
 import type { HostSession, Trajectory, ToolResultData } from "#token-optimizer/pi-durable";
 import type { Observation } from "#token-optimizer/core";
 import {optimizerBashOutput,optimizerCallEntry as codemodeCallEntry,type OptimizerCallStart as CallStart} from "./optimizer-output-source.ts";
+import {Type} from 'typebox';
+import {Value} from 'typebox/value';
 /** Preserve actual Root SDK shell status without changing the tool's script value. */
 export function nativeOptimizerResult(result:ToolResultData){
   if(result.name==='bash'){
@@ -74,8 +76,16 @@ export function optimizerMessageSections(messages:readonly Message[]) {
 export function optimizerSections(entries:readonly EntryRecord[]) {
   return optimizerMessageSections(entries.flatMap(entry => FactContextEntry.is(entry) ? [{role:"system" as const,content:"",sections:{"token-economizer":entry.data.section},timestamp:0}] : [...entry.model ?? []]));
 }
+const modelCallOrigin = Type.Object({kind:Type.Literal("model"),callId:Type.String(),assistant:Type.Integer({minimum:1,maximum:Number.MAX_SAFE_INTEGER})});
+/** Verify a boundary-straddling result by task ID without reading pre-checkpoint arguments. */
+async function callPrecedesRange(harness:Harness,entry:EntryRecord,callId:string,after:number):Promise<boolean> {
+  if (!entry.byTaskId || after === 0) return false;
+  const task = await harness.getTask(entry.byTaskId,context);
+  return task?.kind === ToolTask.definition.name && task.conversationId === entry.conversationId
+    && Value.Check(modelCallOrigin,task.input) && task.input.callId === callId && task.input.assistant <= after;
+}
 /** One conversation's committed tool results within a session range. */
-function readSource(entries:readonly EntryRecord[],host:HostSession) {
+async function readSource(harness:Harness,entries:readonly EntryRecord[],host:HostSession,after:number) {
   const observed:Observation[] = [], calls = new Map<string,{name:string;args:JsonObject;runId:string}>(), starts = new Map<string,{start:CallStart;entry:EntryRecord}>();
   let prompts = 0, activity = 0, answeredTurns = 0, answeredEnd = 0, awaitingAnswer = false;
   for (const entry of entries) {
@@ -98,7 +108,11 @@ function readSource(entries:readonly EntryRecord[],host:HostSession) {
         capture(source.start.name,args,{name:source.start.name,structured:null,details:data.details ?? null,output:data.output ?? data.error ?? "",isError:data.isError,diagnostics:data.cancelled ? [{code:"aborted",message:data.error ?? "Cancelled"}] : []},String(entry.byTaskId),data.key,calls.get(data.callId)?.runId ?? "unknown",source.start.issuedAt ?? 0);starts.delete(key);
       }
     } else if (ToolResultEntry.is(entry)) for (const message of entry.model ?? []) if (message.role === "toolResult") {
-      const source = calls.get(message.toolCallId);if (!source) return {kind:"unreadable" as const,reason:"Tool result has no visible originating arguments"};
+      const source = calls.get(message.toolCallId);
+      if (!source) {
+        if (await callPrecedesRange(harness,entry,message.toolCallId,after)) continue;
+        return {kind:"unreadable" as const,reason:"Tool result has no visible originating arguments"};
+      }
       capture(source.name,source.args,{name:source.name,structured:null,details:JSON.parse(JSON.stringify(message.details ?? null)),output:contentText(message.content),isError:message.isError,diagnostics:entry.data.diagnostics.map(diagnostic => ({code:diagnostic.code ?? "",message:diagnostic.message}))},String(entry.byTaskId),null,source.runId,message.timestamp);
     }
   }
@@ -119,13 +133,13 @@ export async function nativeOptimizerTrajectory(harness:Harness,host:HostSession
   // Freeze the source boundary before scanning: another prompt may already be appending entries.
   const latest = await latestOptimizerEntry(conversation);
   maximum = Math.min(maximum,latest ?? begin);
-  const root = readSource(await optimizerEntries(conversation,{after:begin,upTo:maximum}),host);
+  const root = await readSource(harness,await optimizerEntries(conversation,{after:begin,upTo:maximum}),host,begin);
   if (root.kind === "unreadable") return root;
   if (root.unfinished) return (await harness.snapshot(LiveDoc,host.conversationId,context))?.run ? {kind:"later",reason:"Native calls are still running"} : {kind:"unreadable",reason:"Ended trajectory contains an unfinished native call"};
   const observations = [...root.observations];let activity = root.activity;
   for (const id of descendants) {
     const child = await harness.conversation(id,context);if (!child) continue;
-    const read = readSource(await optimizerEntries(child,{after:begin,upTo:maximum}),host);
+    const read = await readSource(harness,await optimizerEntries(child,{after:begin,upTo:maximum}),host,begin);
     // A descendant's unreadable history must not cost the root its learning; skip that conversation.
     if (read.kind === "unreadable") continue;
     if (read.unfinished && (await harness.snapshot(LiveDoc,id,context))?.run) return {kind:"later",reason:"A subagent is still running"};
