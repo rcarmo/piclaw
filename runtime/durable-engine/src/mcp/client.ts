@@ -63,16 +63,19 @@ export function mcpToolsExtension(config:Pick<McpHttpConnection,"id"|"name"> & {
   const taken = new Set<string>();
   const name = (remote:string) => {const value = createMcpToolName(config.name,remote,item => taken.has(item));taken.add(value);return value;};
   const registered = tools.map(tool => defineTool({
-    name:name(tool.name),description:tool.description ?? tool.name,parameters:Type.Unsafe<JsonObject>(normalizeMcpInputSchema(tool.inputSchema)),structuredOutputSchema:tool.outputSchema,
+    name:name(tool.name),description:tool.description ?? tool.name,parameters:Type.Unsafe<JsonObject>(normalizeMcpInputSchema(tool.inputSchema)),structuredOutputSchema:tool.outputSchema??Type.String(),
     callers:["tools"],replay:"unsafe",
     async execute(args,api,context) {
       const client = await clientFor(api.conversationId,context);
       await api.details(details(tool.name),context);
       try {
         const result = await client.callTool(tool.name,args,{signal:context.abortSignal,onProgress:progress => api.output(`${progress.message ?? "MCP request in progress"}\n`)});
-        // MCP permits structured content without an output schema; the harness does not.
-        // Schema-less tools keep their text contract, including toLlmContent's structured-only JSON rendering.
-        return {output:toLlmContent(result),structuredOutput:tool.outputSchema === undefined || result.structuredContent === undefined ? undefined : JSON.parse(JSON.stringify(result.structuredContent)),isError:result.isError === true,details:details(tool.name)};
+        const output=toLlmContent(result);
+        // The SDK bounds schema-less output before giving it to scripts. Declare
+        // its existing text contract explicitly so the full value stays intact;
+        // model-facing text/images keep the SDK's normal output limits.
+        const structuredOutput=result.isError===true?undefined:tool.outputSchema===undefined?output.flatMap(block=>block.type==='text'?[block.text]:[]).join('\n'):result.structuredContent===undefined?undefined:JSON.parse(JSON.stringify(result.structuredContent));
+        return {output,structuredOutput,isError:result.isError === true,details:details(tool.name)};
       } catch (error) {context.abortSignal?.throwIfAborted();if(error instanceof Error)onFailure?.(error);throw new Error(mcpFailure(error));}
     },
   }));

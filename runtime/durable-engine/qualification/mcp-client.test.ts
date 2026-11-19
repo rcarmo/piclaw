@@ -69,6 +69,7 @@ for(const fixture of [
  {name:'structured',schema:{type:'object',properties:{status:{type:'string'}},required:['status']},result:{content:[{type:'text',text}],structuredContent:payload},expected:payload,error:false},
  {name:'declared schema violation',schema:{type:'object',properties:{status:{type:'string'}},required:['status']},result:{content:[],structuredContent:{status:42}},expected:undefined,error:true},
  {name:'explicit error',schema:undefined,result:{content:[{type:'text',text}],structuredContent:payload,isError:true},expected:undefined,error:true},
+ {name:'explicit error with a declared valid schema',schema:{type:'object',properties:{status:{type:'string'}},required:['status']},result:{content:[{type:'text',text}],structuredContent:payload,isError:true},expected:undefined,error:true},
 ])test('MCP original nested value: '+fixture.name,async()=>{
  const c=await serverFixture(fixture.schema,fixture.result);
  const registry=createRegistry(),sandbox=new CodemodeSandbox();registry.install(createCodemodeExtension({sandbox,models:false}));registry.install(mcpToolsExtension(config,c.tools,async()=>c.client));
@@ -98,4 +99,15 @@ test('HTTP discovery cancellation after execution revocation joins owner-only se
  }});
  let pending:Promise<unknown>|undefined;
  try{pending=connectMcpHttp({...config,url:server.url.href,allowHttp:true},fetch,undefined,abort.signal,authority).then(()=>null,error=>error);await entered.promise;execution=false;abort.abort();release.resolve();const failure=await pending;expect(failure).toBeInstanceOf(Error);expect(failure).not.toBeInstanceOf(AggregateError);expect(deleted).toBe(1);expect(effects).toBe(0);}finally{release.resolve();await pending;server.stop(true);}
+});
+
+for(const structuredOnly of [false,true])test(`schema-less large ${structuredOnly?'structured-only':'text'} MCP values remain complete inside scripts`,async()=>{
+ const value={body:'SYNTHETIC_LARGE_VALUE '.repeat(4500),tail:'ORIGINAL_COMPLETE_TAIL'},text=JSON.stringify(value),expected=structuredOnly?JSON.stringify(value,null,2):text;
+ const c=await serverFixture(undefined,structuredOnly?{content:[],structuredContent:value}:{content:[{type:'text',text}]});
+ const registry=createRegistry(),sandbox=new CodemodeSandbox();registry.install(createCodemodeExtension({sandbox,models:false}));registry.install(mcpToolsExtension(config,c.tools,async()=>c.client));const models=createModels(),faux=fauxProvider({tokensPerSecond:100000});models.setProvider(faux.provider);
+ const harness=await Harness.open(new MemoryStorage(),{registry,models},context);cleanups.push(()=>harness.close(context));
+ const root=await harness.root(context);await root.configure({model:{provider:'faux',modelId:'faux-1'}},context);
+ const code=`const value=await tools.mcp__fixture__probe({});if(typeof value!=='string'||value.length!==${expected.length}||JSON.parse(value).tail!=='ORIGINAL_COMPLETE_TAIL')throw Error('Schema-less script value was truncated');return 'LARGE_ORIGINAL_VALUE_OK';`;
+ faux.setResponses([fauxAssistantMessage([fauxToolCall('codemode',{code})],{stopReason:'toolUse'}),request=>{expect(request.messages.filter(message=>message.role==='toolResult').map(message=>contentText(message.content)).join('\n')).toContain('LARGE_ORIGINAL_VALUE_OK');return fauxAssistantMessage('Done');}]);
+ expect((await(await root.submit({type:'input',content:'Exercise complete schema-less value'},context)).wait(context)).status).toBe('done');expect(c.calls()).toBe(1);
 });

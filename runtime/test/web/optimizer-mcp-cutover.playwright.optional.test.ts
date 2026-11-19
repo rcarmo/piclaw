@@ -38,11 +38,13 @@ browserTest(`Classic cutover ${engine}/${width}/${colorScheme}: reference-safe M
   }
   return new Response('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"><style>body{margin:0;padding:12px;box-sizing:border-box}#root{max-width:1000px;margin:auto}</style><main id="root"></main><script type="module" src="/fixture.js"></script>',{headers:{'Content-Type':'text/html'}});
  }});
- const page=await browsers.get(engine)!.newPage({viewport:{width,height:900},hasTouch:width<600,colorScheme});const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+ const page=await browsers.get(engine)!.newPage({viewport:{width,height:900},hasTouch:width<600,colorScheme});
+ await page.addInitScript(()=>Object.defineProperty(globalThis.crypto,'randomUUID',{configurable:true,value:undefined}));
+ const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
  await page.route('**/*',route=>new URL(route.request().url()).origin===server.url.origin?route.continue():route.abort());
  const checkWidth=async()=>{const dimensions=await page.evaluate(()=>({width:document.documentElement.clientWidth,scroll:document.documentElement.scrollWidth}));expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.width+1);};
  try{
-  await page.goto(server.url.href);await page.getByLabel('Name',{exact:true}).waitFor();expect(await page.getByLabel('Bearer token keychain reference').inputValue()).toBe('');expect(await page.locator('body').innerText()).not.toContain('SAVED_REFERENCE_NOT_IN_BROWSER');expect(mcpPosts).toEqual([]);
+  await page.goto(server.url.href);await page.getByLabel('Name',{exact:true}).waitFor();expect(await page.evaluate(()=>typeof crypto.randomUUID)).toBe('undefined');expect(await page.getByLabel('Bearer token keychain reference').inputValue()).toBe('');expect(await page.locator('body').innerText()).not.toContain('SAVED_REFERENCE_NOT_IN_BROWSER');expect(mcpPosts).toEqual([]);
   await page.getByLabel('Name',{exact:true}).fill('renamed');const save=page.getByRole('button',{name:'Save connection',exact:true});if(width<600)await save.tap();else{await save.focus();await page.keyboard.press('Space');}
   await page.waitForFunction(()=>!(document.querySelector('input[id$="name"]') as HTMLInputElement)?.disabled);expect(mcpPosts).toHaveLength(1);expect(mcpPosts[0].connection).not.toHaveProperty('bearerTokenKeychain');expect(mcpPosts[0].approveCredentialReuse).toBe(false);expect(connection.bearerTokenKeychain).toBe('SAVED_REFERENCE_NOT_IN_BROWSER');expect(connection.recall).toEqual(defaultMcpRecallSettings());expect(connection.access.grants).toEqual([{workspaceId:'foreign_workspace',agentIds:['foreign_agent']},{workspaceId,agentIds:['default']}]);
   await page.getByLabel('Default',{exact:true}).uncheck();await save.click();await page.getByRole('alert').filter({hasText:'Select at least one Agent'}).waitFor();expect(mcpPosts).toHaveLength(1);
