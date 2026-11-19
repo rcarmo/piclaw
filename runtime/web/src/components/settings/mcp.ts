@@ -39,11 +39,14 @@ function parseJsonObject(raw: string, fallback: Record<string, string> = {}): Re
     }
 }
 
+// Non-secret metadata IDs follow the existing upload/notification fallback for
+// LAN HTTP, where browsers do not expose crypto.randomUUID.
+const connectionId=()=>globalThis.crypto?.randomUUID?globalThis.crypto.randomUUID():`mcp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 function createConnectionDraft(workspaceId: string, source: any = null, recallDefaults = DEFAULT_RECALL()) {
     const data = source || {};
     const recall = { ...DEFAULT_RECALL(), ...(recallDefaults || {}), ...(data.recall || {}) };
     return {
-        id: data.id || crypto.randomUUID(),
+        id: data.id || connectionId(),
         name: data.name || '',
         workspaceId: data.workspaceId || workspaceId || 'workspace',
         access: data.access || null,
@@ -56,7 +59,6 @@ function createConnectionDraft(workspaceId: string, source: any = null, recallDe
         allowHttp: Boolean(data.allowHttp),
         timeoutSeconds: Number(data.timeoutSeconds || 30),
         revision: Number(data.revision || 0),
-        accessEpoch: data.accessEpoch || crypto.randomUUID(),
         hasSavedCredentials: Boolean(data.hasSavedCredentials),
         needsCredentialApproval: Boolean(data.needsCredentialApproval),
         approveCredentialReuse: false,
