@@ -6,6 +6,12 @@
   "scope": "Subsequent source transformations only. Original receipt,105 rows,37 deletions and financial accounting are unchanged.",
   "rows": [
     {
+      "path": "runtime/durable-engine/src/host-extension-catalog.ts",
+      "beforeSha256": "24cda3691168179f509d034feeaed4c860ae267f27f3070694cc4aca27ab3059",
+      "afterSha256": "c3d8dfa1be4711d1bf0e4d422e172ecc91fc5e5da286088890df3c908a720097",
+      "purpose": "Admit the exact Draw.io 31.4.6 manifest alongside the existing 31.4.5 source pins for the repaired distribution; preserve the historical retirement disposition and accounting."
+    },
+    {
       "path": "runtime/durable-engine/src/application-bootstrap.ts",
       "beforeSha256": "3a5948d7b2e4495a26d443561dbab0ec829b422636e4218eb52800cf20d3ec44",
       "afterSha256": "5ac03b42bf88bca7b86b46654296086f2a78541f8f83fd40ab0a98a2f7ded088",
