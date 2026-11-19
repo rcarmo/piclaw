@@ -270,7 +270,7 @@ export async function handleCliOptions(args = process.argv.slice(2)): Promise<bo
       await handlePostCommand(commandArgs.slice(1));
     } catch (error) {
       console.error((error as Error).message);
-      return true;
+      process.exitCode = 1;
     }
     return true;
   }
