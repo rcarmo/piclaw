@@ -63,12 +63,38 @@ test("cli --post rejects empty content", async () => {
     errors.push(args.map(String).join(" "));
   };
 
+  const previousExit = process.exitCode ?? 0;
   try {
     const handled = await handleCliOptions(["--post", "web:chat:test-github", "   "]);
     expect(handled).toBe(true);
+    expect(process.exitCode).toBe(1);
   } finally {
     console.error = originalError;
+    process.exitCode = previousExit;
   }
 
   expect(errors.some((line) => line.includes("Message content is required for --post."))).toBe(true);
+});
+
+test("cli --post reports a failed write as a nonzero exit without a success message", async () => {
+  const db = getDb();
+  db.exec(`CREATE TEMP TRIGGER cli_post_write_failure BEFORE INSERT ON messages
+    WHEN NEW.chat_jid = 'web:cli-post-failure' BEGIN SELECT RAISE(ABORT, 'fixture write rejected'); END`);
+  const errors: string[] = [], output: string[] = [];
+  const { log, error } = console;
+  const previousExit = process.exitCode ?? 0;
+  console.log = value => { output.push(String(value)); };
+  console.error = value => { errors.push(String(value)); };
+  try {
+    expect(await handleCliOptions(["--post", "web:cli-post-failure", "Uncommitted digest"])).toBe(true);
+    expect(process.exitCode).toBe(1);
+    expect(errors).toEqual(["fixture write rejected"]);
+    expect(output).toEqual([]);
+    expect(db.query("SELECT count(*) AS n FROM messages WHERE chat_jid = ?").get("web:cli-post-failure")).toEqual({ n: 0 });
+  } finally {
+    console.log = log;
+    console.error = error;
+    process.exitCode = previousExit;
+    db.exec("DROP TRIGGER cli_post_write_failure");
+  }
 });
