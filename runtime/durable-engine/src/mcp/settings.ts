@@ -26,7 +26,7 @@ export function createMcpSettingsHandler(service:ReturnType<typeof createApplica
   const check=()=>{assertOwner();request.signal.throwIfAborted();const current=addonLocalContextApi.getRequestContext(request);if(!principal||principal.kind!=='operator'||principal.workspaceId!==service.workspaceId||!current||current.ownerId!==principal.ownerId)throw Error('Authenticated MCP configuration owner required');};
   try{
    check();await principal!.listTargets();check();
-   const snapshot=()=>({ok:true,workspaceId:service.workspaceId,connections:service.connections.list().map(row=>({...row,status:service.mcp.status(row.id)})),agents:database.query<{id:string;label:string},[]>('SELECT DISTINCT agent_name AS id,agent_name AS label FROM chat_branches WHERE archived_at IS NULL ORDER BY agent_name').all(),migration:service.migration,defaults:{recall:defaultMcpRecallSettings()}});
+   const snapshot=()=>({ok:true,workspaceId:service.workspaceId,connections:service.connections.list().map(row=>({...row,status:service.mcp.status(row.id)})),agents:database.query<{id:string;label:string},[]>('SELECT branch_id AS id,agent_name AS label FROM chat_branches WHERE archived_at IS NULL ORDER BY agent_name,branch_id').all(),migration:service.migration,defaults:{recall:defaultMcpRecallSettings()}});
    const url=new URL(request.url),cookieName=(id:string)=>'mcp_oauth_'+createHash('sha256').update(id).digest('hex').slice(0,20);
    const callback=(id:string)=>{const target=new URL(base+'/oauth/callback',url.origin);target.searchParams.set('id',id);return target.href;};
    const cookie=(id:string,value:string,expire=false)=>`${cookieName(id)}=${value}; Path=${base}/oauth/callback; HttpOnly; SameSite=Lax; Max-Age=${expire?0:600}${url.protocol==='https:'?'; Secure':''}`;

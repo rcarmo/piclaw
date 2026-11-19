@@ -40,9 +40,10 @@ export function createApplicationOptimizerMcp(options:{root:Database;workspaceRo
    const child:CoreOptimizerAgent={agentId:`child_${record.id}`,durableId:record.id,parentId:parent.agentId,rootId:parent.rootId??parent.agentId,...(record.owner?{oneShotCallId:`sdk:${record.owner.taskId}`}:{readOnly:true}),label:record.owner?'SDK task-owned child':'Unrouted SDK fork'};result.push(child);byId.set(record.id,child);
   }cursor=page.next;}while(cursor);return result;
  }
+ // MCP grants use the persisted branch lifetime, never its renameable friendly handle.
  async function identity(id:ConversationId,harness=options.harness()){
   const bindings=await roots(harness);let current=await harness.commit(tx=>tx.conversation(id),context);const seen=new Set<number>();let taskOwned=false,child=false;
-  while(current){check();taskOwned ||= !!current.owner;if(seen.has(current.id))throw Error('Invalid SDK identity ancestry');seen.add(current.id);const root=bindings.find(binding=>binding.conversationId===current!.id);if(root)return{binding:root,child,agentId:root.profile,readOnly:child||taskOwned};
+  while(current){check();taskOwned ||= !!current.owner;if(seen.has(current.id))throw Error('Invalid SDK identity ancestry');seen.add(current.id);const root=bindings.find(binding=>binding.conversationId===current!.id);if(root)return{binding:root,child,agentId:root.branchId,readOnly:child||taskOwned};
    child=true;const parent=current.owner?.conversationId??current.parent?.conversationId;current=parent?await harness.commit(tx=>tx.conversation(parent),context):undefined;
   }return undefined;
  }
