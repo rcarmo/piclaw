@@ -19,6 +19,19 @@ export function splitOptimizerPolicy(config:OptimizerConfig){
   config.oversightWorkspaces={...config.workspaces};config.oversightAgents={...config.agents};
  }
 }
+/** Settings has a single instance. Fold its old workspace mode into each default
+ * without touching Agent choices, other identities, or SQLite on a read. */
+export function projectInstanceOptimizerConfig(input:OptimizerConfig,workspaceId:string):OptimizerConfig {
+ const config=structuredClone(input);
+ splitOptimizerPolicy(config);
+ const policy=config.policy;
+ const mode=effectivePolicy(policy,config.workspaces[workspaceId]??'inherit').mode;
+ policy.enabled=mode!=='off';policy.mode=mode;
+ policy.oversightMode=effectivePolicy(oversightPolicy(policy),config.oversightWorkspaces?.[workspaceId]??'inherit').mode;
+ delete config.workspaces[workspaceId];
+ if(config.oversightWorkspaces)delete config.oversightWorkspaces[workspaceId];
+ return config;
+}
 const key='native.token-optimizer.v1';
 type WriteOptions={expectedRevision?:string;authorise?:()=>void;signal?:AbortSignal};
 export class TokenOptimizerConfiguration{

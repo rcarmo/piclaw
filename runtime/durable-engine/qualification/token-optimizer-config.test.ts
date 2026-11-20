@@ -1,6 +1,6 @@
 import {afterEach,expect,test} from 'bun:test';
 import {Database} from 'bun:sqlite';
-import {TokenOptimizerConfiguration,parseOptimizerConfig,splitOptimizerPolicy} from '../src/token-optimizer-config.ts';
+import {TokenOptimizerConfiguration,parseOptimizerConfig,splitOptimizerPolicy,projectInstanceOptimizerConfig} from '../src/token-optimizer-config.ts';
 import {oversightPolicy,purposeAllowed} from '#token-optimizer/core';
 const close:(()=>void)[]=[];afterEach(()=>{for(const fn of close.splice(0).reverse())fn();});
 function fixture(){const db=new Database(':memory:');db.exec('PRAGMA busy_timeout=0; CREATE TABLE router_state(key TEXT PRIMARY KEY,value TEXT NOT NULL);');close.push(()=>db.close());let owner=true;const guard=()=>{if(!owner)throw Error('owner revoked');};return{db,guard,service:new TokenOptimizerConfiguration(db,guard),revoke(){owner=false;}};}
@@ -15,6 +15,31 @@ test('split settings retain legacy oversight and ancestor vetoes, then edit inde
  expect(f.service.policy('allowed','agent').mode).toBe('off');expect(oversightPolicy(f.service.policy('allowed','agent')).mode).toBe('active');expect(oversightPolicy(f.service.policy('blocked','agent')).mode).toBe('off');expect(split.policy.sharePlanWithJudge).toBeUndefined();
  const next=f.service.snapshot();next.policy.enabled=true;next.policy.oversightMode='off';await f.service.configure(next);const reopened=new TokenOptimizerConfiguration(f.db,f.guard);expect(reopened.policy('allowed','agent').mode).toBe('active');expect(oversightPolicy(reopened.policy('allowed','agent')).mode).toBe('off');
 });
+test('instance Settings folds only the local legacy overrides into the defaults without changing effective Agent modes',async()=>{
+ const f=fixture(),initial=f.service.snapshot(),instance='local',other='foreign',agentKey=(agent:string)=>JSON.stringify([instance,agent]);
+ initial.policy.enabled=true;initial.policy.mode='observe';await f.service.configure(initial);
+ const config=f.service.snapshot();Object.assign(config.policy,{mode:'active',goalChecks:true,inferenceInObserve:true});
+ config.workspaces={[instance]:'off',[other]:'observe'};config.agents={[agentKey('on')]:'active',[agentKey('off')]:'off'};
+ // A legacy combined policy must split before its historical inherited modes are folded.
+ await f.service.configure(config);const first=f.service.snapshot(),revision=f.service.revision();
+ const agents=['on','off','new'];const modes=()=>agents.map(agent=>{const policy=f.service.policy(instance,agent);return [policy.mode,oversightPolicy(policy).mode];});
+ const before=modes();const projected=projectInstanceOptimizerConfig(first,instance);
+ expect(f.service.revision()).toBe(revision);expect(f.service.snapshot()).toEqual(first);
+ expect(projected.workspaces).toEqual({[other]:'observe'});expect(projected.oversightWorkspaces).toEqual({[other]:'observe'});
+ expect(projected.policy).toMatchObject({enabled:false,mode:'off',oversightMode:'off',oversightInferenceInObserve:true});
+ expect(projected.agents).toEqual(first.agents);expect(projected.oversightAgents).toEqual(first.agents);
+ await f.service.configure(projected,{expectedRevision:revision});expect(modes()).toEqual(before);
+ const independent=f.service.snapshot();independent.policy.enabled=true;independent.policy.mode='active';independent.policy.oversightMode='active';
+ independent.workspaces[instance]='observe';independent.oversightWorkspaces![instance]='active';independent.oversightAgents![agentKey('on')]='observe';
+ await f.service.configure(independent);const prior=modes(),next=projectInstanceOptimizerConfig(f.service.snapshot(),instance);
+ expect(next.policy.mode).toBe('observe');expect(next.policy.oversightMode).toBe('active');
+ await f.service.configure(next);expect(modes()).toEqual(prior);expect(projectInstanceOptimizerConfig(next,instance)).toEqual(next);
+});
+test('instance projection keeps a disabled ancestor Off even with a dormant Active override',()=>{
+ const f=fixture(),config=f.service.snapshot();config.workspaces.local='active';config.oversightWorkspaces={local:'active'};config.policy.oversightMode='off';
+ const view=projectInstanceOptimizerConfig(config,'local');expect(view.policy.mode).toBe('off');expect(view.policy.enabled).toBe(false);expect(view.policy.oversightMode).toBe('off');expect(view.hasEnabled).toBe(false);expect(view.workspaces).toEqual({});
+});
+
 test('independent form edits use the latest admitted SQLite config without losing either feature',async()=>{
  const f=fixture();await Promise.all([f.service.update(config=>{splitOptimizerPolicy(config);config.policy.maxFacts=7;return config;}),f.service.update(config=>{splitOptimizerPolicy(config);config.policy.oversightMode='observe';config.policy.goalChecks=true;return config;})]);const saved=f.service.snapshot();expect(saved.policy.maxFacts).toBe(7);expect(saved.policy.oversightMode).toBe('observe');expect(saved.policy.enabled).toBe(false);expect(saved.policy.inferenceInObserve).toBe(false);expect(saved.policy.oversightInferenceInObserve).toBe(false);
 });
