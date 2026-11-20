@@ -10,11 +10,13 @@ test("packages carry the native source, frozen island and installer without prom
   const pkg = JSON.parse(text("package.json"));
   for (const path of ["scripts/install-durable-engine.ts", "runtime/durable-engine/src", "runtime/durable-engine/package.json", "runtime/durable-engine/bun.lock"])
     expect(pkg.files).toContain(path);
-  expect(pkg.dependencies["@earendil-works/pi-coding-agent"]).toBe("1.2.0");
-  expect(pkg.dependencies["@earendil-works/pi-mcp"]).toBe("1.2.0");
+  const { sdkVersion } = JSON.parse(text("scripts/native-gate-contract.json"));
+  expect(pkg.dependencies["@earendil-works/pi-coding-agent"]).toBe(sdkVersion);
+  expect(pkg.dependencies["@earendil-works/pi-mcp"]).toBe(sdkVersion);
+  expect(pkg.dependencies["@earendil-works/pi-durable"]).toBeUndefined();
   const engine = JSON.parse(text("runtime/durable-engine/package.json"));
-  expect(Object.keys(engine.dependencies).sort()).toEqual(DURABLE_ENGINE_SDK_PACKAGES.map(name => `@earendil-works/${name}`).sort());
-  expect(Object.values(engine.dependencies).every(version => version === "1.3.0")).toBe(true);
+  expect(Object.keys(engine.dependencies).filter(name => name.startsWith("@earendil-works/")).sort()).toEqual(DURABLE_ENGINE_SDK_PACKAGES.map(name => `@earendil-works/${name}`).sort());
+  for (const name of DURABLE_ENGINE_SDK_PACKAGES) expect(engine.dependencies[`@earendil-works/${name}`]).toBe(sdkVersion);
 });
 
 test("normal, scripts-disabled Docker and portable installs run the native installer", () => {
