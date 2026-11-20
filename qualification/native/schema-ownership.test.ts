@@ -74,7 +74,7 @@ for (const addons of [false, true]) applicationTest(`complete native startup inv
     expect(result.objects.some(object => object.owner === "addon:code-review")).toBe(addons);
     expect(result.objects.some(object => object.owner === "archive:session-store")).toBe(false);
     const kinds = db.query("SELECT DISTINCT json_extract(record,'$.kind') AS kind FROM documents").all() as { kind: string }[];
-    for (const { kind } of kinds) expect(contract.documents.some(document => document.kind === kind)).toBe(true);
+    for (const { kind } of kinds) expect(contract.documents.some(document => document.kind === kind),kind).toBe(true);
     expect(db.query("SELECT * FROM documents ORDER BY id").all()).toEqual(documents);
     expect(db.query("SELECT * FROM piclaw_schema_migrations ORDER BY owner,migration_order").all()).toEqual(receipts);
     expect(db.query("SELECT * FROM sqlite_schema ORDER BY type,name").all()).toEqual(schema);

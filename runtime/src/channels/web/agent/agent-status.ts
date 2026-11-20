@@ -5,7 +5,6 @@
 import type { WebChannelLike, AgentStatusContext, TokenUsageCounterSummary, LatestTokenUsageCounterSummary, AgentTokenUsageContext } from "../core/web-channel-contracts.js";
 export type { AgentStatusContext, TokenUsageCounterSummary, LatestTokenUsageCounterSummary, AgentTokenUsageContext } from "../core/web-channel-contracts.js";
 import { getAddonApiHealthSnapshot } from "../../../addons/addon-api-health.js";
-import { getMcpStartupDiagnostics } from "../../../secure/mcp-keychain.js";
 import { appendServerTiming, measureAsync, measureSync } from "../http/server-timing.js";
 import { publicContextUsage } from "../context-usage.js";
 
@@ -95,7 +94,7 @@ function formatTokenUsageContext(usage: AgentTokenUsageContext | null): Record<s
 }
 
 function getMcpStartupStatus(
-  readDiagnostics: typeof getMcpStartupDiagnostics = getMcpStartupDiagnostics,
+  readDiagnostics: NonNullable<AgentStatusContext['getMcpStartupDiagnostics']> = () => [],
 ): { degraded: boolean; servers: Array<{ server_name: string; reason: string }> } {
   const diagnostics = readDiagnostics();
   return {

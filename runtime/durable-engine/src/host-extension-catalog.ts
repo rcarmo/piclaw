@@ -55,6 +55,8 @@ const approvedOfficeViewerFiles = Object.freeze({
 });
 // Execution source only. Installed vendor assets remain trusted installation
 // content, not integrity-qualified source or a filesystem sandbox.
+// 31.4.6 repackages the same executable sources with the missing vendor payload.
+// Preserve existing 31.4.5 installs with an exact, separate manifest pin.
 const approvedDrawioFiles = Object.freeze({
   "compat/tool-call-summary.ts": "a3b717a0538e5fae5e8572b02e289d5b799574ba9bff51b63a6bb29ff5772051",
   "index.ts": "ab1ffba287828ed37db87288c7f1feb47a12efb2c66aa983941643575bdf2790",
@@ -122,8 +124,12 @@ type Profile = keyof typeof profiles;
 export const applicationAddonSourceProfiles = { ...profiles, ...installedAddonProfiles };
 const sourceProfiles = applicationAddonSourceProfiles;
 type SourceProfile = keyof typeof sourceProfiles;
+const drawioSuccessor = { version: "31.4.6", manifest: "6ad445ab54e5eb91f0982c3cbe9993d5103780afbefa503e986db37ca1b0ca42" } as const;
+function isDrawioSuccessor(kind: SourceProfile, version: unknown): version is typeof drawioSuccessor.version {
+  return kind === "open_drawio_editor" && version === drawioSuccessor.version;
+}
 type Extension = LoadExtensionsResult["extensions"][number];
-type InstalledSource = Readonly<{ cwd: string; packageDir: string; entry: string; manifest: string; files: string }>;
+type InstalledSource = Readonly<{ cwd: string; packageDir: string; entry: string; version: string; manifest: string; files: string }>;
 type InstalledRegistration = Readonly<{
   source: InstalledSource;
   definition: NonNullable<ReturnType<Extension["tools"]["get"]>>["definition"] | undefined;
@@ -167,7 +173,8 @@ function captureApprovedPackage(workspace: string, packageDir: string, installed
     if (!inside(join(packageDir, "package.json"))) return undefined;
     const manifest = readFileSync(join(packageDir, "package.json"), "utf8");
     const pkg = JSON.parse(manifest);
-    if (pkg.name !== profile.name || pkg.version !== profile.version || pkg.type !== "module") return undefined;
+    const successor = isDrawioSuccessor(kind, pkg.version);
+    if (pkg.name !== profile.name || (pkg.version !== profile.version && !successor) || pkg.type !== "module") return undefined;
     const entries = resolveAddonPackageEntries(packageDir, pkg.pi?.extensions);
     const entryFile = "entry" in profile ? profile.entry : "index.ts";
     const entry = join(packageDir, entryFile || "package.json");
@@ -175,14 +182,15 @@ function captureApprovedPackage(workspace: string, packageDir: string, installed
     // The pinned TS imports use .js specifiers. A sibling JS file would win
     // resolution and is NOT covered by the approved TS content proof.
     if (profile.shadows.some(file => existsSync(join(packageDir, file)))) return undefined;
-    const files = Object.entries(profile.files).map(([file, expected]) => {
+    const files = Object.entries(profile.files).map(([file, pinned]) => {
       const path = join(packageDir, file);
       if (!inside(path)) throw Error(`${profile.label} source escape`);
       const digest = createHash("sha256").update(readFileSync(path)).digest("hex");
+      const expected = successor && file === "package.json" ? drawioSuccessor.manifest : pinned;
       if (digest !== expected) throw Error(`Unsupported ${profile.label} source`);
       return `${file}:${realpathSync(path)}:${digest}`;
     }).join("\n");
-    return Object.freeze({ cwd: workspace, packageDir, entry, manifest, files });
+    return Object.freeze({ cwd: workspace, packageDir, entry, version: pkg.version, manifest, files });
   } catch { return undefined; }
 }
 /** Read-only install preflight using the same source proof as the loader. No
@@ -192,13 +200,14 @@ export function inspectAddonInstall(name: string, version?: string, directory?: 
   if (name === "@rcarmo/piclaw-addon-delegate") return { supportedVersion: "built-in", problem: "Delegate is built into Core. The retired add-on is not loaded and need not be installed." };
   const match = Object.entries(sourceProfiles).find(([, profile]) => profile.name === name);
   if (!match) return;
-  const [kind, profile] = match;
-  const supportedVersion = profile.version;
-  if (version !== supportedVersion) return { supportedVersion, problem: `This Core release requires ${profile.label} ${supportedVersion}. Update Core to a release supporting the requested add-on before installing it. The installed add-on has not been changed.` };
+  const [key, profile] = match, kind = key as SourceProfile;
+  const supportedVersion = isDrawioSuccessor(kind, version) ? version : profile.version;
+  const requiredVersion = kind === "open_drawio_editor" ? `${profile.version} or ${drawioSuccessor.version}` : profile.version;
+  if (version !== supportedVersion) return { supportedVersion, problem: `This Core release requires ${profile.label} ${requiredVersion}. Update Core to a release supporting the requested add-on before installing it. The installed add-on has not been changed.` };
   if (directory) {
     const manifest = readInstalledAddonPackage(directory)?.manifest;
     const entries = resolveAddonPackageEntries(directory, manifest?.pi?.extensions);
-    if (!captureApprovedPackage(directory, resolve(directory), entries, kind as SourceProfile))
+    if (captureApprovedPackage(directory, resolve(directory), entries, kind)?.version !== version)
       return { supportedVersion, problem: `${profile.label} does not match the add-on source approved by this Core release. The installed add-on has not been changed.` };
   }
   return { supportedVersion };
@@ -220,7 +229,7 @@ function qualifyInstalled(catalog: LoadExtensionsResult, cwd: string, kind: Prof
   const [extension, { source, definition, execute, declaration, handlerMap, handlers, tools, commands }] = candidates[0]!;
   const assertCurrent = () => {
     if (!catalog.extensions.includes(extension) || resolve(extension.resolvedPath) !== source.entry ||
-      !sameSource(source, captureApprovedSource(cwd, getInstalledAddonExtensionPaths(cwd), kind))) throw new InstalledAddonSourceChanged(profile.label, profile.version);
+      !sameSource(source, captureApprovedSource(cwd, getInstalledAddonExtensionPaths(cwd), kind))) throw new InstalledAddonSourceChanged(profile.label, source.version);
     const names = kind === "observability" ? [] : kind === "goal" ? ["get_goal", "create_goal", "goal_complete", "goal_stop", "update_goal"] : [kind];
     if (definition?.name !== names[0] || extension.tools.size !== names.length || tools.length !== names.length ||
       names.some(name => !tools.some(prior => prior.name === name && extension.tools.get(name)?.definition === prior.definition && prior.definition.execute === prior.execute && readToolCallSummary(prior.definition) === prior.summary && JSON.stringify(prior.definition) === prior.declaration)) ||
@@ -355,7 +364,7 @@ function assertApprovedApplicationSources(cwd: string, {installedEntries,snapsho
 export function auditInstalledApplicationAddonSources(cwd: string) {
   const captured=captureApplicationSources(cwd);
   assertApprovedApplicationSources(cwd,captured);
-  return {expectedProfiles:Object.values(sourceProfiles).map(({name,version})=>({name,version})),profiles:captured.snapshots.flatMap(({kind,before,entry})=>before?[{kind,name:sourceProfiles[kind].name,version:sourceProfiles[kind].version,packageDir:before.packageDir,entry}]:[])};
+  return {expectedProfiles:Object.values(sourceProfiles).map(({name,version})=>({name,version})),profiles:captured.snapshots.flatMap(({kind,before,entry})=>before?[{kind,name:sourceProfiles[kind].name,version:before.version,packageDir:before.packageDir,entry}]:[])};
 }
 
 /** The public Pi registry, not a second registerTool implementation. Factories

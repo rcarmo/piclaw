@@ -105,6 +105,9 @@ export interface MaterializedAnswer {
   readonly mediaIds: readonly number[];
 }
 export interface RuntimeOptions {
+  /** Imported SDK optimizer state, qualified in the same namespace; no independent execution owner. */
+  readonly optimizer?: import('./token-optimizer-authority.js').OptimizerAuthority;
+  readonly onSessionReset?:(conversationId:ConversationId)=>Promise<void>;
   /** Fresh producer only; atomic root ACK plus exact execution harness. */
   readonly completeInputHandoff?: (input: AcceptedInput, submissionId: SubmissionId, capturedOperation: OperationSnapshot, intent: boolean, signal?: AbortSignal) => Promise<void>;
   readonly incarnation: string;
@@ -224,6 +227,7 @@ function runtimeSnapshot(o: RuntimeOptions): RuntimeSnapshot {
   const { owner, work, terminal, bindings, harnessOptions: h, existingConversationIds,
     openStorage, conversationFor, authorizeScheduling, putAnswer, materializeAnswer, now, incarnation, sessionId } = o;
   return Object.freeze({ incarnation, sessionId, captured: true as const,
+    optimizer:o.optimizer&&Object.freeze({task:o.optimizer.task.bind(o.optimizer),steering:o.optimizer.steering.bind(o.optimizer)}),onSessionReset:o.onSessionReset?.bind(o),
     completeInputHandoff: o.completeInputHandoff?.bind(o),
     codemodeExecute: o.codemodeExecute,
     onStorageFailure: o.onStorageFailure?.bind(o),
@@ -301,6 +305,11 @@ export class HostConversationRuntime {
     // Join notification/cleanup failures during close; never detach an unhandled rejection.
     void this.storageEnded.catch(() => {});
   }
+
+  /** Trusted Core extensions borrow this exact SDK namespace; no second Harness or storage owner is constructed. */
+  coreExtensionHarness(): Harness { this.fence(); return this.harness; }
+  qualifyOptimizerTask(record: HarnessInspection['tasks'][number]['record']) {return this.observe(async()=>{const allowed=await this.options.optimizer?.task(this.harness,record);this.fence();return allowed===true;});}
+  ownsOptimizerSubmission(record:SubmissionRecord) {return this.observe(async()=>{const allowed=await this.options.optimizer?.steering(this.harness,record);this.fence();return allowed===true;});}
 
   /** Borrow the existing SDK SQLite admission scope. It rechecks the source at
    * physical write/COMMIT boundaries; it owns no state, queue or transaction. */
@@ -843,6 +852,7 @@ export class HostConversationRuntime {
         } else {
           await conversation.reset(undefined, this.context);
         }
+        await this.options.onSessionReset?.(copy.conversationId as ConversationId);this.fence();
       });
       this.fence();
     })();
@@ -1814,6 +1824,7 @@ export class HostConversationRuntime {
         const record = await submission?.status(this.context); this.fence();
         if (!record || record.type !== "input" || record.conversationId !== conversationId || record.entry === undefined)
           throw Error("Exact host accepted input required");
+        if(await this.ownsOptimizerSubmission(record))continue;
         const entry = await this.harness.commit(tx => tx.entry(record.entry!), this.context); this.fence();
         const data = entry?.data as Record<string, unknown> | undefined;
         if (entry?.kind !== "host.accepted" || !data || (data.role !== "primary" && data.role !== "intent"))
@@ -2253,6 +2264,7 @@ export class HostConversationRuntime {
         const page = await this.storage.scanSubmissions({conversationId:copy.conversationId,status:"done"},100,cursor,this.context); this.fence();
         for (const candidate of page.items) {
           if (candidate.type !== "input" || candidate.status !== "done" || candidate.answer !== status.answer) continue;
+          if(await this.ownsOptimizerSubmission(candidate))continue;
           const entry = await this.harness.commit(tx=>tx.entry(candidate.entry),this.context); this.fence();
           if (entry?.kind !== "host.accepted" || entry.conversationId !== copy.conversationId) throw Error("Native result source unavailable");
           const accepted = inputSnapshot(entry.data as unknown as AcceptedInput);

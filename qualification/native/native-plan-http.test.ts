@@ -39,8 +39,10 @@ test('SDK serializes concurrent HTTP preconditions; reset and postcommit notific
     const replies = await Promise.all([call(request({ markdown: '- [x] first' })), call(request({ markdown: '- [x] second' }))]);
     expect(replies.map(reply => reply.status).sort()).toEqual([200, 409]);
     const current = await session.snapshot(PlanDoc, chat, context); expect(current?.markdown).toBe('- [x] first');
+    expect(current?.revision).toBe(1);
     const reset = await call(request({ action: 'reset' }, planEtag(current!))); expect(reset.status).toBe(200);
     expect((await session.snapshot(PlanDoc, chat, context))?.markdown).toBe(DEFAULT_PLAN);
+    expect((await session.snapshot(PlanDoc, chat, context))?.revision).toBe(2);
     const read = await handleNativePlanRequest(session, request(), chat, context, () => {}, () => { throw Error('legacy must not be consulted'); }, () => {});
     expect(read.status).toBe(200); expect((await read.json() as any).plan.markdown).toBe(DEFAULT_PLAN);
     expect(await session.snapshot(PlanDoc, chat + ':branch:one', context)).toBeUndefined();

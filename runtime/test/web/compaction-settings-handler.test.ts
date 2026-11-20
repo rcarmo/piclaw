@@ -44,24 +44,12 @@ test('saveCompactionSettings persists and applies compaction settings immediatel
       autoCompactionEnabled: false,
       progressWatchdogEnabled: true,
       progressWatchdogTimeoutSec: 75,
-      toolResultCompactionEnabled: false,
-      toolResultCompactionTools: ['bash', 'exec_batch'],
-      toolResultSemanticSummaryEnabled: true,
-      toolResultSemanticSummaryMaxInputChars: 24000,
-      toolResultSemanticSummaryMaxTokens: 640,
-      toolResultSemanticSummaryTimeoutSec: 30,
     });
 
     expect(saved).toMatchObject({
       autoCompactionEnabled: false,
       progressWatchdogEnabled: true,
       progressWatchdogTimeoutSec: 75,
-      toolResultCompactionEnabled: false,
-      toolResultCompactionTools: ['bash', 'exec_batch'],
-      toolResultSemanticSummaryEnabled: true,
-      toolResultSemanticSummaryMaxInputChars: 24000,
-      toolResultSemanticSummaryMaxTokens: 640,
-      toolResultSemanticSummaryTimeoutSec: 30,
     });
     expect(process.env.PICLAW_AUTO_COMPACTION_ENABLED).toBeUndefined();
     expect(process.env.PICLAW_SMART_COMPACTION_METHOD).toBe('');
@@ -77,14 +65,6 @@ test('saveCompactionSettings persists and applies compaction settings immediatel
     const persisted = JSON.parse(readFileSync(join(workspace.workspace, '.piclaw', 'config.json'), 'utf8'));
     expect(persisted).toMatchObject({
       domains: {
-        tools: {
-          toolResultCompactionEnabled: false,
-          toolResultCompactionTools: ['bash', 'exec_batch'],
-          toolResultSemanticSummaryEnabled: true,
-          toolResultSemanticSummaryMaxInputChars: 24000,
-          toolResultSemanticSummaryMaxTokens: 640,
-          toolResultSemanticSummaryTimeoutMs: 30000,
-        },
         compaction: {
           autoCompactionEnabled: false,
         },
@@ -137,76 +117,13 @@ test('native compaction rejects every retired field before any supported setting
   });
 });
 
-test('saveCompactionSettings normalizes per-tool compaction allowlist', async () => {
-  await withTempWorkspaceEnv('piclaw-compaction-tools-normalization-', {
-    PICLAW_TOOL_RESULT_COMPACTION_ENABLED: undefined,
-    PICLAW_TOOL_RESULT_COMPACTION_TOOLS: undefined,
-    PICLAW_TOOL_RESULT_SEMANTIC_SUMMARY_ENABLED: undefined,
-    PICLAW_TOOL_RESULT_SEMANTIC_SUMMARY_MAX_INPUT_CHARS: undefined,
-    PICLAW_TOOL_RESULT_SEMANTIC_SUMMARY_MAX_TOKENS: undefined,
-    PICLAW_TOOL_RESULT_SEMANTIC_SUMMARY_TIMEOUT_MS: undefined,
-  }, async (workspace) => {
-    const db = await importFresh<typeof import('../../src/db.js')>('../src/db.js');
-    db.initDatabase();
-    const handler = await importFresh<typeof import('../../src/channels/web/handlers/compaction-settings.js')>(
-      '../src/channels/web/handlers/compaction-settings.js',
-    );
-
-    const saved = await handler.saveCompactionSettings({
-      toolResultCompactionTools: [' Bash ', 'proxmox', 'proxmox'],
-    });
-
-    expect(saved.toolResultCompactionTools).toEqual(['bash', 'proxmox']);
-
-    const persisted = JSON.parse(readFileSync(join(workspace.workspace, '.piclaw', 'config.json'), 'utf8'));
-    expect(persisted).toMatchObject({
-      domains: { tools: { toolResultCompactionTools: ['bash', 'proxmox'] } },
-    });
-    expect(process.env.PICLAW_TOOL_RESULT_COMPACTION_TOOLS).toBeUndefined();
-  });
-});
-
-test('saveCompactionSettings normalizes semantic summary settings', async () => {
-  await withTempWorkspaceEnv('piclaw-compaction-semantic-summary-normalization-', {
-    PICLAW_TOOL_RESULT_SEMANTIC_SUMMARY_ENABLED: undefined,
-    PICLAW_TOOL_RESULT_SEMANTIC_SUMMARY_MAX_INPUT_CHARS: undefined,
-    PICLAW_TOOL_RESULT_SEMANTIC_SUMMARY_MAX_TOKENS: undefined,
-    PICLAW_TOOL_RESULT_SEMANTIC_SUMMARY_TIMEOUT_MS: undefined,
-  }, async (workspace) => {
-    const db = await importFresh<typeof import('../../src/db.js')>('../src/db.js');
-    db.initDatabase();
-    const handler = await importFresh<typeof import('../../src/channels/web/handlers/compaction-settings.js')>(
-      '../src/channels/web/handlers/compaction-settings.js',
-    );
-
-    const saved = await handler.saveCompactionSettings({
-      toolResultSemanticSummaryEnabled: true,
-      toolResultSemanticSummaryMaxInputChars: 10,
-      toolResultSemanticSummaryMaxTokens: 99999,
-      toolResultSemanticSummaryTimeoutSec: 999,
-    });
-
-    expect(saved).toMatchObject({
-      toolResultSemanticSummaryEnabled: true,
-      toolResultSemanticSummaryMaxInputChars: 500,
-      toolResultSemanticSummaryMaxTokens: 4096,
-      toolResultSemanticSummaryTimeoutSec: 300,
-    });
-
-    const persisted = JSON.parse(readFileSync(join(workspace.workspace, '.piclaw', 'config.json'), 'utf8'));
-    expect(persisted).toMatchObject({
-      domains: { tools: {
-        toolResultSemanticSummaryEnabled: true,
-        toolResultSemanticSummaryMaxInputChars: 500,
-        toolResultSemanticSummaryMaxTokens: 4096,
-        toolResultSemanticSummaryTimeoutMs: 300000,
-      } },
-    });
-    expect(process.env.PICLAW_TOOL_RESULT_SEMANTIC_SUMMARY_ENABLED).toBeUndefined();
-    expect(process.env.PICLAW_TOOL_RESULT_SEMANTIC_SUMMARY_MAX_INPUT_CHARS).toBeUndefined();
-    expect(process.env.PICLAW_TOOL_RESULT_SEMANTIC_SUMMARY_MAX_TOKENS).toBeUndefined();
-    expect(process.env.PICLAW_TOOL_RESULT_SEMANTIC_SUMMARY_TIMEOUT_MS).toBeUndefined();
-  });
+test('retired tool-result controls cannot mutate supported compaction or legacy source',async()=>{
+ await withTempWorkspaceEnv('retired-output-controls-',{},async workspace=>{
+  const config=await import('../../src/core/config.js');config.setLocalLitePromptProfileEnabled(false);
+  const file=join(workspace.workspace,'.piclaw','config.json'),historical=JSON.parse(readFileSync(file,'utf8'));historical.domains.tools.toolResultCompactionTools=['bash','private-existing'];writeFileSync(file,JSON.stringify(historical));const before=readFileSync(file,'utf8');
+  const handler=await importFresh<typeof import('../../src/channels/web/handlers/compaction-settings.js')>('../src/channels/web/handlers/compaction-settings.js');
+  for(const field of handler.UNSUPPORTED_NATIVE_COMPACTION_FIELDS.filter(name=>name.startsWith('toolResult'))){await expect(handler.saveCompactionSettings({localLitePromptProfileEnabled:true,[field]:['new']})).rejects.toThrow('Unsupported native compaction settings');expect(readFileSync(file,'utf8')).toBe(before);expect(handler.getCompactionSettingsData()).not.toHaveProperty(field);}
+ });
 });
 
 test('saveCompactionSettings can disable watchdog without clearing its timeout', async () => {
@@ -312,14 +229,7 @@ test('native settings retain independent tracked phases without exposing or dele
       );
 
       const beforeReset = handler.getCompactionSettingsData();
-      expect(typeof beforeReset.toolResultCompactionEnabled).toBe('boolean');
-      expect(beforeReset.toolResultCompactionTools).toEqual(
-        expect.arrayContaining(['bash', 'powershell', 'exec_batch']),
-      );
-      expect(typeof beforeReset.toolResultSemanticSummaryEnabled).toBe('boolean');
-      expect(typeof beforeReset.toolResultSemanticSummaryMaxInputChars).toBe('number');
-      expect(typeof beforeReset.toolResultSemanticSummaryMaxTokens).toBe('number');
-      expect(typeof beforeReset.toolResultSemanticSummaryTimeoutSec).toBe('number');
+      for(const field of handler.UNSUPPORTED_NATIVE_COMPACTION_FIELDS)expect(beforeReset).not.toHaveProperty(field);
       expect(beforeReset).not.toHaveProperty('compactionBackoffs');
       expect(beforeReset.progressWatchdogPhases).toEqual([
         expect.objectContaining({ chatJid: 'web:test-compaction-settings', phase: 'prompt' }),

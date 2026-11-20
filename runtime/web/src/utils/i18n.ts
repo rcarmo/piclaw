@@ -130,6 +130,7 @@ type MessageKey =
   | 'settings.section.providers'
   | 'settings.section.models'
   | 'settings.section.mcp'
+  | 'settings.section.optimizer'
   | 'settings.section.theme'
   | 'settings.section.scheduled-tasks'
   | 'settings.section.quick-actions'
@@ -725,6 +726,7 @@ const EN: Record<MessageKey, string> = {
   'settings.section.providers': 'Providers',
   'settings.section.models': 'Models',
   'settings.section.mcp': 'MCP',
+  'settings.section.optimizer': 'Optimisation',
   'settings.section.theme': 'Appearance',
   'settings.section.scheduled-tasks': 'Scheduled Tasks',
   'settings.section.quick-actions': 'Quick Actions',
@@ -904,7 +906,7 @@ const EN: Record<MessageKey, string> = {
   'settings.tools.disableCompaction': 'Disable tool-result compaction for this tool',
   'settings.tools.enableCompaction': 'Enable tool-result compaction for this tool',
   'settings.tools.noMatch': 'No tools match "{filter}"',
-  'settings.tools.footer': 'Tool activation is managed by the agent runtime. Group checkboxes collapse/expand; the “Compact” column controls tool-result compaction eligibility.',
+  'settings.tools.footer': 'Read-only tool catalogue. Availability follows SDK access restrictions and optimizer policy.',
   'settings.environment.heading': 'Environment',
   'settings.environment.introPre': 'Showing non-keychain environment variables only. Overrides are stored in extension KV and applied to',
   'settings.environment.introPost': ', so subsequent tool calls inherit them.',
@@ -1314,6 +1316,7 @@ const ZH_CN: Partial<Record<MessageKey, string>> = {
   'settings.section.providers': '提供商',
   'settings.section.models': '模型',
   'settings.section.mcp': 'MCP',
+  'settings.section.optimizer': '优化',
   'settings.section.theme': '外观',
   'settings.section.scheduled-tasks': '计划任务',
   'settings.section.quick-actions': '快捷操作',
@@ -1493,7 +1496,7 @@ const ZH_CN: Partial<Record<MessageKey, string>> = {
   'settings.tools.disableCompaction': '为此工具禁用工具结果压缩',
   'settings.tools.enableCompaction': '为此工具启用工具结果压缩',
   'settings.tools.noMatch': '没有匹配 “{filter}” 的工具',
-  'settings.tools.footer': '工具激活由代理运行时管理。组复选框可折叠/展开；“压缩”列控制工具结果压缩资格。',
+  'settings.tools.footer': '只读工具目录。可用性由 SDK 访问限制和优化器策略决定。',
   'settings.environment.heading': '环境',
   'settings.environment.introPre': '仅显示非 keychain 环境变量。覆盖项存储在扩展 KV 中并应用于',
   'settings.environment.introPost': '，因此后续工具调用会继承它们。',
@@ -1903,6 +1906,7 @@ const JA: Partial<Record<MessageKey, string>> = {
   'settings.section.providers': 'プロバイダー',
   'settings.section.models': 'モデル',
   'settings.section.mcp': 'MCP',
+  'settings.section.optimizer': '最適化',
   'settings.section.theme': '外観',
   'settings.section.scheduled-tasks': 'スケジュールタスク',
   'settings.section.quick-actions': 'クイックアクション',
@@ -2082,7 +2086,7 @@ const JA: Partial<Record<MessageKey, string>> = {
   'settings.tools.disableCompaction': 'このツールのツール結果コンパクションを無効化',
   'settings.tools.enableCompaction': 'このツールのツール結果コンパクションを有効化',
   'settings.tools.noMatch': '「{filter}」に一致するツールはありません',
-  'settings.tools.footer': 'ツールのアクティベーションはエージェントランタイムが管理します。グループのチェックボックスで折りたたみ/展開でき、「コンパクト」列はツール結果コンパクションの対象可否を制御します。',
+  'settings.tools.footer': '読み取り専用のツール一覧です。利用できるツールは SDK のアクセス制限と最適化ポリシーに従います。',
   'settings.environment.heading': '環境',
   'settings.environment.introPre': 'キーチェーン以外の環境変数のみを表示しています。オーバーライドは拡張機能の KV に保存され、',
   'settings.environment.introPost': 'に適用されるため、以降のツール呼び出しに継承されます。',

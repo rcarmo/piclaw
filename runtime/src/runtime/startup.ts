@@ -28,11 +28,12 @@ import type { AgentQueue } from "../queue.js";
 import { validateAccessStartup } from "../db/access-state.js";
 import { startAuthMaintenance } from "./auth-maintenance.js";
 import { readAccessConfig } from "../core/config-access.js";
-import { prepareMcpInstanceConfig } from "../core/config-mcp.js";
 import { createUuid } from "../utils/ids.js";
 import { applyEnvironmentOverrides } from "../environment-overrides.js";
 import { createLogger } from "../utils/logger.js";
 import { seedFreshWorkspaceCoreAddons } from "./core-addon-defaults.js";
+import { getConfigPath } from '../core/config-context.js';
+import { preparePrivateJsonConfig } from '../core/config-store.js';
 import { patchConsoleTimestamps } from "./console-timestamps.js";
 import { startExternalProgressWatchdogMonitor } from "./progress-watchdog-supervisor.js";
 import type { RuntimeState } from "./state.js";
@@ -166,9 +167,7 @@ export function initializeRuntimeEnvironment(state: RuntimeState): ReturnType<ty
     log.warn("Failed to seed fresh workspace core add-ons", { operation: "workspace_bootstrap.core_addons", err: error });
   }
   bootstrapWorkspaceFromSkel();
-  const { migration } = prepareMcpInstanceConfig();
-  if (migration === "migrated") log.info("Migrated legacy instance configuration permissions to private mode.", { operation: "mcp_config.permissions_migrated" });
-  if (migration === "unavailable") log.warn("Instance configuration permission migration failed; agents will start without MCP if its policy is unavailable.", { operation: "mcp_config.permissions_migration_failed" });
+  if(preparePrivateJsonConfig(getConfigPath())==='unavailable')log.warn('Instance configuration permissions could not be safely tightened',{operation:'startup.config_permissions_unavailable'});
 
   initDatabase(getRuntimeConfigPaths());
   const access = validateAccessStartup(getDb());

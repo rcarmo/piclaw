@@ -28,7 +28,7 @@ applicationTest("Regrets-only actual factory executes default decision-off revie
   const model = { provider: "synthetic", id: "approved", name: "Approved", api: "openai-completions", baseUrl: "https://invalid.invalid", input: ["text"], reasoning: false, contextWindow: 100000, maxTokens: 1000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
   let calls = 0, result = "";
   const services = { modelRegistry: { getAvailable: () => [model] }, modelRuntime: {
-    getPhysicalModel: () => model,
+    getModelsOfType: () => [], getPhysicalModel: () => model,
     streamSimple(_model: unknown, input: any) {
       calls++;
       const tool = input.messages.find((m: any) => m.role === "toolResult");

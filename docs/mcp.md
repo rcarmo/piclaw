@@ -1,260 +1,134 @@
-# MCP via pi-mcp-adapter
+# Outbound MCP
 
-PiClaw ships [`pi-mcp-adapter`](https://github.com/nicobailon/pi-mcp-adapter) so you can use external MCP servers without exposing every MCP tool directly in the base prompt.
+Core uses the public `pi-mcp` client through its existing `pi-durable` Harness. MCP calls share the conversation's SDK execution, cancellation, persistence and recovery. Connection setup has a bounded discovery pool; remote tool effects are never retried automatically.
 
-## What ships
+This page covers outbound connections. The inbound CLI/control MCP server is outside this integration. The standalone `pi` CLI is unchanged.
 
-- bundled `pi-mcp-adapter` dependency
-- automatic extension loading in PiClaw sessions
-- shared project starter config at `.mcp.json.example`
-- Pi-specific override starter config at `.pi/mcp.json.example`
-- workspace skill guidance under `.pi/skills/mcp-adapter/` when present
+## Add a connection
 
-The adapter exposes one primary proxy tool:
+Open **Settings → MCP**, select **New connection**, and enter a name containing letters, digits or underscores. Choose HTTP or stdio, the access scope, authentication and timeout. Save the connection, then check its discovery status.
 
-```text
-mcp({ ... })
+- HTTP supports explicit anonymous access, a bearer token reference, or OAuth.
+- Stdio takes a JSON array of executable arguments, an absolute working directory and an optional environment object. It runs without a shell or ambient host credentials.
+- Stdio has one execution workspace. HTTP can have explicit workspace and Agent grants, or an all-workspaces grant.
+- Names must be unique where workspace grants overlap. Up to100 connections can be configured.
+
+An empty **Selected Agents** list does not save as a broad grant. Choose **This workspace, all Agents** explicitly if that is the intended scope. SDK tool filters and Delegate capability limits still apply. Task-owned children and unrouted SDK forks do not acquire MCP access through their parent.
+
+Saving a configuration does not interrupt or replay a tool effect. Revision checks reject stale saves and removals. **Reconnect** repeats discovery, not the last tool call.
+
+## Credentials
+
+Store secrets in the existing encrypted keychain. Enter a keychain entry name such as `mcp/knowledge/token` in the bearer-reference field; do not enter the token itself or add a `keychain:` prefix there. The saved-reference field stays blank when editing. Leaving it blank preserves the reference.
+
+For stdio environment entries, use the reference syntax:
+
+```json
+{
+  "API_KEY": "keychain:mcp/local/token",
+  "NODE_ENV": "production"
+}
 ```
 
-and slash commands such as:
+Sensitive environment values require references. Loader/startup injection variables and malformed names are rejected at save and launch. Environment whitespace is preserved.
 
-```text
-/mcp
-/mcp status
-/mcp tools
-/mcp reconnect
-/mcp reconnect <server>
-/mcp setup
-/mcp-auth <server>
+Credentials are bound to their destination:
+
+- Repointing an HTTP connection disables reuse of its existing credential until the operator explicitly approves the new endpoint.
+- Changing a stdio executable, arguments or working directory cannot silently carry saved keychain environment references to the new command.
+- Migration with unproved credential provenance stays disabled and requires explicit reuse approval. Merely toggling **Enabled** does not approve it.
+- A new explicitly selected reference binds to its new destination.
+- OAuth URL changes require a new sign-in, even after a reuse approval.
+
+Local keychain changes invalidate the old connection epoch. Reconnect after replacing a saved secret. Revoked sources cannot send a request or publish a retained result. HTTP bearer material is confined to the exact endpoint and is not forwarded through redirects. **No authentication** never forwards bearer material.
+
+### OAuth
+
+Save an OAuth connection, then select **Sign in**. Discovery, PKCE, token exchange and refresh use the public SDK. Tokens and pending state stay in the encrypted keychain.
+
+The callback binds the connection/workspace/endpoint, redirect URL, browser cookie, one-use state and expiry. It consumes pending state before token exchange, so callback retries cannot replay an uncertain exchange. **Sign out** joins refresh, clears that connection's OAuth state and disables it.
+
+## Discover and call tools
+
+MCP tools are deferred behind code mode. Search their current schemas, then call them with ordinary objects. The old `mcp({tool,args})` proxy and engine-switching controls are retired.
+
+For a server named `knowledge` with a remote `read` tool:
+
+```javascript
+const result = await tools.mcp__knowledge__read({ id: "example" });
+return result;
 ```
 
-In the web UI, plain `/mcp` opens the MCP management panel. In non-UI contexts it falls back to a text status summary.
+Code mode receives the original structured value. An eligible model-facing result may be shortened afterwards; scripts never receive a summary in place of the tool value.
 
-## Config locations
+Each server also has deferred resource helpers:
 
-`pi-mcp-adapter` uses a shared-MCP-first lookup order.
-
-Preferred shared config locations:
-
-1. user/global shared MCP config: `~/.config/mcp/mcp.json`
-2. project-local shared MCP config: `/workspace/.mcp.json`
-
-Pi-specific override layers still work:
-
-3. Pi-home config: `~/.pi/agent/mcp.json` (or an override path passed via `--mcp-config`)
-4. project-local Pi override: `/workspace/.pi/mcp.json`
-
-Use the shared files when the MCP configuration should also be usable by other MCP-aware tools. Use the Pi-owned files only for PiClaw-specific overrides.
-
-Starter examples seeded on first startup:
-
-```text
-/workspace/.mcp.json.example
-/workspace/.pi/mcp.json.example
+```javascript
+const catalog = await tools.mcp__knowledge__resources_list({});
+const resource = await tools.mcp__knowledge__resource_read({
+  uri: "memory://catalog"
+});
+return { catalog, resource };
 ```
 
-In the container image, Pi home is typically bind-mounted at:
+Tool discovery, resource reads and calls recheck the current grant. A cached schema does not grant authority. Setup retries use1/5/15-second delays where appropriate; an unsuccessful or uncertain remote effect is not replayed.
 
-```text
-/config/.pi/agent/mcp.json
+## Recall and retained outputs
+
+Per-connection recall defaults **Off**. **Observe** records eligible retained copies without shortening model output; **Active** can shorten eligible MCP-only script results. Both keep committed source history intact. Errors and uncertain/truncated results remain unchanged.
+
+Recall requires the original owner, visible SDK branch history and current connection grant/credential epoch. Another Agent, workspace, sibling fork or revoked grant cannot retrieve the copy. Retention and item/byte limits apply to the index. Pinning only exempts an item from age expiry.
+
+Code mode can search or page through an original without rerunning it:
+
+```javascript
+const matches = await tools.mcp_recall_search({ query: "example" });
+const page = await tools.mcp_recall_retrieve({
+  id: "mcp_<id from the result>", mode: "full", maxChars: 4000
+});
+return { matches, page };
 ```
 
-## Imports from other tool configs
+`mcp_recall_manage` lists/stats, pins or forgets scoped copies. **Forget recall** in Settings removes this connection's retained copies in the current workspace. Original SDK history and other workspaces' copies remain.
 
-`pi-mcp-adapter` can also import MCP server definitions from other tools through its Pi-owned config layers. Current supported import kinds include:
+**Settings → Optimisation** independently controls general tool-output reduction/offload, model-written summaries, learned facts, tool pruning and task oversight. Optimisation defaults **Off**; its first enable starts in **Observe**. Model use in either Observe mode and sharing one bounded current Plan item require explicit consent. Oversight can run while token optimisation is Off.
 
-- `cursor`
-- `claude-code`
-- `claude-desktop`
-- `codex`
-- `windsurf`
-- `vscode`
+Long bash outputs use task-owned local file bindings and bounded retrieval. General offload uses `read_tool_output` and `search_tool_output`. Shortening stops when the permitted retrieval tool is unavailable. Restoring optimiser-owned tools cannot widen an external SDK filter.
 
-Shared MCP config comes first; Pi-owned config is for PiClaw-specific imports and overrides.
+## One-shot configuration migration
 
-## Keychain-backed bearer tokens
+On the first cutover, Core reads existing definitions through the old configuration parser and imports supported metadata into the application's SQLite database. It does not execute the old adapter, resolve secrets during planning, write the source files or import old transcripts.
 
-PiClaw can resolve an HTTP MCP bearer token from its encrypted keychain before the adapter starts. The effective configuration is loaded once into an immutable, revisioned bridge snapshot; sessions never reread raw MCP config:
+The reader preserves the existing source precedence, including shared global files, `.agents` files, the active Pi profile, project `.mcp.json` and project `.pi/mcp.json`. The adapter package remains only for this read-only migration parser. Later Settings changes use SQLite; the completed migration never rereads old files to overwrite edits or resurrect a deleted connection.
+
+The current bearer-reference shape is supported:
 
 ```json
 {
   "mcpServers": {
-    "memory": {
-      "url": "https://mcp.example.test/mcp",
-      "auth": "bearer",
-      "bearerTokenKeychain": "mcp/memory",
-      "bearerTokenEnv": "PICLAW_MCP_MEMORY_TOKEN"
+    "knowledge": {
+      "url": "https://knowledge.example.test/mcp",
+      "bearerTokenKeychain": "mcp/knowledge/token",
+      "bearerTokenEnv": "LEGACY_KNOWLEDGE_TOKEN",
+      "directTools": false
     }
   }
 }
 ```
 
-Store the token with `piclaw keychain set mcp/memory --type token --secret-file <path>`. `bearerTokenKeychain` and `bearerTokenEnv` must appear together. The decrypted token is retained in a generation-scoped secret map, never added to global `process.env`. Each live session receives an immutable per-server environment containing only referenced variables, that server's credential and required operational values. Concurrent/replacement sessions retain their generation until the final lease releases it. The token is not written into MCP config, bridge snapshots, dry-run output, diagnostics, metadata caches or transcripts.
+`bearerTokenEnv` is retained as legacy metadata input, not injected into global `process.env`. The reference resolves only at the outbound connection boundary.
 
-Do not combine `bearerTokenKeychain` with a literal `bearerToken`, and choose a dedicated environment variable name that is not already set.
+Unknown restrictions and unsupported semantics import disabled with named diagnostics, or remain in unchanged source with an explicit repair diagnostic. In particular, Core does not silently reinterpret `includeTools`, `excludeTools`, approval rules, command-secret interpolation, socket transports or direct-tool exposure. Review these entries before enabling them. Unknown imported/package credential provenance requires explicit approval.
 
-## Environment expansion
+Stable IDs let an interrupted initial metadata import resume. Capacity and malformed-source failures happen before a completion marker is written. Migration never deletes existing keychain entries, accepted messages, SDK journals or historical file-backed outputs.
 
-`pi-mcp-adapter` 2.15.0 expands `${NAME}`, `$env:NAME`, and `{env:NAME}` in MCP `socket`, `env`, `cwd`, `url`, HTTP `headers`, and `bearerToken` values. Plain `$NAME` is intentionally literal. A leading `!!` preserves a literal leading `!`; a leading single `!` is an adapter command-secret expression.
+## Settings API
 
-PiClaw validates all supported environment references before loading the adapter, after keychain-backed references are resolved in memory. Missing variables quarantine only the affected optional server instead of becoming empty stdio/header values. Literal bearer tokens, literal sensitive headers/environment fields and literal OAuth client secrets are quarantined and removed from every exported snapshot. Command-secret expressions are not executed by loading or dry-run; they run once inside the server-scoped environment only when the eligible server connects.
+The existing authenticated Core surface serves:
 
-## Safe starter shell
+- `GET /agent/settings/mcp`: redacted connections, status, Agent choices and migration diagnostics.
+- `POST /agent/settings/mcp`: `save`, `remove`, `reconnect`, `sign_in`, `sign_out` or `forget_recall`.
+- `GET /agent/settings/mcp/oauth/callback`: browser/state-bound OAuth completion.
+- `/agent/addons/api/token-optimizer/config`: independent optimisation/oversight configuration and scoped session actions.
 
-The seeded examples contain no configured servers:
-
-```json
-{
-  "mcpServers": {}
-}
-```
-
-For a concrete starter server, for example filesystem access:
-
-```json
-{
-  "mcpServers": {
-    "filesystem": {
-      "command": "bunx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "."
-      ],
-      "lifecycle": "lazy"
-    }
-  }
-}
-```
-
-## Bridge snapshots and safe writes
-
-The bridge preserves source provenance for the shared-global, Pi-global, shared-project and Pi-project layers plus approved imports. Project precedence remains unchanged. Invalid higher-precedence server entries become disabled tombstones, so they cannot reveal a lower definition with the same name; a malformed project override fails the complete lower projection closed.
-
-A redacted dry-run classifies every server as `mapped`, `blocked`, or `quarantined`. This is a migration preview only: socket, lazy/idle lifecycle, resource policy, auth, per-request headers and other adapter-only semantics remain blocked from native 0.99.1 projection rather than being approximated. `pi-mcp-adapter` remains the sole runtime owner.
-
-Authorized project-override writes require the current bridge revision, reject unknown/malformed fields and literal secrets, lock the Piclaw-owned `.pi/mcp.json` directory, reject symlink components, write a `0600` temporary file, fsync, rename and reload the bridge. Stale/failed writes leave the active snapshot unchanged.
-
-## Setup flow
-
-1. Start with shared project config in `.mcp.json`
-2. Add one or more MCP servers, or run `/mcp setup`
-3. Use `.pi/mcp.json` only if you need Pi-specific overrides/imports
-4. Start a new PiClaw chat/session or let adapter-driven setup reload PiClaw
-5. Discover tools with:
-   - `mcp({})`
-   - `mcp({ search: "..." })`
-   - `mcp({ describe: "tool_name" })`
-   - `/mcp`
-   - `/mcp status`
-   - `/mcp tools`
-   - `/mcp reconnect [server]`
-6. Call tools through the proxy:
-
-```text
-mcp({ tool: "filesystem_read_file", args: "{\"path\":\"./README.md\"}" })
-```
-
-`args` must be a JSON string.
-
-## Optional Parallel Search preset
-
-In **Settings → MCP → Adapter servers**, select **Use Parallel Search preset**,
-review the populated fields, then **Preview server change**. Acknowledge the
-session reload and select **Apply server change** to enable it in current and new
-sessions. The same flow is available in Classic.
-
-[Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp)
-provides free web search and page fetching without an account or API key.
-Anonymous searches use Fast mode and are subject to service rate limits. The
-preset uses Streamable HTTP, connects lazily, and keeps `web_search` and
-`web_fetch` behind the existing `mcp` proxy. First connect the lazy server with
-`mcp({ connect: "parallel-search" })`. Then discover its tool names and schemas
-with `mcp({ search: "parallel-search" })` and
-`mcp({ describe: "<tool name>" })`.
-Call a discovered tool with `mcp({ tool: "<tool name>", args: "<JSON arguments>" })`.
-Search takes `objective` and `search_queries`; fetch takes `urls`. Reuse one
-`session_id` across related calls in a conversation. Search results include
-source URLs and excerpts; fetch can extract those pages for follow-up reading.
-
-No search provider is selected automatically. The existing DuckDuckGo/SearXNG
-skills and configured MCP servers remain available. The preset is unavailable
-when a server named `parallel-search` already exists, including a disabled or
-inherited definition. Select that server to inspect or edit it instead. To stop
-using the new server, select it and use **Preview disable**, then Apply. Existing
-tool authorization and owner-only settings controls still apply.
-
-The preset sets a 60-second protocol request timeout; the existing PiClaw outer
-MCP guard also applies. Errors and quotas are returned through the proxy without
-switching providers. Authentication remains opt-in through the normal MCP
-configuration and keychain references.
-
-## Tool authorization filters
-
-Per-server `includeTools` and `excludeTools` are authorization controls for the adapter's model-visible surfaces, not only prompt-size filters. They apply to direct tools and to generic proxy status, list, search, describe, resource reads, and tool calls. Exclusions take precedence over inclusions.
-
-The adapter evaluates the active server policy against the underlying raw MCP tool/resource name for both raw and prefixed requests. Cached metadata cannot grant access after configuration changes. Denied proxy calls stop locally before server connection or transport invocation and return a structured `tool_not_allowed` error.
-
-For example, a read-only projection can be defined as:
-
-```json
-{
-  "mcpServers": {
-    "workiq": {
-      "command": "workiq.exe",
-      "includeTools": ["retrieve", "fetch", "list_agents"],
-      "excludeTools": ["create_entity", "update_entity", "delete_entity", "do_action"]
-    }
-  }
-}
-```
-
-Use `excludeTools` as defense in depth, not as a substitute for least-privilege credentials or server-side authorization.
-
-## Timeout, abort, and output handling
-
-`pi-mcp-adapter` 2.15.0 forwards Pi abort signals into connect, discovery, resource, and tool requests. It also applies `requestTimeoutMs` consistently across those request types. Configure a global protocol-request timeout in the active MCP configuration file:
-
-```json
-{
-  "settings": {
-    "requestTimeoutMs": 120000
-  },
-  "mcpServers": {}
-}
-```
-
-A server-level `requestTimeoutMs` overrides the global value. If it is omitted or set to `0` or any negative value, the MCP SDK default applies.
-
-For compatibility with existing installations, PiClaw also keeps an outer 120-second guard around registered MCP tools. Override it with `PICLAW_MCP_TOOL_TIMEOUT_MS`, or set that variable to `0` to disable only the outer guard. The shorter of the PiClaw guard and the adapter/SDK request timeout wins, so increase both settings when requests must run for more than two minutes.
-
-The adapter also guards oversized MCP output by default and spills excess text to temporary files. Set `settings.outputGuard` to `false` to disable it, or provide `{ "maxBytes", "maxLines", "detailsMaxBytes" }` to tune the thresholds.
-
-## Notes
-
-- `pi-mcp-adapter` does not require `mcp-cli`.
-- MCP servers are lazy by default, so they do not connect until first use.
-- `/mcp setup` provides guided onboarding for shared/compatibility MCP config.
-- Interactive sessions can authenticate with `/mcp-auth`; remote/headless sessions can use the proxy tool's `auth-start` and `auth-complete` actions.
-- Global `settings.toolPrefix` controls whether proxied/direct tool names are server-prefixed (`server`, `short`, or `none`).
-- Global `settings.directTools` can expose all imported MCP tools as first-class Pi tools; per-server `directTools` can enable all tools or only a named subset.
-- Keep large MCP servers behind the proxy unless you deliberately enable `directTools`.
-
-## Legacy instance-config permission migration
-
-On startup and before selecting an MCP owner, Piclaw tightens an existing
-owner-owned, single-link regular `.piclaw/config.json` to mode `0600` on qualified
-POSIX hosts. The migration uses a no-follow file descriptor and does not rewrite
-configuration contents. Symlinks, hardlinks, foreign ownership and unverifiable
-ownership are not repaired or trusted.
-
-If an instance MCP policy cannot be safely read or migrated, ordinary agent
-sessions still start with a warning diagnostic, **without MCP or codemode**.
-MCP registration remains blocked; no default adapter is selected from untrusted
-contents. Settings reads/writes remain strict. After repairing the configuration,
-restart to replace degraded sessions before applying MCP settings. An explicit
-unsupported native owner or a failed/in-progress MCP transition remains fenced;
-those are not permission-migration fallbacks.
-
-Upgrade acceptance must exercise real session creation and agent output as well
-as HTTP/service health. A healthy web endpoint alone does not qualify a rollout.
+Operator configuration requires a single-user administrator context. MCP configuration bodies are bounded to64KiB and five seconds, decode UTF-8 strictly and honour cancellation. Save/remove revisions and execution-time source checks remain authoritative. Responses omit secrets and saved secret-reference values.

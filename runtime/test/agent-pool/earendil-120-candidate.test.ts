@@ -17,13 +17,8 @@ async function run(fixture: string, args: string[], env: Record<string, string> 
     return JSON.parse(stdout.trim().split("\n").at(-1)!);
   } finally { clearTimeout(timer); if (child.exitCode === null) child.kill("SIGKILL"); await child.exited; }
 }
-for (const mode of ["success", "failed-initial", "failed-reload", "commit-failure", "unbound", "overlap", "disposed-barrier", "failed-barrier", "shutdown-error", "runtime-dispose"]) {
-  test(`1.5.2 candidate bridge lease lifecycle: ${mode}`, async () => {
-    const ws = createTempWorkspace("candidate-120-bridge-");
-    try { const result = await run("mcp-bridge-reload-120.ts", [mode, "3", "plain", ws.workspace]); expect(result).toMatchObject({ mode, version: "1.5.2", adapterVersion: "2.31.0", status: "pass", network: 0 }); expect(result.released).toBe(result.acquired); }
-    finally { ws.cleanup(); }
-  }, 25_000);
-}
+// Core bridge leases were retired by the outbound cutover. Standalone SDK
+// transport/tool/OAuth probes below remain active; archived bridge fixtures stay intact.
 for (const exposure of ["deferred", "codemode"]) {
   test(`1.5.2 candidate real MCP/tool pipeline: ${exposure}`, async () => {
     const ws = createTempWorkspace("candidate-120-public-");

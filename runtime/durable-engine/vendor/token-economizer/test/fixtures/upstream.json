@@ -1,0 +1,789 @@
+{
+  "upstream": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+  "cases": [
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 0,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 0,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 1,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 1,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 9,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 9,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 10,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 10,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 11,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 11,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 29,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 29,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 30,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 30,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 31,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 0,
+      "prompts": 31,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 0,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 0,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 1,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 1,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 9,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 9,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 10,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 10,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 11,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 11,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 29,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 29,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 30,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 30,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 31,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 1,
+      "prompts": 31,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 0,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 0,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 1,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 1,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 9,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 9,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 10,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 10,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 11,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 11,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 29,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 29,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 30,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 30,
+      "highRisk": true,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 31,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 2,
+      "prompts": 31,
+      "highRisk": true,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 0,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 0,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 1,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 1,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 9,
+      "highRisk": false,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 9,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 10,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 10,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 11,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 11,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 29,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 29,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 30,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 30,
+      "highRisk": true,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 31,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 4,
+      "prompts": 31,
+      "highRisk": true,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 0,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 0,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 1,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 1,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 9,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 9,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 10,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 10,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 11,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 11,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 29,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 29,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 30,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 30,
+      "highRisk": true,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 31,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 5,
+      "prompts": 31,
+      "highRisk": true,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 0,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 0,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 1,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 1,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 9,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 9,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 10,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 10,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 11,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 11,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 29,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 29,
+      "highRisk": true,
+      "expected": false
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 30,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 30,
+      "highRisk": true,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 31,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 14,
+      "prompts": 31,
+      "highRisk": true,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 0,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 0,
+      "highRisk": true,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 1,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 1,
+      "highRisk": true,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 9,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 9,
+      "highRisk": true,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 10,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 10,
+      "highRisk": true,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 11,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 11,
+      "highRisk": true,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 29,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 29,
+      "highRisk": true,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 30,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 30,
+      "highRisk": true,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 31,
+      "highRisk": false,
+      "expected": true
+    },
+    {
+      "kind": "enough-evidence",
+      "sessions": 15,
+      "prompts": 31,
+      "highRisk": true,
+      "expected": true
+    }
+  ]
+}

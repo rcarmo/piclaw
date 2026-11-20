@@ -24,10 +24,10 @@ applicationTest("actual eight-resource factory uses owned native Root dashboard 
   storeChatMetadata("web:resource-factory", new Date().toISOString());
   const owner = acquireRuntimeLock({ lockPath: join(workspace, "resource-owner.lock"), strictOwnership: true, disabled: false });
   const model = { provider: "synthetic", id: "approved", name: "Approved", api: "openai-completions", baseUrl: "https://invalid.invalid", input: ["text"], reasoning: false, contextWindow: 10000, maxTokens: 1000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
-  const services = { modelRuntime: { getPhysicalModel: () => model }, modelRegistry: { getAvailable: () => [model] } } as any;
+  const services = { modelRuntime: { getModelsOfType: () => [], getPhysicalModel: () => model }, modelRegistry: { getAvailable: () => [model] } } as any;
   const getDashboardRootCurrent = async (authorized = true) => {
     const req = new Request("http://fixture/agent/addons/api/session-dashboard/sessions");
-    if (authorized) admitAddonLocalRequest(req, { userId: "default", mode: "single-user" } as any, () => true);
+    if (authorized) admitAddonLocalRequest(req, { kind: "local", userId: "default", username: "default", displayName: "Fixture", role: "admin", mode: "single-user", homeChatJid: "web:default", authentication: { method: "fixture", sessionId: null, expiresAt: null } } as any, () => true);
     return handleRegisteredAddonConfigApiRequest(req, "session-dashboard", "sessions", (body, status = 200) => Response.json(body, { status }));
   };
   let backend: Awaited<ReturnType<typeof createDefaultApplicationRuntime>> | undefined;

@@ -21,14 +21,16 @@ function verify() {
 }
 writeFileSync(ready, "ready"); await wait(go);
 let outcome = "ready";
+let firstFailure: string | undefined;
 try { initDatabase(); verify(); }
 catch (error) {
+  firstFailure = error instanceof Error ? error.stack : String(error);
   if (error instanceof UnsupportedStoreFormat) outcome = "refused-unstamped";
   else if (isSqliteContention(error)) outcome = "busy";
   else throw error;
   assert.throws(() => getDb(), /not initialized/); assert.equal(getDatabaseBinding(), null);
 } finally { await closeDatabase({ shrinkMemory: false }); }
-writeFileSync(ready + ".attempt", JSON.stringify({ outcome }));
+writeFileSync(ready + ".attempt", JSON.stringify({ outcome, firstFailure }));
 // Zero-wait offline bootstrap may fail promptly. Only the external fixture
 // controller starts a fresh attempt, after both earlier SQLite lifetimes closed.
 // This is not a production retry loop or provider/SDK callback replay.

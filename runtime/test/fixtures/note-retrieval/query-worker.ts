@@ -35,7 +35,6 @@ const {createFakeExtensionApi}=await import('../../extensions/fake-extension-api
 const {withChatContext}=await import('../../../src/core/chat-context.js');
 const {withExecutionIdentity}=await import('../../../src/core/execution-context.js');
 const {setBackgroundWorkspaceIndexRefreshRequesterForTests}=await import('../../../src/workspace-search.js');
-const {getAutoActiveToolNames}=await import('../../../src/extensions/tool-activation.js');
 let refreshes=0;setBackgroundWorkspaceIndexRefreshRequesterForTests(()=>{refreshes++;});
 let sessionId='query-session';const fake=createFakeExtensionApi({activeTools:['memory_query']});createMemorySearchExtension('web:test')(fake.api);
 const ctx:any={cwd:workspace,sessionManager:{getSessionId:()=>sessionId},signal:undefined};
@@ -53,7 +52,7 @@ try {
   const full=body(await withChatContext('web:test','web',()=>fake.tools.get('memory_get').execute('get',{
     chunk_id:b.hits[0].chunk_id,source_revision:b.hits[0].source_revision},undefined,undefined,ctx)));
   assert.equal(full.status,'ok');assert.equal(full.text,original);fake.setActiveTools(['memory_query']);
-  assert.ok(!getAutoActiveToolNames(['memory_query']).includes('memory_query'));assert.equal(refreshes,0);
+  assert.deepEqual(fake.api.getActiveTools(),['memory_query']);assert.equal(refreshes,0);
   const no=body(await run({query:'absentunique'}));assert.equal(no.status,'ok');assert.equal(no.hits.length,0);
   const page=body(await run({query:'cobalt',limit:1,offset:1}));assert.equal(page.hits.length,1);
   only(await run({query:'  '}),'invalid_request');only(await run({query:'cobalt',path:'notes/a.md'}),'invalid_request');

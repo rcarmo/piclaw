@@ -88,9 +88,7 @@ test("plain import covers config module init branches with isolated argv and env
         "call:getToolOutputConfig",
         "call:getToolUseBudget",
         "same:getToolOutputConfig:TOOL_OUTPUT_CONFIG",
-        "TOOL_ACTIVATION_CONFIG",
-        "call:getToolActivationConfig",
-        "same:getToolActivationConfig:TOOL_ACTIVATION_CONFIG",
+        "has:TOOL_ACTIVATION_CONFIG",
         "PUSHOVER_CONFIG",
         "call:getPushoverConfig",
         "same:getPushoverConfig:PUSHOVER_CONFIG",
@@ -165,8 +163,7 @@ test("plain import covers config module init branches with isolated argv and env
     expect(snapshot.TOOL_OUTPUT_CONFIG).toEqual({ retentionMs: 14400000, cleanupIntervalMs: 60000 });
     expect(snapshot["same:getToolOutputConfig:TOOL_OUTPUT_CONFIG"]).toBe(true);
     expect(snapshot["call:getToolUseBudget"]).toBe(96);
-    expect(snapshot.TOOL_ACTIVATION_CONFIG).toEqual({ additionalDefaultTools: [] });
-    expect(snapshot["same:getToolActivationConfig:TOOL_ACTIVATION_CONFIG"]).toBe(true);
+    expect(snapshot["has:TOOL_ACTIVATION_CONFIG"]).toBe(false);
     expect(snapshot.PUSHOVER_CONFIG).toEqual({ appToken: "push-app", userKey: "push-user", device: "push-device", priority: 1, sound: "magic" });
     expect(snapshot["same:getPushoverConfig:PUSHOVER_CONFIG"]).toBe(true);
 

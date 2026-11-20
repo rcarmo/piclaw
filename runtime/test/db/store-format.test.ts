@@ -36,6 +36,18 @@ test('the explicit idle schema boundary also refuses legacy/development stores i
   try { expect(readFileSync(path).equals(before)).toBe(true); } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test('format probe refuses an empty reservation without querying SQLite', () => {
+  const directory = mkdtempSync(join(process.env.PICLAW_WORKSPACE!, 'native-reservation-probe-'));
+  const path = join(directory, 'store.db');
+  fs.writeFileSync(path, '', { flag: 'wx' });
+  const query = spyOn(Database.prototype, 'query');
+  try {
+    expect(() => inspectExistingStoreFormat(path)).toThrow(UnsupportedStoreFormat);
+    expect(query).not.toHaveBeenCalled();
+    expect(fs.statSync(path).size).toBe(0);
+  } finally { query.mockRestore(); rmSync(directory, { recursive: true, force: true }); }
+});
+
 test('fresh native root initialization and ordinary supported-native reopen retain identity/history', async () => {
   const directory = mkdtempSync(join(process.env.PICLAW_WORKSPACE!, 'native-format-reopen-'));
   const path = join(directory, 'native.db'), paths = { ...getRuntimeConfigPaths(), databasePath: path };

@@ -192,7 +192,7 @@ const entries = Object.freeze([
     idempotencyIdentity: null, certainty: "Abort must stop the process group; prior external effects may still be unknown.",
     activationPrerequisites: ["selected tagged Harness v3 local ExecutionEnv", "single-execution process-group abort evidence"],
   }),
-  ...policy(["activate_tools", "reset_active_tools", "context_prune"], {
+  ...policy(["context_prune"], {
     effectClass: "mutation", replay: "never", contextFields: [], serviceEffector: null,
     abortExpectation: "may_finish_late", safeProof: null, nullAuthorityKind: "harness",
     authorityRationale: "Selected harness/lane state is not Piclaw service-operation authority.",

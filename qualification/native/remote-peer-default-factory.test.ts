@@ -52,7 +52,7 @@ applicationTest("Remote Peer actual factory uses network-free transport, execute
   const peerOptions = { transportFactory: (options: any) => { ingress = options.handler; return ({ id: "fixture-native-id", status: () => ({ id: "fixture-native-id", active: true }), ticket: () => "fixture-ticket", async start() { starts++; }, async request() { return { body: { ok: true } }; }, async close() { closes++; } }); },
     discoveryFactory: () => { throw Error("mDNS must remain disabled in fixture"); } };
   const services = { modelRegistry: { getAvailable: () => [model] }, modelRuntime: {
-    getPhysicalModel: () => model,
+    getModelsOfType: () => [], getPhysicalModel: () => model,
     streamSimple(_model: unknown, input: any) {
       calls++;
       prompts.push(JSON.stringify(input.messages));

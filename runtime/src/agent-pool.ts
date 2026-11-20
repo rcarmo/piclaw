@@ -223,15 +223,6 @@ function chatHasStoredMessages(database: ReturnType<typeof getDb>, chatJid: stri
 }
 
 export class AgentPool {
-  inspectMcpSettings(policy?: unknown) { return this.mcpSettings.inspect(policy); }
-  inspectMcpServers(edit?: unknown) { return this.mcpSettings.inspectServers(edit); }
-  applyMcpServers(input: { revision: string; acknowledgeInterruptions: boolean }, authorise: () => void, signal: AbortSignal) {
-    return this.mcpSettings.applyServers(input, authorise, signal);
-  }
-  applyMcpSettings(input: { policy: unknown; revision: string; acknowledgeInterruptions: boolean }, authorise: () => void) {
-    return this.mcpSettings.apply(input, authorise);
-  }
-  private mcpSettings: AgentPoolServices["mcpSettings"];
   private pool = new Map<string, PoolEntry>();
   private shuttingDown = false;
   // Shared across all sessions (expensive to create, safe to reuse)
@@ -287,7 +278,6 @@ export class AgentPool {
     this.modelRegistry = options.modelRegistry ?? new ModelRegistry(this.modelRuntime);
     ({
       attachments: this.attachments,
-      mcpSettings: this.mcpSettings,
       runtimeFacade: this.runtimeFacade,
       branchManager: this.branchManager,
     } = createAgentPoolServices({

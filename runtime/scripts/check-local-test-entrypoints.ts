@@ -11,6 +11,8 @@ const ALLOWLIST = new Set([
   "runtime/test/features/run-feature-tests.ts", // nested feature subprocess inherits launcher niceness
   "runtime/test/scripts/local-test-priority.test.ts", // launcher/audit fixtures mention raw runners
   "runtime/test/scripts/controlled-test-runner.test.ts", // controlled-runner fixture
+  "runtime/durable-engine/vendor/token-economizer/test/fixtures/detectors.json", // pinned upstream command-parser data, not an entrypoint
+  "runtime/durable-engine/vendor/token-economizer/test/fixtures/extractors.json", // pinned upstream command-parser data, not an entrypoint
   "tests/e2e/scripts/run-microvm-suite.ts", // nested Playwright runner launched by niced package entrypoints
 ]);
 const EXCLUDED_PREFIXES = [

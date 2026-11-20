@@ -1,13 +1,13 @@
 import type { HostCodexModelServices } from "./host-codex-model-services.js";
 import { createLogger } from "../../src/utils/logger.js";
-import { taskModelRequestScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
+import { taskModelRequestScope, currentTaskExecutionScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
 import { isPromise } from "node:util/types";
 import { classifyModelFailure, modelFailureDetail, type ModelFailure, type ModelFailurePhase } from "./host-model-failure.js";
 import { modelFailureUpstreamMessage, type ModelFailureEvidence } from "./host-model-failure-evidence.js";
 const log = createLogger("durable.models");
 import {
   createModels, createProvider, createAssistantMessageEventStream, normalizeContext,
-  type Api, type Model, type SimpleStreamOptions,
+  type Api, type Model, type SimpleStreamOptions, type ModelsSimpleStreamOptions,
   type TranscriptContext, type AssistantMessage, type AssistantMessageEvent, type AnyModel, type ModelType,
   type ImageModel, type ImageApi, type ClassifierModel, type ClassifierApi,
   type ImagesContext, type ImagesOptions, type AssistantImages,
@@ -38,6 +38,8 @@ export interface HostModelPolicy {
   captureTelemetry?(): SimpleStreamOptions["telemetry"];
   /** Invocation-local source fence retained through asynchronous credential resolution. */
   captureSourceGuard?(signal: AbortSignal | undefined): (() => void) | Promise<() => void>;
+  /** Trusted SDK optimizer phase may supply local before-send guards; never credential access. */
+  optimizerRequestGuards?: boolean;
   /** Resolve once after source capture; ordinary requests without observers do
    * not clone every streaming partial. Observer failure cannot change outcomes. */
   captureEventObserver?(requestSignal?: AbortSignal): HostModelEventObserver | undefined;
@@ -93,12 +95,14 @@ const optionKeys = new Set([
   "sessionId", "metadata", "timeoutMs", "websocketConnectTimeoutMs",
   "reasoning", "thinkingBudgets", "toolChoice", "maxRetryDelayMs", "maxRetries", "identity",
 ]);
-function requestOptions(options: SimpleStreamOptions = {}, deferred = false): SimpleStreamOptions {
+function requestOptions(options: ModelsSimpleStreamOptions = {}, deferred = false, optimizerGuards = false): ModelsSimpleStreamOptions {
   if (Object.getPrototypeOf(options) !== Object.prototype) throw new Error("Only JSON data is qualified");
-  const scope=taskModelRequestScope(options.signal);
-  const sdkPayload=typeof options.onPayload==='function'&&scope?.taskKind==='pi.generation'&&scope.phase==='request'&&!!scope.checkpointHash;
+  const scope=taskModelRequestScope(options.signal),optimizerScope=optimizerGuards?currentTaskExecutionScope():undefined;
+  const optimizer=optimizerScope?.taskKind==='token-economizer.inference'&&optimizerScope.phase==='invoke'&&!!optimizerScope.checkpointHash;
+  const sdkPayload=typeof options.onPayload==='function'&&(scope?.taskKind==='pi.generation'&&scope.phase==='request'&&!!scope.checkpointHash||optimizer);
+  const localHeaders=optimizer&&typeof options.transformHeaders==='function';
   for (const [key, value] of Object.entries(options)) {
-    if (!(key==='onPayload'&&sdkPayload) && key !== "signal" && key !== "telemetry" && value !== undefined && !optionKeys.has(key) && !(deferred && key === "deferred")) {
+    if (!(key==='onPayload'&&sdkPayload) && !(key==='transformHeaders'&&localHeaders) && key !== "signal" && key !== "telemetry" && value !== undefined && !optionKeys.has(key) && !(deferred && key === "deferred")) {
       throw new Error(`Unqualified request option: ${key}`);
     }
   }
@@ -107,8 +111,8 @@ function requestOptions(options: SimpleStreamOptions = {}, deferred = false): Si
   }
   // SDK spans stay in their originating island. The host transport retains its
   // own tracing; no span methods or callbacks cross this JSON-only bridge.
-  const { signal: _signal, telemetry: _telemetry,onPayload, ...rest } = options;
-  return { ...data(rest), ...(onPayload?{onPayload}:{}), maxRetries: 0 };
+  const { signal: _signal, telemetry: _telemetry,onPayload,transformHeaders, ...rest } = options;
+  return { ...data(rest), ...(onPayload?{onPayload}:{}), ...(localHeaders?{transformHeaders}:{}), maxRetries: 0 };
 }
 
 function catalogCost(cost: AnyModel["cost"]): AnyModel["cost"] {
@@ -367,7 +371,7 @@ export function createHostModels(
         if (!listed || listed.api !== model.api) throw new Error("Model is not approved");
         transportAbort = new AbortController();
         const signal = AbortSignal.any([policy.signal, transportAbort.signal, ...(options?.signal ? [options.signal] : [])]);
-        const {onPayload:sdkPayload,...safeOptions} = requestOptions(options, !!policy.deferred);
+        const {onPayload:sdkPayload,transformHeaders:localHeaders,...safeOptions} = requestOptions(options, !!policy.deferred, policy.optimizerRequestGuards);
         signal.throwIfAborted();
         phase = "admission";
         await policy.authorize(ref, "chat", signal);
@@ -405,6 +409,11 @@ export function createHostModels(
           }}:{}), transformHeaders: async (headers: Record<string, string | null>) => {
           signal.throwIfAborted(); assertSource();
           policy.assertCurrent(ref, "chat", signal); assertPhysicalCompatible();
+          if(localHeaders){
+            // Run the optimizer's guard in its own island without exposing auth headers.
+            const result=await localHeaders(Object.freeze({}));
+            if(result!==undefined&&Object.keys(data(result)).length)throw Error('Optimizer header replacement is not qualified');
+          }
           const transformed = await (codex ? codex.headers(headers) : headers);
           signal.throwIfAborted(); assertSource();
           policy.assertCurrent(ref, "chat", signal); assertPhysicalCompatible();
@@ -575,14 +584,17 @@ export function createHostModels(
     }
   };
   const classify = async (model: ClassifierModel<ClassifierApi>, context: ClassifierContext, options?: ClassifierOptions): Promise<ClassifierResult> => {
-    let phase: ModelFailure["phase"] = "admission", providerError: unknown;
+    let phase: ModelFailure["phase"] = "admission", providerError: unknown, terminalUsage: Usage | undefined;
     try {
       const hostOptions = await admit("classify", model, options);
       const physical = physicalOfType("classifier", model);
       if (!hostModelRuntime120.classify) throw new Error("Host operation is unavailable");
       phase = "provider";
       const result = await hostModelRuntime120.classify(physical, data(context), hostOptions);
-      if (result.stopReason !== "stop") throw new Error("Host request failed");
+      terminalUsage = usage(result.usage);
+      phase = 'source'; hostOptions.signal.throwIfAborted();
+      policy.assertCurrent({provider:model.provider,id:model.id,type:'classifier'},'classify',hostOptions.signal);
+      if (result.stopReason !== "stop") { phase = 'provider'; throw new Error("Host request failed"); }
       return data({ api: model.api, provider: model.provider, model: model.id, stopReason: "stop" as const,
         timestamp: result.timestamp, usage: usage(result.usage),
         answers: Object.fromEntries(Object.entries(result.answers).map(([key, answer]) => [key,
@@ -592,7 +604,7 @@ export function createHostModels(
               : { type: answer.type, probability: answer.probability }])) });
     } catch (cause) {
       return { api: model.api, provider: model.provider, model: model.id, answers: {},
-        stopReason: "error", errorMessage: await operationFailure(model, phase, cause, options?.signal, providerError), timestamp: Date.now() };
+        stopReason: "error", errorMessage: await operationFailure(model, phase, cause, options?.signal, providerError), timestamp: Date.now(), ...(terminalUsage ? {usage: terminalUsage} : {}) };
     }
   };
   const fetchDeferred = (model: Model<Api>, handle: DeferredHandle, options?: DeferredFetchOptions) =>
@@ -649,8 +661,14 @@ export function createHostModels(
       };
       if (chatMethods.has(String(key))) return (model: Model<Api>, context: TranscriptContext, options?: SimpleStreamOptions) => {
         const safeModel = validatedChatModel(model);
-        const safeOptions = requestOptions(options, !!policy.deferred);
-        return Reflect.apply(value, target, [safeModel, freeze(data(context)), { ...safeOptions, signal: options?.signal }]);
+        const safeOptions = requestOptions(options, !!policy.deferred, policy.optimizerRequestGuards);
+        const transcript=freeze(data(context)),request={...safeOptions,signal:options?.signal};
+        if(policy.optimizerRequestGuards){
+          // Preserve local SDK guards until Root auth finishes; the private factory would consume them early.
+          const stream=relay(String(key).endsWith('Simple'),safeModel,transcript,request);
+          return String(key).startsWith('complete')?stream.result():stream;
+        }
+        return Reflect.apply(value, target, [safeModel, transcript, request]);
       };
       return typeof value === "function" ? value.bind(target) : value;
     },

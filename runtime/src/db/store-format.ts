@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite';
-import { existsSync } from 'node:fs';
+import { statSync } from 'node:fs';
 
 /** SQLite header discriminator for fresh native Core stores. It is format
  * metadata, never execution/admission authority or a migration version ledger. */
@@ -47,7 +47,11 @@ export function assertNativeStoreFormat(database: Database, allowEmpty: boolean)
 /** Before root openSqliteRole can set WAL/pragmas or create/backfill schemas.
  * The probe neither checkpoints nor opens a legacy runtime/importer. */
 export function inspectExistingStoreFormat(path: string): void {
-  if (!existsSync(path)) return;
+  const file = statSync(path, { throwIfNoEntry: false });
+  if (!file) return;
+  // An exclusive creator's zero-byte reservation has no format to inspect.
+  // Even a read-only SQLite handle can lock it during initial auto_vacuum.
+  if (file.isFile() && file.size === 0) throw new UnsupportedStoreFormat();
   const reader = new Database(path, { readonly: true, create: false });
   try { assertNativeStoreFormat(reader, false); }
   finally { reader.close(); }

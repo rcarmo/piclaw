@@ -9,5 +9,5 @@
     "types": ["bun"],
     "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*.ts", "qualification/**/*.ts", "../src/types/gifenc.d.ts", "../src/types/web-push.d.ts"]
+  "include": ["src/**/*.ts", "vendor/token-economizer/src/**/*.ts", "qualification/**/*.ts", "../src/types/gifenc.d.ts", "../src/types/web-push.d.ts"]
 }

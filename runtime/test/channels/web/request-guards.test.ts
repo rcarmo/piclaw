@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import {withAddonLocalRequest} from '../../../src/addons/local-context.js';
+import type {AuthenticatedPrincipal} from '../../../src/core/access-types.js';
 
 import { getRouteFlags } from "../../../src/channels/web/http/route-flags.js";
 import { getDataRateLimitRule } from "../../../src/channels/web/http/rate-limit-rules.js";
@@ -16,6 +18,7 @@ function createChannel(overrides: {
     isInternalSecretEnabled(): boolean;
     verifyInternalSecret(req: Request): boolean;
     isAuthenticated(req: Request): boolean;
+    getPrincipal(req:Request,refresh?:boolean):AuthenticatedPrincipal|null;
   }>;
 } = {}): any {
   return {
@@ -107,4 +110,17 @@ test('large media upload route is authenticated, CSRF guarded and chunk-rate lim
   expect((await enforceRequestGuards(createChannel(),hostile,path,getRouteFlags(hostile,path)))?.status).toBe(403);
   expect(await enforceRequestGuards(createChannel(),req,path,flags)).toBeNull();
   expect(getDataRateLimitRule('POST',path)).toMatchObject({bucket:'data/media_upload_chunk',limit:240});
+});
+
+const operator:AuthenticatedPrincipal={kind:'local',userId:'default',username:'default',displayName:'Fixture',role:'admin',mode:'single-user',homeChatJid:'web:default',authentication:{method:'local',sessionId:null,expiresAt:null}};
+for(const path of ['/agent/settings/mcp','/agent/settings/mcp/oauth/callback','/agent/addons/api/token-optimizer/config'])test('real request guard admits the current operator for '+path,async()=>{
+ let principal:AuthenticatedPrincipal=operator;const channel=createChannel({authGateway:{isInternalSecretEnabled:()=>false,getPrincipal:()=>principal}}),request=new Request('https://example.com'+path);
+ expect(await enforceRequestGuards(channel,request,path,getRouteFlags(request,path))).toBeNull();
+ await withAddonLocalRequest(request,async context=>{expect(context?.kind).toBe('operator');expect(context?.ownerId).toBe('default');principal={...operator,role:'member'};await expect(context!.listTargets()).rejects.toThrow('unavailable');});
+ await withAddonLocalRequest(request,async context=>expect(context).toBeNull());
+});
+test('native MCP operator admission cannot be borrowed by adjacent paths, internal access or failed CSRF',async()=>{
+ for(const path of ['/agent/settings/mcp-other','/agent/settings/mcpx']){const request=new Request('https://example.com'+path),channel=createChannel({authGateway:{getPrincipal:()=>operator}});expect(await enforceRequestGuards(channel,request,path,getRouteFlags(request,path))).toBeNull();await withAddonLocalRequest(request,async context=>expect(context).toBeNull());}
+ const path='/agent/settings/mcp',internal=new Request('https://example.com'+path),channel=createChannel({authGateway:{verifyInternalSecret:()=>true,getPrincipal:()=>operator}});expect(await enforceRequestGuards(channel,internal,path,getRouteFlags(internal,path))).toBeNull();await withAddonLocalRequest(internal,async context=>expect(context).toBeNull());
+ const hostile=new Request('https://example.com'+path,{method:'POST',headers:{origin:'https://evil.example.com',host:'example.com'}});expect((await enforceRequestGuards(createChannel({authGateway:{getPrincipal:()=>operator}}),hostile,path,getRouteFlags(hostile,path)))?.status).toBe(403);await withAddonLocalRequest(hostile,async context=>expect(context).toBeNull());
 });

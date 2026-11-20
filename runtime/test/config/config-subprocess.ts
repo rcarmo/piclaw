@@ -19,6 +19,7 @@ function serialize(value: unknown): unknown {
 }
 
 function resolveRequestedValue(name: string): unknown {
+  if (name.startsWith('has:')) return Object.hasOwn(values,name.slice(4));
   if (name.startsWith("call:")) {
     const fnName = name.slice(5);
     const fn = values[fnName];

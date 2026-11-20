@@ -168,7 +168,7 @@ for (const forks of [false, true]) {
   resetAddonRuntimeContributionsForTests();
   expect(AgentPool.prototype).not.toHaveProperty("setSessionBinder");
   const running = bootstrapRuntime({ ...runtimeDeps,
-    initializeRuntimeEnvironment: () => {}, hydrateMcpCredentials: async () => [], clearMcpCredentials: () => {},
+    initializeRuntimeEnvironment: () => {},
     startBackgroundModelRefresh: () => {}, startOptionalPushoverChannel: async () => null,
     registerRuntimeShutdownSignals: (_registrar, handler) => { shutdown = handler; }, startRuntimeWorkers: (_queue, activePool) => { pool = activePool as AgentPool; },
     stopIpcWatcher: async () => {}, stopSchedulerLoop: () => {}, stopOptionalProviders: () => {},

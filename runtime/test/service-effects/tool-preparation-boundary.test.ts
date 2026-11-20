@@ -30,12 +30,6 @@ function walk(directory: string): string[] {
   return files;
 }
 
-function stringArray(source: string, constant: string): string[] {
-  const match = source.match(new RegExp(`const\\s+${constant}\\s*=\\s*\\[([\\s\\S]*?)\\]\\s*as const`));
-  if (!match) throw new Error(`missing ${constant}`);
-  return [...match[1].matchAll(/["']([^"']+)["']/g)].map((entry) => entry[1]);
-}
-
 function moduleSpecifiers(file: string, source: string): readonly string[] {
   return collectModuleSpecifiers(file, source);
 }
@@ -160,49 +154,32 @@ describe("WP-3C static import graph and inert top-level boundary", () => {
 });
 
 describe("WP-3C retained latent-composition snapshots", () => {
-  test("default and Windows activation declarations remain byte-for-byte semantic snapshots", () => {
-    const source = readFileSync(resolve(runtimeRoot, "src/extensions/tool-activation.ts"), "utf8");
-    expect(stringArray(source, "DEFAULT_ACTIVE_TOOL_NAMES")).toEqual([
-      "read", "bash", "powershell", "edit", "write", "list_tools", "activate_tools", "reset_active_tools",
-      "attach_file", "messages", "chat", "chat_project", "keychain", "exit_process", "session_status", "set_model", "provider_quota",
-    ]);
-    expect(stringArray(source, "WINDOWS_DEFAULT_ACTIVE_TOOL_NAMES")).toEqual(["bun_run"]);
+  test("manual activation source is retired", () => {
+    const tree = readLatentPreparationSourceTree();
+    expect(Object.keys(tree.files).some(file=>file.endsWith("/extensions/tool-activation.ts"))).toBe(false);
   });
 
   // Source-wide AST audit; this is not a runtime latency assertion.
-  test("actual default/effective active-tool contracts and AgentToolFactory are unchanged", async () => {
-    const [{ AgentToolFactory }, activation] = await Promise.all([
-      import("../../src/agent-pool/tool-factory.js"),
-      import("../../src/extensions/tool-activation.js"),
-    ]);
-    for (const platform of ["linux", "win32"] as const) {
-      const factory = new AgentToolFactory({ workspaceDir: "/workspace", platform });
-      expect(factory.createDefaultTools()).toEqual(activation.getDefaultActiveToolNames(platform));
-      expect(factory.createDefaultTools().some((name) => name.includes("tool-preparation"))).toBeFalse();
-    }
-
+  test("removing latent declarations cannot reintroduce a default-tool selector", () => {
     const tree = readLatentPreparationSourceTree();
     const withoutLatent = Object.freeze({
       files: Object.freeze(Object.fromEntries(Object.entries(tree.files).filter(([file]) => !file.startsWith(latentPrefix)))),
     });
     const withInventory = inventoryLatentToolFamilies(tree);
     const withoutInventory = inventoryLatentToolFamilies(withoutLatent);
-    const available = (names: readonly string[]) => names.map((name) => ({ name }));
-    expect(activation.getEffectiveDefaultActiveToolNames(available(withInventory.names))).toEqual(
-      activation.getEffectiveDefaultActiveToolNames(available(withoutInventory.names)),
-    );
+    expect(withInventory.names).toEqual(withoutInventory.names);
+    expect(withInventory.names).not.toContain("activate_tools");
+    expect(withInventory.names).not.toContain("reset_active_tools");
   }, 30_000);
   test("keeps active name/description/prompt/schema contracts identical with and without latent files", () => {
     const tree = readLatentPreparationSourceTree();
     const withoutLatent = Object.freeze({
       files: Object.freeze(Object.fromEntries(Object.entries(tree.files).filter(([file]) => !file.startsWith(latentPrefix)))),
     });
-    const activationSource = readFileSync(resolve(runtimeRoot, "src/extensions/tool-activation.ts"), "utf8");
-    const linuxNames = stringArray(activationSource, "DEFAULT_ACTIVE_TOOL_NAMES");
-    const windowsNames = [...linuxNames, ...stringArray(activationSource, "WINDOWS_DEFAULT_ACTIVE_TOOL_NAMES")];
+    const coreNames = ["read","bash","powershell","edit","write","grep","find","ls","list_tools","attach_file","messages"];
     const configurations = [
-      { platform: "linux" as const, enabledEnv: new Set<string>(), activeNames: linuxNames },
-      { platform: "win32" as const, enabledEnv: new Set<string>(), activeNames: windowsNames },
+      {platform:"linux" as const,enabledEnv:new Set<string>(),activeNames:coreNames},
+      {platform:"win32" as const,enabledEnv:new Set<string>(),activeNames:coreNames},
     ];
     for (const { activeNames, ...config } of configurations) {
       const withContracts = snapshotLatentToolContracts(tree, config);
@@ -243,16 +220,11 @@ describe("WP-3C retained latent-composition snapshots", () => {
 
     expect(linux.names).toContain("powershell");
     expect(windows.names).toContain("powershell");
-    const activationSource = readFileSync(resolve(runtimeRoot, "src/extensions/tool-activation.ts"), "utf8");
-    const registeredDefaults = stringArray(activationSource, "DEFAULT_ACTIVE_TOOL_NAMES");
-    const windowsAdditions = stringArray(activationSource, "WINDOWS_DEFAULT_ACTIVE_TOOL_NAMES");
-    const linuxActiveNames = registeredDefaults.filter((name) => name !== "powershell");
-    const windowsActiveNames = [...new Set([...registeredDefaults, ...windowsAdditions]
-      .map((name) => name === "bash" ? "powershell" : name)
-      .filter((name) => name !== "bash"))];
-    expect(registeredDefaults).toContain("powershell");
-    expect(linuxActiveNames).not.toContain("powershell");
-    expect(windowsActiveNames).toContain("powershell");
+    for (const inventory of [linux,windows]) {
+      expect(inventory.names).toContain('list_tools');
+      expect(inventory.names).not.toContain('activate_tools');
+      expect(inventory.names).not.toContain('reset_active_tools');
+    }
     expect(linux.unresolvedRegistrations).toEqual([]);
     expect(windows.unresolvedRegistrations).toEqual([]);
   }, 30_000);

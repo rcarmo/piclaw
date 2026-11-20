@@ -454,7 +454,7 @@ test("config and env fallback chains handle booleans and session settings", () =
   }
 });
 
-test("config-file tool activation settings support additional default tools", () => {
+test("obsolete string default-tool lists have no effective configuration", () => {
   const ws = createTempWorkspace("piclaw-config-");
 
   try {
@@ -464,10 +464,8 @@ test("config-file tool activation settings support additional default tools", ()
       },
     });
 
-    const snapshot = loadConfigInSubprocess(ws, ["TOOL_ACTIVATION_CONFIG"]);
-    expect(snapshot.TOOL_ACTIVATION_CONFIG).toEqual({
-      additionalDefaultTools: ["search_workspace", "introspect_sql"],
-    });
+    const snapshot = loadConfigInSubprocess(ws, ["has:TOOL_ACTIVATION_CONFIG"]);
+    expect(snapshot["has:TOOL_ACTIVATION_CONFIG"]).toBe(false);
   } finally {
     ws.cleanup();
   }
@@ -515,25 +513,16 @@ test("tool-output retention config defaults and caps retention at 30 days", () =
   }
 });
 
-test("tool activation config getter groups additional default tools from config file", () => {
+test("obsolete default-tool configuration is not exposed or applied", () => {
   const ws = createTempWorkspace("piclaw-config-");
   try {
-    writeWorkspaceConfig(ws.workspace, {
-      tools: { additionalDefaultTools: ["search_workspace", "introspect_sql"] },
-    });
-    const snapshot = loadConfigInSubprocess(ws, [
-      "TOOL_ACTIVATION_CONFIG",
-      "call:getToolActivationConfig",
-      "same:getToolActivationConfig:TOOL_ACTIVATION_CONFIG",
-      "frozen:TOOL_ACTIVATION_CONFIG",
-    ]);
-    expect(snapshot["same:getToolActivationConfig:TOOL_ACTIVATION_CONFIG"]).toBe(true);
-    expect(snapshot["frozen:TOOL_ACTIVATION_CONFIG"]).toBe(true);
-    expect(snapshot.TOOL_ACTIVATION_CONFIG).toEqual({ additionalDefaultTools: ["search_workspace", "introspect_sql"] });
-    expect(snapshot["call:getToolActivationConfig"]).toEqual(snapshot.TOOL_ACTIVATION_CONFIG);
-  } finally {
-    ws.cleanup();
-  }
+    const path = writeWorkspaceConfig(ws.workspace, {tools:{additionalDefaultTools:["search_workspace","introspect_sql"]}});
+    const before = readFileSync(path,'utf8');
+    const snapshot = loadConfigInSubprocess(ws,["has:TOOL_ACTIVATION_CONFIG","has:getToolActivationConfig"],{env:{PICLAW_ADDITIONAL_DEFAULT_TOOLS:'forbidden'}});
+    expect(snapshot["has:TOOL_ACTIVATION_CONFIG"]).toBe(false);
+    expect(snapshot["has:getToolActivationConfig"]).toBe(false);
+    expect(readFileSync(path,'utf8')).toBe(before);
+  } finally {ws.cleanup();}
 });
 
 test("workspace search config getter groups configured FTS roots from env or config", () => {

@@ -11,7 +11,6 @@
  *   - modelControl: get_model_state, list_models, switch_model, switch_thinking.
  *   - internalTools: list_tools for tool discovery.
  *   - runtimeScripts: list_scripts for packaged/workspace script discovery.
- *   - toolActivation: activate_tools/reset_active_tools for lazy tool activation.
  *   - scheduledTasks: /tasks and /scheduled commands for task listing.
  *   - workspaceSearch: search_workspace tool for FTS over workspace files.
  *   - dreamMaintenance: /dream memory-consolidation slash command.
@@ -24,8 +23,7 @@
  *   - providerRequestSanitizer: defensive provider payload cleanup before HTTP requests.
  *   - openRouterRequestFilter: bounded OpenRouter output budgets and adaptive retry overrides.
  *   - llmContextNormalizer: defensive LLM message-shape cleanup before provider conversion.
- *   - mcpTimeoutPatch: Piclaw-compatible outer timeout/abort guard for MCP tools.
- *   - localLitePromptProfile: compact prompt/tool profile for local OpenAI-compatible models.
+ *   - localLitePromptProfile: compact prompt for local OpenAI-compatible models.
  *
  * Packaged integration declarations remain under runtime/extensions/integrations.
  * Native installed add-on admission has its own qualified public-loader profiles.
@@ -38,7 +36,6 @@ import { modelControl } from "./model-control.js";
 import { createProviderQuotaExtension } from "./provider-quota.js";
 import { internalTools } from "./internal-tools.js";
 import { runtimeScripts } from "./runtime-scripts.js";
-import { toolActivation } from "./tool-activation.js";
 import { scheduledTasks } from "./scheduled-tasks.js";
 import { workspaceSearch } from "./workspace-search.js";
 import { createMemorySearchExtension } from "./memory-search.js";
@@ -60,7 +57,6 @@ import { openRouterRequestFilter } from "./openrouter-request-filter.js";
 import { llmContextNormalizer } from "./llm-context-normalizer.js";
 import { persistedToolResultSanitizer } from "./persisted-tool-result-sanitizer.js";
 import { createContextPruneExtension } from "./context-prune.js";
-import { mcpTimeoutPatch } from "./mcp-timeout-patch.js";
 import { localLitePromptProfile } from "./local-lite-prompt-profile.js";
 import { createUiPromptWatchdogExtension } from "./ui-prompt-watchdog.js";
 
@@ -77,7 +73,6 @@ export function createBuiltinExtensionFactories(options?: {
     createProviderQuotaExtension({ modelRuntime: options?.modelRuntime }),
     internalTools,
     runtimeScripts,
-    toolActivation,
     scheduledTasks,
     workspaceSearch,
     createMemorySearchExtension(options?.chatJid),
@@ -99,7 +94,6 @@ export function createBuiltinExtensionFactories(options?: {
     persistedToolResultSanitizer,
     createContextPruneExtension({ modelRuntime: options?.modelRuntime }),
     llmContextNormalizer,
-    mcpTimeoutPatch,
     localLitePromptProfile,
     createUiPromptWatchdogExtension(options?.chatJid),
   ];

@@ -1,0 +1,21 @@
+{
+  "name": "@kintsugi/token-economizer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    "./core": "./src/core/index.ts",
+    "./pi-durable": "./src/pi-durable/index.ts"
+  },
+  "dependencies": {
+    "@noble/hashes": "2.4.0",
+    "re2js": "2.10.0",
+    "typebox": "^1.0.57"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-durable": "1.5.2",
+    "@earendil-works/pi-ai": "1.5.2",
+    "@earendil-works/chord": "1.5.2"
+  }
+}

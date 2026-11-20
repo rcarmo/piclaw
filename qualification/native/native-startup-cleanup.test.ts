@@ -28,7 +28,7 @@ for (const uncertain of [false, true, 'synchronous'] as const) applicationTest(`
     : Error("storage initialization failed");
   const cleanup = Error("application close failed before close");
   const model = { provider: "synthetic", id: "approved", name: "Approved", api: "openai-completions", baseUrl: "https://invalid.invalid", input: ["text"], reasoning: false, contextWindow: 10000, maxTokens: 1000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
-  const services = { modelRuntime: { getPhysicalModel: () => model }, modelRegistry: { getAvailable: () => [model] } } as unknown as RuntimeModelServices;
+  const services = { modelRuntime: { getModelsOfType: () => [], getPhysicalModel: () => model }, modelRegistry: { getAvailable: () => [model] } } as unknown as RuntimeModelServices;
   const originalClose = BunSqliteDatabase.prototype.close;
   let captured: BunSqliteDatabase | undefined;
   const close = spyOn(BunSqliteDatabase.prototype, "close").mockImplementation(function (this: BunSqliteDatabase) {

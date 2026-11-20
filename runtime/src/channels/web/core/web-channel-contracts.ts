@@ -19,7 +19,6 @@ import type { TotpAuthContext } from "../auth/totp-auth.js";
 import type { WebauthnAuthContext } from "../auth/webauthn-auth.js";
 import type { WebauthnEnrolPageContext } from "../auth/webauthn-enrol-page.js";
 import type { getAddonApiHealthSnapshot } from "../../../addons/addon-api-health.js";
-import type { getMcpStartupDiagnostics } from "../../../secure/mcp-keychain.js";
 import type { StoreWebMessageOptions } from "../messaging/message-store.js";
 
 export interface TokenUsageCounterSummary {
@@ -78,7 +77,7 @@ export interface AgentStatusContext {
   getAvailableModels(chatJid: string, options?: { includeProviderDiagnostics?: boolean; includeCatalogue?: boolean }): Promise<unknown>;
   getProviderReadyCompletedForInstance(req: Request): boolean | Promise<boolean>;
   getAddonApiHealthSnapshot?: typeof getAddonApiHealthSnapshot;
-  getMcpStartupDiagnostics?: typeof getMcpStartupDiagnostics;
+  getMcpStartupDiagnostics?: () => Array<{serverName:string;reason:string}>;
 }
 
 

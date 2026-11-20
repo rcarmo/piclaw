@@ -11,15 +11,15 @@ function source(path: string): string {
 const classic = source("web/src/components/settings/compaction.ts");
 
 const retiredFields = [
+  "toolResultCompactionEnabled", "toolResultCompactionTools", "toolResultSemanticSummaryEnabled",
+  "toolResultSemanticSummaryMaxInputChars", "toolResultSemanticSummaryMaxTokens", "toolResultSemanticSummaryTimeoutSec",
   "smartCompactionMethod", "compactionModel", "compactionLatencyEstimate",
   "remoteCompactionEnabled", "remoteCompactionTimeoutSec", "remoteCompactionSupportedProviders",
   "compactionThresholdPercent", "compactionTimeoutSec", "compactionBackoffBaseMin",
   "compactionBackoffMaxMin", "compactionBackoffDecayFactor", "compactionBackoffs",
 ];
 const supportedFields = [
-  "autoCompactionEnabled", "localLitePromptProfileEnabled", "toolResultCompactionEnabled",
-  "toolResultSemanticSummaryEnabled", "toolResultSemanticSummaryMaxInputChars",
-  "toolResultSemanticSummaryMaxTokens", "toolResultSemanticSummaryTimeoutSec",
+  "autoCompactionEnabled", "localLitePromptProfileEnabled",
   "progressWatchdogEnabled", "progressWatchdogTimeoutSec",
 ];
 
@@ -38,7 +38,9 @@ for (const [skin, component] of [["classic", classic]] as const) {
     expect(component).toContain("already accepted maintenance is not cancelled");
     expect(component).not.toContain("auto-compactor stays suppressed");
     expect(component).toContain("localLitePromptProfileEnabled ?? false");
-    expect(component).toContain("Local-lite prompt and tools");
+    expect(component).toContain("Local-lite prompt");
+    expect(component).not.toContain("Local-lite prompt and tools");
+    expect(component).toContain('Use Optimisation for tool-output reduction');
     for (const field of supportedFields) expect(component).toContain(field);
     expect(component).toContain("progressWatchdogPhases");
   });

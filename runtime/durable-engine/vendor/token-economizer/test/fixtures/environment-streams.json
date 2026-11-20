@@ -1,0 +1,4684 @@
+{
+  "upstream": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+  "cases": [
+    {
+      "kind": "environment-stream",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "name": "form-repair",
+        "steps": [
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m0.py",
+                  "paths": [
+                    "src/m0.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m0.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -m pytest tests/a.py"
+                },
+                "output": "python: No module named pytest",
+                "success": false
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "/env/bin/python -m pytest tests/a.py"
+                },
+                "output": "1 passed in 0.2s",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_tests",
+                  "form": "python -m pytest",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "module_missing",
+                  "segment": "python -m pytest tests/a.py",
+                  "labels": [
+                    "tests/a.py"
+                  ],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 2,
+                  "intent": "run_tests",
+                  "form": "/env/bin/python -m pytest",
+                  "head": "/env/bin/python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "/env/bin/python -m pytest tests/a.py",
+                  "labels": [
+                    "tests/a.py"
+                  ],
+                  "label_err": false,
+                  "loaded": true,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m0.py"
+              ],
+              "n_calls": 3,
+              "env": []
+            },
+            "expected": {
+              "now": 1,
+              "facts": [
+                {
+                  "id": "form_repair:run_tests:python -m pytest",
+                  "family": "form_repair",
+                  "params": {
+                    "intent": "run_tests",
+                    "a": "python -m pytest",
+                    "b_counts": {
+                      "/env/bin/python -m pytest": 1
+                    },
+                    "error_counts": {
+                      "module_missing": 1
+                    },
+                    "b_fails": {},
+                    "contra_streak": 0
+                  },
+                  "life": {
+                    "key": "form_repair:run_tests:python -m pytest",
+                    "high": false,
+                    "drift": false,
+                    "state": "CANDIDATE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 1,
+                    "fire_den": 1,
+                    "promoted_at": null,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m1.py",
+                  "paths": [
+                    "src/m1.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m1.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -m pytest tests/a.py"
+                },
+                "output": "python: No module named pytest",
+                "success": false
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "/env/bin/python -m pytest tests/a.py"
+                },
+                "output": "1 passed in 0.2s",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_tests",
+                  "form": "python -m pytest",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "module_missing",
+                  "segment": "python -m pytest tests/a.py",
+                  "labels": [
+                    "tests/a.py"
+                  ],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 2,
+                  "intent": "run_tests",
+                  "form": "/env/bin/python -m pytest",
+                  "head": "/env/bin/python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "/env/bin/python -m pytest tests/a.py",
+                  "labels": [
+                    "tests/a.py"
+                  ],
+                  "label_err": false,
+                  "loaded": true,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m1.py"
+              ],
+              "n_calls": 3,
+              "env": []
+            },
+            "expected": {
+              "now": 2,
+              "facts": [
+                {
+                  "id": "form_repair:run_tests:python -m pytest",
+                  "family": "form_repair",
+                  "params": {
+                    "intent": "run_tests",
+                    "a": "python -m pytest",
+                    "b_counts": {
+                      "/env/bin/python -m pytest": 2
+                    },
+                    "error_counts": {
+                      "module_missing": 2
+                    },
+                    "b_fails": {},
+                    "contra_streak": 0
+                  },
+                  "life": {
+                    "key": "form_repair:run_tests:python -m pytest",
+                    "high": false,
+                    "drift": false,
+                    "state": "CANDIDATE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 2,
+                    "fire_den": 2,
+                    "promoted_at": null,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m2.py",
+                  "paths": [
+                    "src/m2.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m2.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -m pytest tests/a.py"
+                },
+                "output": "python: No module named pytest",
+                "success": false
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "/env/bin/python -m pytest tests/a.py"
+                },
+                "output": "1 passed in 0.2s",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_tests",
+                  "form": "python -m pytest",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "module_missing",
+                  "segment": "python -m pytest tests/a.py",
+                  "labels": [
+                    "tests/a.py"
+                  ],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 2,
+                  "intent": "run_tests",
+                  "form": "/env/bin/python -m pytest",
+                  "head": "/env/bin/python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "/env/bin/python -m pytest tests/a.py",
+                  "labels": [
+                    "tests/a.py"
+                  ],
+                  "label_err": false,
+                  "loaded": true,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m2.py"
+              ],
+              "n_calls": 3,
+              "env": []
+            },
+            "expected": {
+              "now": 3,
+              "facts": [
+                {
+                  "id": "form_repair:run_tests:python -m pytest",
+                  "family": "form_repair",
+                  "params": {
+                    "intent": "run_tests",
+                    "a": "python -m pytest",
+                    "b_counts": {
+                      "/env/bin/python -m pytest": 3
+                    },
+                    "error_counts": {
+                      "module_missing": 3
+                    },
+                    "b_fails": {},
+                    "contra_streak": 0
+                  },
+                  "life": {
+                    "key": "form_repair:run_tests:python -m pytest",
+                    "high": false,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 3,
+                    "fire_den": 3,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m3.py",
+                  "paths": [
+                    "src/m3.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m3.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -m pytest tests/a.py"
+                },
+                "output": "python: No module named pytest",
+                "success": false
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "/env/bin/python -m pytest tests/a.py"
+                },
+                "output": "1 passed in 0.2s",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_tests",
+                  "form": "python -m pytest",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "module_missing",
+                  "segment": "python -m pytest tests/a.py",
+                  "labels": [
+                    "tests/a.py"
+                  ],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 2,
+                  "intent": "run_tests",
+                  "form": "/env/bin/python -m pytest",
+                  "head": "/env/bin/python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "/env/bin/python -m pytest tests/a.py",
+                  "labels": [
+                    "tests/a.py"
+                  ],
+                  "label_err": false,
+                  "loaded": true,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m3.py"
+              ],
+              "n_calls": 3,
+              "env": []
+            },
+            "expected": {
+              "now": 4,
+              "facts": [
+                {
+                  "id": "form_repair:run_tests:python -m pytest",
+                  "family": "form_repair",
+                  "params": {
+                    "intent": "run_tests",
+                    "a": "python -m pytest",
+                    "b_counts": {
+                      "/env/bin/python -m pytest": 4
+                    },
+                    "error_counts": {
+                      "module_missing": 4
+                    },
+                    "b_fails": {},
+                    "contra_streak": 0
+                  },
+                  "life": {
+                    "key": "form_repair:run_tests:python -m pytest",
+                    "high": false,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 4,
+                    "fire_den": 4,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "# environment facts learned from earlier sessions in this repository\n- `python -m pytest …` fails here with ModuleNotFoundError; `/env/bin/python -m pytest …` works.\n",
+              "ids": [
+                "form_repair:run_tests:python -m pytest"
+              ]
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m4.py",
+                  "paths": [
+                    "src/m4.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m4.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "/env/bin/python -m pytest tests/b.py"
+                },
+                "output": "2 passed in 0.2s",
+                "success": true
+              }
+            ],
+            "injected": [
+              "form_repair:run_tests:python -m pytest"
+            ],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_tests",
+                  "form": "/env/bin/python -m pytest",
+                  "head": "/env/bin/python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "/env/bin/python -m pytest tests/b.py",
+                  "labels": [
+                    "tests/b.py"
+                  ],
+                  "label_err": false,
+                  "loaded": true,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m4.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 5,
+              "facts": [
+                {
+                  "id": "form_repair:run_tests:python -m pytest",
+                  "family": "form_repair",
+                  "params": {
+                    "intent": "run_tests",
+                    "a": "python -m pytest",
+                    "b_counts": {
+                      "/env/bin/python -m pytest": 5
+                    },
+                    "error_counts": {
+                      "module_missing": 4
+                    },
+                    "b_fails": {},
+                    "contra_streak": 0
+                  },
+                  "life": {
+                    "key": "form_repair:run_tests:python -m pytest",
+                    "high": false,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ],
+                      [
+                        4,
+                        [
+                          "m4.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 5,
+                    "fire_den": 5,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "# environment facts learned from earlier sessions in this repository\n- `python -m pytest …` fails here with ModuleNotFoundError; `/env/bin/python -m pytest …` works.\n",
+              "ids": [
+                "form_repair:run_tests:python -m pytest"
+              ]
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m5.py",
+                  "paths": [
+                    "src/m5.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m5.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "/env/bin/python -m pytest tests/b.py"
+                },
+                "output": "2 passed in 0.2s",
+                "success": true
+              }
+            ],
+            "injected": [
+              "form_repair:run_tests:python -m pytest"
+            ],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_tests",
+                  "form": "/env/bin/python -m pytest",
+                  "head": "/env/bin/python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "/env/bin/python -m pytest tests/b.py",
+                  "labels": [
+                    "tests/b.py"
+                  ],
+                  "label_err": false,
+                  "loaded": true,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m5.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 6,
+              "facts": [
+                {
+                  "id": "form_repair:run_tests:python -m pytest",
+                  "family": "form_repair",
+                  "params": {
+                    "intent": "run_tests",
+                    "a": "python -m pytest",
+                    "b_counts": {
+                      "/env/bin/python -m pytest": 6
+                    },
+                    "error_counts": {
+                      "module_missing": 4
+                    },
+                    "b_fails": {},
+                    "contra_streak": 0
+                  },
+                  "life": {
+                    "key": "form_repair:run_tests:python -m pytest",
+                    "high": false,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ],
+                      [
+                        4,
+                        [
+                          "m4.py"
+                        ]
+                      ],
+                      [
+                        5,
+                        [
+                          "m5.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 6,
+                    "fire_den": 6,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "# environment facts learned from earlier sessions in this repository\n- `python -m pytest …` fails here with ModuleNotFoundError; `/env/bin/python -m pytest …` works.\n",
+              "ids": [
+                "form_repair:run_tests:python -m pytest"
+              ]
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m6.py",
+                  "paths": [
+                    "src/m6.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m6.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "/env/bin/python -m pytest tests/b.py"
+                },
+                "output": "2 passed in 0.2s",
+                "success": true
+              }
+            ],
+            "injected": [
+              "form_repair:run_tests:python -m pytest"
+            ],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_tests",
+                  "form": "/env/bin/python -m pytest",
+                  "head": "/env/bin/python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "/env/bin/python -m pytest tests/b.py",
+                  "labels": [
+                    "tests/b.py"
+                  ],
+                  "label_err": false,
+                  "loaded": true,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m6.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 7,
+              "facts": [
+                {
+                  "id": "form_repair:run_tests:python -m pytest",
+                  "family": "form_repair",
+                  "params": {
+                    "intent": "run_tests",
+                    "a": "python -m pytest",
+                    "b_counts": {
+                      "/env/bin/python -m pytest": 7
+                    },
+                    "error_counts": {
+                      "module_missing": 4
+                    },
+                    "b_fails": {},
+                    "contra_streak": 0
+                  },
+                  "life": {
+                    "key": "form_repair:run_tests:python -m pytest",
+                    "high": false,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ],
+                      [
+                        4,
+                        [
+                          "m4.py"
+                        ]
+                      ],
+                      [
+                        5,
+                        [
+                          "m5.py"
+                        ]
+                      ],
+                      [
+                        6,
+                        [
+                          "m6.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 7,
+                    "fire_den": 7,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "# environment facts learned from earlier sessions in this repository\n- `python -m pytest …` fails here with ModuleNotFoundError; `/env/bin/python -m pytest …` works.\n",
+              "ids": [
+                "form_repair:run_tests:python -m pytest"
+              ]
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m7.py",
+                  "paths": [
+                    "src/m7.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m7.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -m pytest tests/a.py"
+                },
+                "output": "1 passed in 0.2s",
+                "success": true
+              }
+            ],
+            "injected": [
+              "form_repair:run_tests:python -m pytest"
+            ],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_tests",
+                  "form": "python -m pytest",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -m pytest tests/a.py",
+                  "labels": [
+                    "tests/a.py"
+                  ],
+                  "label_err": false,
+                  "loaded": true,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m7.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 8,
+              "facts": [
+                {
+                  "id": "form_repair:run_tests:python -m pytest",
+                  "family": "form_repair",
+                  "params": {
+                    "intent": "run_tests",
+                    "a": "python -m pytest",
+                    "b_counts": {
+                      "/env/bin/python -m pytest": 7
+                    },
+                    "error_counts": {
+                      "module_missing": 4
+                    },
+                    "b_fails": {},
+                    "contra_streak": 1
+                  },
+                  "life": {
+                    "key": "form_repair:run_tests:python -m pytest",
+                    "high": false,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ],
+                      [
+                        4,
+                        [
+                          "m4.py"
+                        ]
+                      ],
+                      [
+                        5,
+                        [
+                          "m5.py"
+                        ]
+                      ],
+                      [
+                        6,
+                        [
+                          "m6.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 7,
+                    "fire_den": 8,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "# environment facts learned from earlier sessions in this repository\n- `python -m pytest …` fails here with ModuleNotFoundError; `/env/bin/python -m pytest …` works.\n",
+              "ids": [
+                "form_repair:run_tests:python -m pytest"
+              ]
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m8.py",
+                  "paths": [
+                    "src/m8.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m8.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -m pytest tests/a.py"
+                },
+                "output": "1 passed in 0.2s",
+                "success": true
+              }
+            ],
+            "injected": [
+              "form_repair:run_tests:python -m pytest"
+            ],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_tests",
+                  "form": "python -m pytest",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -m pytest tests/a.py",
+                  "labels": [
+                    "tests/a.py"
+                  ],
+                  "label_err": false,
+                  "loaded": true,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m8.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 9,
+              "facts": [
+                {
+                  "id": "form_repair:run_tests:python -m pytest",
+                  "family": "form_repair",
+                  "params": {
+                    "intent": "run_tests",
+                    "a": "python -m pytest",
+                    "b_counts": {
+                      "/env/bin/python -m pytest": 7
+                    },
+                    "error_counts": {
+                      "module_missing": 4
+                    },
+                    "b_fails": {},
+                    "contra_streak": 2
+                  },
+                  "life": {
+                    "key": "form_repair:run_tests:python -m pytest",
+                    "high": false,
+                    "drift": false,
+                    "state": "RETIRED",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ],
+                      [
+                        4,
+                        [
+                          "m4.py"
+                        ]
+                      ],
+                      [
+                        5,
+                        [
+                          "m5.py"
+                        ]
+                      ],
+                      [
+                        6,
+                        [
+                          "m6.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [
+                      8
+                    ],
+                    "fire_num": 7,
+                    "fire_den": 9,
+                    "promoted_at": 2,
+                    "retired_at": 8
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          }
+        ]
+      },
+      "expected": null,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-stream",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "name": "absent",
+        "steps": [
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m0.py",
+                  "paths": [
+                    "src/m0.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m0.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "ruff check ."
+                },
+                "output": "bash: ruff: command not found",
+                "success": false
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_build",
+                  "form": "ruff",
+                  "head": "ruff",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "command_missing",
+                  "segment": "ruff check .",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": true
+                }
+              ],
+              "edited": [
+                "m0.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 1,
+              "facts": [
+                {
+                  "id": "absent_tool:ruff",
+                  "family": "absent_tool",
+                  "params": {
+                    "tool": "ruff",
+                    "intent": "run_build"
+                  },
+                  "life": {
+                    "key": "absent_tool:ruff",
+                    "high": true,
+                    "drift": false,
+                    "state": "CANDIDATE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 1,
+                    "fire_den": 1,
+                    "promoted_at": null,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m1.py",
+                  "paths": [
+                    "src/m1.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m1.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "ruff check ."
+                },
+                "output": "bash: ruff: command not found",
+                "success": false
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_build",
+                  "form": "ruff",
+                  "head": "ruff",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "command_missing",
+                  "segment": "ruff check .",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": true
+                }
+              ],
+              "edited": [
+                "m1.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 2,
+              "facts": [
+                {
+                  "id": "absent_tool:ruff",
+                  "family": "absent_tool",
+                  "params": {
+                    "tool": "ruff",
+                    "intent": "run_build"
+                  },
+                  "life": {
+                    "key": "absent_tool:ruff",
+                    "high": true,
+                    "drift": false,
+                    "state": "CANDIDATE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 2,
+                    "fire_den": 2,
+                    "promoted_at": null,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m2.py",
+                  "paths": [
+                    "src/m2.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m2.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "ruff check ."
+                },
+                "output": "bash: ruff: command not found",
+                "success": false
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_build",
+                  "form": "ruff",
+                  "head": "ruff",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "command_missing",
+                  "segment": "ruff check .",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": true
+                }
+              ],
+              "edited": [
+                "m2.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 3,
+              "facts": [
+                {
+                  "id": "absent_tool:ruff",
+                  "family": "absent_tool",
+                  "params": {
+                    "tool": "ruff",
+                    "intent": "run_build"
+                  },
+                  "life": {
+                    "key": "absent_tool:ruff",
+                    "high": true,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 3,
+                    "fire_den": 3,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m3.py",
+                  "paths": [
+                    "src/m3.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m3.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "ruff check ."
+                },
+                "output": "bash: ruff: command not found",
+                "success": false
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_build",
+                  "form": "ruff",
+                  "head": "ruff",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "command_missing",
+                  "segment": "ruff check .",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": true
+                }
+              ],
+              "edited": [
+                "m3.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 4,
+              "facts": [
+                {
+                  "id": "absent_tool:ruff",
+                  "family": "absent_tool",
+                  "params": {
+                    "tool": "ruff",
+                    "intent": "run_build"
+                  },
+                  "life": {
+                    "key": "absent_tool:ruff",
+                    "high": true,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 4,
+                    "fire_den": 4,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "# environment facts learned from earlier sessions in this repository\n- `ruff …` fails here with command not found, and no other way to run it has worked.\n",
+              "ids": [
+                "absent_tool:ruff"
+              ]
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m4.py",
+                  "paths": [
+                    "src/m4.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m4.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "eslint ."
+                },
+                "output": "linted",
+                "success": true
+              }
+            ],
+            "injected": [
+              "absent_tool:ruff"
+            ],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_build",
+                  "form": "eslint",
+                  "head": "eslint",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "eslint .",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m4.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 5,
+              "facts": [
+                {
+                  "id": "absent_tool:ruff",
+                  "family": "absent_tool",
+                  "params": {
+                    "tool": "ruff",
+                    "intent": "run_build"
+                  },
+                  "life": {
+                    "key": "absent_tool:ruff",
+                    "high": true,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ],
+                      [
+                        4,
+                        [
+                          "m4.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 5,
+                    "fire_den": 5,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "# environment facts learned from earlier sessions in this repository\n- `ruff …` fails here with command not found, and no other way to run it has worked.\n",
+              "ids": [
+                "absent_tool:ruff"
+              ]
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m5.py",
+                  "paths": [
+                    "src/m5.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m5.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "eslint ."
+                },
+                "output": "linted",
+                "success": true
+              }
+            ],
+            "injected": [
+              "absent_tool:ruff"
+            ],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_build",
+                  "form": "eslint",
+                  "head": "eslint",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "eslint .",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m5.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 6,
+              "facts": [
+                {
+                  "id": "absent_tool:ruff",
+                  "family": "absent_tool",
+                  "params": {
+                    "tool": "ruff",
+                    "intent": "run_build"
+                  },
+                  "life": {
+                    "key": "absent_tool:ruff",
+                    "high": true,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ],
+                      [
+                        4,
+                        [
+                          "m4.py"
+                        ]
+                      ],
+                      [
+                        5,
+                        [
+                          "m5.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 6,
+                    "fire_den": 6,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "# environment facts learned from earlier sessions in this repository\n- `ruff …` fails here with command not found, and no other way to run it has worked.\n",
+              "ids": [
+                "absent_tool:ruff"
+              ]
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m6.py",
+                  "paths": [
+                    "src/m6.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m6.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "ruff check ."
+                },
+                "output": "all checks passed",
+                "success": true
+              }
+            ],
+            "injected": [
+              "absent_tool:ruff"
+            ],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_build",
+                  "form": "ruff",
+                  "head": "ruff",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "ruff check .",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m6.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 7,
+              "facts": [
+                {
+                  "id": "absent_tool:ruff",
+                  "family": "absent_tool",
+                  "params": {
+                    "tool": "ruff",
+                    "intent": "run_build"
+                  },
+                  "life": {
+                    "key": "absent_tool:ruff",
+                    "high": true,
+                    "drift": false,
+                    "state": "RETIRED",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ],
+                      [
+                        4,
+                        [
+                          "m4.py"
+                        ]
+                      ],
+                      [
+                        5,
+                        [
+                          "m5.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [
+                      6
+                    ],
+                    "fire_num": 6,
+                    "fire_den": 7,
+                    "promoted_at": 2,
+                    "retired_at": 6
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          }
+        ]
+      },
+      "expected": null,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-stream",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "name": "boundary",
+        "steps": [
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m0.py",
+                  "paths": [
+                    "src/m0.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m0.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "curl https://api.example.org/x"
+                },
+                "output": "curl: (7) Failed to connect to api.example.org: Connection refused",
+                "success": false
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "fetch_remote",
+                  "form": "curl",
+                  "head": "curl",
+                  "prefix": "",
+                  "hosts": [
+                    "api.example.org"
+                  ],
+                  "probe": null,
+                  "outcome": "connection_refused",
+                  "segment": "curl https://api.example.org/x",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m0.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 1,
+              "facts": [
+                {
+                  "id": "boundary:fetch_remote",
+                  "family": "boundary",
+                  "params": {
+                    "hosts": {
+                      "api.example.org": 1
+                    }
+                  },
+                  "life": {
+                    "key": "boundary:fetch_remote",
+                    "high": true,
+                    "drift": false,
+                    "state": "CANDIDATE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 1,
+                    "fire_den": 1,
+                    "promoted_at": null,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m1.py",
+                  "paths": [
+                    "src/m1.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m1.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "curl https://api.example.org/x"
+                },
+                "output": "curl: (7) Failed to connect to api.example.org: Connection refused",
+                "success": false
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "fetch_remote",
+                  "form": "curl",
+                  "head": "curl",
+                  "prefix": "",
+                  "hosts": [
+                    "api.example.org"
+                  ],
+                  "probe": null,
+                  "outcome": "connection_refused",
+                  "segment": "curl https://api.example.org/x",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m1.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 2,
+              "facts": [
+                {
+                  "id": "boundary:fetch_remote",
+                  "family": "boundary",
+                  "params": {
+                    "hosts": {
+                      "api.example.org": 2
+                    }
+                  },
+                  "life": {
+                    "key": "boundary:fetch_remote",
+                    "high": true,
+                    "drift": false,
+                    "state": "CANDIDATE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 2,
+                    "fire_den": 2,
+                    "promoted_at": null,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m2.py",
+                  "paths": [
+                    "src/m2.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m2.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "curl https://api.example.org/x"
+                },
+                "output": "curl: (7) Failed to connect to api.example.org: Connection refused",
+                "success": false
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "fetch_remote",
+                  "form": "curl",
+                  "head": "curl",
+                  "prefix": "",
+                  "hosts": [
+                    "api.example.org"
+                  ],
+                  "probe": null,
+                  "outcome": "connection_refused",
+                  "segment": "curl https://api.example.org/x",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m2.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 3,
+              "facts": [
+                {
+                  "id": "boundary:fetch_remote",
+                  "family": "boundary",
+                  "params": {
+                    "hosts": {
+                      "api.example.org": 3
+                    }
+                  },
+                  "life": {
+                    "key": "boundary:fetch_remote",
+                    "high": true,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 3,
+                    "fire_den": 3,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m3.py",
+                  "paths": [
+                    "src/m3.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m3.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "curl https://api.example.org/x"
+                },
+                "output": "curl: (7) Failed to connect to api.example.org: Connection refused",
+                "success": false
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "fetch_remote",
+                  "form": "curl",
+                  "head": "curl",
+                  "prefix": "",
+                  "hosts": [
+                    "api.example.org"
+                  ],
+                  "probe": null,
+                  "outcome": "connection_refused",
+                  "segment": "curl https://api.example.org/x",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m3.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 4,
+              "facts": [
+                {
+                  "id": "boundary:fetch_remote",
+                  "family": "boundary",
+                  "params": {
+                    "hosts": {
+                      "api.example.org": 4
+                    }
+                  },
+                  "life": {
+                    "key": "boundary:fetch_remote",
+                    "high": true,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 4,
+                    "fire_den": 4,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "# environment facts learned from earlier sessions in this repository\n- Outbound connections to api.example.org are refused here; nothing can be fetched from them.\n",
+              "ids": [
+                "boundary:fetch_remote"
+              ]
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m4.py",
+                  "paths": [
+                    "src/m4.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m4.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "curl https://api.example.org/x"
+                },
+                "output": "response body",
+                "success": true
+              }
+            ],
+            "injected": [
+              "boundary:fetch_remote"
+            ],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "fetch_remote",
+                  "form": "curl",
+                  "head": "curl",
+                  "prefix": "",
+                  "hosts": [
+                    "api.example.org"
+                  ],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "curl https://api.example.org/x",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m4.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 5,
+              "facts": [
+                {
+                  "id": "boundary:fetch_remote",
+                  "family": "boundary",
+                  "params": {
+                    "hosts": {
+                      "api.example.org": 4
+                    }
+                  },
+                  "life": {
+                    "key": "boundary:fetch_remote",
+                    "high": true,
+                    "drift": false,
+                    "state": "RETIRED",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [
+                      4
+                    ],
+                    "fire_num": 4,
+                    "fire_den": 5,
+                    "promoted_at": 2,
+                    "retired_at": 4
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          }
+        ]
+      },
+      "expected": null,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-stream",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "name": "probe",
+        "steps": [
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m0.py",
+                  "paths": [
+                    "src/m0.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m0.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "git remote -v; git tag --contains HEAD | head"
+                },
+                "output": "",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "probe_vcs_refs",
+                  "form": "git remote",
+                  "head": "git",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": "remote",
+                  "outcome": "empty",
+                  "segment": "git remote -v",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 1,
+                  "intent": "probe_vcs_refs",
+                  "form": "git tag",
+                  "head": "git",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": "tag",
+                  "outcome": "empty",
+                  "segment": "git tag --contains HEAD",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m0.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 1,
+              "facts": [
+                {
+                  "id": "empty_probe:vcs_refs",
+                  "family": "empty_probe",
+                  "params": {
+                    "kinds": {
+                      "remote": 1,
+                      "tag": 1
+                    }
+                  },
+                  "life": {
+                    "key": "empty_probe:vcs_refs",
+                    "high": true,
+                    "drift": false,
+                    "state": "CANDIDATE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 1,
+                    "fire_den": 1,
+                    "promoted_at": null,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m1.py",
+                  "paths": [
+                    "src/m1.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m1.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "git remote -v; git tag --contains HEAD | head"
+                },
+                "output": "",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "probe_vcs_refs",
+                  "form": "git remote",
+                  "head": "git",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": "remote",
+                  "outcome": "empty",
+                  "segment": "git remote -v",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 1,
+                  "intent": "probe_vcs_refs",
+                  "form": "git tag",
+                  "head": "git",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": "tag",
+                  "outcome": "empty",
+                  "segment": "git tag --contains HEAD",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m1.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 2,
+              "facts": [
+                {
+                  "id": "empty_probe:vcs_refs",
+                  "family": "empty_probe",
+                  "params": {
+                    "kinds": {
+                      "remote": 2,
+                      "tag": 2
+                    }
+                  },
+                  "life": {
+                    "key": "empty_probe:vcs_refs",
+                    "high": true,
+                    "drift": false,
+                    "state": "CANDIDATE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 2,
+                    "fire_den": 2,
+                    "promoted_at": null,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m2.py",
+                  "paths": [
+                    "src/m2.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m2.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "git remote -v; git tag --contains HEAD | head"
+                },
+                "output": "",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "probe_vcs_refs",
+                  "form": "git remote",
+                  "head": "git",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": "remote",
+                  "outcome": "empty",
+                  "segment": "git remote -v",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 1,
+                  "intent": "probe_vcs_refs",
+                  "form": "git tag",
+                  "head": "git",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": "tag",
+                  "outcome": "empty",
+                  "segment": "git tag --contains HEAD",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m2.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 3,
+              "facts": [
+                {
+                  "id": "empty_probe:vcs_refs",
+                  "family": "empty_probe",
+                  "params": {
+                    "kinds": {
+                      "remote": 3,
+                      "tag": 3
+                    }
+                  },
+                  "life": {
+                    "key": "empty_probe:vcs_refs",
+                    "high": true,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 3,
+                    "fire_den": 3,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m3.py",
+                  "paths": [
+                    "src/m3.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m3.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "git remote -v; git tag --contains HEAD | head"
+                },
+                "output": "",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "probe_vcs_refs",
+                  "form": "git remote",
+                  "head": "git",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": "remote",
+                  "outcome": "empty",
+                  "segment": "git remote -v",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 1,
+                  "intent": "probe_vcs_refs",
+                  "form": "git tag",
+                  "head": "git",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": "tag",
+                  "outcome": "empty",
+                  "segment": "git tag --contains HEAD",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m3.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 4,
+              "facts": [
+                {
+                  "id": "empty_probe:vcs_refs",
+                  "family": "empty_probe",
+                  "params": {
+                    "kinds": {
+                      "remote": 4,
+                      "tag": 4
+                    }
+                  },
+                  "life": {
+                    "key": "empty_probe:vcs_refs",
+                    "high": true,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 4,
+                    "fire_den": 4,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "# environment facts learned from earlier sessions in this repository\n- This checkout has no git remote and no branches, tags or unreachable objects beyond HEAD; its history ends at the checked-out commit.\n",
+              "ids": [
+                "empty_probe:vcs_refs"
+              ]
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m4.py",
+                  "paths": [
+                    "src/m4.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m4.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "git remote -v"
+                },
+                "output": "origin https://example.org/repo (fetch)",
+                "success": true
+              }
+            ],
+            "injected": [
+              "empty_probe:vcs_refs"
+            ],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "probe_vcs_refs",
+                  "form": "git remote",
+                  "head": "git",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": "remote",
+                  "outcome": "hit",
+                  "segment": "git remote -v",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m4.py"
+              ],
+              "n_calls": 2,
+              "env": []
+            },
+            "expected": {
+              "now": 5,
+              "facts": [
+                {
+                  "id": "empty_probe:vcs_refs",
+                  "family": "empty_probe",
+                  "params": {
+                    "kinds": {
+                      "remote": 5,
+                      "tag": 4
+                    }
+                  },
+                  "life": {
+                    "key": "empty_probe:vcs_refs",
+                    "high": true,
+                    "drift": false,
+                    "state": "RETIRED",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [
+                      4
+                    ],
+                    "fire_num": 5,
+                    "fire_den": 5,
+                    "promoted_at": 2,
+                    "retired_at": 4
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          }
+        ]
+      },
+      "expected": null,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-stream",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "name": "arg",
+        "steps": [
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m0.py",
+                  "paths": [
+                    "src/m0.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m0.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -m unittest tests.app::Case"
+                },
+                "output": "Failed to import test module: tests.app::Case",
+                "success": false
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -m unittest tests.app.Case"
+                },
+                "output": "Ran 1 test\nOK",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_tests",
+                  "form": "python -m unittest",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -m unittest tests.app::Case",
+                  "labels": [
+                    "tests.app::Case"
+                  ],
+                  "label_err": true,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 2,
+                  "intent": "run_tests",
+                  "form": "python -m unittest",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -m unittest tests.app.Case",
+                  "labels": [
+                    "tests.app.Case"
+                  ],
+                  "label_err": false,
+                  "loaded": true,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m0.py"
+              ],
+              "n_calls": 3,
+              "env": []
+            },
+            "expected": {
+              "now": 1,
+              "facts": [
+                {
+                  "id": "arg_repair:python -m unittest:sep:::",
+                  "family": "arg_repair",
+                  "params": {
+                    "form": "python -m unittest",
+                    "kind": "sep",
+                    "param": "::",
+                    "examples": {
+                      "tests.app::Case tests.app.Case": 1
+                    }
+                  },
+                  "life": {
+                    "key": "arg_repair:python -m unittest:sep:::",
+                    "high": false,
+                    "drift": false,
+                    "state": "CANDIDATE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 1,
+                    "fire_den": 1,
+                    "promoted_at": null,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m1.py",
+                  "paths": [
+                    "src/m1.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m1.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -m unittest tests.app::Case"
+                },
+                "output": "Failed to import test module: tests.app::Case",
+                "success": false
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -m unittest tests.app.Case"
+                },
+                "output": "Ran 1 test\nOK",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_tests",
+                  "form": "python -m unittest",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -m unittest tests.app::Case",
+                  "labels": [
+                    "tests.app::Case"
+                  ],
+                  "label_err": true,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 2,
+                  "intent": "run_tests",
+                  "form": "python -m unittest",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -m unittest tests.app.Case",
+                  "labels": [
+                    "tests.app.Case"
+                  ],
+                  "label_err": false,
+                  "loaded": true,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m1.py"
+              ],
+              "n_calls": 3,
+              "env": []
+            },
+            "expected": {
+              "now": 2,
+              "facts": [
+                {
+                  "id": "arg_repair:python -m unittest:sep:::",
+                  "family": "arg_repair",
+                  "params": {
+                    "form": "python -m unittest",
+                    "kind": "sep",
+                    "param": "::",
+                    "examples": {
+                      "tests.app::Case tests.app.Case": 2
+                    }
+                  },
+                  "life": {
+                    "key": "arg_repair:python -m unittest:sep:::",
+                    "high": false,
+                    "drift": false,
+                    "state": "CANDIDATE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 2,
+                    "fire_den": 2,
+                    "promoted_at": null,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m2.py",
+                  "paths": [
+                    "src/m2.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m2.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -m unittest tests.app::Case"
+                },
+                "output": "Failed to import test module: tests.app::Case",
+                "success": false
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -m unittest tests.app.Case"
+                },
+                "output": "Ran 1 test\nOK",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_tests",
+                  "form": "python -m unittest",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -m unittest tests.app::Case",
+                  "labels": [
+                    "tests.app::Case"
+                  ],
+                  "label_err": true,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 2,
+                  "intent": "run_tests",
+                  "form": "python -m unittest",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -m unittest tests.app.Case",
+                  "labels": [
+                    "tests.app.Case"
+                  ],
+                  "label_err": false,
+                  "loaded": true,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m2.py"
+              ],
+              "n_calls": 3,
+              "env": []
+            },
+            "expected": {
+              "now": 3,
+              "facts": [
+                {
+                  "id": "arg_repair:python -m unittest:sep:::",
+                  "family": "arg_repair",
+                  "params": {
+                    "form": "python -m unittest",
+                    "kind": "sep",
+                    "param": "::",
+                    "examples": {
+                      "tests.app::Case tests.app.Case": 3
+                    }
+                  },
+                  "life": {
+                    "key": "arg_repair:python -m unittest:sep:::",
+                    "high": false,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 3,
+                    "fire_den": 3,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m3.py",
+                  "paths": [
+                    "src/m3.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m3.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -m unittest tests.app::Case"
+                },
+                "output": "Failed to import test module: tests.app::Case",
+                "success": false
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -m unittest tests.app.Case"
+                },
+                "output": "Ran 1 test\nOK",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_tests",
+                  "form": "python -m unittest",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -m unittest tests.app::Case",
+                  "labels": [
+                    "tests.app::Case"
+                  ],
+                  "label_err": true,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 2,
+                  "intent": "run_tests",
+                  "form": "python -m unittest",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -m unittest tests.app.Case",
+                  "labels": [
+                    "tests.app.Case"
+                  ],
+                  "label_err": false,
+                  "loaded": true,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m3.py"
+              ],
+              "n_calls": 3,
+              "env": []
+            },
+            "expected": {
+              "now": 4,
+              "facts": [
+                {
+                  "id": "arg_repair:python -m unittest:sep:::",
+                  "family": "arg_repair",
+                  "params": {
+                    "form": "python -m unittest",
+                    "kind": "sep",
+                    "param": "::",
+                    "examples": {
+                      "tests.app::Case tests.app.Case": 4
+                    }
+                  },
+                  "life": {
+                    "key": "arg_repair:python -m unittest:sep:::",
+                    "high": false,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 4,
+                    "fire_den": 4,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "# environment facts learned from earlier sessions in this repository\n- `python -m unittest` takes dotted test labels (`module.Class.test`, not `module::Class::test`).\n",
+              "ids": [
+                "arg_repair:python -m unittest:sep:::"
+              ]
+            }
+          }
+        ]
+      },
+      "expected": null,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-stream",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "name": "environment",
+        "steps": [
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m0.py",
+                  "paths": [
+                    "src/m0.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m0.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -c \"import project\""
+                },
+                "output": "environment variable 'PYTHONPATH' is required",
+                "success": false
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "PYTHONPATH=. python -c \"import project\""
+                },
+                "output": "imported",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_interpreter",
+                  "form": "python",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -c \"import project\"",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 2,
+                  "intent": "run_interpreter",
+                  "form": "python",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -c \"import project\"",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": true,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m0.py"
+              ],
+              "n_calls": 3,
+              "env": [
+                {
+                  "need": [
+                    "PYTHONPATH"
+                  ],
+                  "sets": {},
+                  "ok": false,
+                  "call": 1
+                },
+                {
+                  "need": [],
+                  "sets": {
+                    "PYTHONPATH": "."
+                  },
+                  "ok": true,
+                  "call": 2
+                }
+              ]
+            },
+            "expected": {
+              "now": 1,
+              "facts": [
+                {
+                  "id": "env_value:PYTHONPATH",
+                  "family": "env_value",
+                  "params": {
+                    "var": "PYTHONPATH",
+                    "good": {
+                      ".": 1
+                    },
+                    "bad": {}
+                  },
+                  "life": {
+                    "key": "env_value:PYTHONPATH",
+                    "high": false,
+                    "drift": false,
+                    "state": "CANDIDATE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 1,
+                    "fire_den": 1,
+                    "promoted_at": null,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m1.py",
+                  "paths": [
+                    "src/m1.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m1.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -c \"import project\""
+                },
+                "output": "environment variable 'PYTHONPATH' is required",
+                "success": false
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "PYTHONPATH=. python -c \"import project\""
+                },
+                "output": "imported",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_interpreter",
+                  "form": "python",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -c \"import project\"",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 2,
+                  "intent": "run_interpreter",
+                  "form": "python",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -c \"import project\"",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": true,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m1.py"
+              ],
+              "n_calls": 3,
+              "env": [
+                {
+                  "need": [
+                    "PYTHONPATH"
+                  ],
+                  "sets": {},
+                  "ok": false,
+                  "call": 1
+                },
+                {
+                  "need": [],
+                  "sets": {
+                    "PYTHONPATH": "."
+                  },
+                  "ok": true,
+                  "call": 2
+                }
+              ]
+            },
+            "expected": {
+              "now": 2,
+              "facts": [
+                {
+                  "id": "env_value:PYTHONPATH",
+                  "family": "env_value",
+                  "params": {
+                    "var": "PYTHONPATH",
+                    "good": {
+                      ".": 2
+                    },
+                    "bad": {}
+                  },
+                  "life": {
+                    "key": "env_value:PYTHONPATH",
+                    "high": false,
+                    "drift": false,
+                    "state": "CANDIDATE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 2,
+                    "fire_den": 2,
+                    "promoted_at": null,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m2.py",
+                  "paths": [
+                    "src/m2.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m2.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -c \"import project\""
+                },
+                "output": "environment variable 'PYTHONPATH' is required",
+                "success": false
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "PYTHONPATH=. python -c \"import project\""
+                },
+                "output": "imported",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_interpreter",
+                  "form": "python",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -c \"import project\"",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 2,
+                  "intent": "run_interpreter",
+                  "form": "python",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -c \"import project\"",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": true,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m2.py"
+              ],
+              "n_calls": 3,
+              "env": [
+                {
+                  "need": [
+                    "PYTHONPATH"
+                  ],
+                  "sets": {},
+                  "ok": false,
+                  "call": 1
+                },
+                {
+                  "need": [],
+                  "sets": {
+                    "PYTHONPATH": "."
+                  },
+                  "ok": true,
+                  "call": 2
+                }
+              ]
+            },
+            "expected": {
+              "now": 3,
+              "facts": [
+                {
+                  "id": "env_value:PYTHONPATH",
+                  "family": "env_value",
+                  "params": {
+                    "var": "PYTHONPATH",
+                    "good": {
+                      ".": 3
+                    },
+                    "bad": {}
+                  },
+                  "life": {
+                    "key": "env_value:PYTHONPATH",
+                    "high": false,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 3,
+                    "fire_den": 3,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          },
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m3.py",
+                  "paths": [
+                    "src/m3.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m3.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -c \"import project\""
+                },
+                "output": "environment variable 'PYTHONPATH' is required",
+                "success": false
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "PYTHONPATH=. python -c \"import project\""
+                },
+                "output": "imported",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_interpreter",
+                  "form": "python",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -c \"import project\"",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 2,
+                  "intent": "run_interpreter",
+                  "form": "python",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -c \"import project\"",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": true,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m3.py"
+              ],
+              "n_calls": 3,
+              "env": [
+                {
+                  "need": [
+                    "PYTHONPATH"
+                  ],
+                  "sets": {},
+                  "ok": false,
+                  "call": 1
+                },
+                {
+                  "need": [],
+                  "sets": {
+                    "PYTHONPATH": "."
+                  },
+                  "ok": true,
+                  "call": 2
+                }
+              ]
+            },
+            "expected": {
+              "now": 4,
+              "facts": [
+                {
+                  "id": "env_value:PYTHONPATH",
+                  "family": "env_value",
+                  "params": {
+                    "var": "PYTHONPATH",
+                    "good": {
+                      ".": 4
+                    },
+                    "bad": {}
+                  },
+                  "life": {
+                    "key": "env_value:PYTHONPATH",
+                    "high": false,
+                    "drift": false,
+                    "state": "ACTIVE",
+                    "confirms": [
+                      [
+                        0,
+                        [
+                          "m0.py"
+                        ]
+                      ],
+                      [
+                        1,
+                        [
+                          "m1.py"
+                        ]
+                      ],
+                      [
+                        2,
+                        [
+                          "m2.py"
+                        ]
+                      ],
+                      [
+                        3,
+                        [
+                          "m3.py"
+                        ]
+                      ]
+                    ],
+                    "contradicts": [],
+                    "fire_num": 4,
+                    "fire_den": 4,
+                    "promoted_at": 2,
+                    "retired_at": null
+                  }
+                }
+              ],
+              "text": "# environment facts learned from earlier sessions in this repository\n- Code that imports the project needs `PYTHONPATH` set here: `PYTHONPATH=.` works.\n",
+              "ids": [
+                "env_value:PYTHONPATH"
+              ]
+            }
+          }
+        ]
+      },
+      "expected": null,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-stream",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "name": "compound",
+        "steps": [
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m0.py",
+                  "paths": [
+                    "src/m0.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m0.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "cd tests && python runtests.py | tail -2"
+                },
+                "output": "Ran 2 tests\nOK",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python -m pytest -k target; echo done"
+                },
+                "output": "1 passed in 0.1s",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "git remote -v; echo no"
+                },
+                "output": "origin url (fetch)",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "curl https://host/x | grep result"
+                },
+                "output": "result",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_tests",
+                  "form": "cd tests && python runtests.py",
+                  "head": "python",
+                  "prefix": "cd tests &&",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python runtests.py",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 2,
+                  "intent": "run_tests",
+                  "form": "python -m pytest",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python -m pytest -k target",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 3,
+                  "intent": "probe_vcs_refs",
+                  "form": "git remote",
+                  "head": "git",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": "remote",
+                  "outcome": "hit",
+                  "segment": "git remote -v",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 4,
+                  "intent": "fetch_remote",
+                  "form": "curl",
+                  "head": "curl",
+                  "prefix": "",
+                  "hosts": [
+                    "host"
+                  ],
+                  "probe": null,
+                  "outcome": null,
+                  "segment": "curl https://host/x",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m0.py"
+              ],
+              "n_calls": 5,
+              "env": []
+            },
+            "expected": {
+              "now": 1,
+              "facts": [
+                {
+                  "id": "empty_probe:vcs_refs",
+                  "family": "empty_probe",
+                  "params": {
+                    "kinds": {
+                      "remote": 1
+                    }
+                  },
+                  "life": {
+                    "key": "empty_probe:vcs_refs",
+                    "high": true,
+                    "drift": false,
+                    "state": "RETIRED",
+                    "confirms": [],
+                    "contradicts": [
+                      0
+                    ],
+                    "fire_num": 1,
+                    "fire_den": 1,
+                    "promoted_at": null,
+                    "retired_at": 0
+                  }
+                }
+              ],
+              "text": "",
+              "ids": []
+            }
+          }
+        ]
+      },
+      "expected": null,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    },
+    {
+      "kind": "environment-stream",
+      "sourceRevision": "81e32e56bb3c4c1b4c9756b429be91e3960116ca",
+      "scope": {
+        "host": "fixture",
+        "repository": "repo",
+        "environment": "v1"
+      },
+      "policy": {
+        "mode": "active",
+        "version": 1
+      },
+      "observations": [],
+      "catalogue": [],
+      "priorState": null,
+      "input": {
+        "name": "heredoc",
+        "steps": [
+          {
+            "calls": [
+              {
+                "tool": "apply_patch",
+                "args": {
+                  "path": "src/m0.py",
+                  "paths": [
+                    "src/m0.py"
+                  ],
+                  "changes": [
+                    {
+                      "path": "src/m0.py",
+                      "kind": "update"
+                    }
+                  ]
+                },
+                "output": "",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "python - <<'PY'\nprint('pytest word, not a command')\nPY"
+                },
+                "output": "printed",
+                "success": true
+              },
+              {
+                "tool": "shell",
+                "args": {
+                  "command": "read -r x <<< x\npytest -q\nx=1"
+                },
+                "output": "1 passed in 0.1s",
+                "success": true
+              }
+            ],
+            "injected": [],
+            "digest": {
+              "obs": [
+                {
+                  "call": 1,
+                  "intent": "run_interpreter",
+                  "form": "python",
+                  "head": "python",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "python - <<'PY' <heredoc>",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": false,
+                  "env": false,
+                  "not_found": false
+                },
+                {
+                  "call": 2,
+                  "intent": "run_tests",
+                  "form": "pytest",
+                  "head": "pytest",
+                  "prefix": "",
+                  "hosts": [],
+                  "probe": null,
+                  "outcome": "ran",
+                  "segment": "pytest -q",
+                  "labels": [],
+                  "label_err": false,
+                  "loaded": false,
+                  "tests_ran": true,
+                  "env": false,
+                  "not_found": false
+                }
+              ],
+              "edited": [
+                "m0.py"
+              ],
+              "n_calls": 3,
+              "env": []
+            },
+            "expected": {
+              "now": 1,
+              "facts": [],
+              "text": "",
+              "ids": []
+            }
+          }
+        ]
+      },
+      "expected": null,
+      "effects": [],
+      "accounting": {
+        "requests": 0,
+        "cost": 0
+      }
+    }
+  ]
+}
