@@ -228,11 +228,11 @@ const entries = Object.freeze([
     activationPrerequisites: ["action split or retained conservative mixed policy", "selected tagged Harness v3 local ExecutionEnv"],
   }),
   ...policy(["keychain"], {
-    effectClass: "mixed", replay: "never", contextFields: ["chatJid", "operationId"], serviceEffector: null,
+    effectClass: "query", replay: "never", contextFields: ["chatJid", "operationId"], serviceEffector: null,
     abortExpectation: "may_finish_late", safeProof: null, nullAuthorityKind: "credential",
-    authorityRationale: "CredentialStore authority is separate from Piclaw service-operation stores.",
-    idempotencyIdentity: null, certainty: "A credential mutation may commit before cancellation; no replay.",
-    activationPrerequisites: ["public CredentialStore direct contract", "protected-field observer evidence"],
+    authorityRationale: "Native keychain inventory reads local metadata under an owned task; it never decrypts or modifies credentials.",
+    idempotencyIdentity: null, certainty: "Local metadata reads have no mutation effect; results remain protected and are not replayed.",
+    activationPrerequisites: ["owned task and local inventory scope", "protected-field observer evidence"],
   }),
   ...policy(["ssh"], {
     effectClass: "mixed", replay: "never", contextFields: ["chatJid", "operationId"], serviceEffector: null,

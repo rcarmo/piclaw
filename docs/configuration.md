@@ -745,11 +745,10 @@ The keychain is disabled unless you provide a master key:
 | `PICLAW_KEYCHAIN_KEY` | _(empty)_ | Master key for encrypting/decrypting keychain entries |
 | `PICLAW_KEYCHAIN_KEY_FILE` | _(empty)_ | Read master key from a file (trimmed) |
 
-Quick example:
+Add credentials in Settings → Keychain. For operator automation after configuring the master key, use a protected secret file:
 
 ```bash
-PICLAW_KEYCHAIN_KEY="your-master-key" \
-  piclaw keychain set github/token --type token --secret "ghp_xxx"
+piclaw keychain set github/token --type token --secret-file /secure/path/token.txt
 ```
 
 ## WhatsApp pairing

@@ -359,13 +359,13 @@ export const TOOL_PREPARATION_MANIFEST: readonly ToolPreparationSpec[] = Object.
     protectedFields: ["params.script", "params.args", "params.cwd", "result.content", "result.details"],
   }),
   ...rows(["keychain"], {
-    currentSource: "runtime/extensions/integrations/keychain/index.ts; runtime/src/extensions/keychain-tools.ts",
-    effectClass: "mixed",
+    currentSource: "runtime/durable-engine/src/host-keychain-tool.ts; runtime/src/secure/keychain-inventory.ts; runtime/src/extensions/keychain-tools.ts",
+    effectClass: "query",
     replay: "never",
     contextFields: ["chatJid", "operationId"],
     serviceEffector: null,
     abortExpectation: "may_finish_late",
-    protectedFields: ["params.name", "params.secret", "params.username", "result.content", "result.details"],
+    protectedFields: ["params.query", "params.name", "params.secret", "params.username", "result.content", "result.details"],
   }),
   ...rows(["ssh"], {
     currentSource: "runtime/extensions/integrations/ssh/index.ts; runtime/src/extensions/ssh.ts; runtime/src/extensions/ssh-core.ts",

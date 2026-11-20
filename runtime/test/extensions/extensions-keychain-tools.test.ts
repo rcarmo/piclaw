@@ -1,181 +1,109 @@
-/**
- * test/extensions/extensions-keychain-tools.test.ts – Tests for keychain-tools extension.
- */
-
-import { beforeEach, afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createTempWorkspace, importFresh, setEnv } from "../helpers.js";
 import { createFakeExtensionApi } from "./fake-extension-api.js";
 
-describe("keychain-tools extension", () => {
+const secret = "SYNTHETIC_KEYCHAIN_SECRET";
+const username = "SYNTHETIC_KEYCHAIN_USERNAME";
+const userNote = "SYNTHETIC_PRIVATE_NOTE";
+
+describe("agent keychain inventory", () => {
   let ws: ReturnType<typeof createTempWorkspace>;
-  let restoreEnv: (() => void) | null = null;
+  let restoreEnv: () => void;
+  let keychain: typeof import("../../src/secure/keychain.js");
 
   beforeEach(async () => {
     ws = createTempWorkspace("piclaw-keychain-tools-");
-    restoreEnv = setEnv({
-      PICLAW_WORKSPACE: ws.workspace,
-      PICLAW_STORE: ws.store,
-      PICLAW_DATA: ws.data,
-      PICLAW_KEYCHAIN_KEY: "test-keychain-tools",
-    });
-
-    const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
+    restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store,
+      PICLAW_DATA: ws.data, PICLAW_KEYCHAIN_KEY: "test-keychain-tools" });
+    const db = await importFresh<typeof import("../../src/db.js")>("../src/db.js");
     db.initDatabase();
-    const keychain = await importFresh<typeof import("../src/secure/keychain.js")>("../src/secure/keychain.js");
-    await keychain.setKeychainEntry({
-      name: "ssh/piclaw",
-      type: "secret",
-      secret: "PRIVATE_KEY_DATA",
-      username: "git",
-    });
+    keychain = await importFresh<typeof import("../../src/secure/keychain.js")>("../src/secure/keychain.js");
+    await keychain.setKeychainEntry({ name: "ssh/piclaw", type: "secret", secret, username, userNote, agentNote: "Build server" });
   });
 
   afterEach(() => {
-    restoreEnv?.();
-    restoreEnv = null;
+    keychain.setKeyMaterialProviderForTests(null);
+    restoreEnv();
     ws.cleanup();
   });
 
-  async function registerKeychainExtension() {
-    const { keychainTools } = await importFresh<typeof import("../src/extensions/keychain-tools.js")>(
-      "../src/extensions/keychain-tools.js",
-    );
+  async function register() {
+    const { keychainTools } = await importFresh<typeof import("../../src/extensions/keychain-tools.js")>("../src/extensions/keychain-tools.js");
     const fake = createFakeExtensionApi();
     keychainTools(fake.api);
-    return fake;
+    return { fake, tool: fake.tools.get("keychain") };
   }
 
-  async function getTool() {
-    const fake = await registerKeychainExtension();
-    return fake.tools.get("keychain");
-  }
-
-  test("lists keychain entries", async () => {
-    const tool = await getTool();
-    const result = await tool.execute("k1", { action: "list" });
-    expect(result.content[0].text).toContain("Keychain entries");
-    expect(result.content[0].text).toContain("ssh/piclaw");
-    expect(result.content[0].text).toContain("Injection is command-scoped");
-    expect(result.content[0].text).toContain("Dynamic lookups and env enumeration do not trigger it");
-    expect(result.details.count).toBe(1);
+  test("advertises metadata only and rejects obsolete plaintext operations without touching storage", async () => {
+    const { tool } = await register();
+    expect(Object.keys(tool.parameters.properties).sort()).toEqual(["action", "limit", "offset", "query"]);
+    expect(tool.parameters.additionalProperties).toBe(false);
+    for (const args of [
+      { action: "get", name: "ssh/piclaw" },
+      { action: "get", name: "ssh/piclaw", field: "username" },
+      { action: "set", name: "ssh/piclaw", secret: "UNSAFE_ARGUMENT" },
+      { action: "delete", name: "ssh/piclaw" },
+      { action: "list", secret: "UNSAFE_ARGUMENT" },
+    ]) {
+      const result = await tool.execute("old-call", args);
+      expect(result.isError).toBe(true);
+      for (const value of [secret, username, "UNSAFE_ARGUMENT"]) expect(JSON.stringify(result)).not.toContain(value);
+    }
+    expect(await keychain.getKeychainEntry("ssh/piclaw")).toMatchObject({ secret, username });
   });
 
-  test("retrieves secret and username fields while marking direct get as last resort", async () => {
-    const tool = await getTool();
-
-    const secretResult = await tool.execute("k2", { action: "get", name: "ssh/piclaw" });
-    expect(secretResult.content[0].text).toBe("PRIVATE_KEY_DATA");
-    expect(secretResult.details.name).toBe("ssh/piclaw");
-    expect(secretResult.details.field).toBe("secret");
-    expect(secretResult.details.access_method).toBe("direct_get_last_resort");
-
-    const userResult = await tool.execute("k3", { action: "get", name: "ssh/piclaw", field: "username" });
-    expect(userResult.content[0].text).toBe("git");
-    expect(userResult.details.name).toBe("ssh/piclaw");
-    expect(userResult.details.field).toBe("username");
-    expect(userResult.details.access_method).toBe("direct_get_last_resort");
+  test("returns only allowed metadata even when the master key is unavailable", async () => {
+    const { tool } = await register();
+    let keyReads = 0;
+    keychain.setKeyMaterialProviderForTests({ getKeyMaterial() { keyReads++; throw Error("No key material"); } });
+    const result = await tool.execute("list", { action: "list" });
+    expect(result.isError).not.toBe(true);
+    expect(result.details).toEqual({ count: 1, total: 1, offset: 0,
+      entries: [{ name: "ssh/piclaw", type: "secret", shellEnv: "SSH_PICLAW", agentNote: "Build server" }] });
+    expect(JSON.parse(result.content[0].text)).toEqual(result.details);
+    for (const value of [secret, username, userNote]) expect(JSON.stringify(result)).not.toContain(value);
+    expect(keyReads).toBe(0);
   });
 
-  test("sets a keychain entry and can read it back", async () => {
-    const tool = await getTool();
+  test("filters and pages, preserving case and the real eligibility/collision rules", async () => {
+    for (const name of ["ApiKey", "abc-def", "abc/def", "123credential"]) {
+      await keychain.setKeychainEntry({ name, type: "token", secret });
+    }
+    const { tool } = await register();
+    const list = async (args = {}) => (await tool.execute("list", { action: "list", ...args })).details;
+    expect((await list({ query: "apikey" })).entries).toEqual([{ name: "ApiKey", type: "token", shellEnv: "ApiKey" }]);
+    expect((await list({ query: "abc_def" })).entries).toEqual([{ name: "abc-def", type: "token", shellEnv: "ABC_DEF" }]);
+    expect(await list({ query: "abc", offset: 1, limit: 1 })).toEqual({ count: 1, total: 2, offset: 1,
+      entries: [{ name: "abc/def", type: "token", shellEnv: null }] });
+    expect((await list({ query: "123credential" })).entries[0].shellEnv).toBeNull();
+    expect(await list({ query: "missing" })).toEqual({ count: 0, total: 0, offset: 0, entries: [] });
+    for (const args of [{ limit: 0 }, { limit: 201 }, { offset: -1 }, { offset: 0.5 }, { query: "x".repeat(201) }]) {
+      expect((await tool.execute("bad-list", { action: "list", ...args })).isError).toBe(true);
+    }
+  });
 
-    const setResult = await tool.execute("k4", {
-      action: "set",
-      name: "proxmox/piclaw",
-      type: "token",
-      secret: "tok_123",
-      username: "root@pam!piclaw",
+  test("does not ask external providers to list or decrypt entries", async () => {
+    const providers = await import("../../src/secure/keychain-providers.js");
+    let calls = 0;
+    providers.registerKeychainProvider({ id: "inventory-test", label: "Fixture",
+      async list() { calls++; return [{ name: "external/token", type: "token", source: "fixture" }]; },
+      async get() { calls++; return null; },
     });
-    expect(setResult.content[0].text).toContain("Stored keychain entry proxmox/piclaw (token).");
-
-    const secretResult = await tool.execute("k5", { action: "get", name: "proxmox/piclaw" });
-    expect(secretResult.content[0].text).toBe("tok_123");
-
-    const userResult = await tool.execute("k6", { action: "get", name: "proxmox/piclaw", field: "username" });
-    expect(userResult.content[0].text).toBe("root@pam!piclaw");
+    try {
+      const { tool } = await register();
+      expect((await tool.execute("list", { action: "list" })).details.total).toBe(1);
+      expect(calls).toBe(0);
+    } finally { providers.unregisterKeychainProvider("inventory-test"); }
   });
 
-  test("deletes a keychain entry", async () => {
-    const tool = await getTool();
-
-    const removed = await tool.execute("k7", { action: "delete", name: "ssh/piclaw" });
-    expect(removed.content[0].text).toContain("Deleted keychain entry ssh/piclaw.");
-
-    const missing = await tool.execute("k8", { action: "delete", name: "ssh/piclaw" });
-    expect(missing.content[0].text).toContain("Keychain entry not found: ssh/piclaw");
-  });
-
-  test("before_agent_start includes env and integration profile hints and last-resort guidance", async () => {
-    const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
-    const keychain = await importFresh<typeof import("../src/secure/keychain.js")>("../src/secure/keychain.js");
-    db.initDatabase();
-    await keychain.setKeychainEntry({
-      name: "STRIPE_KEY",
-      type: "token",
-      secret: "stripe-secret",
-    });
-    await keychain.setKeychainEntry({
-      name: "proxmox/lab",
-      type: "secret",
-      secret: "token-secret",
-      username: "root@pam!lab",
-    });
-    await keychain.setKeychainEntry({
-      name: "portainer/relay",
-      type: "secret",
-      secret: "portainer-token",
-      username: "https://portainer.example.com:9443",
-    });
-
-    const fake = await registerKeychainExtension();
-    const beforeAgentStart = fake.handlers.find((entry) => entry.event === "before_agent_start")?.handler;
-    const result = await beforeAgentStart?.({ systemPrompt: "base prompt" });
-    expect(result?.systemPrompt).toContain("$STRIPE_KEY");
-    expect(result?.systemPrompt).toContain("ssh/piclaw");
-    expect(result?.systemPrompt).toContain("proxmox/lab");
-    expect(result?.systemPrompt).toContain("portainer/relay");
-    expect(result?.systemPrompt).toContain("Use keychain get only as an absolute last resort");
-    expect(result?.systemPrompt).toContain("Shell injection is command-scoped");
-    expect(result?.systemPrompt).toContain("Dynamic lookups and env enumeration do not request injection");
-  });
-
-  test("status hints only expose entry names, not secrets", async () => {
-    await registerKeychainExtension();
-    const { resolveToolStatusHints } = await import("../../src/tool-status-hints.js");
-
-    const hints = resolveToolStatusHints({
-      chatJid: "web:keychain",
-      toolName: "keychain",
-      args: {
-        action: "set",
-        name: "ssh/piclaw",
-        secret: "PRIVATE_KEY_DATA",
-        username: "git",
-      },
-      payload: {},
-    });
-
-    expect(hints).toEqual([
-      expect.objectContaining({
-        key: "keychain",
-        label: "ssh/piclaw",
-        title: "Keychain entry • ssh/piclaw",
-      }),
-    ]);
-    expect(JSON.stringify(hints)).not.toContain("PRIVATE_KEY_DATA");
-    expect(JSON.stringify(hints)).not.toContain("git");
-  });
-
-  test("set/delete actions validate required fields", async () => {
-    const tool = await getTool();
-
-    const missingNameSet = await tool.execute("k9", { action: "set", secret: "abc" });
-    expect(missingNameSet.content[0].text).toContain("Provide name for action=set");
-
-    const missingSecret = await tool.execute("k10", { action: "set", name: "foo/bar" });
-    expect(missingSecret.content[0].text).toContain("Provide secret for action=set");
-
-    const missingNameDelete = await tool.execute("k11", { action: "delete" });
-    expect(missingNameDelete.content[0].text).toContain("Provide name for action=delete");
+  test("prompt and summary steer agents towards references without enumerating stored data", async () => {
+    const { fake, tool } = await register();
+    const before = fake.handlers.find(({ event }) => event === "before_agent_start")!;
+    const { systemPrompt } = await before.handler({ systemPrompt: "base prompt" });
+    expect(systemPrompt).toContain("Settings → Keychain");
+    expect(systemPrompt).toContain("keychain:NAME");
+    expect(systemPrompt).toContain("dynamic lookups and env enumeration do not trigger it");
+    for (const value of [secret, username, userNote, "ssh/piclaw", "Build server"]) expect(systemPrompt).not.toContain(value);
+    expect(tool.callSummary({ action: "list", query: "private-name" })).toBe("List entries");
   });
 });
