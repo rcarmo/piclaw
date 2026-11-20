@@ -8,8 +8,8 @@
     {
       "path": "runtime/durable-engine/src/host-extension-catalog.ts",
       "beforeSha256": "24cda3691168179f509d034feeaed4c860ae267f27f3070694cc4aca27ab3059",
-      "afterSha256": "c3d8dfa1be4711d1bf0e4d422e172ecc91fc5e5da286088890df3c908a720097",
-      "purpose": "Admit the exact Draw.io 31.4.6 manifest alongside the existing 31.4.5 source pins for the repaired distribution; preserve the historical retirement disposition and accounting."
+      "afterSha256": "437149df6c054d8088418793c03a684199b7ba425ec53343970960da2fc0e43a",
+      "purpose": "Admit exact Draw.io 31.4.6 and loose-file 31.4.7 alongside existing 31.4.5 source pins. Preserve historical retirement disposition and accounting."
     },
     {
       "path": "runtime/durable-engine/src/application-bootstrap.ts",

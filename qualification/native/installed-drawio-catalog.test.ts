@@ -17,8 +17,10 @@ for (const version of ["31.4.5", "31.4.6"]) test(`Draw.io ${version}: exact fact
   try {
     const name = "@rcarmo/piclaw-addon-drawio-editor";
     expect(inspectAddonInstall(name, version, pkg)).toEqual({ supportedVersion: version });
+    expect(inspectAddonInstall(name, "31.4.7")).toEqual({ supportedVersion: "31.4.7" });
+    expect(inspectAddonInstall(name, "31.4.7", pkg)?.problem).toContain("does not match");
     expect(inspectAddonInstall(name, version === "31.4.5" ? "31.4.6" : "31.4.5", pkg)?.problem).toContain("does not match");
-    expect(inspectAddonInstall(name, "31.4.7")?.problem).toContain("31.4.5 or 31.4.6");
+    expect(inspectAddonInstall(name, "31.4.8")?.problem).toContain("31.4.5, 31.4.6, 31.4.7");
     expect(auditInstalledApplicationAddonSources(dir).profiles).toEqual([expect.objectContaining({ name, version })]);
     catalog = await loadApplicationExtensionCatalog({ cwd: dir, agentDir, settingsManager: SettingsManager.inMemory() });
     const q = await qualifyInstalledDrawio(catalog, dir);
@@ -44,7 +46,7 @@ for (const version of ["31.4.5", "31.4.6"]) test(`Draw.io ${version}: exact fact
       expect(opened).toEqual(["nested/new.drawio", "nested/new.drawio"]);
     } finally { await host.close(); }
     await expect(host.prepare()).rejects.toThrow("closed");
-    if (version === "31.4.6") {
+    if (version !== "31.4.5") {
       writeFileSync(manifest, older); // The other exact version cannot inherit this loaded factory's proof.
       expect(inspectAddonInstall(name, "31.4.5", pkg)).toEqual({ supportedVersion: "31.4.5" });
       expect(() => q!.assertCurrent()).toThrow("source changed");

@@ -5,7 +5,7 @@ import { installedAddonProfiles, type InstalledAddonProfile } from "./host-insta
 import { DefaultResourceLoader, type LoadExtensionsResult, type SettingsManager, type ToolDefinition, type RegisteredCommand } from "../../src/durable-legacy-sdk.js";
 import { getInstalledAddonExtensionPaths, resolveAddonPackageEntries, isRetiredCoreAddon, listInstalledAddonPackageDirs, readInstalledAddonPackage } from "../../src/addons/package-entries.js";
 import { join, resolve, relative, isAbsolute, posix } from "node:path";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import type { CodeReviewNativeExports } from "./host-code-review-tool.js";
@@ -124,9 +124,14 @@ type Profile = keyof typeof profiles;
 export const applicationAddonSourceProfiles = { ...profiles, ...installedAddonProfiles };
 const sourceProfiles = applicationAddonSourceProfiles;
 type SourceProfile = keyof typeof sourceProfiles;
-const drawioSuccessor = { version: "31.4.6", manifest: "6ad445ab54e5eb91f0982c3cbe9993d5103780afbefa503e986db37ca1b0ca42" } as const;
-function isDrawioSuccessor(kind: SourceProfile, version: unknown): version is typeof drawioSuccessor.version {
-  return kind === "open_drawio_editor" && version === drawioSuccessor.version;
+const drawioSuccessorManifests: Readonly<Record<string, string>> = Object.freeze({
+  "31.4.6": "6ad445ab54e5eb91f0982c3cbe9993d5103780afbefa503e986db37ca1b0ca42",
+  "31.4.7": "4fe5c0463623872a2444f1128762152e5826f7a0f6a6b84a5ce8baa838ea071d",
+});
+const drawioLooseIndex = "591f38f6658cb07ab073da04c3ddf8b0418d8d42a365f3e3355d40f60e5b169a";
+function drawioSuccessorManifest(kind: SourceProfile, version: unknown) {
+  return kind === "open_drawio_editor" && typeof version === "string" && Object.hasOwn(drawioSuccessorManifests, version)
+    ? drawioSuccessorManifests[version] : undefined;
 }
 type Extension = LoadExtensionsResult["extensions"][number];
 type InstalledSource = Readonly<{ cwd: string; packageDir: string; entry: string; version: string; manifest: string; files: string }>;
@@ -173,8 +178,14 @@ function captureApprovedPackage(workspace: string, packageDir: string, installed
     if (!inside(join(packageDir, "package.json"))) return undefined;
     const manifest = readFileSync(join(packageDir, "package.json"), "utf8");
     const pkg = JSON.parse(manifest);
-    const successor = isDrawioSuccessor(kind, pkg.version);
+    const successor = drawioSuccessorManifest(kind, pkg.version);
     if (pkg.name !== profile.name || (pkg.version !== profile.version && !successor) || pkg.type !== "module") return undefined;
+    const drawioLoose = kind === "open_drawio_editor" && pkg.version === "31.4.7";
+    if (drawioLoose) {
+      // Do not admit a broken loose-file package that needs a runtime extraction or fallback.
+      const index = join(packageDir, "vendor/index.html"), file = statSync(index, { throwIfNoEntry: false });
+      if (!file?.isFile() || !file.size || realpathSync(index) !== index) return undefined;
+    }
     const entries = resolveAddonPackageEntries(packageDir, pkg.pi?.extensions);
     const entryFile = "entry" in profile ? profile.entry : "index.ts";
     const entry = join(packageDir, entryFile || "package.json");
@@ -186,7 +197,7 @@ function captureApprovedPackage(workspace: string, packageDir: string, installed
       const path = join(packageDir, file);
       if (!inside(path)) throw Error(`${profile.label} source escape`);
       const digest = createHash("sha256").update(readFileSync(path)).digest("hex");
-      const expected = successor && file === "package.json" ? drawioSuccessor.manifest : pinned;
+      const expected = file === "package.json" ? successor ?? pinned : drawioLoose && file === "index.ts" ? drawioLooseIndex : pinned;
       if (digest !== expected) throw Error(`Unsupported ${profile.label} source`);
       return `${file}:${realpathSync(path)}:${digest}`;
     }).join("\n");
@@ -201,8 +212,8 @@ export function inspectAddonInstall(name: string, version?: string, directory?: 
   const match = Object.entries(sourceProfiles).find(([, profile]) => profile.name === name);
   if (!match) return;
   const [key, profile] = match, kind = key as SourceProfile;
-  const supportedVersion = isDrawioSuccessor(kind, version) ? version : profile.version;
-  const requiredVersion = kind === "open_drawio_editor" ? `${profile.version} or ${drawioSuccessor.version}` : profile.version;
+  const supportedVersion = version && drawioSuccessorManifest(kind, version) ? version : profile.version;
+  const requiredVersion = kind === "open_drawio_editor" ? [profile.version, ...Object.keys(drawioSuccessorManifests)].join(", ") : profile.version;
   if (version !== supportedVersion) return { supportedVersion, problem: `This Core release requires ${profile.label} ${requiredVersion}. Update Core to a release supporting the requested add-on before installing it. The installed add-on has not been changed.` };
   if (directory) {
     const manifest = readInstalledAddonPackage(directory)?.manifest;
