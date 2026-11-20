@@ -75,10 +75,18 @@ function withCallerSignal(entry: InFlightRefresh, signal?: AbortSignal): Promise
 
 /** Picker and model tools share the same one-refresh, authenticated lookup. */
 export async function resolveLiveModelSelection<T extends { provider: string; id: string }>(
-  label: string, available: () => readonly T[], refresh?: () => Promise<unknown>,
+  selection: string | { provider?: string; modelId: string }, available: () => readonly T[], refresh?: () => Promise<unknown>,
 ): Promise<T[]> {
-  const query = label.trim().toLowerCase();
-  const matches = () => available().filter(model => model.id.toLowerCase() === query || `${model.provider}/${model.id}`.toLowerCase() === query);
+  const query = (typeof selection === "string" ? selection : selection.modelId).trim().toLowerCase();
+  const matches = () => {
+    const models = available();
+    if (typeof selection === "string") {
+      const canonical = models.filter(model => `${model.provider}/${model.id}`.toLowerCase() === query);
+      if (canonical.length) return canonical;
+    }
+    const provider = typeof selection === "string" ? undefined : selection.provider?.toLowerCase();
+    return models.filter(model => model.id.toLowerCase() === query && (provider === undefined || model.provider.toLowerCase() === provider));
+  };
   let found = matches();
   if (query && !found.length && refresh) { await refresh(); found = matches(); }
   return found;

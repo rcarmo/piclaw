@@ -517,7 +517,7 @@ export class AgentRuntimeFacade {
         const { resolveControlModelSelection } = await import("../agent-control/agent-control-helpers.js");
         let matches: readonly Model<Api>[];
         try {
-          matches = await resolveLiveModelSelection(command.provider ? `${command.provider}/${command.modelId}` : command.modelId,
+          matches = await resolveLiveModelSelection({ provider: command.provider, modelId: command.modelId },
             () => resolveModelScope(this.options.modelRegistry.getAvailable(), this.options.settingsManager).models,
             () => refreshModelCatalogForSelection(this.options.modelRuntime));
           requireSingleUserDirectExecution("Direct model commands");

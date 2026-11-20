@@ -1269,14 +1269,15 @@ for (const native of [false, true]) for (const supportsOff of [false, true]) {
 
 test("native model command refreshes the shared authenticated catalogue before selecting a newly published model", async () => {
   const added = { provider: "synthetic", id: "new-sol", name: "New Sol", api: "openai-responses" } as any;
-  let available: any[] = [], refreshes = 0, current = "synthetic/old";
+  const routedAlias = { ...added, provider: "router", id: "synthetic/new-sol" };
+  let available: any[] = [routedAlias], refreshes = 0, current = "synthetic/old";
   const { facade } = createFacade({
     getDurableSession: () => createNativePositionPort({
       readModel: async () => current,
       async setModel(choice: { provider: string; modelId: string }) { current = `${choice.provider}/${choice.modelId}`; },
     }),
     modelRegistry: { getAll: () => [added], getAvailable: () => available } as any,
-    modelRuntime: { async refresh(options: any) { expect(options).toMatchObject({ force: true, allowNetwork: true }); refreshes++; available = [added]; return { aborted: false, errors: new Map() }; }, getAvailableSnapshot: () => available } as any,
+    modelRuntime: { async refresh(options: any) { expect(options).toMatchObject({ force: true, allowNetwork: true }); refreshes++; available = [routedAlias, added]; return { aborted: false, errors: new Map() }; }, getAvailableSnapshot: () => available } as any,
   });
   const result = await facade.applyControlCommand("web:live-model", { type: "model", provider: "synthetic", modelId: "new-sol", raw: "/model synthetic/new-sol" });
   expect(result.status).toBe("success"); expect(current).toBe("synthetic/new-sol"); expect(refreshes).toBe(1);

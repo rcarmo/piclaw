@@ -90,6 +90,12 @@ test("selection refreshes a missing model once and reads the newly authenticated
   expect(calls).toBe(2);
 });
 
+test("a canonical model reference wins over another provider's slash-containing ID", async () => {
+  const canonical = { provider: "one", id: "new" }, routed = { provider: "router", id: "one/new" };
+  expect(await resolveLiveModelSelection("ONE/NEW", () => [routed, canonical])).toEqual([canonical]);
+  expect(await resolveLiveModelSelection("ONE/NEW", () => [routed])).toEqual([routed]);
+});
+
 test("ambiguous authenticated matches do not trigger another network refresh", async () => {
   let calls = 0;
   const models = [{ provider: "one", id: "new" }, { provider: "two", id: "new" }];

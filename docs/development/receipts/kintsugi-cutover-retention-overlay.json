@@ -122,7 +122,7 @@
     {
       "path": "runtime/src/agent-pool/runtime-facade.ts",
       "beforeSha256": "60b142469fd02aeb373109ebf275d08e829c4c6b8d630378e8c96c03b01f2f45",
-      "afterSha256": "76db626f9427ebab9d073be1d0c22f15aa8ce5d646fd60bbe7e3eddb02d3a687",
+      "afterSha256": "1adf37474310a6b1154e8bfd9371aa7743708479ee9f9d45f1214f7e60acce7b",
       "purpose": "Bind the reviewed integrated runtime-facade source used by the SDK and native model cutover; preserve historical retention disposition and financial accounting unchanged."
     }
   ]
