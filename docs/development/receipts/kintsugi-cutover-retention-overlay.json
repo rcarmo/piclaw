@@ -20,8 +20,8 @@
     {
       "path": "runtime/durable-engine/src/default-application-runtime.ts",
       "beforeSha256": "85de1db072f2c7e3f5280ca93cab21329da6a2ce8f3052e400202ecee97ce2a7",
-      "afterSha256": "b459884a666da1ce21f21acb27d45ab63699ee6c1892427046eb0290da7b6c38",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "8f54ce54249ca9a06d384f6b7b986f9d8c91fb7fa82443e3c6ebf4db6cd7456d",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Register the owned model-facing keychain metadata inventory and reference-first managed guidance without legacy credential actions."
     },
     {
       "path": "runtime/durable-engine/src/host-models.ts",
@@ -68,20 +68,20 @@
     {
       "path": "runtime/src/extensions/tool-capabilities.ts",
       "beforeSha256": "61c5d8b1d5736ea618642509ee730597dada7f49de1f342c29e765e0bf5948b1",
-      "afterSha256": "7b31d9f9e0c8019d7094aa66ee9b0fb679c9a8b827e18078533aa3211ab18707",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "ddf9afbab50ebb9cba9f65a09fe20c0bcc8e43fc11de67c0d70b9d14864e8ff3",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Classify keychain discovery as read-only and stop advising agents to store or delete credentials through it."
     },
     {
       "path": "runtime/src/service-effects/tool-preparation/manifest.ts",
       "beforeSha256": "3243d4482c27f6eaa1dd3c7eb5dc3ce205d575085d775d8d1f2b92f196b04fb7",
-      "afterSha256": "1006de9bcb31926464de177a160512568ba5e8e97cee3719cc692e556aa7258d",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "5c5884c3d5e44f482c3094f8716aa84fc017088b7f82a91018f5652d2fd8035d",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Record the metadata query and mark the free-form filter and results protected; retain historic plaintext field protection."
     },
     {
       "path": "runtime/src/service-effects/tool-preparation/policy.ts",
       "beforeSha256": "7e7cee875d878bd7c27d2a57d54ede5c2a4f9466a7c3d2f53efe848d548a42c2",
-      "afterSha256": "175b02636f3bb1f6d145de6419eb8fea0b98388438dd499480456f49d3c618f0",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "0e08d5cff22b7087a5b11309899e57a6b8e4e674f7456ea7cdaba28922d9821f",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Keep keychain inventory queries non-replayable under owned credential scope without granting service mutation authority."
     },
     {
       "path": "runtime/web/src/components/settings-dialog.ts",
@@ -104,14 +104,20 @@
     {
       "path": "docs/tools-and-skills.md",
       "beforeSha256": "5e3212ee821b5c1f83ddbc3535ebb924c3316133a4cfa9397a70f5ad97fc69f9",
-      "afterSha256": "1a425c0f0f2e94c1adee612a88ddcc87efeeeeb62407e3befef5b980f7db9d61",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "12e15dbd17dc5a35ab08ecc215cca8db67f2c62fefea15ef5c4aeb4284c85707",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Document the read-only agent discovery surface and direct users to Settings for credential management."
     },
     {
       "path": "runtime/scripts/schema-ownership.json",
       "beforeSha256": "038a3dca34d15b62f63319805aeefab84acd249e199da509a9f2aa5f774277b6",
       "afterSha256": "01f8b9ecb1b274995209edb16a58ce390719b5c70418031b13055a4892e5fedf",
       "purpose": "Register exact outbound connection metadata, disposable output/recall cache objects and SDK document kinds; preserve historical schema fingerprints and financial accounting unchanged."
+    },
+    {
+      "path": "docs/architecture.md",
+      "beforeSha256": "de7e9d4d570ad1d7ab85b09deb243b5b825ddb16cb8b30de55a78c0404c7b236",
+      "afterSha256": "7c8e1d1be9b4bd8d2dae8cd4e4e0e617c7f7e9af0b244cd679258ec47536e090",
+      "purpose": "Distinguish the native metadata-only inventory from the retained legacy adapter and remove the always-loaded claim."
     }
   ]
 }
