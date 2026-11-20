@@ -23,7 +23,55 @@ interface RefreshableRuntime {
   getAvailableSnapshot?(): readonly { provider: string }[];
 }
 
-const inFlight = new WeakMap<RefreshableRuntime, Promise<ModelCatalogRefreshOutcome>>();
+interface InFlightRefresh {
+  promise: Promise<ModelCatalogRefreshOutcome>;
+  controller: AbortController;
+  liveWaiters: number;
+}
+
+const inFlight = new WeakMap<RefreshableRuntime, InFlightRefresh>();
+
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new Error("The operation was aborted.");
+}
+
+function releaseWaiter(entry: InFlightRefresh): void {
+  entry.liveWaiters = Math.max(0, entry.liveWaiters - 1);
+}
+
+function withCallerSignal(entry: InFlightRefresh, signal?: AbortSignal): Promise<ModelCatalogRefreshOutcome> {
+  if (!signal) {
+    entry.liveWaiters++;
+    entry.promise.then(() => releaseWaiter(entry), () => releaseWaiter(entry));
+    return entry.promise;
+  }
+  if (signal.aborted) return Promise.reject(abortReason(signal));
+
+  entry.liveWaiters++;
+  let settled = false;
+  return new Promise<ModelCatalogRefreshOutcome>((resolve, reject) => {
+    const finish = (value: () => void) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      releaseWaiter(entry);
+      value();
+    };
+    const onAbort = () => {
+      finish(() => reject(abortReason(signal)));
+      if (entry.liveWaiters === 0) entry.controller.abort(abortReason(signal));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    entry.promise.then(
+      outcome => finish(() => resolve(outcome)),
+      error => finish(() => reject(error)),
+    );
+  });
+}
 
 /** Picker and model tools share the same one-refresh, authenticated lookup. */
 export async function resolveLiveModelSelection<T extends { provider: string; id: string }>(
@@ -36,26 +84,38 @@ export async function resolveLiveModelSelection<T extends { provider: string; id
   return found;
 }
 
-export async function refreshModelCatalogForSelection(runtime: RefreshableRuntime, options: { signal?: AbortSignal } = {}): Promise<ModelCatalogRefreshOutcome> {
+export async function refreshModelCatalogForSelection(runtime: RefreshableRuntime, options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<ModelCatalogRefreshOutcome> {
   const outcome = await refreshModelCatalogs(runtime, options);
   if (outcome.status === "failed" || outcome.status === "timed_out") throw new Error("Model catalogue refresh failed; retry or inspect the cached catalogue.");
   return outcome;
 }
 
 export function refreshModelCatalogs(runtime: RefreshableRuntime, options: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<ModelCatalogRefreshOutcome> {
+  if (options.signal?.aborted) return Promise.reject(abortReason(options.signal));
+
   const existing = inFlight.get(runtime);
-  if (existing) return existing;
-  const run = refreshOnce(runtime, Math.max(1, options.timeoutMs ?? 15_000), options.signal)
-    .finally(() => { if (inFlight.get(runtime) === run) inFlight.delete(runtime); });
-  inFlight.set(runtime, run);
-  return run;
+  if (existing) return withCallerSignal(existing, options.signal);
+
+  const timeoutMs = Math.max(1, options.timeoutMs ?? 15_000);
+  const controller = new AbortController();
+  let entry!: InFlightRefresh;
+  const run = refreshOnce(runtime, timeoutMs, controller)
+    .finally(() => {
+      entry.liveWaiters = 0;
+      if (inFlight.get(runtime) === entry) inFlight.delete(runtime);
+    });
+  entry = { controller, liveWaiters: 0, promise: run };
+  inFlight.set(runtime, entry);
+
+  if (!options.signal) {
+    entry.liveWaiters++;
+    run.then(() => { entry.liveWaiters = 0; }, () => { entry.liveWaiters = 0; });
+    return run;
+  }
+  return withCallerSignal(entry, options.signal);
 }
 
-async function refreshOnce(runtime: RefreshableRuntime, timeoutMs: number, signal?: AbortSignal): Promise<ModelCatalogRefreshOutcome> {
-  const controller = new AbortController();
-  const abort = () => controller.abort(signal?.reason);
-  signal?.addEventListener("abort", abort, { once: true });
-  if (signal?.aborted) abort();
+async function refreshOnce(runtime: RefreshableRuntime, timeoutMs: number, controller: AbortController): Promise<ModelCatalogRefreshOutcome> {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const before = runtime.getAvailableSnapshot?.().length;
@@ -77,6 +137,5 @@ async function refreshOnce(runtime: RefreshableRuntime, timeoutMs: number, signa
     return { status: "failed", skipped: [], failed: [{ provider: "", message: error instanceof Error ? error.message : String(error) }] };
   } finally {
     clearTimeout(timer);
-    signal?.removeEventListener("abort", abort);
   }
 }

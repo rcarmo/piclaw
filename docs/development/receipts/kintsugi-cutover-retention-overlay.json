@@ -20,7 +20,7 @@
     {
       "path": "runtime/durable-engine/src/default-application-runtime.ts",
       "beforeSha256": "85de1db072f2c7e3f5280ca93cab21329da6a2ce8f3052e400202ecee97ce2a7",
-      "afterSha256": "b459884a666da1ce21f21acb27d45ab63699ee6c1892427046eb0290da7b6c38",
+      "afterSha256": "722cafe7df71a3be6af65ae3d2d94d28db5f8366349353961dffc750517dc998",
       "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
     },
     {
@@ -32,7 +32,7 @@
     {
       "path": "runtime/durable-engine/src/host-runtime.ts",
       "beforeSha256": "6eab0bd0a8cc8a90d068cc08a181aba0730e9c2210cf39cdef4e54d86b8fa54f",
-      "afterSha256": "d3b4c97a95abd296e11c274eda85147a54e44cae5361138367f0e64963927da1",
+      "afterSha256": "a708ec26e94daa2e042ea73b7a99ef55ae4f5d7eaa3e849888b281842421e8bf",
       "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
     },
     {
@@ -112,6 +112,12 @@
       "beforeSha256": "038a3dca34d15b62f63319805aeefab84acd249e199da509a9f2aa5f774277b6",
       "afterSha256": "01f8b9ecb1b274995209edb16a58ce390719b5c70418031b13055a4892e5fedf",
       "purpose": "Register exact outbound connection metadata, disposable output/recall cache objects and SDK document kinds; preserve historical schema fingerprints and financial accounting unchanged."
+    },
+    {
+      "path": "runtime/src/agent-pool/runtime-facade.ts",
+      "beforeSha256": "60b142469fd02aeb373109ebf275d08e829c4c6b8d630378e8c96c03b01f2f45",
+      "afterSha256": "76db626f9427ebab9d073be1d0c22f15aa8ce5d646fd60bbe7e3eddb02d3a687",
+      "purpose": "Bind the reviewed integrated runtime-facade source used by the SDK and native model cutover; preserve historical retention disposition and financial accounting unchanged."
     }
   ]
 }
