@@ -26,6 +26,21 @@ describe('canonical offline native contract', () => {
     expect(integration).toContain('await runStage("test:features", ["bun", "run", "ci:fast:features"]);');
   });
 
+  test('the complete gates build bundles in one required stage, not during host discovery', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    const make = readFileSync(join(ROOT, 'Makefile'), 'utf8');
+    const integration = readFileSync(join(ROOT, 'scripts/integration-test-suite.ts'), 'utf8');
+    const exclusion = '--path-ignore-patterns=**/channels/web/web-build.test.ts';
+    expect(pkg.scripts['ci:fast:tests'].replaceAll("'", "")).toContain(exclusion);
+    expect(integration).toContain(exclusion);
+    expect(pkg.scripts['ci:fast']).toContain('make build-web');
+    expect(integration).toContain('await runStage("build-web", ["make", "build-web"]);');
+    const stage = make.split(/^build-web:/m)[1]!.split(/^\S/m)[0];
+    expect(stage).toContain('./test/channels/web/web-build.test.ts');
+    expect(stage).not.toContain('bun run build:web');
+    expect(stage).not.toContain('post-link-preview-content.test.ts');
+  });
+
   test('both private type projects and required engine integration precede all isolated files', () => {
     const stages = nativeStages(contract);
     expect(stages.map(stage => stage.name)).toEqual(['type:runtime/durable-engine', 'type:qualification/native', 'accepted-source', 'native-isolated']);

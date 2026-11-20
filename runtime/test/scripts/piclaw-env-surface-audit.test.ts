@@ -20,6 +20,10 @@ const repoRoot = resolve(import.meta.dir, "../../..");
 const observationsPath = resolve(repoRoot, "docs/config/piclaw-env-observations.json");
 const catalogPath = resolve(repoRoot, "docs/config/piclaw-env-support-catalog.json");
 
+// Hold one read-only view of the candidate. Counterexamples use separate fixtures or clones.
+const observations = buildObservations();
+const currentCatalog = buildSupportCatalog();
+
 describe("Piclaw env surface audit", () => {
   test("detects direct and helper env reads as semantic reads", () => {
     const matches = semanticHelperMatches([
@@ -37,8 +41,8 @@ describe("Piclaw env surface audit", () => {
   });
 
   test("committed observations and support catalog are current", () => {
-    expect(isObservationTextCurrent(readFileSync(observationsPath, "utf8"))).toBe(true);
-    expect(isCatalogTextCurrent(readFileSync(catalogPath, "utf8"))).toBe(true);
+    expect(isObservationTextCurrent(readFileSync(observationsPath, "utf8"), observations)).toBe(true);
+    expect(isCatalogTextCurrent(readFileSync(catalogPath, "utf8"), currentCatalog)).toBe(true);
   });
 
   test("scope accounting does not leak reads across referenced-only scopes", () => {
@@ -55,7 +59,6 @@ describe("Piclaw env surface audit", () => {
   });
 
   test("observations reconcile the #724 baseline and restored scan roots", () => {
-    const observations = buildObservations();
     expect(observations.issueBaseline).toEqual({ distinctNames: 235, literalProductionReaders: 151 });
     expect(observations.scanScopes.production).toEqual(["runtime/src", "runtime/extensions"]);
     expect(observations.current.runtimeSrc.directReaderNames).toBe(observations.runtimeSrcDirectBaseline.names.length);
@@ -71,22 +74,19 @@ describe("Piclaw env surface audit", () => {
   });
 
   test("support catalog has no unresolved dispositions or stale config monolith provenance", () => {
-    const catalog = buildSupportCatalog();
-    expect(catalog.entries.filter((entry) => entry.migrationDisposition === "investigate")).toEqual([]);
-    expect(catalog.entries.filter((entry) => entry.source.includes("runtime/src/core/config.ts"))).toEqual([]);
+    expect(currentCatalog.entries.filter((entry) => entry.migrationDisposition === "investigate")).toEqual([]);
+    expect(currentCatalog.entries.filter((entry) => entry.source.includes("runtime/src/core/config.ts"))).toEqual([]);
   });
 
   test("support catalog covers all production observations with complete metadata", () => {
-    const observations = buildObservations();
-    const catalog = buildSupportCatalog();
-    validateSupportCatalog(catalog, observations);
-    const catalogNames = new Set(catalog.entries.map((entry) => entry.name));
+    validateSupportCatalog(currentCatalog, observations);
+    const catalogNames = new Set(currentCatalog.entries.map((entry) => entry.name));
     for (const entry of observations.entries.filter((item) => item.scopes.production?.referenced)) {
       expect(catalogNames.has(entry.name), entry.name).toBe(true);
     }
-    expect(catalog.entries.filter((entry) => entry.status === "undocumented-runtime")).toEqual([]);
-    expect(catalog.entries.filter((entry) => entry.migrationDisposition === "move-to-domain-config")).toEqual([]);
-    for (const entry of catalog.entries) {
+    expect(currentCatalog.entries.filter((entry) => entry.status === "undocumented-runtime")).toEqual([]);
+    expect(currentCatalog.entries.filter((entry) => entry.migrationDisposition === "move-to-domain-config")).toEqual([]);
+    for (const entry of currentCatalog.entries) {
       expect(entry.owner, entry.name).toBeTruthy();
       expect(entry.source, entry.name).toBeTruthy();
       expect(entry.migrationDisposition, entry.name).toBeTruthy();
@@ -116,9 +116,8 @@ describe("Piclaw env surface audit", () => {
       "PICLAW_STALE_ACTIVE_COMPACTION_BACKOFF_MS",
       "PICLAW_STALE_ACTIVE_COMPACTION_RECOVERY_MS",
     ];
-    const catalog = buildSupportCatalog();
     for (const name of names) {
-      const entry = catalog.entries.find((item) => item.name === name);
+      const entry = currentCatalog.entries.find((item) => item.name === name);
       expect(entry, name).toBeDefined();
       expect(entry?.status, name).toBe("internal");
       expect(entry?.migrationDisposition, name).toBe("constant");
@@ -129,63 +128,69 @@ describe("Piclaw env surface audit", () => {
 
   test("bootstrap entries must be allowlisted", () => {
     const allowlist = new Set(bootstrapEnvAllowlist);
-    const catalog = buildSupportCatalog();
-    for (const entry of catalog.entries.filter((item) => item.status === "bootstrap" || item.bootstrapAllowed)) {
+    for (const entry of currentCatalog.entries.filter((item) => item.status === "bootstrap" || item.bootstrapAllowed)) {
       expect(allowlist.has(entry.name), entry.name).toBe(true);
       expect(entry.bootstrapAllowed, entry.name).toBe(true);
     }
   });
 
   test("secret entries do not claim JSON config persistence", () => {
-    const catalog = buildSupportCatalog();
-    for (const entry of catalog.entries.filter((item) => item.secret)) {
+    for (const entry of currentCatalog.entries.filter((item) => item.secret)) {
       expect(entry.persistence.includes("json-config"), entry.name).toBe(false);
     }
   });
 
   test("missing production disposition entries fail validation", () => {
-    const observations = buildObservations();
-    const catalog = structuredClone(buildSupportCatalog());
+    const catalog = structuredClone(currentCatalog);
     const productionName = observations.entries.find((entry) => entry.scopes.production?.referenced)!.name;
     catalog.entries = catalog.entries.filter((entry) => entry.name !== productionName);
     expect(() => validateSupportCatalog(catalog, observations)).toThrow(/Missing production env disposition catalog entry/);
   });
 
   test("placeholder disposition and public contract metadata fail validation", () => {
-    const observations = buildObservations();
-    const catalog = structuredClone(buildSupportCatalog());
+    const catalog = structuredClone(currentCatalog);
     const entry = catalog.entries.find((item) => item.status === "bootstrap")!;
     entry.owner = "unknown";
     expect(() => validateSupportCatalog(catalog, observations)).toThrow(/Placeholder disposition metadata/);
 
-    const publicCatalog = structuredClone(buildSupportCatalog());
+    const publicCatalog = structuredClone(currentCatalog);
     const publicEntry = publicCatalog.entries.find((item) => item.status === "bootstrap")!;
     publicEntry.type = "unknown" as any;
     expect(() => validateSupportCatalog(publicCatalog, observations)).toThrow(/Placeholder supported-config contract/);
   });
 
   test("secret JSON persistence fails validation", () => {
-    const observations = buildObservations();
-    const catalog = structuredClone(buildSupportCatalog());
+    const catalog = structuredClone(currentCatalog);
     const secret = catalog.entries.find((item) => item.secret)!;
     secret.persistence.push("json-config");
     expect(() => validateSupportCatalog(catalog, observations)).toThrow(/must not declare json-config persistence/);
   });
 
   test("bootstrap mismatch and allowlist drift fail validation", () => {
-    const observations = buildObservations();
-    const catalog = structuredClone(buildSupportCatalog());
+    const catalog = structuredClone(currentCatalog);
     const nonBootstrap = catalog.entries.find((item) => !bootstrapEnvAllowlist.includes(item.name as any))!;
     nonBootstrap.bootstrapAllowed = true;
     expect(() => validateSupportCatalog(catalog, observations)).toThrow(/bootstrapAllowed not in allowlist/);
 
-    const drifted = structuredClone(buildSupportCatalog());
+    const drifted = structuredClone(currentCatalog);
     drifted.bootstrapEnvAllowlist = drifted.bootstrapEnvAllowlist.slice(1);
     expect(() => validateSupportCatalog(drifted, observations)).toThrow(/Bootstrap env allowlist drift/);
   });
 
+  test("web compatibility aliases cannot move to another runtime reader", () => {
+    for (const name of ["PICLAW_TERMINAL_IMAGE_PROTOCOL", "PICLAW_WEB_PUSH_SUBSCRIPTION_CAP", "PICLAW_WEB_PUSH_VAPID_SUBJECT"]) {
+      const reader = `process.env.${name}`;
+      expect(() => validateScanContract(buildObservationsFromFileTexts({
+        "runtime/src/core/config.ts": reader,
+        "runtime/src/channels/web/terminal.ts": `const childEnv = { ${name}: 'configured' };`,
+      }, undefined, [name]))).not.toThrow();
+      expect(() => validateScanContract(buildObservationsFromFileTexts({
+        "runtime/src/channels/web/terminal.ts": reader,
+      }, undefined, [name]))).toThrow(`Web compatibility env reader outside core config: ${name}`);
+    }
+  });
+
   test("scan-root and runtime-src baseline drift fail validation", () => {
-    const observations = buildObservations();
     const scanRootDrift = structuredClone(observations);
     scanRootDrift.scanRootVersion += 1;
     expect(() => validateScanContract(scanRootDrift)).toThrow(/Scan root version drift/);
@@ -203,7 +208,7 @@ describe("Piclaw env surface audit", () => {
   });
 
   test("stale observation and catalog text are rejected", () => {
-    expect(isObservationTextCurrent(stableJson({ ...buildObservations(), current: { production: { referencedNames: 0 } } }))).toBe(false);
-    expect(isCatalogTextCurrent(stableJson({ ...buildSupportCatalog(), entries: [] }))).toBe(false);
+    expect(isObservationTextCurrent(stableJson({ ...observations, current: { production: { referencedNames: 0 } } }), observations)).toBe(false);
+    expect(isCatalogTextCurrent(stableJson({ ...currentCatalog, entries: [] }), currentCatalog)).toBe(false);
   });
 });

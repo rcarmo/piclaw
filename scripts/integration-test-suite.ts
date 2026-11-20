@@ -104,6 +104,7 @@ await runStage("test:full", ["bun", "run", "test:local", "--cwd", "runtime", "--
   "--path-ignore-patterns=**/features/**",
   "--path-ignore-patterns=**/scripts/**",
   "--path-ignore-patterns=**/*.optional.test.ts",
+  "--path-ignore-patterns=**/channels/web/web-build.test.ts",
 ]);
 
 // ── Stage 2b: Feature regression tests (isolated subprocess) ─────────

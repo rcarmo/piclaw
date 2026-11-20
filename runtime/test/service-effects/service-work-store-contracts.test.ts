@@ -94,15 +94,20 @@ function mustCreateCurrentStore(
 function sqliteSubject(
   path: string,
   ctx: ContractTestContext,
-  trace: readonly NormalisedEffectTrace[] = [],
+  { create = false, trace = [] }: { create?: boolean; trace?: readonly NormalisedEffectTrace[] },
 ): SqliteSubject {
-  const database = new Database(path, { strict: true });
-  database.exec(
-    "PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=0",
-  );
-  installServiceWorkSchema(database);
+  const database = new Database(path, { strict: true, create });
   const runtime = new Runtime(ctx, trace);
-  const store = mustCreateCurrentStore(database, runtime);
+  let store: CurrentPiclawServiceWorkStore;
+  try {
+    database.exec("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=0");
+    // Recovery must use the committed schema, not reinstall it.
+    if (create) installServiceWorkSchema(database);
+    store = mustCreateCurrentStore(database, runtime);
+  } catch (error) {
+    database.close();
+    throw error;
+  }
   return {
     database,
     path,
@@ -181,17 +186,14 @@ const sqliteFactory: ContractSubjectFactory<ServiceWorkContractSubject> = {
   name: "current-piclaw-service-work",
   create(ctx) {
     const dir = mkdtempSync(join(tmpdir(), "piclaw-s01-"));
-    const path = join(dir, "store.sqlite");
-    return sqliteSubject(path, ctx);
+    try { return sqliteSubject(join(dir, "store.sqlite"), ctx, { create: true }); }
+    catch (error) { rmSync(dir, { recursive: true, force: true }); throw error; }
   },
   crashAndRestore(subject, ctx) {
     const current = subject as SqliteSubject;
     const trace = current.runtime.trace.snapshot();
     current.database.close();
-    const restored = sqliteSubject(current.path, ctx, trace);
-    restored.runtime.faults.clear();
-    restored.runtime.faultCounts.clear();
-    return { subject: restored, context: ctx };
+    return { subject: sqliteSubject(current.path, ctx, { trace }), context: ctx };
   },
   inspectTrace(subject) {
     return (subject as SqliteSubject).runtime.trace.inspect();
@@ -228,7 +230,7 @@ const fakeFactory: ContractSubjectFactory<ServiceWorkContractSubject> = {
 };
 
 describe("EF-S01 ServiceWorkStore shared contract", () => {
-  // This aggregate runs 18 contract/recovery cases with repeated private-schema creation and fresh SQLite restores.
+  // All 18 cases still exercise fresh file-backed stores and actual committed reopens.
   test("isolated SQLite adapter", { timeout: 15_000 }, async () => {
     const before = readdirSync(tmpdir())
       .filter((name) => name.startsWith("piclaw-s01-"))

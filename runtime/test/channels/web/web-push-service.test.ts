@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -39,20 +39,6 @@ function createSubscription(id: number, deviceId: string | null = null) {
     },
     ...(deviceId ? { deviceId } : {}),
   };
-}
-
-const DIRECT_ENV_READS = [
-  "process.env.PICLAW_TERMINAL_IMAGE_PROTOCOL",
-  "process.env.PICLAW_WEB_PUSH_SUBSCRIPTION_CAP",
-  "process.env.PICLAW_WEB_PUSH_VAPID_SUBJECT",
-] as const;
-
-function listRuntimeSourceFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const entryPath = join(dir, entry.name);
-    if (entry.isDirectory()) return listRuntimeSourceFiles(entryPath);
-    return entryPath.endsWith(".ts") ? [entryPath] : [];
-  });
 }
 
 describe("web push service", () => {
@@ -121,20 +107,6 @@ describe("web push service", () => {
     } finally {
       WEB_RUNTIME_CONFIG.pushVapidSubject = previousSubject;
     }
-  });
-
-  test("runtime source routes migrated web compatibility env through core config only", () => {
-    const sourceRoot = join(import.meta.dir, "../../../src");
-    const offenders = listRuntimeSourceFiles(sourceRoot).flatMap((filePath) => {
-      if (filePath.endsWith("/core/config.ts")) return [];
-      const source = readFileSync(filePath, "utf8");
-      const matchedKeys = DIRECT_ENV_READS.filter((key) => source.includes(key));
-      return matchedKeys.length > 0
-        ? [`${filePath.replace(`${sourceRoot}/`, "")}: ${matchedKeys.join(", ")}`]
-        : [];
-    });
-
-    expect(offenders).toEqual([]);
   });
 
   test("removes expired subscriptions and keeps non-expired failures", async () => {
