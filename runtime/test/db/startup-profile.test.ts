@@ -30,13 +30,15 @@ for (const fresh of [true, false]) test(`two processes initialize ${fresh ? "a f
     try {
       await waitFor(barrier(() => ready.every(existsSync)), 5000); writeFileSync(go, "go");
       await waitFor(barrier(() => ready.every(path => existsSync(path + ".attempt"))), 5000);
+      const attempts = ready.map(path => JSON.parse(readFileSync(path + ".attempt", "utf8")));
       for (let index = 0; index < results.length; index++) {
         // A competing fresh creator may encounter the first owner's unstamped
         // file. It must refuse, never silently adopt or stamp that existing file.
-        expect(fresh ? ["ready", "busy", "refused-unstamped"] : ["ready", "busy"]).toContain(JSON.parse(readFileSync(ready[index] + ".attempt", "utf8")).outcome);
+        expect(fresh ? ["ready", "busy", "refused-unstamped"] : ["ready", "busy"]).toContain(attempts[index].outcome);
         writeFileSync(resume[index], "go");
         const result = await results[index];
-        expect(result.exit, result.stderr).toBe(0); expect(result.stdout).toContain("CONCURRENT_INIT_OK");
+        expect(result.exit, JSON.stringify({ attempts, stderr: result.stderr })).toBe(0);
+        expect(result.stdout).toContain("CONCURRENT_INIT_OK");
       }
     } finally { clearTimeout(timer); for (const child of children) if (child.exitCode === null) child.kill("SIGKILL"); await Promise.all(results); }
   });
