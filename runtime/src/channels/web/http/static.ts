@@ -9,7 +9,7 @@
  */
 
 import { extname, resolve } from "path";
-import { existsSync, readFileSync, statSync } from "fs";
+import { readFileSync, statSync } from "fs";
 
 import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import { APP_ASSET_VERSION_REL_PATHS, computeAssetContentVersion } from "../../../utils/asset-content-version.js";
@@ -46,7 +46,6 @@ const NOTIFICATION_SOURCE_LABELS_PLACEHOLDER = "__PICLAW_NOTIFICATION_SOURCE_LAB
 const SANITIZE_SVG_FENCES_PLACEHOLDER = "__PICLAW_SANITIZE_SVG_FENCES_FLAG__";
 const LOGIN_VERSION_FILES = ["common/dist/login.bundle.js", "common/dist/login.bundle.css"];
 const TEXT_ASSET_CACHE = new Map<string, { mtimeMs: number; text: string }>();
-const GZIP_ASSET_CACHE = new Map<string, { mtimeMs: number; data: Uint8Array }>();
 
 const SKIP_COMPRESSION_EXTS = new Set([
   ".avif",
@@ -136,14 +135,6 @@ function getAcceptedCompressionEncodings(req: Request | undefined, ext: string):
   return parseAcceptedEncodings(req);
 }
 
-function gzipAsset(filePath: string, mtimeMs: number, raw: Uint8Array): Uint8Array {
-  const cached = GZIP_ASSET_CACHE.get(filePath);
-  if (cached && cached.mtimeMs === mtimeMs) return cached.data;
-  const data = new Uint8Array(Bun.gzipSync(Buffer.from(raw)));
-  GZIP_ASSET_CACHE.set(filePath, { mtimeMs, data });
-  return data;
-}
-
 function buildCompressedHeaders(contentType: string, cacheControl: string, encoding: "br" | "gzip"): Record<string, string> {
   return {
     "Content-Type": contentType,
@@ -181,8 +172,8 @@ export async function serveStatic(relPath: string, notFound: () => Response, req
   const filePath = resolve(STATIC_DIR, relPath);
   if (!isPathWithin(STATIC_DIR, filePath)) return notFound();
 
-  const file = Bun.file(filePath);
-  if (!(await file.exists())) return notFound();
+  if (!statSync(filePath, { throwIfNoEntry: false })?.isFile()) return notFound();
+  const head = req?.method === "HEAD";
 
   // Use the resolved path for the same narrow public-asset policy as auth routing.
   const publicWidgetAsset = isPublicWidgetAssetPath(`/static/${filePath.slice(STATIC_DIR.length + 1)}`);
@@ -212,7 +203,6 @@ export async function serveStatic(relPath: string, notFound: () => Response, req
   ];
 
   if (ext === ".html" || relPath === "sw.js") {
-    const rendered = renderHtmlTemplate(relPath, readRenderedTextAsset(filePath));
     const responseHeaders: Record<string, string> = {
       "Content-Type": contentType,
       "Cache-Control": cacheControl,
@@ -220,41 +210,24 @@ export async function serveStatic(relPath: string, notFound: () => Response, req
     if (relPath === "sw.js") {
       responseHeaders["Service-Worker-Allowed"] = "/";
     }
-    if (acceptsGzip) {
-      const stats = statSync(filePath);
-      const compressed = gzipAsset(filePath, stats.mtimeMs || 0, new TextEncoder().encode(rendered));
-      return new Response(Buffer.from(compressed), {
-        headers: {
-          ...responseHeaders,
-          "Content-Encoding": "gzip",
-          "Vary": "Accept-Encoding",
-        },
-      });
-    }
     if (acceptedEncodings.size > 0) responseHeaders["Vary"] = "Accept-Encoding";
-    return new Response(rendered, {
-      headers: responseHeaders,
-    });
+    if (acceptsGzip) responseHeaders["Content-Encoding"] = "gzip";
+    const rendered = head ? null : renderHtmlTemplate(relPath, readRenderedTextAsset(filePath));
+    return new Response(rendered !== null && acceptsGzip ? Bun.gzipSync(new TextEncoder().encode(rendered)) : rendered, { headers: responseHeaders });
   }
 
   for (const encoding of sidecarEncodingPreference) {
     const sidecarExt = encoding === "br" ? ".br" : ".gz";
     const sidecarPath = `${filePath}${sidecarExt}`;
-    if (existsSync(sidecarPath)) {
-      return new Response(Bun.file(sidecarPath), {
+    if (statSync(sidecarPath, { throwIfNoEntry: false })?.isFile()) {
+      return new Response(head ? null : Bun.file(sidecarPath), {
         headers: { ...buildCompressedHeaders(contentType, cacheControl, encoding), ...corsHeaders },
       });
     }
   }
 
-  if (acceptsGzip) {
-    const stats = statSync(filePath);
-    const compressed = gzipAsset(filePath, stats.mtimeMs || 0, new Uint8Array(readFileSync(filePath)));
-    return new Response(Buffer.from(compressed), {
-      headers: { ...buildCompressedHeaders(contentType, cacheControl, "gzip"), ...corsHeaders },
-    });
-  }
-
+  // Static compression belongs to the build. With no accepted sidecar, serve
+  // the original file rather than spending CPU or memory on each request.
   const responseHeaders: Record<string, string> = {
     "Content-Type": contentType,
     "Cache-Control": cacheControl,
@@ -264,7 +237,7 @@ export async function serveStatic(relPath: string, notFound: () => Response, req
     responseHeaders["Vary"] = "Accept-Encoding";
   }
 
-  return new Response(file, {
+  return new Response(head ? null : Bun.file(filePath), {
     headers: responseHeaders,
   });
 }
