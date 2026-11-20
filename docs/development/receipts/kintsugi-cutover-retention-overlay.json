@@ -8,8 +8,8 @@
     {
       "path": "runtime/durable-engine/src/host-extension-catalog.ts",
       "beforeSha256": "24cda3691168179f509d034feeaed4c860ae267f27f3070694cc4aca27ab3059",
-      "afterSha256": "437149df6c054d8088418793c03a684199b7ba425ec53343970960da2fc0e43a",
-      "purpose": "Admit exact Draw.io 31.4.6 and loose-file 31.4.7 alongside existing 31.4.5 source pins. Preserve historical retirement disposition and accounting."
+      "afterSha256": "708747e48e821f32e6b3db52a729c5e23e626b05a3ccde6c9daf8757bd35686b",
+      "purpose": "Pin the exact Draw.io and Codex successor releases, and share fresh post-evaluation package discovery across source checks without changing historical retirement accounting."
     },
     {
       "path": "runtime/durable-engine/src/application-bootstrap.ts",
