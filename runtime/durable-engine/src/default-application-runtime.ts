@@ -35,7 +35,7 @@ import { createCodemodeTool } from "@earendil-works/pi-durable/codemode";
 import { CodemodeSandbox } from "@earendil-works/pi-codemode";
 import { accessSync, constants } from "node:fs";
 import { createReadToolDefinition, SettingsManager, normalizeContext } from "../../src/durable-legacy-sdk.js";
-import { assertModelContextFits } from "./host-model-context.js";
+import { assertModelContextFits, modelSelectionFrame } from "./host-model-context.js";
 import type { RuntimeModelServices } from "../../src/agent-pool/model-services.js";
 import type { RuntimeLockHandle } from "../../src/runtime/single-instance.js";
 import type { RuntimeBackend } from "../../src/runtime/bootstrap.js";
@@ -48,7 +48,9 @@ import { installTerminalSettlementCompositionSchema } from "../../src/service-ef
 import { BunSqliteDatabase } from "./bun-sqlite.js";
 import { applicationOwnership, createApplicationBootstrapBundle } from "./application-bootstrap.js";
 import { previewHostRequest } from "../../src/agent-pool/model-request-preview.js";
-import { createHostModels } from "./host-models.js";
+import { createHostModels, type HostModelPolicy } from "./host-models.js";
+import { refreshModelCatalogForSelection } from "../../src/runtime/model-catalog-refresh.js";
+import { resolveModelScope } from "../../src/utils/scoped-models.js";
 import { readStoredProviderUsageAccountRef } from "../../src/agent-pool/provider-usage.js";
 import { createHostDreamTools } from './host-dream-tools.js';
 import { buildDreamPrompt } from '../../src/agent-memory/dream-prompt.js';
@@ -765,11 +767,22 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   const host = codexHost ?? await getModels(); assert();
   const provider = settings.getDefaultProvider(), modelId = settings.getDefaultModel();
   // Only the host's authenticated/approved catalog grants admission, never getAll().
-  const available = host.modelRegistry.getAvailable().filter(model => {
-    const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
-    return physical?.provider === model.provider && physical.id === model.id;
-  });
-  const selected = provider && modelId ? available.find(model => model.provider === provider && model.id === modelId) : available[0];
+  let scopeKey = "", approved: ReturnType<typeof host.modelRegistry.getAvailable> = [];
+  const available = () => {
+    const current = host.modelRegistry.getAvailable();
+    const scope = resolveModelScope(current, settings);
+    const key = JSON.stringify([scope.scoped, scope.patterns,
+      scope.models.map(model => [model.provider, model.id, model.name, model.cost, modelSelectionFrame(model)])]);
+    if (key !== scopeKey) {
+      approved = scope.models.filter(model => {
+        const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
+        return physical?.provider === model.provider && physical.id === model.id;
+      });
+      scopeKey = key;
+    }
+    return approved;
+  };
+  const selected = provider && modelId ? available().find(model => model.provider === provider && model.id === modelId) : available()[0];
   if (!selected) throw Error("Durable startup requires an available host default model");
   const ref = { provider: selected.provider, id: selected.id };
   const defaultThinking = (model: any) => getSupportedThinkingLevels(model).includes("medium") ? "medium" as const : getSupportedThinkingLevels(model)[0]!;
@@ -777,8 +790,8 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   codeReview?.addon.reviewService();
   const check = (model: { provider: string; id: string }, signal: AbortSignal) => {
     assertAdmission(); assert(); signal.throwIfAborted();
-    if (!available.some(entry => entry.provider === model.provider && entry.id === model.id)) throw Error("Host model not approved");
     if (!host.modelRegistry.getAvailable().some(entry => entry.provider === model.provider && entry.id === model.id)) throw Error("Host model no longer available");
+    if (!available().some(entry => entry.provider === model.provider && entry.id === model.id)) throw Error("Host model not approved");
     const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
     if (!physical || physical.provider !== model.provider || physical.id !== model.id) throw Error("Host model no longer available");
   };
@@ -839,7 +852,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   // SDK hook failures are reported but can still reach the model bridge. Keep
   // expected Goal denials on the exact task-owned signal, never on the app lifetime.
   const goalRequestDenials = new WeakMap<AbortSignal, GoalRequestDenied>();
-  const models = createHostModels(host.modelRuntime, available.map(model => ({ provider: model.provider, id: model.id })), { signal: lifetime.signal, codex: codexServices,
+  const modelPolicy: HostModelPolicy = { signal: lifetime.signal, codex: codexServices,
     captureTelemetry: observability ? () => observability.addon.createNativeTelemetryContext() : undefined,
     previewRequest: (model, transcript, options) => previewHostRequest(host.modelRuntime, model, transcript, options ?? {}),
     async captureSourceGuard(signal) {
@@ -922,14 +935,26 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       const chat = dreamRequests.get(scope.signal)?.context.chatJid ?? source?.operation.chatJid ?? maintenanceRequests.get(scope.signal)?.chatJid;
       if (chat) reportUsage(chat, message, `native:${mapping.domain}:${scope.taskId}:${scope.checkpointHash}`, scope.taskKind === "pi.compaction" ? "compaction" : "assistant");
     },
-    async authorize(model, _kind, signal) { check(model, signal); }, assertCurrent(model, _kind, signal) { check(model, signal); } });
+    async authorize(model, _kind, signal) { check(model, signal); }, assertCurrent(model, _kind, signal) { check(model, signal); } };
+  // Pi-durable calls HarnessOptions.models for each request/tool. Keep prepared
+  // requests immutable and read the latest admitted publication on the next use.
+  let modelPublication: ReturnType<typeof available> | undefined;
+  let modelSnapshot: ReturnType<typeof createHostModels> | undefined;
+  const models = () => {
+    const current = available();
+    if (current !== modelPublication) {
+      modelSnapshot = createHostModels(host.modelRuntime, current.map(({ provider, id }) => ({ provider, id })), modelPolicy);
+      modelPublication = current;
+    }
+    return modelSnapshot!;
+  };
   let decisionSequence = 0;
   regretsDecision = (captured, authority, scope) => ({
     getAvailable() {
       assertRegrets(); authority.assertSourceCurrent();
       return host.modelRuntime.getAvailableSnapshot().filter(model => {
         const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
-        return available.some(approved => approved.provider === model.provider && approved.id === model.id) && physical?.provider === model.provider
+        return available().some(approved => approved.provider === model.provider && approved.id === model.id) && physical?.provider === model.provider
           && physical.id === model.id && physical.api === model.api;
       });
     },
@@ -938,7 +963,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       const checkModel = () => {
       assertRegrets(); authority.assertSourceCurrent(); options.signal?.throwIfAborted();
       const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
-      if (!available.some(a => a.provider === model.provider && a.id === model.id) ||
+      if (!available().some(a => a.provider === model.provider && a.id === model.id) ||
           !host.modelRuntime.getAvailableSnapshot().some(a => a.provider === model.provider && a.id === model.id) ||
           physical?.provider !== model.provider || physical.id !== model.id || physical.api !== model.api
           || physical.contextWindow !== model.contextWindow || physical.maxTokens !== model.maxTokens
@@ -947,7 +972,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       };
       checkModel();
       const normalized = normalizeContext(context);
-      const output = await models.previewSimple?.(model, normalized, options);
+      const output = await models().previewSimple?.(model, normalized, options);
       checkModel();
       assertModelContextFits(normalized.messages, model, output);
       const message = await host.modelRuntime.completeSimple(model, context, { ...options, transformHeaders: headers => { checkModel(); return headers; } });
@@ -987,7 +1012,13 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   tools.push(...createHostModelTools({
     assertCurrent() { assert(); lifetime.signal.throwIfAborted(); if (readAccessConfig().mode !== "single-user") throw Error("Native model controls unavailable"); },
     prepareContext: (call, model, thinkingLevel, signal) => runtime().prepareToolModelContext(call, model, thinkingLevel, signal),
-    available: () => available.filter(model => host.modelRegistry.getAvailable().some(current => current.provider === model.provider && current.id === model.id)),
+    available,
+    async refresh(signal) {
+      assert(); lifetime.signal.throwIfAborted();
+      const outcome = await refreshModelCatalogForSelection(host.modelRuntime, { signal });
+      assert(); lifetime.signal.throwIfAborted();
+      terminalBroadcast?.("models_refreshed", { status: outcome.status });
+    },
     assertModel: choice => check({ provider: choice.provider, id: choice.modelId }, lifetime.signal),
     captureSourceGuard: captureSource,
   }));
@@ -1041,7 +1072,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
           const slash = args.model.indexOf("/");
           if (slash <= 0 || slash === args.model.length - 1) throw Error("Delegate model must be an exact provider/model ID");
           const provider = args.model.slice(0, slash), modelId = args.model.slice(slash + 1);
-          const exact = available.find(entry => entry.provider === provider && entry.id === modelId);
+          const exact = available().find(entry => entry.provider === provider && entry.id === modelId);
           if (!exact) throw Error("Native Delegate model unavailable");
           model = { provider: exact.provider, modelId: exact.id };
         }
@@ -1199,7 +1230,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         for (const id of missingThinking) {
           const agent = await tx.doc(AgentDoc, id);
           if (agent.thinkingLevel !== undefined || !agent.model) continue;
-          const model = models.getModel(agent.model.provider, agent.model.modelId);
+          const model = models().getModel(agent.model.provider, agent.model.modelId);
           if (model) await configure(tx, id, { thinkingLevel: defaultThinking(model) });
         }
         assert(); assertToolUpgradeIdle(root);
@@ -1422,7 +1453,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   }
   const delegateSettings = createDelegateSettings({ assertCurrent: assertCoreDelegate, defaultModel: () => `${selected.provider}/${selected.id}`,
     models: () => { assertCoreDelegate(); return host.modelRegistry.getAvailable().flatMap(model => {
-      if (!available.some(allowed => allowed.provider === model.provider && allowed.id === model.id)) return [];
+      if (!available().some(allowed => allowed.provider === model.provider && allowed.id === model.id)) return [];
       const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
       if (!physical || physical.provider !== model.provider || physical.id !== model.id) return [];
       return [{ provider: physical.provider, id: physical.id, fullId: `${physical.provider}/${physical.id}`, name: physical.name,
@@ -1437,7 +1468,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     const settings = createHostRegretsSettings(regretsAddon, async () => {
       assertRegrets(); const target = bundle.sessionTargets.list()[0];
       if (!target) throw Error("Regrets application configuration unavailable");
-      return regretsPorts(target.chatJid, assertRegrets, configWrite, { getAvailable: () => host.modelRuntime.getAvailableSnapshot().filter(model => available.some(a => a.provider === model.provider && a.id === model.id)) });
+      return regretsPorts(target.chatJid, assertRegrets, configWrite, { getAvailable: available });
     });
     registerAddonConfigApi("late-night-regrets", "config", { get: () => settings.getConfig(), set: patch => settings.setConfig(patch) }, regrets.source.packageDir);
     registerAddonConfigApi("late-night-regrets", "models", { get: () => settings.getModels() }, regrets.source.packageDir);
@@ -1465,7 +1496,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     assertAdmission();const checkInvocation=request.assertCurrent.bind(request);checkInvocation();
     const invocation=Object.freeze({invocationId:request.invocationId,chatJid:request.chatJid,mode:request.mode,days:request.days,model:request.model,timeoutMs:request.timeoutMs,acceptedAt:request.acceptedAt});
     if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(invocation.invocationId)||!invocation.chatJid||!['manual','auto'].includes(invocation.mode)||!Number.isSafeInteger(invocation.days)||invocation.days<1||!Number.isSafeInteger(invocation.timeoutMs)||invocation.timeoutMs<1)throw Error('Invalid Dream invocation');
-    const label=invocation.model?.trim(),choices=available.filter(model=>label?(model.provider+'/'+model.id===label||model.id===label):(model.provider===ref.provider&&model.id===ref.id));
+    const label=invocation.model?.trim(),choices=available().filter(model=>label?(model.provider+'/'+model.id===label||model.id===label):(model.provider===ref.provider&&model.id===ref.id));
     if(choices.length!==1)throw Error('Exact approved Dream model required');const choice=choices[0]!;check(choice,lifetime.signal);
     const physical=host.modelRuntime.getPhysicalModel(choice.provider,choice.id)!;
     const allowedTools=['read','edit','write','grep','find','ls','messages','search_workspace'];

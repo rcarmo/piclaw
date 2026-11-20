@@ -112,6 +112,14 @@ for (const scenario of ["write", "model", "sse", "broken-sse"] as const) applica
         expect(options?.headers?.["x-fixture"]).toBe("owned");
         const payload = await options!.onPayload!({ model: model.id, input: [], tools: tools.map(t => ({type: "function", name: t.name, description: t.description, parameters: t.parameters})) }, actual);
         expect(payload).toBeDefined();
+        if (scenario === "model" && calls === 1) {
+          expect(services.modelRegistry.getAvailable().some(candidate => candidate.id === alternate.id)).toBe(false);
+          published = [model, alternate];
+          // Refresh while the first provider request is already executing. The
+          // SDK's next owned set_model call must use its public models getter.
+          await runtime.refresh({ allowNetwork: false, providers: [model.provider] });
+          expect(services.modelRegistry.getAvailable().some(candidate => candidate.id === alternate.id)).toBe(true);
+        }
         if (scenario === "write") {
           const response = await options!.fetch!("https://fixture.invalid/responses", { method: "POST", body: JSON.stringify(payload), headers: options!.headers as HeadersInit });
           await response.text();
@@ -153,10 +161,12 @@ for (const scenario of ["write", "model", "sse", "broken-sse"] as const) applica
     })();
     return stream;
   };
-  const provider: Parameters<typeof runtime.registerNativeProvider>[0] = { id: model.provider, name: "Synthetic Codex", getModels: () => [model, alternate], auth: { apiKey: { name: "Synthetic", resolve: async () => ({ auth: { apiKey: "synthetic-only", headers: { "x-fixture": "owned" } }, source: "fixture" }) } }, stream: run, streamSimple: run };
+  let published = scenario === "model" ? [model] : [model, alternate];
+  const provider: Parameters<typeof runtime.registerNativeProvider>[0] = { id: model.provider, name: "Synthetic Codex", getModels: () => published, auth: { apiKey: { name: "Synthetic", resolve: async () => ({ auth: { apiKey: "synthetic-only", headers: { "x-fixture": "owned" } }, source: "fixture" }) } }, stream: run, streamSimple: run };
   runtime.registerNativeProvider(provider);
   expect(runtime.getRegisteredNativeProvider(model.provider)).toBe(provider);
-  const services = { modelRuntime: runtime, modelRegistry: { getAvailable: () => [model, alternate] } };
+  await runtime.refresh({ allowNetwork: false, providers: [model.provider] });
+  const services = { modelRuntime: runtime, modelRegistry: { getAvailable: () => [...published] } };
   mkdirSync(getPiclawAgentDir(), { recursive: true });
   writeFileSync(join(getPiclawAgentDir(), "auth.json"), JSON.stringify({ "openai-codex": { type: "oauth", access: "synthetic-only", refresh: "synthetic-refresh", expires: Date.now() + 3600000, accountId: "synthetic-account" } }));
   process.env.PICLAW_DB_IN_MEMORY = "0"; initDatabase();

@@ -20,8 +20,8 @@
     {
       "path": "runtime/durable-engine/src/default-application-runtime.ts",
       "beforeSha256": "85de1db072f2c7e3f5280ca93cab21329da6a2ce8f3052e400202ecee97ce2a7",
-      "afterSha256": "8f54ce54249ca9a06d384f6b7b986f9d8c91fb7fa82443e3c6ebf4db6cd7456d",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Register the owned model-facing keychain metadata inventory and reference-first managed guidance without legacy credential actions."
+      "afterSha256": "a8f3960da1a159cdde7b95bf56fbb9b73b502ed7f37fc98e36a02f6333f7c3b4",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Register the owned model-facing keychain metadata inventory and reference-first managed guidance without legacy credential actions. Share the authenticated, scoped model catalogue without changing retention or accounting."
     },
     {
       "path": "runtime/durable-engine/src/host-models.ts",
@@ -32,8 +32,8 @@
     {
       "path": "runtime/durable-engine/src/host-runtime.ts",
       "beforeSha256": "6eab0bd0a8cc8a90d068cc08a181aba0730e9c2210cf39cdef4e54d86b8fa54f",
-      "afterSha256": "d3b4c97a95abd296e11c274eda85147a54e44cae5361138367f0e64963927da1",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "a708ec26e94daa2e042ea73b7a99ef55ae4f5d7eaa3e849888b281842421e8bf",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Share the authenticated, scoped model catalogue without changing retention or accounting."
     },
     {
       "path": "runtime/src/agent-pool.ts",
@@ -118,6 +118,12 @@
       "beforeSha256": "de7e9d4d570ad1d7ab85b09deb243b5b825ddb16cb8b30de55a78c0404c7b236",
       "afterSha256": "7c8e1d1be9b4bd8d2dae8cd4e4e0e617c7f7e9af0b244cd679258ec47536e090",
       "purpose": "Distinguish the native metadata-only inventory from the retained legacy adapter and remove the always-loaded claim."
+    },
+    {
+      "path": "runtime/src/agent-pool/runtime-facade.ts",
+      "beforeSha256": "60b142469fd02aeb373109ebf275d08e829c4c6b8d630378e8c96c03b01f2f45",
+      "afterSha256": "1adf37474310a6b1154e8bfd9371aa7743708479ee9f9d45f1214f7e60acce7b",
+      "purpose": "Bind the reviewed integrated runtime-facade source used by the SDK and native model cutover; preserve historical retention disposition and financial accounting unchanged."
     }
   ]
 }

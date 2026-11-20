@@ -1,4 +1,5 @@
-import { assertModelContextFits, type ModelContextAdmission } from "./host-model-context.js";
+import { assertModelContextFits, modelSelectionFrame, type ModelContextAdmission } from "./host-model-context.js";
+import { resolveLiveModelSelection } from "../../src/runtime/model-catalog-refresh.js";
 import { Type } from "typebox";
 import { getSupportedThinkingLevels, type Api, type Model } from "@earendil-works/pi-ai";
 import { AgentDoc, configure, defineTool, type ConversationId, type TaskId } from "@earendil-works/pi-durable";
@@ -12,6 +13,7 @@ Codemode is available as the codemode tool with {code: "raw JavaScript"}. It run
 interface Options {
   assertCurrent(): void;
   available(): readonly Model<Api>[];
+  refresh?(signal?: AbortSignal): Promise<void>;
   prepareContext(call: { conversationId: ConversationId; taskId: TaskId; toolCallId: string }, model: { provider: string; modelId: string }, thinkingLevel?: string, signal?: AbortSignal): Promise<ModelContextAdmission>;
   assertModel(choice: { provider: string; modelId: string }): void;
   captureSourceGuard(call: { conversationId: ConversationId; taskId: TaskId; toolCallId: string }): Promise<() => void>;
@@ -24,12 +26,12 @@ const text = (value: unknown) => ({ output: [{ type: "text" as const, text: JSON
  */
 export function createHostModelTools(options: Options) {
   return hostModelToolNames.map(name => defineTool({
-    name, description: name === "list_models" ? "List currently authenticated/approved models; optional query, limit and offset."
+    name, description: name === "list_models" ? "List currently authenticated/approved models; optional query, limit, offset and refresh. refresh=true updates the shared live provider catalogue."
       : name === "get_model_state" ? "Read this conversation's persisted model and thinking level."
       : name === "switch_model" ? "Select a model for this conversation's next model request. Use provider/modelId or a unique model ID."
       : name === "switch_thinking" ? "Select a supported thinking level for this conversation's next request."
       : "Inspect or set this conversation's model and/or thinking_level. Empty arguments inspect only. Changes apply on the next request; no turn replay.",
-    parameters: name === "list_models" ? Type.Object({ query: Type.Optional(Type.String()), limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })), offset: Type.Optional(Type.Integer({ minimum: 0 })) })
+    parameters: name === "list_models" ? Type.Object({ query: Type.Optional(Type.String()), limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })), offset: Type.Optional(Type.Integer({ minimum: 0 })), refresh: Type.Optional(Type.Boolean()) })
       : name === "get_model_state" ? Type.Object({})
       : name === "switch_model" ? Type.Object({ model: Type.String() })
       : name === "switch_thinking" ? Type.Object({ level: Type.String() }) : selection,
@@ -37,9 +39,18 @@ export function createHostModelTools(options: Options) {
     async execute(raw: any, api, context) {
       options.assertCurrent();
       const guard = await options.captureSourceGuard({ conversationId: api.conversationId, taskId: api.taskId, toolCallId: api.callId });
-      const check = () => { context.abortSignal?.throwIfAborted(); options.assertCurrent(); guard(); };
+      let expected: { provider: string; id: string; frame: string } | undefined;
+      const check = () => {
+        context.abortSignal?.throwIfAborted(); options.assertCurrent(); guard();
+        if (expected) {
+          const current = options.available().find(model => model.provider === expected!.provider && model.id === expected!.id);
+          if (!current || modelSelectionFrame(current) !== expected.frame) throw Error("Model catalogue changed; retry the command.");
+        }
+      };
+      const refresh = options.refresh ? async () => { try { await options.refresh!(context.abortSignal); } finally { check(); } } : undefined;
       check();
-      const catalog = options.available();
+      if (name === "list_models" && raw.refresh) { await refresh?.(); check(); }
+      let catalog = options.available();
       if (name === "list_models") {
         const query = (raw.query ?? "").toLowerCase();
         const filtered = catalog.filter(model => `${model.provider}/${model.id} ${model.name}`.toLowerCase().includes(query));
@@ -50,9 +61,11 @@ export function createHostModelTools(options: Options) {
       }
       let choice: { provider: string; modelId: string } | undefined;
       if (raw.model !== undefined) {
-        const matches = catalog.filter(model => `${model.provider}/${model.id}` === raw.model || model.id === raw.model);
+        const matches = await resolveLiveModelSelection(raw.model, options.available, refresh);
+        check(); catalog = options.available();
         if (matches.length !== 1) return text({ error: matches.length ? "Model ID is ambiguous; use provider/modelId." : "Model is not available; use list_models." });
         choice = { provider: matches[0]!.provider, modelId: matches[0]!.id };
+        expected = { provider: matches[0]!.provider, id: matches[0]!.id, frame: modelSelectionFrame(matches[0]!) };
         options.assertModel(choice); check();
       }
       const requestedLevel = name === "switch_thinking" ? raw.level : raw.thinking_level;
@@ -71,6 +84,7 @@ export function createHostModelTools(options: Options) {
         const target = choice ?? current.model;
         const model = target && catalog.find(model => model.provider === target.provider && model.id === target.modelId);
         if (!model || !target) return { error: "Current model is not available; use list_models." };
+        expected ??= { provider: model.provider, id: model.id, frame: modelSelectionFrame(model) };
         options.assertModel(target); check();
         const supported = getSupportedThinkingLevels(model);
         const level = requestedLevel ?? current.thinkingLevel;

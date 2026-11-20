@@ -61,7 +61,8 @@ export async function createRuntimeModelServices(
   installOpenAICompletionsUsageCompatibility(modelRuntime);
   registerGitHubCopilotDynamicModels(modelRuntime);
   const modelRegistry = new PiclawModelRegistry(modelRuntime);
-  // The native backend snapshots this catalogue before AgentPool exists.
+  // Prepare cached provider metadata before AgentPool exists. The native
+  // backend consumes later authenticated catalogue publications without reopening.
   const prepared = await modelRegistry.refresh();
   if (prepared.aborted || prepared.errors.size) throw new AggregateError([...prepared.errors.values()], "Model catalogue preparation failed");
   return { credentialStore, modelRuntime, modelRegistry, agentDir };
