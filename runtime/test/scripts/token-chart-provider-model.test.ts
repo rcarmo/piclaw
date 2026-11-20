@@ -88,8 +88,8 @@ test("token-chart --mode provider-model renders an alternative chart", () => {
 
   const proc = Bun.spawnSync(
     [
-      "bun",
-      "/workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts",
+      process.execPath,
+      join(import.meta.dir, "../../skills/operator/token-chart/token-chart.ts"),
       "--days",
       "2",
       "--source",

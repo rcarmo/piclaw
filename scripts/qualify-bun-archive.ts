@@ -31,13 +31,16 @@ export async function qualifyArchive() {
     symlinkSync('file-644', join(source, 'symlink'));
     linkSync(join(source, 'file-644'), join(source, 'hardlink'));
     const tarPath = join(parent, 'metadata.tar');
-    const build = Bun.spawnSync(['tar', '-cf', tarPath, '-C', source, '.'], { stderr: 'pipe' });
+    // Name the payload before its hardlink so tar cannot choose the link as the
+    // payload owner based on the filesystem's directory iteration order.
+    const members = ['file-644', 'file-600', 'file-755', 'empty', 'symlink', 'hardlink'];
+    const build = Bun.spawnSync(['tar', '-cf', tarPath, '-C', source, ...members], { stderr: 'pipe' });
     if (build.exitCode !== 0) throw Error('Reference tar fixture failed');
     const reference = join(parent, 'reference'); mkdirSync(reference);
     if (Bun.spawnSync(['tar', '--same-permissions', '-xf', tarPath, '-C', reference], { stderr: 'pipe' }).exitCode !== 0) throw Error('Reference extraction failed');
     const candidate = join(parent, 'candidate'); mkdirSync(candidate);
     await new Bun.Archive(readFileSync(tarPath)).extract(candidate);
-    for (const name of ['file-644', 'file-600', 'file-755', 'empty', 'symlink', 'hardlink']) {
+    for (const name of members) {
       const snapshot = (root: string) => {
         const stat = lstatSync(join(root, name));
         return { mode: (stat.mode & 0o777).toString(8), uid: stat.uid, gid: stat.gid,

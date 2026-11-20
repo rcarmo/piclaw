@@ -78,7 +78,7 @@
       "semanticReaderOccurrences": 0
     },
     "tooling": {
-      "referencedNames": 93,
+      "referencedNames": 95,
       "directReaderNames": 39,
       "directReaderOccurrences": 58,
       "helperReaderNames": 0,
@@ -87,7 +87,7 @@
       "semanticReaderOccurrences": 58
     },
     "docsDeploy": {
-      "referencedNames": 154,
+      "referencedNames": 155,
       "directReaderNames": 18,
       "directReaderOccurrences": 42,
       "helperReaderNames": 0,
@@ -3569,6 +3569,21 @@
       }
     },
     {
+      "name": "PICLAW_RUN_FEATURE_TESTS",
+      "scopes": {
+        "docsDeploy": {
+          "referenced": true,
+          "directReaders": 0,
+          "helperReaders": 0,
+          "semanticReaders": 0,
+          "files": [
+            "package.json"
+          ],
+          "readerFiles": []
+        }
+      }
+    },
+    {
       "name": "PICLAW_RUN_IDLE_CPU_PROFILE",
       "scopes": {
         "docsDeploy": {
@@ -4717,7 +4732,8 @@
           "helperReaders": 0,
           "semanticReaders": 0,
           "files": [
-            "runtime/scripts/imgcat.ts"
+            "runtime/scripts/imgcat.ts",
+            "scripts/audit-piclaw-env-surface.ts"
           ],
           "readerFiles": []
         },
@@ -6372,6 +6388,16 @@
             "runtime/src/core/config-web.ts"
           ],
           "readerFiles": []
+        },
+        "tooling": {
+          "referenced": true,
+          "directReaders": 0,
+          "helperReaders": 0,
+          "semanticReaders": 0,
+          "files": [
+            "scripts/audit-piclaw-env-surface.ts"
+          ],
+          "readerFiles": []
         }
       }
     },
@@ -6397,6 +6423,16 @@
           "files": [
             "runtime/src/core/config-sources.ts",
             "runtime/src/core/config-web.ts"
+          ],
+          "readerFiles": []
+        },
+        "tooling": {
+          "referenced": true,
+          "directReaders": 0,
+          "helperReaders": 0,
+          "semanticReaders": 0,
+          "files": [
+            "scripts/audit-piclaw-env-surface.ts"
           ],
           "readerFiles": []
         }

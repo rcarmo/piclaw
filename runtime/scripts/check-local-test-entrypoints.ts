@@ -7,8 +7,6 @@ import { spawnSync } from "node:child_process";
 const ROOT = resolve(import.meta.dir, "../..");
 const ALLOWLIST = new Set([
   "runtime/scripts/local-test-priority.ts", // central launcher implementation
-  "runtime/scripts/controlled-test-runner.ts", // nested stages inherit launcher niceness
-  "runtime/test/features/run-feature-tests.ts", // nested feature subprocess inherits launcher niceness
   "runtime/test/scripts/local-test-priority.test.ts", // launcher/audit fixtures mention raw runners
   "runtime/test/scripts/controlled-test-runner.test.ts", // controlled-runner fixture
   "runtime/durable-engine/vendor/token-economizer/test/fixtures/detectors.json", // pinned upstream command-parser data, not an entrypoint

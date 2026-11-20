@@ -20,9 +20,9 @@ function createTinyControlledTestPackage(): string {
   return root;
 }
 
-function runControlled(root: string, args: string[]) {
+function runControlled(root: string, args: string[], files = ['test/sample.test.ts']) {
   return Bun.spawnSync({
-    cmd: [process.execPath, RUNNER, "--stage-size=1", "--sample-ms=50", ...args, "--", "test/sample.test.ts"],
+    cmd: [process.execPath, RUNNER, "--stage-size=1", "--sample-ms=50", ...args, "--", ...files],
     cwd: root,
     env: {
       PATH: process.env.PATH || "",
@@ -39,6 +39,21 @@ function runControlled(root: string, args: string[]) {
 }
 
 describe("controlled-test-runner report policy", () => {
+  test("early exit zero cannot qualify a stage or run the next one", () => {
+    const root = createTinyControlledTestPackage();
+    try {
+      writeFileSync(join(root, 'runtime/test/later.test.ts'), readFileSync(join(root, 'runtime/test/sample.test.ts')));
+      writeFileSync(join(root, 'runtime/test/sample.test.ts'), 'process.exit(0);\n');
+      const reportPath = join(root, 'incomplete.json');
+      const result = runControlled(root, ['--report', reportPath], ['test/sample.test.ts', 'test/later.test.ts']);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr.toString()).toContain('without its own complete JUnit artifact');
+      expect(JSON.parse(readFileSync(reportPath, 'utf8'))).toMatchObject({
+        total_files: 2, stages_completed: 1, failed_stage_index: 1, exit_code: 1,
+      });
+    } finally { rmSync(root, { force: true, recursive: true }); }
+  });
+
   test("default run does not write the legacy generated report; explicit --report writes JSON", () => {
     const root = createTinyControlledTestPackage();
     try {

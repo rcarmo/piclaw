@@ -26,7 +26,10 @@
     "./test/channels/web/input-source-admission.test.ts",
     "./test/db/store-format.test.ts",
     "./test/native-gate-contract.test.ts",
-    "./test/scripts/local-test-priority.test.ts"
+    "./test/scripts/controlled-test-runner.test.ts",
+    "./test/scripts/local-test-priority.test.ts",
+    "./test/scripts/test-filesystem-isolation.test.ts",
+    "./test/scripts/test-safety-audit.test.ts"
   ],
   "tests": [
     "accepted-steer-recovery.test.ts",

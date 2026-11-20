@@ -152,8 +152,8 @@ describe("silent-swallow-metrics", () => {
       ].join("\n"));
 
       const proc = Bun.spawnSync({
-        cmd: ["bun", "run", "runtime/scripts/silent-swallow-metrics.ts", "--check"],
-        cwd: "/workspace/piclaw",
+        cmd: [process.execPath, "run", "runtime/scripts/silent-swallow-metrics.ts", "--check"],
+        cwd: join(import.meta.dir, "../../.."),
         env: {
           ...process.env,
           PICLAW_SILENT_SWALLOW_SCAN_ROOTS: join(dir, "src"),

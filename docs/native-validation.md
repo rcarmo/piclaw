@@ -9,9 +9,9 @@
 | `make ci-full` / `bun run ci:full` | `ci:fast` followed by `ci:native` |
 | `make ci-integration` | Integration stages including required `ci:native`; Docker/Playwright skip flags do not skip native qualification |
 
-[`scripts/native-gate-contract.json`](../scripts/native-gate-contract.json) defines fixture repositories and immutable SHAs, four source-root mappings, catalogue dependencies, the two type projects, two accepted-source tests, two gate/launcher contract files and the complete required file inventory. Goal catalogue, tools, usage, settlement and terminal-race files are mandatory. No filter, skip, empty discovery or missing fixture can produce native success.
+[`scripts/native-gate-contract.json`](../scripts/native-gate-contract.json) defines fixture repositories and immutable SHAs, four source-root mappings, catalogue dependencies, the two type projects, the accepted-source and test-isolation contracts, and the complete required file inventory. Goal catalogue, tools, usage, settlement and terminal-race files are mandatory. No filter, skip, empty discovery or missing fixture can produce native success.
 
-The root and `runtime/durable-engine` each pin Pi 1.5.2, with separate physical dependency graphs and lockfiles. Qualification imports the engine graph through public re-exports; do not symlink root dependencies into the engine or mix SDK handles, contexts, telemetry spans or TypeBox objects across them. Package acquisition records the matching published bytes before offline validation.
+The root and `runtime/durable-engine` pin the SDK version named in the gate contract, with separate physical dependency graphs and lockfiles. Qualification imports the engine graph through public re-exports; do not symlink root dependencies into the engine or mix SDK handles, contexts, telemetry spans or TypeBox objects across them. Package acquisition records the matching published bytes before offline validation.
 
 The contract’s `sdkVersion` must match the root/private manifest pins, installed root SDK and byte-verified private provenance. Source qualification uses disposable stores; a directory name or historical receipt cannot establish current compatibility. The [1.4.0 qualification](development/pi-1.4.0-qualification.md) records the earlier storage-format transition only. Deployment remains separately authorised.
 

@@ -179,6 +179,7 @@ describe("audit-baseline-quality-deterministic", () => {
     expectGroup("channels-web-http-routes", "channels web http and route surfaces");
     expectGroup("channels-web-media-workspace-remote", "channels web media, workspace, and remote surfaces");
     expectGroup("service-effects", "latent service-effect contracts and compatibility");
+    expectGroup("native-mcp", "native MCP contracts and provenance");
     expectGroup("web-ui-model-catalogue", "web ui model catalogue");
     expect(groups.get("web-ui-model-catalogue")?.count).toBe(6);
     expectGroup("web-ui-interaction-and-state", "web ui interaction and state");

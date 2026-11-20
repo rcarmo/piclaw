@@ -57,7 +57,7 @@ type ControlledTestReport = {
 
 function printUsage(): void {
   console.log([
-    "Usage: bun run runtime/scripts/controlled-test-runner.ts [--stage-size N] [--sample-ms N] [--report PATH] [--no-db-in-memory] [-- <bun test args/files>]",
+    "Usage: bun run test:controlled -- [--stage-size N] [--sample-ms N] [--report PATH] [--no-db-in-memory] [-- <test options/files>]",
     "",
     "Defaults:",
     "  - discovers runtime/test/**/*.test.ts",
@@ -244,10 +244,6 @@ function readCgroupMemoryCurrent(): number | null {
   }
 }
 
-async function wait(ms: number): Promise<void> {
-  await Bun.sleep(ms);
-}
-
 async function runStage(
   runtimeDir: string,
   stage: StagePlan,
@@ -255,7 +251,7 @@ async function runStage(
   sampleMs: number,
   env: Record<string, string | undefined>,
 ): Promise<StageResult> {
-  const cmd = [process.execPath, "test", ...baseArgs, ...stage.files];
+  const cmd = [process.execPath, join(import.meta.dir, "local-test-priority.ts"), "--cwd", runtimeDir, "--", process.execPath, "test", ...baseArgs, ...stage.files];
   console.log(`\n[controlled-test] stage ${stage.index}: ${stage.files.length} file(s)`);
   if (stage.files.length <= 3) {
     for (const file of stage.files) console.log(`[controlled-test]   ${file}`);
@@ -277,8 +273,7 @@ async function runStage(
   let peakCgroupAtMs: number | null = null;
   let samples = 0;
 
-  while (true) {
-    const exitCode = child.exitCode;
+  const sample = (alive: boolean) => {
     const elapsedMs = Date.now() - startedAt;
     const processTreeRssKb = measureProcessTreeRssKb(child.pid);
     const cgroupMemoryBytes = readCgroupMemoryCurrent();
@@ -292,32 +287,32 @@ async function runStage(
       peakCgroupMemoryBytes = cgroupMemoryBytes;
       peakCgroupAtMs = elapsedMs;
     }
-
-    if (exitCode !== null) {
-      const elapsed_ms = Date.now() - startedAt;
-      return {
-        index: stage.index,
-        file_count: stage.files.length,
-        files: [...stage.files],
-        elapsed_ms,
-        exit_code: exitCode,
-        peak_process_tree_rss_kb: peakProcessTreeRssKb,
-        peak_cgroup_memory_bytes: peakCgroupMemoryBytes,
-        peak_process_tree_at_ms: peakProcessTreeAtMs,
-        peak_cgroup_at_ms: peakCgroupAtMs,
-        samples,
-      };
-    }
-
-    if (samples % Math.max(1, Math.round(5000 / sampleMs)) === 0) {
+    if (alive && samples % Math.max(1, Math.round(5000 / sampleMs)) === 0) {
       const cgroupLabel = cgroupMemoryBytes === null ? "n/a" : `${Math.round(cgroupMemoryBytes / (1024 * 1024))} MiB`;
       console.log(
         `[controlled-test] stage ${stage.index} alive: elapsed=${Math.round(elapsedMs / 1000)}s rss=${Math.round(processTreeRssKb / 1024)} MiB cgroup=${cgroupLabel}`,
       );
     }
+  };
 
-    await wait(sampleMs);
-  }
+  sample(true);
+  const timer = setInterval(() => sample(true), sampleMs);
+  let exitCode: number;
+  try { exitCode = await child.exited; }
+  finally { clearInterval(timer); }
+  sample(false);
+  return {
+    index: stage.index,
+    file_count: stage.files.length,
+    files: [...stage.files],
+    elapsed_ms: Date.now() - startedAt,
+    exit_code: exitCode,
+    peak_process_tree_rss_kb: peakProcessTreeRssKb,
+    peak_cgroup_memory_bytes: peakCgroupMemoryBytes,
+    peak_process_tree_at_ms: peakProcessTreeAtMs,
+    peak_cgroup_at_ms: peakCgroupAtMs,
+    samples,
+  };
 }
 
 async function main(): Promise<void> {

@@ -141,7 +141,11 @@ function scanFileTexts(fileTexts: Record<string, string>, scopes: typeof scanSco
   }
   return entries;
 }
-function readAllScanFiles(scopes: typeof scanScopes): Record<string, string> { return Object.fromEntries(Array.from(new Set(Object.values(scopes).flat().flatMap(walk))).sort().map((file) => [file, readFileSync(resolve(repoRoot, file), "utf8")])); }
+function readAllScanFiles(scopes: typeof scanScopes): Record<string, string> {
+  const roots = [...new Set(Object.values(scopes).flat())];
+  const files = [...new Set(roots.flatMap(walk))].sort();
+  return Object.fromEntries(files.map(file => [file, readFileSync(resolve(repoRoot, file), "utf8")]));
+}
 function toObservationEntries(raw: Map<string, RawEntry>): ObservationEntry[] { return Array.from(raw.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([name, rawEntry]) => { const scopesOut: Partial<Record<ScopeName, ScopeObservation>> = {}; for (const [scope, scoped] of Object.entries(rawEntry) as Array<[ScopeName, RawScopeEntry]>) scopesOut[scope] = { referenced: scoped.referenced, directReaders: scoped.directReaders, helperReaders: scoped.helperReaders, semanticReaders: scoped.directReaders + scoped.helperReaders, files: Array.from(scoped.files).sort(), readerFiles: Array.from(scoped.readerFiles).sort() }; return { name, scopes: scopesOut }; }); }
 function scopeStats(entries: ObservationEntry[], scope: ScopeName): ScopeStats { const scoped = entries.map((entry) => entry.scopes[scope]).filter((entry): entry is ScopeObservation => Boolean(entry)); return { referencedNames: scoped.filter((entry) => entry.referenced).length, directReaderNames: scoped.filter((entry) => entry.directReaders > 0).length, directReaderOccurrences: scoped.reduce((sum, entry) => sum + entry.directReaders, 0), helperReaderNames: scoped.filter((entry) => entry.helperReaders > 0).length, helperReaderOccurrences: scoped.reduce((sum, entry) => sum + entry.helperReaders, 0), semanticReaderNames: scoped.filter((entry) => entry.semanticReaders > 0).length, semanticReaderOccurrences: scoped.reduce((sum, entry) => sum + entry.semanticReaders, 0) }; }
 function loadRuntimeSrcDirectBaseline(currentNames: string[]): BaselineFile { if (existsSync(runtimeSrcBaselinePath)) return JSON.parse(readFileSync(runtimeSrcBaselinePath, "utf8")) as BaselineFile; return { version: 1, source: "initial #747 tranche-1 snapshot from cddc4d3e9", names: currentNames }; }
@@ -165,6 +169,13 @@ function isPlaceholder(value: unknown): boolean { return value === "unknown" || 
 export function validateScanContract(observations = buildObservations()): void {
   if (observations.scanRootVersion !== scanRootVersion) throw new Error("Scan root version drift");
   if (JSON.stringify(observations.scanScopes) !== JSON.stringify(scanScopes)) throw new Error("Scan root scope drift");
+  const webAliases = new Set(["PICLAW_TERMINAL_IMAGE_PROTOCOL", "PICLAW_WEB_PUSH_SUBSCRIPTION_CAP", "PICLAW_WEB_PUSH_VAPID_SUBJECT"]);
+  for (const entry of observations.entries) {
+    if (!webAliases.has(entry.name)) continue;
+    for (const file of entry.scopes.runtimeSrc?.readerFiles ?? []) {
+      if (file !== "runtime/src/core/config.ts") throw new Error(`Web compatibility env reader outside core config: ${entry.name} in ${file}`);
+    }
+  }
   if (observations.runtimeSrcDirectBaseline.added.length > 0 || observations.runtimeSrcDirectBaseline.removed.length > 0) {
     throw new Error(
       `Runtime src direct-reader name drift: added=${observations.runtimeSrcDirectBaseline.added.join(",") || "none"} removed=${observations.runtimeSrcDirectBaseline.removed.join(",") || "none"}`,
@@ -194,8 +205,8 @@ export function validateSupportCatalog(catalog = buildSupportCatalog(), observat
   for (const entry of catalog.entries) if (entry.bootstrapAllowed && !bootstrapSet.has(entry.name)) throw new Error(`Catalog bootstrapAllowed not in allowlist: ${entry.name}`);
 }
 export function stableJson(value: unknown): string { return `${JSON.stringify(value, null, 2)}\n`; }
-export function isObservationTextCurrent(current: string): boolean { return current === stableJson(buildObservations()); }
-export function isCatalogTextCurrent(current: string): boolean { return current === stableJson(buildSupportCatalog()); }
+export function isObservationTextCurrent(current: string, observations: Observations): boolean { return current === stableJson(observations); }
+export function isCatalogTextCurrent(current: string, catalog: ReturnType<typeof buildSupportCatalog>): boolean { return current === stableJson(catalog); }
 
 function currentRuntimeSrcDirectNames(observations: Observations): string[] {
   return observations.entries.filter((entry) => (entry.scopes.runtimeSrc?.directReaders ?? 0) > 0).map((entry) => entry.name).sort();
@@ -221,7 +232,7 @@ function main(): void {
   const catalog = buildSupportCatalog();
   validateSupportCatalog(catalog, observations);
   if (process.argv.includes("--write")) { mkdirSync(dirname(observationsPath), { recursive: true }); writeFileSync(observationsPath, stableJson(observations)); if (!existsSync(runtimeSrcBaselinePath)) writeFileSync(runtimeSrcBaselinePath, stableJson({ version: 1, source: observations.runtimeSrcDirectBaseline.source, names: observations.runtimeSrcDirectBaseline.names })); }
-  if (process.argv.includes("--check")) { const obs = existsSync(observationsPath) ? readFileSync(observationsPath, "utf8") : ""; if (!isObservationTextCurrent(obs)) throw new Error(`${relative(repoRoot, observationsPath)} is stale. Run: bun run scripts/audit-piclaw-env-surface.ts --write`); if (!isCatalogTextCurrent(readFileSync(catalogPath, "utf8"))) throw new Error(`${relative(repoRoot, catalogPath)} is stale`); console.log(`[env-surface] ok runtime_src_direct=${observations.current.runtimeSrc.directReaderNames} production_direct=${observations.current.production.directReaderNames} extension_delta=${observations.extensionDelta.directReaderNamesOnlyInExtensions.join(",") || "none"}`); return; }
+  if (process.argv.includes("--check")) { const obs = existsSync(observationsPath) ? readFileSync(observationsPath, "utf8") : ""; if (!isObservationTextCurrent(obs, observations)) throw new Error(`${relative(repoRoot, observationsPath)} is stale. Run: bun run scripts/audit-piclaw-env-surface.ts --write`); if (!isCatalogTextCurrent(readFileSync(catalogPath, "utf8"), catalog)) throw new Error(`${relative(repoRoot, catalogPath)} is stale`); console.log(`[env-surface] ok runtime_src_direct=${observations.current.runtimeSrc.directReaderNames} production_direct=${observations.current.production.directReaderNames} extension_delta=${observations.extensionDelta.directReaderNamesOnlyInExtensions.join(",") || "none"}`); return; }
   console.log(JSON.stringify({ current: observations.current, baselineDelta: observations.runtimeSrcDirectBaseline, extensionDelta: observations.extensionDelta }, null, 2));
 }
 if (import.meta.main) main();

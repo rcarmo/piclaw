@@ -19,14 +19,15 @@ function projectRoot(): string {
 
 test("build:web produces bundle assets", async () => {
   const root = projectRoot();
-  const proc = Bun.spawn(["bun", "run", "build:web"], {
+  const proc = Bun.spawn([process.execPath, "run", "build:web"], {
     cwd: root,
     stdout: "pipe",
     stderr: "pipe",
   });
-
-  const exitCode = await proc.exited;
-  expect(exitCode).toBe(0);
+  const [exitCode, stdout, stderr] = await Promise.all([
+    proc.exited, new Response(proc.stdout).text(), new Response(proc.stderr).text(),
+  ]);
+  expect(exitCode, stderr || stdout).toBe(0);
 
   const appBundlePath = join(root, "web", "static", "classic", "dist", "app.bundle.js");
   const appMapPath = join(root, "web", "static", "classic", "dist", "app.bundle.js.map");

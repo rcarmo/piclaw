@@ -17,10 +17,11 @@ test('Pele vendor is a deterministic classic script with truthful metadata and c
     const checkedIn = readFileSync(join(root, 'runtime/web/static/common/js/vendor/pele.js'));
     expect(bytes.equals(checkedIn)).toBe(true);
     const meta = JSON.parse(readFileSync(metadata, 'utf8'));
-    expect(meta.manifest_id).toBe('pele'); expect(meta.package_name).toBe('pele'); expect(meta.package_version).toBe('1.6.0');
+    const pins = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    expect(meta.manifest_id).toBe('pele'); expect(meta.package_name).toBe('pele'); expect(meta.package_version).toBe(pins.dependencies.pele);
     expect(meta.sha256).toBe(createHash('sha256').update(bytes).digest('hex')); expect(meta.size_bytes).toBe(bytes.length);
     expect(meta.build_command).toContain('--format=iife');
-    expect(meta.package_versions.dompurify).toBe('3.4.16');
+    expect(meta.package_versions.dompurify).toBe(pins.devDependencies.dompurify);
     const context: Record<string, any> = {};
     runInNewContext(bytes.toString(), context);
     expect(typeof context.piclawDiagrams.render).toBe('function');

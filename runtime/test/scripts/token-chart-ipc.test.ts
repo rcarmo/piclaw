@@ -32,8 +32,8 @@ test("token chart --ipc writes JSON message safely", () => {
   writeFileSync(join(sessionsDir, "session.jsonl"), JSON.stringify(entry));
 
   const proc = Bun.spawnSync([
-    "bun",
-    "/workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts",
+    process.execPath,
+    join(import.meta.dir, "../../skills/operator/token-chart/token-chart.ts"),
     "--days",
     "1",
     "--sessions-dir",
