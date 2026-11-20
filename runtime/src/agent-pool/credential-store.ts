@@ -152,6 +152,7 @@ function parseCredentialData(content: string | undefined): CredentialData {
 /** App-owned, cross-process serialized CredentialStore for ModelRuntime. */
 export class FileCredentialStore implements PiclawCredentialStore {
   private data: CredentialData = {};
+  private pendingRead: Promise<CredentialData> | undefined;
   private errors: Error[] = [];
   private readonly oauthRefreshRetry: OAuthRefreshRetryOptions;
 
@@ -242,14 +243,28 @@ export class FileCredentialStore implements PiclawCredentialStore {
     return drained;
   }
 
+  private readSnapshot(): Promise<CredentialData> {
+    if (this.pendingRead) return this.pendingRead;
+    // SDK discovery asks about many providers at once. Calls waiting for the
+    // same file can share its locked read, but not a snapshot already taken.
+    const pending = this.withLock(async (data) => {
+      this.pendingRead = undefined;
+      return data;
+    }).finally(() => {
+      if (this.pendingRead === pending) this.pendingRead = undefined;
+    });
+    this.pendingRead = pending;
+    return pending;
+  }
+
   async read(providerId: string): Promise<Credential | undefined> {
-    const current = await this.withLock(async (data) => data);
+    const current = await this.readSnapshot();
     this.data = current;
     return resolveCredential(current[providerId]);
   }
 
   async list(): Promise<readonly CredentialInfo[]> {
-    const current = await this.withLock(async (data) => data);
+    const current = await this.readSnapshot();
     this.data = current;
     return Object.entries(current).map(([providerId, credential]) => ({ providerId, type: credential.type }));
   }

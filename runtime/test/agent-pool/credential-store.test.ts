@@ -108,6 +108,63 @@ describe("FileCredentialStore", () => {
     expect(await store.read("test")).toEqual({ type: "api_key", key: "12", env: { n: "12" } });
   });
 
+  test("concurrent reads and inventory take one locked snapshot and return only their own detached values", async () => {
+    const { store } = await createStore({
+      first: { type: "api_key", key: "one", env: { EXAMPLE: "fixture" } },
+      second: { type: "api_key", key: "two" },
+    });
+    const lockSpy = spyOn(lockfile, "lock");
+    try {
+      const [first, again, second, absent, info] = await Promise.all([
+        store.read("first"), store.read("first"), store.read("second"), store.read("other"), store.list(),
+      ]);
+      expect(lockSpy).toHaveBeenCalledTimes(1);
+      expect(first).toEqual({ type: "api_key", key: "one", env: { EXAMPLE: "fixture" } });
+      if (first?.type === "api_key") first.env!.EXAMPLE = "changed";
+      expect(again).toEqual({ type: "api_key", key: "one", env: { EXAMPLE: "fixture" } });
+      expect(second).toEqual({ type: "api_key", key: "two" });
+      expect(absent).toBeUndefined();
+      expect(info).toEqual([{ providerId: "first", type: "api_key" }, { providerId: "second", type: "api_key" }]);
+    } finally { lockSpy.mockRestore(); }
+  });
+
+  test("a read after an intervening committed write does not join a previously captured snapshot", async () => {
+    const { authPath, store } = await createStore({ test: { type: "api_key", key: "before" } });
+    const captured = Promise.withResolvers<void>();
+    const settle = Promise.withResolvers<void>();
+    const originalLock = lockfile.lock;
+    let delayFirst = true;
+    const lockSpy = spyOn(lockfile, "lock").mockImplementation(async (path, options) => {
+      const first = delayFirst;
+      delayFirst = false;
+      const release = await originalLock(path, options);
+      if (!first) return release;
+      return (async () => {
+        await release();
+        captured.resolve();
+        await settle.promise;
+      }) as typeof release;
+    });
+    const previous = store.read("test");
+    try {
+      await captured.promise;
+      await new FileCredentialStore(authPath).modify("test", async () => ({ type: "api_key", key: "after" }));
+      const next = store.read("test");
+      settle.resolve();
+      expect(await previous).toEqual({ type: "api_key", key: "before" });
+      expect(await next).toEqual({ type: "api_key", key: "after" });
+    } finally { settle.resolve(); await Promise.allSettled([previous]); lockSpy.mockRestore(); }
+  });
+
+  test("a failed shared snapshot is not reused by later reads", async () => {
+    const { authPath, store } = await createStore({ test: { type: "api_key", key: "before" } });
+    writeFileSync(authPath, "{");
+    const reads = await Promise.allSettled([store.read("test"), store.list()]);
+    expect(reads.map(read => read.status)).toEqual(["rejected", "rejected"]);
+    writeFileSync(authPath, JSON.stringify({ test: { type: "api_key", key: "restored" } }));
+    expect(await store.read("test")).toEqual({ type: "api_key", key: "restored" });
+  });
+
   test("cross-instance reads and writes refresh from the locked file", async () => {
     const { authPath, store } = await createStore({ first: { type: "api_key", key: "one" } });
     const other = new FileCredentialStore(authPath);
