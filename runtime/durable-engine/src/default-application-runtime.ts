@@ -63,6 +63,8 @@ import { createHostFetch } from "./host-fetch.js";
 import { taskModelRequestScope, taskModelHookScope, taskModelToolScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
 import { createHostBuiltinTools } from "./host-builtins.js";
 import { createHostModelTools, nativeToolInstructions } from "./host-model-controls.js";
+import { createHostKeychainTool } from "./host-keychain-tool.js";
+import { keychainInstructions } from "../../src/secure/keychain-inventory.js";
 import { createHostCommandPolicy } from "./host-command-policy.js";
 import { createHostProcessControls, nativeProcessInstructions } from "./host-process-controls.js";
 import { inspectAddonInstall, loadApplicationExtensionCatalog, qualifyInstalledAddon, bindInstalledAddon, qualifyInstalledCodeReview, qualifyInstalledEditableTable, qualifyInstalledOfficeViewer, qualifyInstalledDrawio, qualifyInstalledGoal, qualifyInstalledObservability, qualifyInstalledRestic, assertApplicationExtensionCatalogSupported } from "./host-extension-catalog.js";
@@ -800,7 +802,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   };
   const instructionsFor = (chatJid?: string) => loadHostInstructions({ cwd: WORKSPACE_DIR, agentDir: getPiclawAgentDir(),
     projectTrusted: true, additionalSkillPaths: [...settings.getSkillPaths(), ...infrastructure.flatMap(item => [...item.skillPaths]), ...resourceQualifications.flatMap(item => [...item.skillPaths]), ...(regrets?.skillPaths ?? [])],
-    channelAppendix: [nativeToolInstructions, nativeProcessInstructions, delegateInstructions, chatJid ? buildChannelSystemPromptAppendix(detectChannel(chatJid), chatJid) ?? "" : "", ...infrastructure.map(infrastructurePrompt)].filter(Boolean).join("\n\n") });
+    channelAppendix: [nativeToolInstructions, nativeProcessInstructions, keychainInstructions, delegateInstructions, chatJid ? buildChannelSystemPromptAppendix(detectChannel(chatJid), chatJid) ?? "" : "", ...infrastructure.map(infrastructurePrompt)].filter(Boolean).join("\n\n") });
   const instructionUpgrades = new Map<number, string>();
   // Validate stored choices without opening/writing SDK documents or bundle ports.
   if (root.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='documents'").get()) {
@@ -1018,6 +1020,10 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       terminalBroadcast?.("models_refreshed", { status: outcome.status });
     },
     assertModel: choice => check({ provider: choice.provider, id: choice.modelId }, lifetime.signal),
+    captureSourceGuard: captureSource,
+  }));
+  tools.push(createHostKeychainTool({
+    assertCurrent() { assert(); lifetime.signal.throwIfAborted(); if (readAccessConfig().mode !== "single-user") throw Error("Keychain inventory requires single-user policy"); },
     captureSourceGuard: captureSource,
   }));
   tools.push(...infrastructureTools, ...(codexGroup?.tools ?? []));

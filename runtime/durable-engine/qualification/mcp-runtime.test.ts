@@ -1,6 +1,6 @@
 import {afterEach,expect,test} from 'bun:test';
 import {Database} from 'bun:sqlite';
-import {createRegistry,Harness,MemoryStorage,defineExtension,defineTool,type ToolExecutionApi,type ConversationId} from '@earendil-works/pi-durable';
+import {createRegistry,Harness,MemoryStorage,defineExtension,defineTool,type ToolExecutionApi,type ConversationId,type TaskId} from '@earendil-works/pi-durable';
 import {createCodemodeTool} from '@earendil-works/pi-durable/codemode';
 import {CodemodeSandbox} from '@earendil-works/pi-codemode';
 import {BACKGROUND_CONTEXT as context} from '@earendil-works/chord/context';
@@ -8,6 +8,23 @@ import {createModels,fauxProvider,fauxAssistantMessage,fauxToolCall,contentText}
 import {McpConnectionStore} from '../src/mcp/connections.ts';
 import {createMcpRuntime} from '../src/mcp/runtime.ts';
 import {connectMcpHttp} from '../src/mcp/client.ts';
+import {recordingOptimizerCalls} from '../src/optimizer-codemode.ts';
+
+test('optimizer receipts preserve a non-waiting SDK call and record only the observed outcome',async()=>{
+ const receipts:Record<string,boolean>={},phases:string[]=[];let starts=0,waits=0;
+ const taskId=23 as TaskId,result={taskId,structuredOutput:{original:'kept'},isError:false,diagnostics:[]};
+ const api={taskId:7,conversationId:1,callId:'caller',
+  async commit(body:any){await body({doc:async()=>receipts,appendEntry:async(_def:any,_conversation:any,{data}:any)=>phases.push(data.phase)});},
+  async executeTool(name:string,args:unknown,ctx:unknown,options:unknown){
+   starts++;expect(name).toBe('mcp__test__nested');expect(args).toEqual({});expect(ctx).toBe(context);expect(options).toEqual({key:'nested',wait:false});
+   return {taskId:result.taskId,async result(ctx:unknown){expect(ctx).toBe(context);waits++;return result;}};
+  },
+ } as unknown as ToolExecutionApi;
+ const handle=await recordingOptimizerCalls(api).executeTool('mcp__test__nested',{},context,{key:'nested',wait:false});
+ expect(handle.taskId).toBe(taskId);expect(waits).toBe(0);expect(phases).toEqual(['start']);
+ expect(await handle.result(context)).toBe(result);expect(await handle.result(context)).toBe(result);
+ expect(starts).toBe(1);expect(waits).toBe(2);expect(phases).toEqual(['start','end']);
+});
 const cleanup:(()=>Promise<void>)[]=[];afterEach(async()=>{for(const close of cleanup.splice(0).reverse())await close();});
 async function fixture(initialFailures=0){
  let calls=0,source=true,attempts=0,failCalls=false,failClose=false,closes=0;const methods:string[]=[];

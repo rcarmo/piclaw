@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'bun:test';
+import { afterEach, expect, spyOn, test } from 'bun:test';
 import { lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import pathModule, { dirname, join } from 'node:path';
 
@@ -213,6 +213,11 @@ test('handleInstallAddon installs public tarball addons without repo-tree fallba
       if (href.includes('rcarmo/piclaw-addons/main/catalog.json')) {
         return new Response(JSON.stringify({ source: 'default', addons: [{ slug: 'goal', name: '@rcarmo/piclaw-addon-goal', version: '99.0.0', install: { kind: 'tarball', spec: 'https://example.invalid/DO-NOT-NORMALIZE.tgz' } }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
+      if (href.endsWith('/piclaw-addon-observability-0.1.2.tgz')) {
+        const response = new Response(Bun.file(tarballPath).stream());
+        response.arrayBuffer = async () => { throw Error('Package download must not buffer the archive'); };
+        return response;
+      }
       return new Response('not found', { status: 404 });
     }) as typeof fetch;
 
@@ -222,9 +227,6 @@ test('handleInstallAddon installs public tarball addons without repo-tree fallba
         return args.join(' ') === 'bun install --force --omit=peer'
           ? { ok: true, exitCode: 0, stdout: 'installed', stderr: '' }
           : { ok: false, exitCode: 1, stdout: '', stderr: 'unexpected bun command' };
-      },
-      async downloadUrlToFile(_url, destPath) {
-        writeFileSync(destPath, readFileSync(tarballPath));
       },
     });
 
@@ -522,6 +524,27 @@ test('handleAddonAssetRequest serves transpiled addon browser modules', async ()
     expect(response?.status).toBe(200);
     expect(response?.headers.get('Content-Type')).toContain('text/javascript');
     expect(await response?.text()).toContain('const answer = 42');
+  });
+});
+
+test('handleAddonAssetRequest streams built JavaScript unchanged and HEAD opens no asset', async () => {
+  await withTempWorkspaceEnv('piclaw-addon-prebuilt-asset-', {}, async (workspace) => {
+    const path = join(workspace.workspace, '.pi/extensions/node_modules/piclaw-addon-example/web/vendor.js');
+    mkdirSync(dirname(path), { recursive: true });
+    const source = '/*! pinned vendor */\nexport const vendor =  123;\n';
+    writeFileSync(path, source);
+    const route = '/agent/addons/assets/piclaw-addon-example/web/vendor.js';
+    const file = spyOn(Bun, 'file');
+    try {
+      const head = await handleAddonAssetRequest(new Request('http://localhost' + route, { method: 'HEAD' }), route);
+      expect(head?.status).toBe(200);
+      expect(head?.body).toBeNull();
+      expect(file).not.toHaveBeenCalled();
+      const get = await handleAddonAssetRequest(new Request('http://localhost' + route), route);
+      expect(get?.headers.get('Content-Type')).toContain('text/javascript');
+      expect(await get?.text()).toBe(source);
+      expect(file).toHaveBeenCalledWith(path);
+    } finally { file.mockRestore(); }
   });
 });
 

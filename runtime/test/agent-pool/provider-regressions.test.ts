@@ -7,6 +7,8 @@ import {
   processResponsesStream,
 } from "@earendil-works/pi-ai/api/openai-responses-shared";
 import { stream as streamOpenAIResponses } from "@earendil-works/pi-ai/api/openai-responses";
+import { stream as streamOpenAICompletions } from "@earendil-works/pi-ai/api/openai-completions";
+import { normalizeContext } from "@earendil-works/pi-ai/utils/transcript";
 
 function azureModel(): Model<"azure-openai-responses"> {
   return {
@@ -93,11 +95,11 @@ describe("Earendil provider regressions (SDK 1.4.0)", () => {
     expect(openCodeResponses?.compat).toMatchObject({ sessionAffinityFormat: "openai-nosession" });
   });
 
-  test("Moonshot Kimi K3 metadata uses OpenAI thinking format with reasoning effort support", () => {
+  test("Moonshot Kimi K3 uses OpenAI thinking format and sends the system role", async () => {
     for (const provider of ["moonshotai", "moonshotai-cn"] as const) {
       const kimiK3 = getBuiltinModels(provider).find((model) => model.id === "kimi-k3");
       expect(kimiK3, provider).toBeDefined();
-      expect(kimiK3?.api).toBe("openai-completions");
+      if (!kimiK3 || kimiK3.api !== "openai-completions") throw Error("Missing Moonshot completions model");
       expect(kimiK3?.reasoning).toBe(true);
       expect(kimiK3?.thinkingLevelMap).toMatchObject({ low: "low", high: "high", max: "max" });
       expect(kimiK3?.thinkingLevelMap?.minimal).toBeNull();
@@ -105,11 +107,19 @@ describe("Earendil provider regressions (SDK 1.4.0)", () => {
       expect(kimiK3?.compat).toMatchObject({
         thinkingFormat: "openai",
         supportsReasoningEffort: true,
-        supportsDeveloperRole: false,
         requiresReasoningContentOnAssistantMessages: true,
         supportsMidConvoSystemMessages: true,
         supportsMidConvoToolAdditions: true,
       });
+      // 1.6 derives this role from the provider rather than storing false on the model.
+      let payload: unknown;
+      const stream = streamOpenAICompletions(kimiK3, normalizeContext({ systemPrompt: "fixture system", messages: [{ role: "user", content: "hello", timestamp: 0 }] }), {
+        apiKey: "synthetic-key", reasoningEffort: "high",
+        onPayload: value => { payload = value; },
+        fetch: async () => new Response("data: [DONE]\n\n", { headers: { "content-type": "text/event-stream" } }),
+      });
+      await stream.result();
+      expect(payload).toMatchObject({ messages: [{ role: "system", content: "fixture system" }, { role: "user", content: "hello" }], reasoning_effort: "high" });
     }
   });
 

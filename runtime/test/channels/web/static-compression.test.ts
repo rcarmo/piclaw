@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
-import { gunzipSync } from "bun";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { withTempWorkspaceEnv } from "../../helpers.js";
 
 import { serveStatic } from "../../../src/channels/web/http/static.js";
 import { getRouteFlags, isPublicWidgetAssetPath, shouldSkipAuthCheck } from "../../../src/channels/web/http/route-flags.js";
@@ -30,32 +32,36 @@ function notFound(): Response {
   return new Response("not found", { status: 404 });
 }
 
-test("serveStatic gzip-compresses compressible assets when requested", async () => {
-  const req = new Request("https://example.test/static/classic/dist/app.bundle.css", {
-    headers: { "Accept-Encoding": "gzip" },
+test("large static assets use build-time sidecars or stream original bytes; HEAD never compresses", async () => {
+  await withTempWorkspaceEnv("static-gzip-stream-", {}, async workspace => {
+    const path = join(workspace.workspace, "bundle.js");
+    const text = "/* vendor fixture */\n".repeat(200_000);
+    writeFileSync(path, text);
+    writeFileSync(join(workspace.workspace, "packed.js"), text);
+    writeFileSync(join(workspace.workspace, "packed.js.gz"), Bun.gzipSync(new TextEncoder().encode(text)));
+    // A fresh process reads the fixture's static root at module evaluation.
+    const moduleUrl = new URL("../../../src/channels/web/http/static.ts", import.meta.url).href;
+    const child = Bun.spawn([process.execPath, "--no-env-file", "-e", `
+      import assert from 'node:assert/strict';
+      const {serveStatic:serve} = await import(${JSON.stringify(moduleUrl)});
+      Bun.gzipSync = () => { throw Error('Static fallback must not compress whole-file buffers'); };
+      const request = (name, method) => new Request('https://example.test/static/'+name, {method, headers:{'Accept-Encoding':'br, gzip'}});
+      const notFound = () => new Response(null,{status:404});
+      for (const [name, encoding] of [['bundle.js',null],['packed.js','gzip']]) {
+        const head = await serve(name, notFound, request(name,'HEAD'));
+        assert.equal(head.status,200); assert.equal(head.headers.get('Content-Encoding'),encoding); assert.equal(head.body,null);
+        for (let i=0;i<2;i++) {
+          const get = await serve(name, notFound, request(name,'GET'));
+          assert.equal(get.headers.get('Content-Encoding'),encoding);
+          assert.equal(get.headers.get('Vary'),'Accept-Encoding');
+          const body = encoding ? new Response(get.body.pipeThrough(new DecompressionStream('gzip'))) : get;
+          assert.equal(await body.text(),'/* vendor fixture */\\n'.repeat(200_000));
+        }
+      }
+    `], {env:{...process.env,PICLAW_WEB_STATIC_DIR:workspace.workspace},stderr:"pipe",stdout:"ignore"});
+    const [exit, error] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+    expect(exit, error).toBe(0);
   });
-
-  const response = await serveStatic("classic/dist/app.bundle.css", notFound, req);
-
-  expect(response.status).toBe(200);
-  expect(response.headers.get("Content-Encoding")).toBe("gzip");
-  expect(response.headers.get("Vary")).toBe("Accept-Encoding");
-  expect(response.headers.get("Content-Type")).toContain("text/css");
-
-  const compressed = new Uint8Array(await response.arrayBuffer());
-  const text = new TextDecoder().decode(gunzipSync(Buffer.from(compressed)));
-  expect(text).toContain(":root");
-});
-
-test("serveStatic falls back to runtime gzip when brotli is accepted but no sidecar exists", async () => {
-  const req = new Request("https://example.test/static/classic/dist/app.bundle.css", {
-    headers: { "Accept-Encoding": "br, gzip" },
-  });
-
-  const response = await serveStatic("classic/dist/app.bundle.css", notFound, req);
-
-  expect(response.status).toBe(200);
-  expect(response.headers.get("Content-Encoding")).toBe("gzip");
 });
 
 test("serveStatic serves vendored ESM modules with a JavaScript MIME type", async () => {
@@ -67,7 +73,7 @@ test("serveStatic serves vendored ESM modules with a JavaScript MIME type", asyn
   expect(response.headers.get("Vary")).toBe("Accept-Encoding");
 });
 
-test("serveStatic gzip-compresses wasm assets when requested", async () => {
+test("serveStatic preserves the wasm MIME type and bytes", async () => {
   const req = new Request("https://example.test/static/common/js/vendor/remote-display-decoder.wasm", {
     headers: { "Accept-Encoding": "gzip" },
   });
@@ -75,12 +81,11 @@ test("serveStatic gzip-compresses wasm assets when requested", async () => {
   const response = await serveStatic("common/js/vendor/remote-display-decoder.wasm", notFound, req);
 
   expect(response.status).toBe(200);
-  expect(response.headers.get("Content-Encoding")).toBe("gzip");
   expect(response.headers.get("Vary")).toBe("Accept-Encoding");
   expect(response.headers.get("Content-Type")).toBe("application/wasm");
-
-  const compressed = new Uint8Array(await response.arrayBuffer());
-  const wasm = new Uint8Array(gunzipSync(Buffer.from(compressed)));
+  const body = response.headers.get("Content-Encoding") === "gzip"
+    ? new Response(response.body!.pipeThrough(new DecompressionStream("gzip"))) : response;
+  const wasm = new Uint8Array(await body.arrayBuffer());
   expect(Array.from(wasm.slice(0, 4))).toEqual([0x00, 0x61, 0x73, 0x6d]);
 });
 

@@ -1212,7 +1212,7 @@ pi-durable:   sha512-2aD0xead1LH0BBwUBxex28in/PpUJEwyaEiW/nLoTFUcZ/lDYEl6LHX6mGZ
 pi-telemetry: sha512-ERGZr+aXjNJzoUbB7ZzHVH3g5otzMHjHLs2Fyizm12By5X+gBEhod9cJXFOk13S7M8a29Am+Mq21zm73mRJFLg==
 ```
 
-`provenance.json` records acquisition time, exact URLs, both registry digests and
+`provenance-1.6.0.json` records acquisition time, exact URLs, both registry digests and
 SHA256 of **all 1,387 published files**, including README, package metadata and
 all dist JS/declarations/maps. `src/provenance.ts --record` explicitly downloads
 metadata and archives, verifies SHA1 and SHA512, extracts to a disposable temp

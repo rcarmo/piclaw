@@ -254,7 +254,7 @@ test("actual SDK model and nested tool identities retain their initial-record ha
     expect(scope!.checkpointHash).toMatch(/^[a-f0-9]{64}$/);expect(Object.isFrozen(scope)).toBe(true);
     // The metadata adapter hashes initial call input, before the SDK intent.
     // Reconstruct that public initial value only for the hash assertion below.
-    prepared.set(api.taskId,{scope:scope!,record:{...record,state:{status:"running",checkpoint:ToolTask.definition.initial(record.input as ToolTaskInput)}}});
+    prepared.set(api.taskId,{scope:scope!,record:{...record,state:{status:"running",checkpoint:JSON.parse(JSON.stringify(ToolTask.definition.initial(record.input as ToolTaskInput)))}}});
     expectOnlyCurrentTool(scope!);
     expect(taskModelRequestScope(scope!.signal)).toBe(scope);
     // The actual SDK has committed execute intent, but this is still the call

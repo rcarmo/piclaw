@@ -59,7 +59,7 @@ const SAFE_PARAMETER_EXCEPTIONS = Object.freeze([
   safeException("env", ["action", "limit"], "Closed environment operation and bounded listing count reveal no variable names or values."),
   safeException("image_process", ["action", "format", "quality", "width", "height", "fit", "left", "top", "angle", "sigma", "gravity", "preserve_transparency", "overwrite", "animated", "delay", "loop", "frame_count", "direction", "brightness", "saturation", "hue", "gamma", "contrast", "tint_color", "clahe_width", "clahe_height", "threshold_value", "median_size", "extend_top", "extend_bottom", "extend_left", "extend_right", "extend_background", "channel", "text_color", "text_size", "density", "tile_size", "affine_matrix", "strip_metadata"], "Closed image-operation selectors and numeric/rendering controls expose transformation mechanics; paths, overlays, and text remain protected."),
   safeException("bun_run", ["timeout_sec", "capture_stdout"], "Timeout and output-capture controls contain no script path, arguments, working directory, or process output."),
-  safeException("keychain", ["action", "field", "type", "limit"], "Closed keychain operation/field/type selectors and a bound contain no entry name, username, or secret."),
+  safeException("keychain", ["action", "limit", "offset"], "The closed list action and pagination bounds contain no entry name or credential value."),
   safeException("ssh", ["action", "ssh_port", "strict_host_key_checking"], "Closed profile action, numeric port, and host-key policy expose no target, chat identity, or keychain entry names."),
   safeException("cdp_browser", ["action", "ms", "landscape", "displayHeaderFooter", "preferCSSPageSize"], "The closed browser action, wait duration, and PDF layout booleans are execution controls; expressions, URLs, match text, selectors, paths, and templates remain protected."),
 ]);
@@ -150,6 +150,15 @@ describe("WP-3C protected trace/projection oracle", () => {
     expect(inventory.fieldsByTool).toEqual({});
     expect(inventory.unresolvedSchemas).toEqual([{ file: "fixture.ts", registration: "fixture_tool#externalSchema" }]);
     expect(Object.isFrozen(inventory.unresolvedSchemas)).toBeTrue();
+  });
+
+  test("follows a shared local schema without executing its module", () => {
+    const inventory = extractLiteralRegistrationParameterFields("tools/fixture.ts", `
+      import { parameters as schema } from "../schema.js";
+      pi.registerTool({ name: "fixture_tool", parameters: schema });
+    `, { "schema.ts": `throw Error("must not execute"); export const parameters = Type.Object({ query: Type.String() });` });
+    expect(inventory.fieldsByTool).toEqual({ fixture_tool: ["query"] });
+    expect(inventory.unresolvedSchemas).toEqual([]);
   });
 
   // Source-wide AST audit; this is not a runtime latency assertion.

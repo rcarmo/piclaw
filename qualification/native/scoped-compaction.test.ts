@@ -8,7 +8,7 @@ import {SqliteStorage} from '../../runtime/durable-engine/qualification/sqlite.t
 import {BunSqliteDatabase} from '../../runtime/durable-engine/src/bun-sqlite.ts';
 import {createHostController} from '../../runtime/durable-engine/src/host-controller.ts';
 import type {AcceptedInput} from '../../runtime/durable-engine/src/host-runtime.ts';
-import {withTaskModelRequestScope,taskModelRequestScope} from '../../runtime/durable-engine/src/task-model-boundary-shim.ts';
+import {taskModelRequestScope} from '../../runtime/durable-engine/src/task-model-boundary-shim.ts';
 import {TestOwner,OwnedSqlite} from './src/ownership.ts';
 import {hostSourceContractFixture} from './src/host-source-contract-fixture.ts';
 import {barrier,context} from './src/fixture.ts';
@@ -33,7 +33,7 @@ for(const same of [false,true])test(`controller compacts ${same?'the busy curren
   controller=await createHostController({
    async acquireOwnership(){f.owner=TestOwner.acquire(f.path);return{assertCurrentOwner:()=>f.owner.assert(),release(){f.owner.releaseAfterClose();}};},
    async createStorage(){sql=new BunSqliteDatabase(f.path,{root:f.db,assertOwner:()=>f.owner.assert(),fenceTransactions:true});return SqliteStorage.open(sql);},
-   runtime:{incarnation:f.incarnation,...f.ports,harnessOptions:{models:f.base.models,registry:withTaskModelRequestScope(f.base.registry),settings:{retry:{enabled:false},compaction:{enabled:false,keepRecentTokens:1}}},
+   runtime:{incarnation:f.incarnation,...f.ports,harnessOptions:{models:f.base.models,registry:f.base.registry,settings:{retry:{enabled:false},compaction:{enabled:false,keepRecentTokens:1}}},
     withIdleModelGuard:body=>sql.withIdleModelGuard(body),withCompactionGuard:body=>sql.withCompactionGuard(body),
     existingConversationIds:manifest.map(b=>b.conversationId),conversationFor:(chat)=>manifest.find(b=>b.chatJid===chat)!.conversationId,
     putAnswer(ref,text){f.putAnswer(ref,text);},sessionId:f.incarnation,lane:'main',generation:f.generation,now:()=>at},

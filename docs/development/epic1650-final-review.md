@@ -1,5 +1,7 @@
 # #1650 integration review and whole-range accounting
 
+This review records the 17 November source, deployment and accounting ranges. See the [subsequent #1650 acceptance record](epic1650-acceptance.md) for the later MCP cutover, live checks and forward-recovery contract.
+
 The native runtime migration is deployed at Core `b9dd5ec79e938e3ddeed168472c0d4ac305486c3`. The retained integration review found no evidenced runtime blocker in its declared source partitions. Live authentication, server, recovery and real-work latency acceptance still prevent closing the epic under its current requirements.
 
 This review fixes two current design documents that described removed resident capture and `runAgent` compatibility paths. It changes no runtime implementation, supported feature, SDK package or live data.

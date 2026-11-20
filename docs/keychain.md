@@ -20,7 +20,7 @@ The keychain is disabled unless you provide a master key:
 | `PICLAW_KEYCHAIN_KEY` | Master key for encrypting/decrypting secrets |
 | `PICLAW_KEYCHAIN_KEY_FILE` | Path to a file containing the master key |
 
-If neither is set, keychain operations fail with a “Keychain is disabled” error.
+Without a master key, local encryption and decryption are unavailable. Metadata listing and explicit external-provider lookup do not require the local master key.
 
 ## Entry format
 
@@ -33,23 +33,13 @@ Each entry stores:
 
 ## Adding entries
 
-Use the CLI (recommended):
+Use **Settings → Keychain** to enter or rotate a credential. For operator automation, configure the master key separately, then use a protected secret file to keep the value out of command history and process arguments:
 
 ```bash
-PICLAW_KEYCHAIN_KEY="your-master-key" \
-  piclaw keychain set github/foo/bar \
-    --type token \
-    --secret "ghp_xxx" \
-    --username "octo"
-```
-
-Or with a secret file:
-
-```bash
-PICLAW_KEYCHAIN_KEY="your-master-key" \
-  piclaw keychain set github/foo/bar \
-    --type token \
-    --secret-file /path/to/token.txt
+piclaw keychain set github/foo/bar \
+  --type token \
+  --username octo \
+  --secret-file /secure/path/token.txt
 ```
 
 You can update an entry by calling `set` again with the same name.
@@ -63,12 +53,11 @@ PICLAW_KEYCHAIN_KEY="your-master-key" piclaw keychain delete github/foo/bar
 
 ## Agent tool
 
-The agent has a `keychain` tool that can:
+The native `keychain` tool lists local entry metadata on demand. Call it with `{"action":"list"}` and optionally a case-insensitive `query` against entry or shell variable names, `limit` (1–200, default 50) and `offset` (default 0).
 
-- **list** — list all entry names and types
-- **get** — retrieve a secret or username by name
-- **set** — store or update an entry (name, type, secret, optional username)
-- **delete** — remove an entry by name
+The result includes the entry name, type, eligible `shellEnv` (or `null`) and any deliberately agent-readable `agentNote` (up to 300 characters). Names, notes and results can enter model context and history. Keep credentials and instructions out of names and notes. Listing does not decrypt entries, read private notes, contact external providers or modify the store.
+
+The tool has no `get`, `set` or `delete` action. Use Settings or the operator CLI for credential management. Agents should pass references to credential consumers and should not call the CLI to read, write or transmit secret values through tool arguments or output.
 
 ## Low-level API
 
@@ -119,38 +108,20 @@ This applies to:
 
 Example:
 
-```bash
-PICLAW_KEYCHAIN_KEY="your-master-key" \
-  piclaw keychain set STRIPE_KEY \
-    --type token \
-    --secret "sk_live_xxx"
-
-# Later, in bash or SSH-backed bash:
-curl -H "Authorization: Bearer $STRIPE_KEY" https://api.stripe.com
-
-# In PowerShell:
-$env:STRIPE_KEY
-```
+After the operator saves `STRIPE_KEY`, a Bash command can pass `"$STRIPE_KEY"` to the process that needs it. In PowerShell, use `$env:STRIPE_KEY` in the same way. Do not send the value to stdout.
 
 Notes:
 
-- Keychain entry names are sanitized into shell env names before auto-injection: `/`, `-`, and `.` become `_`, then the result is uppercased.
-- Examples: `ssh/prod` → `$SSH_PROD`, `github/piclaw-bot-pat` → `$GITHUB_PICLAW_BOT_PAT`, `restic/azure-account-key` → `$RESTIC_AZURE_ACCOUNT_KEY`.
-- Entries whose sanitized form is empty or begins with a digit are skipped.
+- Auto-injection only considers local entries. Names already valid as shell identifiers keep their spelling and case. Other names map runs of `/`, `-` and `.` to `_`, discard remaining characters outside ASCII letters, digits and underscores, and convert to upper case.
+- Examples: `ApiKey` → `$ApiKey`, `ssh/prod` → `$SSH_PROD`, `github/piclaw-bot-pat` → `$GITHUB_PICLAW_BOT_PAT`.
+- Empty or digit-leading results are skipped. The first entry in SQLite name order wins on a collision. Check `shellEnv` on the entry you intend to use; choose an explicit reference when it is `null`.
 - Explicit env maps using `keychain:...` still work for arbitrary entry names, including cases where you want a different env name than the auto-generated one.
 - For `vm.agent.exec` and `container.exec`, use `shell_family=posix` for Linux/Unix targets and `shell_family=powershell` for Windows targets.
 - Tool output is redacted against known keychain secret values for normal tool execution paths (bash, read, request results, SSH exec output, guest/container exec output).
 
 ## Using keychain placeholders in bash commands
 
-The tracked bash runner also replaces `keychain:<name>` placeholders directly in command strings. This remains available as a fallback for arbitrary key names, but env-style auto-injection is the preferred path for bash and SSH bash:
-
-```bash
-/bash echo keychain:github/deploy
-/bash "curl -H 'Authorization: Bearer keychain:github/token' https://api.github.com"
-```
-
-`keychain:<name>:username` resolves to the stored username (if present).
+The tracked bash runner supports legacy `keychain:<name>` placeholders in command strings. Inline substitution can place a secret in the executed command line. Prefer a keychain reference in a supported env map or a literal shell variable. Do not `echo` credentials, print the environment, or enable shell tracing while handling them.
 
 ## SSH keys and known_hosts entries
 
@@ -180,14 +151,7 @@ The runtime writes these values to temporary files with restrictive permissions 
 
 ## Agent prompt hints
 
-When the keychain extension is active, the agent also gets prompt hints for:
-
-- sanitized auto-injected env-style secret names
-- likely SSH profiles from `ssh/*`
-- likely Proxmox profiles from `proxmox/*` (used by the proxmox addon in [piclaw-addons](https://github.com/rcarmo/piclaw-addons))
-- likely Portainer profiles from `portainer/*` (used by the portainer addon in [piclaw-addons](https://github.com/rcarmo/piclaw-addons))
-
-This is intended to steer the agent toward the `ssh` tool and addon-provided `proxmox`/`portainer` tools instead of fetching raw credential material.
+Host-managed instructions describe credential references and command-scoped injection. They do not enumerate stored entries; use the inventory tool when needed. For example, when the consuming tool is available, pass an entry name in an SSH `private_key_keychain` or `known_hosts_keychain` field, or a Proxmox or Portainer `api_token_keychain` field.
 
 ## Notes
 
@@ -259,12 +223,10 @@ registerKeychainProvider({
 
 All existing keychain consumers work without changes:
 
-- **`keychain list`** — shows internal + external entries (deduplicated by name)
-- **`keychain get`** — falls back to external providers when internal lookup misses
-- **Bash env injection** — `buildInjectedShellEnv()` resolves external secrets through the same `getKeychainEntry()` path
-- **SSH key resolution** — works through external providers
-- **Placeholder resolution** — `keychain:name` placeholders resolve transparently
-- **Agent prompt hints** — external entries appear in the injected env list
+- **Operator CLI `piclaw keychain list`** and the agent inventory list local entries only. The low-level `listAllKeychainEntries()` API can also query external metadata.
+- **Operator CLI `piclaw keychain get`** and explicit credential references — fall back to external providers when internal lookup misses.
+- **Automatic shell injection** — local entries only. Use a supported explicit `keychain:NAME` env reference or credential-reference field for an external entry.
+- **SSH key and legacy placeholder resolution** — can resolve explicit references through external providers.
 
 ### Error handling
 
