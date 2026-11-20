@@ -9,7 +9,7 @@ import { getDb } from "../../../db/connection.js";
  * Consumers: web/handlers/workspace.ts delegates file operations here.
  */
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "fs";
+import { appendFileSync, closeSync, constants, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { readdir } from "fs/promises";
 import path from "path";
 import { gunzipSync } from "zlib";
@@ -104,6 +104,21 @@ function parseZipEntries(buffer: Buffer, maxEntries = 200): { entries: ArchiveEn
     totalEntries,
     truncated: totalEntries > entries.length,
   };
+}
+
+function readFilePrefix(path: string, limit: number): Buffer {
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK);
+  try {
+    if (!fstatSync(fd).isFile()) throw Error("Preview requires a regular file");
+    const buffer = Buffer.allocUnsafe(limit);
+    let offset = 0;
+    while (offset < limit) {
+      const count = readSync(fd, buffer, offset, limit - offset, offset);
+      if (!count) break;
+      offset += count;
+    }
+    return buffer.subarray(0, offset);
+  } finally { closeSync(fd); }
 }
 
 function isTarGzPath(filePath: string): boolean {
@@ -325,10 +340,9 @@ export class WorkspaceFileService {
         return { status: 400, body: { error: "File too large to edit" } };
       }
 
-      const buffer = readFileSync(targetPath, { encoding: null }) as Buffer;
-
       if (!isEditMode && (ext === ".zip" || isTarGzPath(targetPath))) {
         try {
+          const buffer = readFileSync(targetPath);
           const isZip = ext === ".zip";
           const parsed = isZip ? parseZipEntries(buffer) : parseTarEntries(gunzipSync(buffer));
           return {
@@ -360,8 +374,10 @@ export class WorkspaceFileService {
         }
       }
 
-      const slice = buffer.subarray(0, maxBytes);
-      const truncated = buffer.length > maxBytes;
+      // One lookahead byte preserves the truncation signal without reading the whole file.
+      const prefix = readFilePrefix(targetPath, maxBytes + 1);
+      const slice = prefix.subarray(0, maxBytes);
+      const truncated = prefix.length > maxBytes;
 
       if (!isTextFile(targetPath) && detectBinary(slice)) {
         return {

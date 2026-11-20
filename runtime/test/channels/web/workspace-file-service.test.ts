@@ -4,7 +4,8 @@
  * High-value coverage for workspace file read/write/upload paths.
  */
 
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
+import * as fs from "node:fs";
 import "../../helpers.js";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "fs";
 import { isAbsolute, join, relative } from "path";
@@ -140,6 +141,19 @@ test("getFile handles invalid, directory, text/json/image, archive and binary mo
   } finally {
     cleanup();
   }
+});
+
+test("ordinary previews never read the whole file to truncate it", () => {
+  const { prefix, base, cleanup, service } = setupWorkspaceDir();
+  const path = join(base, "large.txt");
+  writeFileSync(path, "a".repeat(16_384));
+  const readAll = spyOn(fs, "readFileSync");
+  try {
+    const response = service.getFile(`${prefix}/large.txt`, "1024");
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ kind: "text", text: "a".repeat(1024), size: 16_384, truncated: true });
+    expect(readAll.mock.calls.some(([target]) => target === path)).toBe(false);
+  } finally { readAll.mockRestore(); cleanup(); }
 });
 
 test("updateFile/deleteFile and getRaw handle success and errors", () => {
