@@ -124,14 +124,28 @@ type Profile = keyof typeof profiles;
 export const applicationAddonSourceProfiles = { ...profiles, ...installedAddonProfiles };
 const sourceProfiles = applicationAddonSourceProfiles;
 type SourceProfile = keyof typeof sourceProfiles;
-const drawioSuccessorManifests: Readonly<Record<string, string>> = Object.freeze({
-  "31.4.6": "6ad445ab54e5eb91f0982c3cbe9993d5103780afbefa503e986db37ca1b0ca42",
-  "31.4.7": "4fe5c0463623872a2444f1128762152e5826f7a0f6a6b84a5ce8baa838ea071d",
-});
-const drawioLooseIndex = "591f38f6658cb07ab073da04c3ddf8b0418d8d42a365f3e3355d40f60e5b169a";
-function drawioSuccessorManifest(kind: SourceProfile, version: unknown) {
-  return kind === "open_drawio_editor" && typeof version === "string" && Object.hasOwn(drawioSuccessorManifests, version)
-    ? drawioSuccessorManifests[version] : undefined;
+// Exact per-release source deltas. Unlisted files retain the base pins and
+// every loaded factory still binds to its own observed manifest/source bytes.
+type SourceFilePins = Readonly<Record<string, string>>;
+const successorFiles: Partial<Record<SourceProfile, Readonly<Record<string, SourceFilePins>>>> = {
+  open_drawio_editor: {
+    "31.4.6": { "package.json": "6ad445ab54e5eb91f0982c3cbe9993d5103780afbefa503e986db37ca1b0ca42" },
+    "31.4.7": {
+      "package.json": "4fe5c0463623872a2444f1128762152e5826f7a0f6a6b84a5ce8baa838ea071d",
+      "index.ts": "591f38f6658cb07ab073da04c3ddf8b0418d8d42a365f3e3355d40f60e5b169a",
+    },
+  },
+  "codex-conversion": {
+    "0.2.4": {
+      "package.json": "89ba347ccadbd84b8ebbf71791d0995a70bad7999aa053aae2c80dffe1c239df",
+      "src/index.ts": "c9e4acfe52ac8bb642e03d4532ef331580c8672dbd27e20dffeb4e88b97d07f9",
+      "src/shell/bash.ts": "37ab050e4c08ac7d6a4c79c809153c03d8197e23d483a050e69d0e7b1480f2c6",
+    },
+  },
+};
+function approvedSuccessor(kind: SourceProfile, version: unknown) {
+  const versions = successorFiles[kind];
+  return versions && typeof version === "string" && Object.hasOwn(versions, version) ? versions[version] : undefined;
 }
 type Extension = LoadExtensionsResult["extensions"][number];
 type InstalledSource = Readonly<{ cwd: string; packageDir: string; entry: string; version: string; manifest: string; files: string }>;
@@ -178,7 +192,7 @@ function captureApprovedPackage(workspace: string, packageDir: string, installed
     if (!inside(join(packageDir, "package.json"))) return undefined;
     const manifest = readFileSync(join(packageDir, "package.json"), "utf8");
     const pkg = JSON.parse(manifest);
-    const successor = drawioSuccessorManifest(kind, pkg.version);
+    const successor = approvedSuccessor(kind, pkg.version);
     if (pkg.name !== profile.name || (pkg.version !== profile.version && !successor) || pkg.type !== "module") return undefined;
     const drawioLoose = kind === "open_drawio_editor" && pkg.version === "31.4.7";
     if (drawioLoose) {
@@ -197,7 +211,7 @@ function captureApprovedPackage(workspace: string, packageDir: string, installed
       const path = join(packageDir, file);
       if (!inside(path)) throw Error(`${profile.label} source escape`);
       const digest = createHash("sha256").update(readFileSync(path)).digest("hex");
-      const expected = file === "package.json" ? successor ?? pinned : drawioLoose && file === "index.ts" ? drawioLooseIndex : pinned;
+      const expected = successor?.[file] ?? pinned;
       if (digest !== expected) throw Error(`Unsupported ${profile.label} source`);
       return `${file}:${realpathSync(path)}:${digest}`;
     }).join("\n");
@@ -212,8 +226,8 @@ export function inspectAddonInstall(name: string, version?: string, directory?: 
   const match = Object.entries(sourceProfiles).find(([, profile]) => profile.name === name);
   if (!match) return;
   const [key, profile] = match, kind = key as SourceProfile;
-  const supportedVersion = version && drawioSuccessorManifest(kind, version) ? version : profile.version;
-  const requiredVersion = kind === "open_drawio_editor" ? [profile.version, ...Object.keys(drawioSuccessorManifests)].join(", ") : profile.version;
+  const supportedVersion = version && approvedSuccessor(kind, version) ? version : profile.version;
+  const requiredVersion = [profile.version, ...Object.keys(successorFiles[kind] ?? {})].join(", ");
   if (version !== supportedVersion) return { supportedVersion, problem: `This Core release requires ${profile.label} ${requiredVersion}. Update Core to a release supporting the requested add-on before installing it. The installed add-on has not been changed.` };
   if (directory) {
     const manifest = readInstalledAddonPackage(directory)?.manifest;
@@ -399,16 +413,26 @@ export async function loadApplicationExtensionCatalog(options: {
     additionalExtensionPaths: installedEntries, noExtensions: true,
     noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
   });
+  const verified = new Set<SourceProfile>();
   try {
     await loader.reload();
   } finally {
+    // Fresh discovery after evaluation; do not rescan all package manifests
+    // separately for each profile. The following capture has no async gap.
+    let afterEntries: string[];
+    try { afterEntries = getInstalledAddonExtensionPaths(options.cwd); }
+    catch (error) {
+      for (const { entry } of snapshots) if (attemptedInstalledSources.has(entry)) attemptedInstalledSources.set(entry, undefined);
+      throw error;
+    }
     for (const { kind, before, entry } of snapshots) if (existsSync(entry) || attemptedInstalledSources.has(entry)) {
-      if (!sameSource(before, captureApprovedSource(options.cwd, getInstalledAddonExtensionPaths(options.cwd), kind))) attemptedInstalledSources.set(entry, undefined);
+      if (sameSource(before, captureApprovedSource(options.cwd, afterEntries, kind))) verified.add(kind);
+      else attemptedInstalledSources.set(entry, undefined);
     }
   }
   const catalog = loader.getExtensions();
   const sources = new Map<Extension, InstalledRegistration>();
-  for (const { kind, before } of snapshots) if (before && sameSource(before, captureApprovedSource(options.cwd, getInstalledAddonExtensionPaths(options.cwd), kind))) {
+  for (const { kind, before } of snapshots) if (before && verified.has(kind)) {
     for (const extension of catalog.extensions) {
       const definition = extension.tools.get(kind === "goal" ? "get_goal" : kind)?.definition;
       if (resolve(extension.resolvedPath) === before.entry && (definition || kind === "observability" || kind in installedAddonProfiles)) sources.set(extension, Object.freeze({
@@ -424,7 +448,7 @@ export async function loadApplicationExtensionCatalog(options: {
     }
   }
   loadedInstalledSources.set(catalog, sources);
-  loadedProfileSources.set(catalog, new Map(snapshots.flatMap(({ kind, before }) => before ? [[kind, before] as const] : [])));
+  loadedProfileSources.set(catalog, new Map(snapshots.flatMap(({ kind, before }) => before && verified.has(kind) ? [[kind, before] as const] : [])));
   return catalog;
 }
 
