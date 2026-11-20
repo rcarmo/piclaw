@@ -87,7 +87,7 @@
       "semanticReaderOccurrences": 58
     },
     "docsDeploy": {
-      "referencedNames": 154,
+      "referencedNames": 155,
       "directReaderNames": 18,
       "directReaderOccurrences": 42,
       "helperReaderNames": 0,
@@ -3563,6 +3563,21 @@
           "semanticReaders": 0,
           "files": [
             "docs/design/earendil-agent-harness-integration-adr/evidence/earendil-0991-auth-cross-process.md"
+          ],
+          "readerFiles": []
+        }
+      }
+    },
+    {
+      "name": "PICLAW_RUN_FEATURE_TESTS",
+      "scopes": {
+        "docsDeploy": {
+          "referenced": true,
+          "directReaders": 0,
+          "helperReaders": 0,
+          "semanticReaders": 0,
+          "files": [
+            "package.json"
           ],
           "readerFiles": []
         }

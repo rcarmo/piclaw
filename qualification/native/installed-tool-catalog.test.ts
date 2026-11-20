@@ -1,9 +1,10 @@
 import './src/test-guard.js';
 import { expect, test } from 'bun:test';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { copyFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { SettingsManager } from '../../node_modules/@earendil-works/pi-coding-agent';
-import { loadApplicationExtensionCatalog, assertApplicationExtensionCatalogSupported, auditInstalledApplicationAddonSources } from '../../runtime/durable-engine/src/host-extension-catalog.js';
+import { loadApplicationExtensionCatalog, assertApplicationExtensionCatalogSupported, auditInstalledApplicationAddonSources, bindInstalledAddon, qualifyInstalledAddon, type InstalledAddonBindingReceipt } from '../../runtime/durable-engine/src/host-extension-catalog.js';
+import { installedAddonProfiles } from '../../runtime/durable-engine/src/host-installed-addon-profiles.js';
 import { getInstalledAddonExtensionPaths } from '../../runtime/src/addons/package-entries.js';
 import { getInstalledAddonConfigEntryPaths, handleRegisteredAddonConfigApiRequest } from '../../runtime/src/channels/web/handlers/addon-config-api.js';
 
@@ -31,6 +32,36 @@ for (const version of ['0.1.28', '99.0.0']) test(`retired Plan ${version} is exc
     expect(catalog.extensions).toEqual([]); expect(await Bun.file(marker).exists()).toBe(false);
     expect(await handleRegisteredAddonConfigApiRequest(new Request('https://fixture/agent/addons/api/plan-sidebar/plan'), 'plan-sidebar', 'plan', (body, status) => Response.json(body, { status }))).toBeNull();
   } finally { catalog?.runtime.invalidate(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('installed binding receipts require the original qualified source and catalogue', async () => {
+  const source = process.env.DURABLE_ADDONS_ROOT;
+  if (!source) throw Error('Frozen add-on fixture required');
+  const cwd = mkdtempSync(join(process.env.PICLAW_WORKSPACE!, 'installed-binding-'));
+  const profile = installedAddonProfiles['yolo-vibe'];
+  const agentDir = join(cwd, 'agent'), pkg = join(cwd, '.pi/extensions/node_modules', profile.name);
+  let catalog: Awaited<ReturnType<typeof loadApplicationExtensionCatalog>> | undefined;
+  try {
+    mkdirSync(agentDir);
+    for (const file of Object.keys(profile.files)) {
+      const target = join(pkg, file);
+      mkdirSync(dirname(target), { recursive: true });
+      copyFileSync(join(source, 'addons/yolo-vibe', file), target);
+    }
+    catalog = await loadApplicationExtensionCatalog({ cwd, agentDir, settingsManager: SettingsManager.inMemory() });
+    const qualified = (await qualifyInstalledAddon(catalog, cwd, 'yolo-vibe'))!;
+    const empty = { tools: [], lifecycle: {}, commands: {} };
+    const assertSupported = (receipts: readonly InstalledAddonBindingReceipt[], target = catalog!) =>
+      assertApplicationExtensionCatalogSupported(target, undefined, undefined, undefined, undefined, undefined, undefined, undefined, receipts);
+    expect(() => assertSupported([])).not.toThrow(); // The static profile needs no native effects.
+    expect(() => bindInstalledAddon({ ...qualified }, empty)).toThrow('Qualified installed add-on identity required');
+    expect(() => bindInstalledAddon(qualified, { ...empty, lifecycle: { extra() {} } })).toThrow('Incomplete native capability binding');
+    const receipt = bindInstalledAddon(qualified, empty);
+    expect(Object.isFrozen(receipt)).toBe(true);
+    expect(() => assertSupported([receipt])).not.toThrow();
+    expect(() => assertSupported([{ ...receipt }])).toThrow('Native receipt catalog identity required');
+    expect(() => assertSupported([receipt], { ...catalog! })).toThrow('Native receipt catalog identity required');
+  } finally { catalog?.runtime.invalidate(); rmSync(cwd, { force: true, recursive: true }); }
 });
 
 test('empty public registry passes; unknown factory still fails before top-level I/O', async () => {

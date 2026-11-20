@@ -114,7 +114,7 @@
     "ci:native": "bun scripts/native-test-suite.ts",
     "ci:full": "bun run ci:fast && bun run ci:native",
     "ci:fast:tests": "bun run test:local --cwd runtime --env PICLAW_DB_IN_MEMORY=1 -- bun test --isolate --max-concurrency=1 --path-ignore-patterns='**/features/**' --path-ignore-patterns='**/scripts/**' --path-ignore-patterns='**/*.optional.test.ts'",
-    "ci:fast:features": "bun run test:local -- bun run runtime/test/features/run-feature-tests.ts",
+    "ci:fast:features": "bun run test:local --cwd runtime --env PICLAW_DB_IN_MEMORY=1 --env PICLAW_RUN_FEATURE_TESTS=1 -- bun test --max-concurrency=1 --timeout=30000 ./test/features/feature-regression.test.ts ./test/features/canonical-ux-contract.test.ts",
     "ci:integration": "bun run scripts/integration-test-suite.ts",
     "ci:publish-smoke": "./scripts/docker/publish-smoke-test.sh \"$IMAGE_REF\" \"$PLATFORM\" \"$EXPECTED_BUN_VERSION\" \"$EXPECTED_RESTIC_VERSION\"",
     "quality": "bun run lint && bun run typecheck && bun run test && bun run check:pack-hygiene && bun run check:stale-dist && bun run check:import-boundaries && bun run check:env-surface && bun run check:circular-dependencies && bun run check:unused-exports && bun run check:hook-tdz && bun run check:silent-swallows && bun run check:structured-logging",

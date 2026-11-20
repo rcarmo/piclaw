@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readFileSync, mkdtempSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
 import { assertNoTestMounts, ensureTestFilesystemIsolation } from "../../scripts/test-filesystem-isolation.js";
@@ -53,6 +53,15 @@ test("nested core test directory receives preload before runtime imports", () =>
     const child = Bun.spawnSync([process.execPath, 'test', '--preload', probe, 'readme-docker-run.test.ts'], { cwd: resolve(import.meta.dir, '../runtime'), env: { ...process.env, PICLAW_TEST_FS_ISOLATION_ACTIVE: '0' }, stdout: 'pipe', stderr: 'pipe' });
     expect(child.exitCode, child.stderr.toString()).toBe(0);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("script tests bind source paths to their candidate checkout", () => {
+  // Tests may use live paths for negative isolation probes, but must never
+  // select a specific external checkout as the source for a script test.
+  const checkout = /["']\/workspace\/piclaw(?:[\/"'])/;
+  for (const file of readdirSync(import.meta.dir).filter(file => file.endsWith('.test.ts'))) {
+    expect(readFileSync(join(import.meta.dir, file), 'utf8'), file).not.toMatch(checkout);
+  }
 });
 
 test("container OOBE only removes its own returned ID and binds loopback", () => {

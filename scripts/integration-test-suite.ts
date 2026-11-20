@@ -108,7 +108,7 @@ await runStage("test:full", ["bun", "run", "test:local", "--cwd", "runtime", "--
 
 // ── Stage 2b: Feature regression tests (isolated subprocess) ─────────
 
-await runStage("test:features", ["bun", "run", "test:local", "--", "bun", "run", "runtime/test/features/run-feature-tests.ts"]);
+await runStage("test:features", ["bun", "run", "ci:fast:features"]);
 
 // ── Stage 3: Static analysis (advisory — pre-existing debt may exist) ──
 

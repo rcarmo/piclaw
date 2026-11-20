@@ -96,7 +96,7 @@ test("audit-model-catalog-delta supports provider filters and fail-on modes", as
     const filtered = await runAudit(["--base", base, "--head", head, "--providers", "openai", "--fields", "contextWindow", "--fail-on", "fields"]);
     expect(filtered.exitCode).toBe(1);
     expect(filtered.stderr).toContain("Catalog delta exceeded --fail-on=fields");
-    expect(filtered.stdout).toContain("Models changed | 1");
+    expect(filtered.stdout).toContain("Entries changed | 1");
     expect(filtered.stdout).not.toContain("ignored/model");
 
     const noFailure = await runAudit(["--base", base, "--head", head, "--providers", "ignored", "--fail-on", "any"]);

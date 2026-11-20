@@ -19,6 +19,13 @@ describe('canonical offline native contract', () => {
     expect(integration.indexOf('await runStage("ci:native"')).toBeLessThan(integration.indexOf('const staticChecks'));
   });
 
+  test('fast and integration gates use the same guarded feature selection', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    expect(pkg.scripts['ci:fast:features']).toBe('bun run test:local --cwd runtime --env PICLAW_DB_IN_MEMORY=1 --env PICLAW_RUN_FEATURE_TESTS=1 -- bun test --max-concurrency=1 --timeout=30000 ./test/features/feature-regression.test.ts ./test/features/canonical-ux-contract.test.ts');
+    const integration = readFileSync(join(ROOT, 'scripts/integration-test-suite.ts'), 'utf8');
+    expect(integration).toContain('await runStage("test:features", ["bun", "run", "ci:fast:features"]);');
+  });
+
   test('both private type projects and required engine integration precede all isolated files', () => {
     const stages = nativeStages(contract);
     expect(stages.map(stage => stage.name)).toEqual(['type:runtime/durable-engine', 'type:qualification/native', 'accepted-source', 'native-isolated']);
@@ -26,7 +33,10 @@ describe('canonical offline native contract', () => {
     expect(stages[2].command).toContain('PICLAW_REQUIRE_DURABLE_ENGINE=1');
     expect(stages[2].command.slice(-contract.integrationTests.length)).toEqual(contract.integrationTests);
     expect(contract.integrationTests).toContain('./test/native-gate-contract.test.ts');
-    expect(contract.integrationTests).toContain('./test/scripts/local-test-priority.test.ts');
+    for (const required of ['./test/scripts/controlled-test-runner.test.ts', './test/scripts/local-test-priority.test.ts', './test/scripts/test-filesystem-isolation.test.ts', './test/scripts/test-safety-audit.test.ts']) {
+      expect(contract.integrationTests).toContain(required);
+      expect(() => nativeStages({ ...contract, integrationTests: contract.integrationTests.filter(file => file !== required) })).toThrow('required accepted-source');
+    }
     expect(stages[3].command).toEqual([process.execPath, './scripts/test-isolated.ts']);
     expect(stages[3].cwd).toBe(join(ROOT, 'qualification/native'));
     expect(() => nativeStages({ ...contract, typeProjects: [] })).toThrow('both private type projects');

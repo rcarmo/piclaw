@@ -331,6 +331,7 @@ export const groupDefinitions: GroupDefinition[] = [
           "intel-gpu-metrics.test.ts",
           "mcp-server-settings.test.ts",
           "mcp-settings.test.ts",
+          "model-catalog-refresh-handler.test.ts",
           "nvml-poller.test.ts",
           "nvml-reader.test.ts",
           "picker-pins-contention.test.ts",
@@ -459,6 +460,12 @@ export const groupDefinitions: GroupDefinition[] = [
     match: (relativePath) => relativePath.startsWith("plan/"),
   },
   {
+    id: "native-mcp",
+    label: "native MCP contracts and provenance",
+    notes: "Current MCP source, ownership, cutover and retained-value contracts.",
+    match: (relativePath) => relativePath.startsWith("mcp/"),
+  },
+  {
     id: "note-retrieval",
     label: "note retrieval and source authority",
     notes: "Current supported subsystem; no test-selection or failure exemptions.",
@@ -543,6 +550,7 @@ export const groupDefinitions: GroupDefinition[] = [
           "passkey-client.test.ts",
           "submission-feedback.test.ts",
           "thought-preview-races.test.ts",
+          "tool-call-summary.test.ts",
           "timeline-catch-up.test.ts",
           "agent-mentions.test.ts",
           "api-routing.test.ts",

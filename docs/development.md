@@ -73,17 +73,21 @@ Every directory containing Bun tests has a local `bunfig.toml`: Bun does not inh
 
 External browser tests require an explicit `PICLAW_E2E_URL` (or `PICLAW_E2E_BASE_URL` for terminal scripts), `PICLAW_E2E_DISPOSABLE=1`, and, when needed, `PICLAW_E2E_INTERNAL_SECRET` for that instance. Injected production credentials are removed from test children. The OOBE container harness creates its own loopback-only container and cleans up by returned ID. Provider integration scripts require explicit opt-in and a test profile; they do not discover the default Pi profile or an SSH host's credentials.
 
-The implementation lives under `runtime/`, so direct Bun test runs should target that subtree. Sequential mode is recommended for SQLite safety:
+Run focused Bun tests from the repository root through the launcher. Keep SQLite tests sequential unless the fixture contract explicitly supports concurrent execution:
 
 ```bash
-cd runtime && bun test --max-concurrency=1
+bun run test:local --cwd runtime --env PICLAW_DB_IN_MEMORY=1 -- bun test --max-concurrency=1 ./test/path/to/file.test.ts
 ```
 
-The default full-suite path uses the controlled staged runner:
+| Entry point | Coverage and selection |
+|---|---|
+| `bun run test` / `test:controlled` | Staged developer runner for `runtime/test/**/*.test.ts`, including script tests, unless exact files are selected. Guarded optional cases still require their opt-in flags. |
+| `make ci-fast` | Source checks, isolated host tests, the shared feature gate and the Classic build. Excludes `runtime/test/scripts` and optional browser files from the ordinary host discovery. The feature gate selects both current files explicitly. |
+| `make ci-native` / `make ci-full` | [Native qualification](native-validation.md) binds both private type projects, accepted-source and isolation contracts, and every native file to the exact candidate. `ci-full` also requires the fast gate. |
+| `make ci-integration` | The same feature and native gates, full host validation, static checks, build and separately scoped browser/container checks. The local default is 600 seconds per stage; the hosted workflow explicitly supplies 1,200 seconds. Missing Docker does not make native qualification optional. |
+| Core CI browser and install checks | Explicit Chromium/WebKit SVG and Pele suites, CDP and isolated Git install. The larger Playwright workflow runs executable `tests/e2e/steps` cases against a disposable service with a synthetic provider. Gherkin import files are not executable merely by being tracked. |
 
-```bash
-bun run test
-```
+Keep specimen data, historical receipts and vendor test fixtures distinct from supported test entry points. Run focused script or packaging tests through the same launcher when changing their code; the fast host stage does not qualify every script or a published package.
 
 Default controlled runs do not write `runtime/generated/controlled-test-report.json` or any other JSON report. They print stage summaries, exit codes, and memory measurements to the terminal so a clean source worktree stays clean after `bun run test`, `bun run quality`, `make ci-fast`, and `make pre-push-ci`.
 
@@ -100,7 +104,7 @@ Set `PICLAW_TEST_CHROMIUM_PATH` to an installed Chromium executable if the isola
 Use `--report` for #394 or performance evidence that needs a durable JSON artifact:
 
 ```bash
-bun run runtime/scripts/controlled-test-runner.ts --report artifacts/performance/controlled-test-report.json
+bun run test:local -- bun run runtime/scripts/controlled-test-runner.ts --report artifacts/performance/controlled-test-report.json
 ```
 
 Use `runtime/generated/reports/` for disposable local reports. Use `artifacts/performance/` or another deliberate artifact path when the report should be reviewed or retained.

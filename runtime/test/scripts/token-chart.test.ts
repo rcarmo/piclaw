@@ -49,8 +49,8 @@ test("token chart outputs chart first and summary lines", () => {
   writeFileSync(join(sessionsDir, "session.jsonl"), entries.map((e) => JSON.stringify(e)).join("\n"));
 
   const proc = Bun.spawnSync([
-    "bun",
-    "/workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts",
+    process.execPath,
+    join(import.meta.dir, "../../skills/operator/token-chart/token-chart.ts"),
     "--days",
     "2",
     "--sessions-dir",
@@ -77,8 +77,8 @@ test("token chart handles empty sessions directory", () => {
   mkdirSync(sessionsDir, { recursive: true });
 
   const proc = Bun.spawnSync([
-    "bun",
-    "/workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts",
+    process.execPath,
+    join(import.meta.dir, "../../skills/operator/token-chart/token-chart.ts"),
     "--days",
     "1",
     "--sessions-dir",
@@ -133,8 +133,8 @@ test("token chart aggregates cached and uncached daily usage without provenance 
   db.close();
 
   const proc = Bun.spawnSync([
-    "bun",
-    "/workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts",
+    process.execPath,
+    join(import.meta.dir, "../../skills/operator/token-chart/token-chart.ts"),
     "--days",
     "1",
     "--source",
@@ -183,8 +183,8 @@ test("token chart ignores malformed JSONL lines", () => {
   writeFileSync(join(sessionsDir, "session.jsonl"), entries.join("\n"));
 
   const proc = Bun.spawnSync([
-    "bun",
-    "/workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts",
+    process.execPath,
+    join(import.meta.dir, "../../skills/operator/token-chart/token-chart.ts"),
     "--days",
     "1",
     "--sessions-dir",
