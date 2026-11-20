@@ -407,6 +407,35 @@
     grid-column: 2 / -1;
 }
 
+/* Settings cards keep the two independent policies and activity distinct. */
+.settings-optimizer {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+}
+.settings-optimizer-group,
+.settings-optimizer-details {
+    min-width: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    overflow-wrap: anywhere;
+}
+.settings-optimizer-group { padding: 12px; }
+.settings-optimizer-group h3 { margin-bottom: 8px; }
+.settings-optimizer-group h4 { margin: 12px 0 6px; font-size: 0.9em; }
+.settings-optimizer-group > :last-child,
+.settings-optimizer-details-body > :last-child,
+.settings-optimizer-save > :last-child,
+.settings-optimizer-agent > :last-child { margin-bottom: 0; }
+.settings-optimizer-details { margin-top: 6px; }
+.settings-optimizer > .settings-optimizer-details { margin-top: 0; }
+.settings-optimizer-details > summary { cursor: pointer; padding: 7px 12px; font-size: 0.9em; }
+.settings-optimizer-details > summary:focus-visible { outline: 2px solid var(--accent-color); outline-offset: -2px; border-radius: 6px; }
+.settings-optimizer-details-body { padding: 4px 12px 12px; }
+.settings-optimizer-agent { border: 0; border-top: 1px solid var(--border-color); margin: 8px 0 0; min-width: 0; padding: 6px 0 0; }
+.settings-optimizer-agent > legend { font-weight: 600; }
+
 .compaction-model-picker {
     align-items: flex-start;
     flex-wrap: wrap;
