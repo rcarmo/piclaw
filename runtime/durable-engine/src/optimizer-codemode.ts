@@ -10,13 +10,20 @@ const object=(value:unknown):value is JsonObject=>value!==null&&typeof value==='
 function outputText(value:NestedToolExecutionResult['structuredOutput']){if(value===undefined)return;return typeof value==='string'?value:JSON.stringify(value);}
 /** Caller delegates are still the SDK's own executeTool/agent/commit ports, including cancellation and call-key recovery. */
 export function recordingOptimizerCalls(api:ToolExecutionApi):ToolExecutionApi{
- return new Proxy(api,{get(target,key){if(key==='executeTool')return async(name:string,args:JsonObject,context:Context,options?:Parameters<ToolExecutionApi['executeTool']>[3])=>{
+ return new Proxy(api,{get(target,key){if(key==='executeTool')return async(name:string,args:JsonObject,context:Context,options?:{readonly key?:string;readonly progress?:boolean;readonly wait?:boolean})=>{
   const nested=options?.key;if(nested===undefined)throw Error('SDK code mode must supply its nested call key');
-  const record=async(data:OptimizerCallStart|OptimizerCallEnd)=>api.commit(async tx=>{const receipts=await tx.doc(OptimizerCallReceiptDoc,api.taskId),id=`${nested}:${data.phase}`;if(receipts[id])return;await tx.appendEntry(optimizerCallEntry,api.conversationId,{data:{callId:api.callId,key:nested,...data}});receipts[id]=true;},context);
+  const record=async(data:OptimizerCallStart|OptimizerCallEnd,ctx=context)=>api.commit(async tx=>{const receipts=await tx.doc(OptimizerCallReceiptDoc,api.taskId),id=`${nested}:${data.phase}`;if(receipts[id])return;await tx.appendEntry(optimizerCallEntry,api.conversationId,{data:{callId:api.callId,key:nested,...data}});receipts[id]=true;},ctx);
   const json=JSON.stringify(args),start:OptimizerCallStart={phase:'start',name,issuedAt:Date.now()};if(json.length<=65536)start.arguments=JSON.parse(json) as JsonValue;
-  await record(start);const result=await api.executeTool(name,args,context,options);
-  const end:OptimizerCallEnd={phase:'end',isError:result.isError,cancelled:result.diagnostics.some(d=>d.code==='aborted')};const text=outputText(result.structuredOutput);if(text!==undefined)end.output=text;if(result.durationMs!==undefined)end.durationMs=result.durationMs;const errors=result.diagnostics.filter(d=>d.severity==='error').map(d=>d.message).join('\n');if(errors)end.error=errors;if(object(result.details))end.details=result.details;
-  await record(end);return result;
+  const finish=async(result:NestedToolExecutionResult,ctx:Context)=>{
+   const end:OptimizerCallEnd={phase:'end',isError:result.isError,cancelled:result.diagnostics.some(d=>d.code==='aborted')};const text=outputText(result.structuredOutput);if(text!==undefined)end.output=text;if(result.durationMs!==undefined)end.durationMs=result.durationMs;const errors=result.diagnostics.filter(d=>d.severity==='error').map(d=>d.message).join('\n');if(errors)end.error=errors;if(object(result.details))end.details=result.details;
+   await record(end,ctx);return result;
+  };
+  await record(start);
+  if(options?.wait===false){
+   const call=await api.executeTool(name,args,context,{...options,wait:false});
+   return{taskId:call.taskId,async result(ctx:Context){return finish(await call.result(ctx),ctx);}};
+  }
+  return finish(await api.executeTool(name,args,context,{...options,wait:true}),context);
  };const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;}});
 }
 export function createOptimizerCodemodeTool(sandbox:CodemodeSandbox){

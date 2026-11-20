@@ -26,8 +26,8 @@
     {
       "path": "runtime/durable-engine/src/host-models.ts",
       "beforeSha256": "92e8c15ebdac6c8d4e1df588bd2f316fd1b3a42da4020021ffb3131ea7341d8a",
-      "afterSha256": "557d2501610add9f33ef42863301528fe18c757af085d418f59fcb9afc8e0a1a",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "12e4ba12e8f4c76c8ba119162896b95e864655693494a40f464f84082a10315a",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. SDK 1.6 preserves provider-runtime identity; forward scoped cancellation at the existing host provider boundary."
     },
     {
       "path": "runtime/durable-engine/src/host-runtime.ts",
