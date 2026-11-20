@@ -6,7 +6,8 @@ The Root and private engine use separate physical dependency graphs pinned to Ea
 
 - The optimiser receipt recorder preserves the new `executeTool({wait: false})` handle and task ID, without awaiting or reissuing the effect. It records terminal evidence only when the caller observes a result through the original handle. The existing waiting path retains the complete script value.
 - Private startup now includes `pi-mcp` in the exact-version checks. The versioned private provenance manifest verifies the installed package payloads against the registry archives and lock. The 1.5.2 private receipt remains historical.
-- The unused legacy session-affinity compatibility wrapper is removed. The task/source adapter remains: the public SDK still does not supply the exact task/checkpoint scope Core uses to bind model and tool requests to accepted sources. The usage-provenance adapter still distinguishes absent cache counters and provider-reported cost from local estimates. Neither is an alternative executor.
+- The unused legacy session-affinity compatibility wrapper and duplicate scope adapters in native fixtures are removed. Generation and compaction retain the original SDK runtime identity so 1.6 can track provider sessions. Core forwards scoped lease cancellation to the provider transport, without proxying the SDK runtime or replacing its commit context.
+- The task/source adapter remains: the public SDK still does not supply the exact task/checkpoint scope Core uses to bind model and tool requests to accepted sources. The usage-provenance adapter still distinguishes absent cache counters and provider-reported cost from local estimates. Neither is an alternative executor.
 
 ## Evidence
 

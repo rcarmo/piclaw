@@ -274,7 +274,8 @@ export function createHostModels(
     const reference = publicHandle(handle, model);
     const authority = policy.deferred;
     if (!authority) throw new Error("Deferred authority unavailable");
-    const signal = options?.signal ? AbortSignal.any([options.signal, authority.signal]) : authority.signal;
+    const sourceSignal = taskModelRequestScope(options?.signal)?.signal ?? options?.signal;
+    const signal = sourceSignal ? AbortSignal.any([sourceSignal, authority.signal]) : authority.signal;
     signal.throwIfAborted();
     // Host scope verification happens before credentials are consulted.
     const raw = authority.resolve(reference, model);
@@ -328,6 +329,7 @@ export function createHostModels(
     void (async () => {
       try {
         scope = taskModelRequestScope(options?.signal);
+        const sourceSignal = scope?.signal ?? options?.signal;
         model = validatedChatModel(model);
         context = freeze(data(context));
         if (deferred) {
@@ -353,7 +355,7 @@ export function createHostModels(
         phase = "source";
         const assertSource = await policy.captureSourceGuard?.(options?.signal) ?? (() => {});
         assertSource();
-        const observer = policy.captureEventObserver?.(options?.signal);
+        const observer = policy.captureEventObserver?.(sourceSignal);
         let observerDetached = false;
         const assertEventCurrent = () => {
           if (!observer) return;
@@ -370,7 +372,7 @@ export function createHostModels(
         if ((model.type ?? "chat") !== "chat") throw new Error("Wrong model type");
         if (!listed || listed.api !== model.api) throw new Error("Model is not approved");
         transportAbort = new AbortController();
-        const signal = AbortSignal.any([policy.signal, transportAbort.signal, ...(options?.signal ? [options.signal] : [])]);
+        const signal = AbortSignal.any([policy.signal, transportAbort.signal, ...(sourceSignal ? [sourceSignal] : [])]);
         const {onPayload:sdkPayload,transformHeaders:localHeaders,...safeOptions} = requestOptions(options, !!policy.deferred, policy.optimizerRequestGuards);
         signal.throwIfAborted();
         phase = "admission";

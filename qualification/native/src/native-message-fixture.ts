@@ -16,7 +16,6 @@ import { createCurrentPiclawTerminalSettlementStore } from '../../../runtime/src
 import { installTerminalSettlementCompositionSchema } from '../../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js';
 import { InMemoryEffectPayloadResolver } from '../../../runtime/src/service-effects/testing/in-memory-payload-resolver.js';
 import { hashCanonicalRequest } from '../../../runtime/src/service-effects/contracts/common.js';
-import { withTaskModelRequestScope } from '../../../runtime/durable-engine/src/task-model-boundary-shim.js';
 import { TestOwner } from './ownership.js';
 import { context,openFixture } from './fixture.js';
 import { value,sealed,effect } from './host-handoff.js';
@@ -50,7 +49,7 @@ export async function nativeMessageFixture(recovered?:NativeMessageFixtureIdenti
   const bindings=createHostDurableBindings(root,{domain,incarnation:domain,manifest:[{chatJid:chat,branchId:'main',conversationId:base.root.id}],assertOwner:assert,
     async resolveContent(ref){const row=root.query('SELECT content FROM messages WHERE rowid=? AND chat_jid=?').get(Number(ref.slice(12)),chat) as {content:string}|null;if(!row)throw Error('Missing native message');return row.content;}});
   const options:RuntimeOptions={incarnation:domain,sessionId:domain,owner:{assert,release(){}},openStorage:storage,
-    harnessOptions:{models:base.models,registry:withTaskModelRequestScope(base.registry),settings:{retry:{enabled:false},compaction:{enabled:false}}},
+    harnessOptions:{models:base.models,registry:base.registry,settings:{retry:{enabled:false},compaction:{enabled:false}}},
     work:new Proxy(work,{get(target,key){if(key==='getOperation')return async()=>{throw Error('Host operation lookup cannot govern native input');};const v=Reflect.get(target,key);return typeof v==='function'?v.bind(target):v;}}),terminal,bindings,
     existingConversationIds:[base.root.id],conversationFor(id,branch){if(id!==chat||branch!=='main')throw Error('Manifest conflict');return base.root.id;},authorizeScheduling(){throw Error('Host scheduling cannot govern native input');},
     putAnswer(){throw Error('Host settlement cannot own native replies');},now:()=>new Date().toISOString()};
