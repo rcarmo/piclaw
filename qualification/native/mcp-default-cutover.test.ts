@@ -103,6 +103,8 @@ test('default outbound MCP migrates references, preserves script values, fences 
   requestedTool='bash';await send(4);
   const retained=database.query("SELECT text FROM retained_tool_outputs WHERE tool='bash'").all() as {text:string}[];
   expect(retained.some(row=>row.text.includes('2999\n3000')),JSON.stringify(retained.map(row=>({length:row.text.length,tail:row.text.slice(-40)})))).toBe(true);expect(receipts[3]?.isError).not.toBe(true);expect(remoteCalls).toBe(2);
+  const retainedStatus=(await (await optimizerGet())!.json() as {status:{agentId:string;hasRetainedCopies:boolean}[]}).status;
+  expect(retainedStatus.find(state=>state.agentId==='web:default')?.hasRetainedCopies).toBe(true);
   expect(keychainDeclaration).toBeDefined();
   expect(Object.keys(keychainDeclaration.parameters.properties).sort()).toEqual(['action','limit','offset','query']);
   const inventoryBefore=database.query('SELECT name, type, hex(ciphertext) ciphertext FROM keychain_entries ORDER BY name').all();
@@ -112,6 +114,14 @@ test('default outbound MCP migrates references, preserves script values, fences 
   expect(JSON.stringify(receipts[4])).not.toContain(secret);
   expect(database.query('SELECT name, type, hex(ciphertext) ciphertext FROM keychain_entries ORDER BY name').all()).toEqual(inventoryBefore);
   expect(remoteCalls).toBe(2);
+  const rawConfig=()=>database.query<{value:string},[]>("SELECT value FROM router_state WHERE key='native.token-optimizer.v1'").get()!.value;
+  const legacyOptimizer=JSON.parse(rawConfig());legacyOptimizer.workspaces[optimizer.workspaceId]='off';legacyOptimizer.policy.oversightMode='active';legacyOptimizer.oversightWorkspaces[optimizer.workspaceId]='observe';
+  const legacyBytes=JSON.stringify(legacyOptimizer);database.run("UPDATE router_state SET value=? WHERE key='native.token-optimizer.v1'",[legacyBytes]);
+  const projected=await (await optimizerGet())!.json() as any;
+  expect(rawConfig()).toBe(legacyBytes);expect(projected.config.workspaces).toEqual({});expect(projected.config.oversightWorkspaces).toEqual({});
+  expect(projected.config.policy).toMatchObject({enabled:false,mode:'off',oversightMode:'observe'});
+  const savedInstance=await handleRegisteredAddonConfigApiRequest(request('POST',{config:projected.config,expectedRevision:projected.revision}),'token-optimizer','config',(body,status=200)=>Response.json(body,{status}));
+  expect(savedInstance?.status).toBe(200);expect(JSON.parse(rawConfig())).toEqual(projected.config);
   expect(database.query('SELECT * FROM service_effect_s01_operations').all()).toEqual([]);
   const before=modelCalls;await backend.close();backend=await createDefaultApplicationRuntime(owner,async()=>services);await connected();expect(remoteCalls).toBe(2);expect(modelCalls).toBe(before);
  }finally{await backend?.close();await channel?.stop();await base.queue.shutdown();await pool?.shutdown();await closeDatabase();owner.release();setKeyMaterialProviderForTests(null);globalThis.fetch=originalFetch;}

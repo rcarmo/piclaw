@@ -98,8 +98,8 @@
     {
       "path": "runtime/web/static/classic/css/settings.css",
       "beforeSha256": "f4ea6b39bbef088bb0bf7ad8df8fb8d120fdec07e483999d5e0239fe54f758d4",
-      "afterSha256": "8092dc8244e7cb6ae6d677a5836d5e06823c3919a6657a5014be977201f9827a",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "9cc2c14cbf6d3d24790099ebba18e827e0787873adb2d03d0284464a965c1005",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Group the Classic optimiser settings, disclosures and separate maintenance surface."
     },
     {
       "path": "docs/tools-and-skills.md",

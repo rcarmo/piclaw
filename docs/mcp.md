@@ -129,6 +129,10 @@ The existing authenticated Core surface serves:
 - `GET /agent/settings/mcp`: redacted connections, status, Agent choices and migration diagnostics.
 - `POST /agent/settings/mcp`: `save`, `remove`, `reconnect`, `sign_in`, `sign_out` or `forget_recall`.
 - `GET /agent/settings/mcp/oauth/callback`: browser/state-bound OAuth completion.
-- `/agent/addons/api/token-optimizer/config`: independent optimisation/oversight configuration and scoped session actions.
+- `/agent/addons/api/token-optimizer/config`: instance-wide defaults for token optimisation and task oversight, per-Agent overrides, and scoped maintenance actions.
+
+The Classic Optimisation pane keeps the two modes separate. On first enable, token optimisation starts in **Watch only**. **Basic** makes no extra optimisation model calls; **Model-assisted** exposes the model choice and **Custom** exposes individual features. Both features share model budgets, but permitting model calls while watching and sharing a Plan item are separate choices.
+
+The pane has no Workspace level. Reads project this instance's previously saved Workspace modes into the instance defaults without writing. The next explicit save stores those defaults and removes the old local overrides, preserving effective modes and Agent choices. Maintenance updates the activity view without saving or discarding edits.
 
 Operator configuration requires a single-user administrator context. MCP configuration bodies are bounded to64KiB and five seconds, decode UTF-8 strictly and honour cancellation. Save/remove revisions and execution-time source checks remain authoritative. Responses omit secrets and saved secret-reference values.
