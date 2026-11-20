@@ -11,7 +11,6 @@ import { BunSqliteDatabase } from "../../runtime/durable-engine/src/bun-sqlite.j
 import { HostConversationRuntime, type AcceptedInput, type CapturedRunSource, type RuntimeOptions } from "../../runtime/durable-engine/src/host-runtime.js";
 import { createHostDurableBindings, initializeHostDurableBindings } from "../../runtime/durable-engine/src/host-bindings.js";
 import { createHostOperationAuthority } from "../../runtime/durable-engine/src/host-operation-authority.js";
-import { withTaskModelRequestScope } from "../../runtime/durable-engine/src/task-model-boundary-shim.js";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
 import { storeChatMetadata, storeMessage } from "../../runtime/src/db/messages.js";
 import { acquireRuntimeLock } from "../../runtime/src/runtime/single-instance.js";
@@ -55,7 +54,7 @@ applicationTest("SDK owns busy submit, follow-up, steering and source fences wit
   const bindings = createHostDurableBindings(database,{domain,incarnation:domain,manifest:[{chatJid:chat,branchId:"main",conversationId:fixture.root.id}],assertOwner:assert,
     async resolveContent(ref){const row=database.query("SELECT content FROM messages WHERE rowid=? AND chat_jid=?").get(Number(ref.slice(12)),chat) as {content:string}|null;if(!row)throw Error("Source unavailable");return row.content;}});
   const options: RuntimeOptions = {incarnation:domain,sessionId:domain,owner:{assert,release(){}},openStorage:storage,
-    harnessOptions:{models:fixture.models,registry:withTaskModelRequestScope(fixture.registry),settings:{retry:{enabled:false},compaction:{enabled:false}}},
+    harnessOptions:{models:fixture.models,registry:fixture.registry,settings:{retry:{enabled:false},compaction:{enabled:false}}},
     work:new Proxy(work,{get(target,key){if(key==="getOperation")return async()=>{throw Error("Host operation lookup must not govern native input");};const value=Reflect.get(target,key);return typeof value==="function"?value.bind(target):value;}}),terminal,bindings,
     conversationFor:()=>fixture.root.id,existingConversationIds:[fixture.root.id],
     authorizeScheduling(){throw Error("Host scheduling policy must not own native submit");},putAnswer(){throw Error("Host settlement must not own native answers");},now:()=>new Date().toISOString()};
@@ -241,7 +240,7 @@ for (const boundary of ["request", "yield"] as const) applicationTest(`Goal ${bo
   const bindings = createHostDurableBindings(database,{domain,incarnation:domain,manifest:[{chatJid:chat,branchId:"main",conversationId:fixture.root.id}],assertOwner:assert,
     async resolveContent(ref){const row=database.query("SELECT content FROM messages WHERE rowid=? AND chat_jid=?").get(Number(ref.slice(12)),chat) as {content:string}|null;if(!row)throw Error("Source unavailable");return row.content;}});
   runtime = await HostConversationRuntime.open({incarnation:domain,sessionId:domain,owner:{assert,release(){}},openStorage:storage,
-    harnessOptions:{models:fixture.models,registry:withTaskModelRequestScope(fixture.registry),settings:{retry:{enabled:false},compaction:{enabled:false}}},
+    harnessOptions:{models:fixture.models,registry:fixture.registry,settings:{retry:{enabled:false},compaction:{enabled:false}}},
     work,terminal,bindings,conversationFor:()=>fixture.root.id,existingConversationIds:[fixture.root.id],authorizeScheduling(){},putAnswer(){throw Error("No host answer owner");},now:()=>new Date().toISOString()},context);
   const accept = (content:string):AcceptedInput => database.transaction(()=>{
     const sourceId=crypto.randomUUID(),timestamp=new Date().toISOString();

@@ -15,15 +15,15 @@ export type TaskModelRequestScope = Pick<Runtime, "taskId" | "conversationId" | 
   readonly checkpointHash?: string;
   readonly toolCallId?: string;
 };
-const requests = new AsyncLocalStorage<TaskModelRequestScope>();
+const requests = new AsyncLocalStorage<TaskModelRequestScope & { readonly sdkSignal: AbortSignal }>();
 
 /** Trusted Core composition only. Identity is passive metadata, never an execution grant; callers fence its signal and source. */
 export function currentTaskExecutionScope(): TaskModelRequestScope | undefined { return requests.getStore(); }
 
 export function taskModelRequestScope(signal: AbortSignal | undefined): TaskModelRequestScope | undefined {
   const scope = requests.getStore();
-  if (!scope || !signal || scope.signal !== signal) return undefined;
-  signal.throwIfAborted();
+  if (!scope || !signal || (scope.signal !== signal && scope.sdkSignal !== signal)) return undefined;
+  scope.signal.throwIfAborted();
   return scope;
 }
 
@@ -42,7 +42,7 @@ export function taskModelToolScope(api: Pick<TaskModelRequestScope, 'taskId' | '
   scope.signal.throwIfAborted(); return scope;
 }
 
-/** Public phase adapter, still required with pi-durable 1.5.1. Replace with an SDK task-bound model-request
+/** Public phase adapter, still required with pi-durable 1.6.0. Replace with an SDK task-bound model-request
  * callback. Uses exported definitions and RegistryReader, without SDK file or
  * persisted-task mutation. Includes checkpoint recovery and every phase entry.
  * Identity is not dispatch/exactly-once proof. This adapter does not decide
@@ -67,9 +67,13 @@ export function withTaskModelRequestScope(registry: RegistryReader, cancellation
         const valid = record?.id === runtime.taskId && record.conversationId === runtime.conversationId
           && record.kind === definition.name && record.version === definition.version && record.state?.status === "running"
           && record.state.checkpoint?.phase === phase;
+        const sdkSignal=runtime.signal;
         const cancellation=valid?await cancellationFor?.(runtime.conversationId):undefined;
-        if(cancellation){
-          const original=runtime,signal=AbortSignal.any([runtime.signal,cancellation]);
+        const signal=cancellation ? AbortSignal.any([sdkSignal,cancellation]) : sdkSignal;
+        // 1.6 tracks provider sessions by the original runtime object. Keep it
+        // intact for generation and compaction; the host transport uses scope.signal.
+        if(cancellation && definition.name !== 'pi.generation' && definition.name !== 'pi.compaction'){
+          const original=runtime;
           const wrapTool=(tool:ToolRegistration):ToolRegistration=>({...tool,execute(args,api,ctx){
             signal.throwIfAborted();return tool.execute(args,api,withAbortSignal(signal,ctx));
           }});
@@ -85,7 +89,7 @@ export function withTaskModelRequestScope(registry: RegistryReader, cancellation
         const toolCallId = definition.name === 'pi.tool' && phase === 'call' && valid
           ? record.input.kind === 'model' ? record.input.callId : record.input.kind === 'nested' ? record.input.call?.id : undefined : undefined;
         const scope = Object.freeze({
-          taskId: runtime.taskId, conversationId: runtime.conversationId, signal: runtime.signal,
+          taskId: runtime.taskId, conversationId: runtime.conversationId, signal, sdkSignal,
           taskKind: definition.name, phase, ...(checkpointHash ? { checkpointHash } : {}),
           ...(typeof toolCallId === 'string' && toolCallId ? { toolCallId } : {}),
         });

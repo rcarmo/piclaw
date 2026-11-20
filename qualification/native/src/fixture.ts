@@ -4,6 +4,8 @@ import { AssistantMessageEventStream } from "../../../runtime/durable-engine/qua
 import { AssistantEntry, Harness, MemoryStorage, createRegistry, defineExtension, defineTool, type HarnessOptions, type Submission, type Storage } from "../../../runtime/durable-engine/qualification/durable.ts";
 import { hashCanonicalRequest, type EffectIdentity } from "../../../runtime/src/service-effects/contracts/common.js";
 
+import { taskModelRequestScope } from '../../../runtime/durable-engine/src/task-model-boundary-shim.js';
+
 export { context };
 export function barrier() {
   let release!: () => void;
@@ -59,7 +61,9 @@ export async function openFixture(owner: { acquired: boolean }, allocated = () =
   let attempt = 0;
   const stream = (_model: unknown, transcript: { messages: readonly { role: string; content: unknown }[] }, options?: { signal?: AbortSignal }) => {
     host.transcripts.push(JSON.stringify(transcript.messages));
-    host.onModelEnter?.(options?.signal); // Synchronous provider entry, before any synthetic hold or admission.
+    // Match the real host transport: lease cancellation affects the provider, not the SDK runtime object.
+    const signal = taskModelRequestScope(options?.signal)?.signal ?? options?.signal;
+    host.onModelEnter?.(signal); // Synchronous provider entry, before any synthetic hold or admission.
     const output = new AssistantMessageEventStream();
     void (async () => {
       let message: AssistantMessage = {
@@ -67,9 +71,9 @@ export async function openFixture(owner: { acquired: boolean }, allocated = () =
         usage: { input: host.tokens, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: host.tokens, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
       };
       try {
-        const requestContext = options?.signal ? withAbortSignal(options.signal, context) : context;
+        const requestContext = signal ? withAbortSignal(signal, context) : context;
         if (host.modelHold) await awaitWithContext(host.modelHold.promise, requestContext);
-        options?.signal?.throwIfAborted();
+        signal?.throwIfAborted();
         gate("model", `model:${++attempt}`, { transcript: JSON.stringify(transcript.messages) });
         host.modelCalls++;
         // Imported conversations may append a tool-catalog system entry after

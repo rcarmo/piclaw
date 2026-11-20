@@ -21,7 +21,12 @@ test('default factory scheduled execution uses native SDK authority and leaves h
   try{
     const due=new Date(Date.now()-1000).toISOString();createTask({id:'default-native-scheduled',chat_jid:'web:default',prompt:'Produce the original native result',task_kind:'agent',schedule_type:'once',schedule_value:due,next_run:due,status:'active',notify_on_complete:false,created_at:due});
     stop=startSchedulerLoop({queue:{enqueueTask(){throw Error('Host queue cannot place native scheduled work');}},agentPool:f.pool,sendMessage:async(_chat:string,text:string)=>{expect(getTaskRunLogs('default-native-scheduled')).toHaveLength(1);sent.push(text);}}as unknown as SchedulerDeps);
-    await f.entered.promise;expect(f.calls()).toBe(1);expect(f.root.query('SELECT harness_session_id,harness_operation_id FROM service_effect_s01_operations').get()).toEqual({harness_session_id:null,harness_operation_id:null});
+    let entered = false;
+    void f.entered.promise.then(() => { entered = true; });
+    const logs = () => getTaskRunLogs('default-native-scheduled');
+    await until(() => entered || logs().length > 0);
+    expect(entered, JSON.stringify(logs())).toBe(true);
+    expect(f.calls()).toBe(1);expect(f.root.query('SELECT harness_session_id,harness_operation_id FROM service_effect_s01_operations').get()).toEqual({harness_session_id:null,harness_operation_id:null});
     expect(f.root.query("SELECT active_operation_id FROM service_effect_s01_chats WHERE chat_jid='web:default'").get()).toEqual({active_operation_id:null});
     f.held.release();await until(()=>sent.length===1);await stop();
     expect(sent).toEqual(['Ordinary native reply']);expect(getTaskRunLogs('default-native-scheduled')[0]?.result).toBe('Ordinary native reply');expect(f.calls()).toBe(1);

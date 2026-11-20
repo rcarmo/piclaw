@@ -8,8 +8,8 @@
     {
       "path": "runtime/durable-engine/src/host-extension-catalog.ts",
       "beforeSha256": "24cda3691168179f509d034feeaed4c860ae267f27f3070694cc4aca27ab3059",
-      "afterSha256": "c3d8dfa1be4711d1bf0e4d422e172ecc91fc5e5da286088890df3c908a720097",
-      "purpose": "Admit the exact Draw.io 31.4.6 manifest alongside the existing 31.4.5 source pins for the repaired distribution; preserve the historical retirement disposition and accounting."
+      "afterSha256": "708747e48e821f32e6b3db52a729c5e23e626b05a3ccde6c9daf8757bd35686b",
+      "purpose": "Pin the exact Draw.io and Codex successor releases, and share fresh post-evaluation package discovery across source checks without changing historical retirement accounting."
     },
     {
       "path": "runtime/durable-engine/src/application-bootstrap.ts",
@@ -26,8 +26,8 @@
     {
       "path": "runtime/durable-engine/src/host-models.ts",
       "beforeSha256": "92e8c15ebdac6c8d4e1df588bd2f316fd1b3a42da4020021ffb3131ea7341d8a",
-      "afterSha256": "557d2501610add9f33ef42863301528fe18c757af085d418f59fcb9afc8e0a1a",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "12e4ba12e8f4c76c8ba119162896b95e864655693494a40f464f84082a10315a",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. SDK 1.6 preserves provider-runtime identity; forward scoped cancellation at the existing host provider boundary."
     },
     {
       "path": "runtime/durable-engine/src/host-runtime.ts",

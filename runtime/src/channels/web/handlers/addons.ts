@@ -15,7 +15,8 @@
  * Explicit non-tarball package specs remain available for third-party catalogs.
  */
 
-import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, mkdirSync, unlinkSync, writeFileSync, renameSync, symlinkSync } from "fs";
+import { createWriteStream, existsSync, lstatSync, readFileSync, readdirSync, rmSync, mkdirSync, unlinkSync, writeFileSync, renameSync, symlinkSync } from "fs";
+import { pipeline } from "node:stream/promises";
 import { join, dirname, extname, resolve } from "path";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
 import { getWorkspaceDir as getConfiguredWorkspaceDir } from "../../../core/config.js";
@@ -284,23 +285,6 @@ function getAddonAssetMimeType(assetPath: string): string {
   }
 }
 
-function maybeTranspileAddonAsset(assetPath: string, source: string): string {
-  const extension = extname(assetPath).toLowerCase();
-  if (extension === '.tsx') {
-    return new Bun.Transpiler({ loader: 'tsx' }).transformSync(source);
-  }
-  if (extension === '.jsx') {
-    return new Bun.Transpiler({ loader: 'jsx' }).transformSync(source);
-  }
-  if (extension === '.js' || extension === '.mjs' || extension === '.cjs') {
-    return new Bun.Transpiler({ loader: 'js' }).transformSync(source);
-  }
-  if (extension === '.ts') {
-    return new Bun.Transpiler({ loader: 'ts' }).transformSync(source);
-  }
-  return source;
-}
-
 export function parseCatalogUrlList(values: Array<string | null | undefined>): string[] {
   const urls: string[] = [];
   const seen = new Set<string>();
@@ -567,12 +551,14 @@ function describeAddonOperationFailure(action: 'install' | 'uninstall', error: u
 }
 
 async function downloadUrlToFile(url: string, destPath: string): Promise<void> {
-  const resp = await fetch(url, { signal: AbortSignal.timeout(30000) });
-  if (!resp.ok) throw new Error(`Failed to download ${url}: ${resp.status}`);
-  const data = new Uint8Array(await resp.arrayBuffer());
-  const dir = dirname(destPath);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(destPath, data);
+  const signal = AbortSignal.timeout(30_000);
+  const resp = await fetch(url, { signal });
+  if (!resp.ok || !resp.body) {
+    await resp.body?.cancel();
+    throw new Error(`Failed to download ${url}: ${resp.status}`);
+  }
+  mkdirSync(dirname(destPath), { recursive: true });
+  await pipeline(resp.body, createWriteStream(destPath, { flags: 'wx' }), { signal });
 }
 
 function resolveExtractedAddonRoot(stagingDir: string): string {
@@ -876,17 +862,13 @@ export async function handleAddonAssetRequest(
     return new Response(null, { headers });
   }
 
-  if (mimeType.startsWith('text/javascript')) {
-    const source = readFileSync(resolvedPath, 'utf8');
-    const code = maybeTranspileAddonAsset(resolvedPath, source);
+  const extension = extname(resolvedPath).toLowerCase();
+  if (extension === '.ts' || extension === '.tsx' || extension === '.jsx') {
+    const code = new Bun.Transpiler({ loader: extension.slice(1) as 'ts' | 'tsx' | 'jsx' }).transformSync(readFileSync(resolvedPath, 'utf8'));
     return new Response(code, { headers });
   }
-
-  if (mimeType.includes('charset=utf-8')) {
-    return new Response(readFileSync(resolvedPath, 'utf8'), { headers });
-  }
-
-  return new Response(readFileSync(resolvedPath), { headers });
+  // Already-built JS and data are browser assets, not server build inputs.
+  return new Response(Bun.file(resolvedPath), { headers });
 }
 
 export async function handleInstallAddon(

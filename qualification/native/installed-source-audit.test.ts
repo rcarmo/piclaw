@@ -51,6 +51,14 @@ test('installer preflight shares exact native package proof before activation', 
     rmSync(join(pkg,'compat/chat-context.js'));
     expect(auditInstalledApplicationAddonSources(f.cwd).profiles.length).toBe(21);
     expect(inspectAddonInstall('@third-party/unmanaged','1.0.0')).toBeUndefined();
+    const codex='@rcarmo/piclaw-addon-codex-conversion',codexDir=join(f.cwd,'.pi/extensions/node_modules',codex);
+    expect(inspectAddonInstall(codex,'0.2.3',codexDir)).toEqual({supportedVersion:'0.2.3'});
+    expect(inspectAddonInstall(codex,'0.2.4')).toEqual({supportedVersion:'0.2.4'});
+    expect(inspectAddonInstall(codex,'0.2.4',codexDir)?.problem).toContain('does not match');
+    const codexManifest=join(codexDir,'package.json'), codexBytes=readFileSync(codexManifest,'utf8');
+    writeFileSync(codexManifest,codexBytes.replace('"version": "0.2.3"','"version": "0.2.4"'));
+    expect(inspectAddonInstall(codex,'0.2.4',codexDir)?.problem).toContain('does not match');
+    expect(()=>auditInstalledApplicationAddonSources(f.cwd)).toThrow('Unqualified installed add-on');
   }finally{cleanup(f.cwd);}
 });
 

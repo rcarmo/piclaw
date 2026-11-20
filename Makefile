@@ -143,7 +143,7 @@ build-web: ## Build web JS/CSS bundles (+ sourcemaps) into static/classic/dist, 
 	cd runtime && bun run build:web
 	@bun run test:local --cwd runtime --env PICLAW_DB_IN_MEMORY=1 -- bun test --timeout $(WEB_BUILD_TEST_TIMEOUT_MS) test/channels/web/web-build.test.ts test/channels/web/post-link-preview-content.test.ts
 	@# Pre-compress static assets for faster first-request serving
-	@find runtime/web/static -type f \( -name '*.js' -o -name '*.css' -o -name '*.json' -o -name '*.svg' \) \
+	@find runtime/web/static -type f \( -name '*.js' -o -name '*.mjs' -o -name '*.css' -o -name '*.json' -o -name '*.svg' -o -name '*.wasm' \) \
 		! -name '*.gz' ! -name '*.br' -size +1k \
 		-exec sh -c 'gzip -9 -k -f "$$1"' _ {} \;
 	@bun run scripts/check-vendor-compressed.ts

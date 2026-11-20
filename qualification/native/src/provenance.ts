@@ -4,9 +4,9 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 const base = resolve(import.meta.dir, "..");
-const manifestPath = join(base, "provenance.json");
+const manifestPath = join(base, "provenance-1.6.0.json");
 const engine = resolve(base, "../../runtime/durable-engine");
-const names = ["chord", "pi-ai", "pi-codemode", "pi-durable", "pi-telemetry"];
+const names = ["chord", "pi-ai", "pi-codemode", "pi-durable", "pi-mcp", "pi-telemetry"];
 type PackageEvidence = { name: string; version: string; tarball: string; sha1: string; integrity: string; files: Record<string, string> };
 type Evidence = { registry: string; recordedAt: string; packages: PackageEvidence[] };
 const digest = (bytes: Uint8Array, algorithm = "sha256", encoding: "hex" | "base64" = "hex") => createHash(algorithm).update(bytes).digest(encoding);
@@ -33,7 +33,7 @@ export async function verifyProvenance() {
   const lock = Bun.JSON5.parse(await Bun.file(join(engine, "bun.lock")).text()) as { packages: Record<string, unknown[]> };
   equal(evidence.packages.map(p => p.name), names.map(n => `@earendil-works/${n}`), "package closure");
   for (const pkg of evidence.packages) {
-    equal(pkg.version, "1.5.2", pkg.name);
+    equal(pkg.version, "1.6.0", pkg.name);
     equal(lock.packages[pkg.name]?.at(-1), pkg.integrity, `${pkg.name} lock integrity`);
     equal(await filesAt(join(engine, "node_modules", pkg.name)), pkg.files, `${pkg.name} installed bytes`);
   }
@@ -48,10 +48,10 @@ if (import.meta.main) {
     const evidence: Evidence = { registry: "https://registry.npmjs.org", recordedAt: new Date().toISOString(), packages: [] };
     for (const name of names) {
       const fullName = `@earendil-works/${name}`;
-      const response = await fetch(`${evidence.registry}/${fullName}/1.5.2`);
+      const response = await fetch(`${evidence.registry}/${fullName}/1.6.0`);
       if (!response.ok) throw new Error(`Registry metadata HTTP ${response.status}`);
       const metadata = await response.json() as { name: string; version: string; dist: { tarball: string; shasum: string; integrity: string } };
-      equal(metadata.name, fullName, "registry name"); equal(metadata.version, "1.5.2", "registry version");
+      equal(metadata.name, fullName, "registry name"); equal(metadata.version, "1.6.0", "registry version");
       if (!metadata.dist.tarball.startsWith(`${evidence.registry}/`)) throw new Error("Non-registry tarball");
       const archiveResponse = await fetch(metadata.dist.tarball);
       if (!archiveResponse.ok) throw new Error(`Registry archive HTTP ${archiveResponse.status}`);
@@ -66,7 +66,7 @@ if (import.meta.main) {
       equal(await filesAt(join(engine, "node_modules", fullName)), files, `${name} extracted vs installed all files`);
       evidence.packages.push({ name: fullName, version: metadata.version, tarball: metadata.dist.tarball, sha1: metadata.dist.shasum, integrity: metadata.dist.integrity, files });
       await rm(join(scratch, "package"), { recursive: true });
-      console.log(`${fullName}@1.5.2: verified ${Object.keys(files).length} files; SHA1 ${metadata.dist.shasum}; ${metadata.dist.integrity}`);
+      console.log(`${fullName}@1.6.0: verified ${Object.keys(files).length} files; SHA1 ${metadata.dist.shasum}; ${metadata.dist.integrity}`);
     }
     await Bun.write(manifestPath, JSON.stringify(evidence, null, 2) + "\n");
     await verifyProvenance();
