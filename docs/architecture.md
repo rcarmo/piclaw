@@ -184,7 +184,7 @@ Piclaw also ships **packaged runtime extensions** under `extensions/` in the pac
 | `integrations/azure-openai.ts` | `AOAI_BASE_URL` must be set | Azure OpenAI + Foundry provider with managed-identity or API-key auth |
 | `integrations/context-mode.ts` | Always loaded | Tool-output storage, search handles, and `exec_batch` tool |
 | `integrations/mcp-status-hints/` | Always loaded | Status-hint providers for MCP/proxy and prefixed-tool surfaces when registry metadata is incomplete |
-| `integrations/keychain/` | Always loaded | `keychain` tool for list/get/set/delete of secure entries |
+| `integrations/keychain/` | Retained adapter, not loaded by the native runtime | Metadata-only `keychain` listing. The native runtime registers its own model-facing tool with the same contract. |
 | `integrations/ssh/` | Always loaded | `ssh` agent-only tool for session-scoped SSH profile `get`/`set`/`clear` |
 | `node_modules/pi-mcp-adapter/index.ts` | Always loaded | Bundled Pi package extension that exposes the token-efficient `mcp` proxy tool plus `/mcp`, `/mcp setup`, and `/mcp-auth` commands for external MCP servers configured through shared `.mcp.json` / `~/.config/mcp/mcp.json` with optional Pi-specific override layers |
 | per-session `ssh-core` session extension | Created per session by `AgentPool` | Wraps `read`/`write`/`edit`/`bash` with session-scoped local-or-remote SSH execution |

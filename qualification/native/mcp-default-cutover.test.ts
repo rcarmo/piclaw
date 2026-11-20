@@ -6,6 +6,9 @@ import {isolatedApplicationTest} from './src/isolated-application-test.js';
 import {initDatabase,getDb,closeDatabase} from '../../runtime/src/db/connection.js';
 import {acquireRuntimeLock} from '../../runtime/src/runtime/single-instance.js';
 import {createDefaultApplicationRuntime} from '../../runtime/durable-engine/src/default-application-runtime.js';
+import {createHostKeychainTool} from '../../runtime/durable-engine/src/host-keychain-tool.js';
+import {BACKGROUND_CONTEXT,withAbortSignal} from '../../runtime/durable-engine/qualification/context.js';
+import type {ConversationId,TaskId,ToolExecutionApi} from '../../runtime/durable-engine/qualification/durable.js';
 import {createRuntimeBaseServices} from '../../runtime/src/runtime/composition.js';
 import {createTestCredentialStore} from '../../runtime/test/model-services-fixture.js';
 import {AgentPool} from '../../runtime/src/agent-pool.js';
@@ -20,6 +23,21 @@ import {ModelRuntime,ModelRegistry,SettingsManager} from '../../node_modules/@ea
 import {createAssistantMessageEventStream} from '../../node_modules/@earendil-works/pi-ai';
 
 const test=isolatedApplicationTest(import.meta.url),path='/agent/settings/mcp';
+test('native keychain checks exact task authority after the asynchronous capture', async () => {
+ const controller=new AbortController();let captures=0;
+ const api={conversationId:1 as ConversationId,taskId:2 as TaskId,callId:'inventory'} as ToolExecutionApi;
+ const revoked=createHostKeychainTool({assertCurrent(){},async captureSourceGuard(call){
+  captures++;expect(call).toEqual({conversationId:api.conversationId,taskId:api.taskId,toolCallId:api.callId});
+  return ()=>{throw Error('revoked fixture');};
+ }});
+ expect(revoked.callers).toEqual(['model']);expect(revoked.replay).toBe('unsafe');
+ await expect(revoked.execute({action:'list'},api,BACKGROUND_CONTEXT)).rejects.toThrow('revoked fixture');
+ const cancelled=createHostKeychainTool({assertCurrent(){},async captureSourceGuard(){
+  captures++;controller.abort(Error('cancelled fixture'));return ()=>{throw Error('must not inspect source after cancellation');};
+ }});
+ await expect(cancelled.execute({action:'list'},api,withAbortSignal(controller.signal,BACKGROUND_CONTEXT))).rejects.toThrow('cancelled fixture');
+ expect(captures).toBe(2);
+});
 test('default outbound MCP migrates references, preserves script values, fences revocation and reopens without replay',async()=>{
  const workspace=process.env.PICLAW_WORKSPACE!;process.env.PICLAW_DB_IN_MEMORY='0';initDatabase();const database=getDb();
  const owner=acquireRuntimeLock({lockPath:join(workspace,'mcp-cutover.lock'),strictOwnership:true,disabled:false});
@@ -45,9 +63,11 @@ test('default outbound MCP migrates references, preserves script values, fences 
  const legacy=JSON.stringify({mcpServers:{fixture:{url:'https://mcp.fixture.invalid/mcp',bearerTokenEnv:'FIXTURE_MCP_TOKEN',bearerTokenKeychain:'fixture/mcp',directTools:false}}});writeFileSync(legacyPath,legacy);
  const credentials=createTestCredentialStore({fixture:{type:'api_key',key:'synthetic-only'}}),host=await ModelRuntime.create({credentials,modelsPath:null,modelsStore:{read:async()=>undefined,write:async()=>{},delete:async()=>{}},allowModelNetwork:false,refreshOnCreate:false});
  const model:any={provider:'fixture',id:'main',name:'main',api:'openai-completions',baseUrl:'https://fixture.invalid',input:['text'],reasoning:false,contextWindow:128000,maxTokens:1000,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}};
+ let keychainDeclaration: any;
  let requestedTool='codemode';const code="const value=await tools.mcp__fixture__echo({message:'DEFAULT_HTTP'});if(value.lines.length!==3000||value.tail!=='COMPLETE_TAIL')throw Error('Script value lost');const resources=await tools.mcp__fixture__resources_list({});if(resources.resources[0].uri!=='memory://fixture')throw Error('Resource list lost');const resource=await tools.mcp__fixture__resource_read({uri:'memory://fixture'});if(resource.contents[0].text!=='RESOURCE_OK')throw Error('Resource value lost');return 'DEFAULT_SCRIPT_OK';";
  const run=(_physical:any,transcript:any)=>{modelCalls++;const stream=createAssistantMessageEventStream(),tool=modelCalls%2===1;if(!tool)receipts.push(transcript.messages.filter((message:any)=>message.role==='toolResult').at(-1));
-  const message:any={role:'assistant',api:model.api,provider:model.provider,model:model.id,timestamp:Date.now(),content:tool?[{type:'toolCall',id:'code-'+modelCalls,name:requestedTool,arguments:requestedTool==='bash'?{command:'seq 1 3000'}:{code}}]:[{type:'text',text:'Fixture settled.'}],stopReason:tool?'toolUse':'stop',usage:{input:2,output:1,cacheRead:0,cacheWrite:0,totalTokens:3,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}};queueMicrotask(()=>{stream.push({type:'done',reason:message.stopReason,message});stream.end(message);});return stream;
+  keychainDeclaration ??= transcript.messages.flatMap((message:any)=>message.toolsAdded??[]).find((declaration:any)=>declaration.name==='keychain');
+  const message:any={role:'assistant',api:model.api,provider:model.provider,model:model.id,timestamp:Date.now(),content:tool?[{type:'toolCall',id:'code-'+modelCalls,name:requestedTool,arguments:requestedTool==='bash'?{command:'seq 1 3000'}:requestedTool==='keychain'?{action:'list',query:'fixture/mcp'}:{code}}]:[{type:'text',text:'Fixture settled.'}],stopReason:tool?'toolUse':'stop',usage:{input:2,output:1,cacheRead:0,cacheWrite:0,totalTokens:3,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}};queueMicrotask(()=>{stream.push({type:'done',reason:message.stopReason,message});stream.end(message);});return stream;
  };
  host.registerNativeProvider({id:'fixture',name:'Fixture',getModels:()=>[model],auth:{apiKey:{name:'Synthetic',resolve:async()=>({auth:{},source:'fixture'})}},stream:run as any,streamSimple:run as any});await host.refresh({allowNetwork:false});await host.getAvailable();const registry=new ModelRegistry(host),settings=SettingsManager.create(workspace,getPiclawAgentDir());settings.setDefaultModelAndProvider('fixture','main');await settings.flush();
  const services:any={modelRuntime:host,modelRegistry:registry},base=createRuntimeBaseServices({dataDir:workspace});let backend:Awaited<ReturnType<typeof createDefaultApplicationRuntime>>|undefined,pool:AgentPool|undefined,channel:WebChannel|undefined;
@@ -83,6 +103,15 @@ test('default outbound MCP migrates references, preserves script values, fences 
   requestedTool='bash';await send(4);
   const retained=database.query("SELECT text FROM retained_tool_outputs WHERE tool='bash'").all() as {text:string}[];
   expect(retained.some(row=>row.text.includes('2999\n3000')),JSON.stringify(retained.map(row=>({length:row.text.length,tail:row.text.slice(-40)})))).toBe(true);expect(receipts[3]?.isError).not.toBe(true);expect(remoteCalls).toBe(2);
+  expect(keychainDeclaration).toBeDefined();
+  expect(Object.keys(keychainDeclaration.parameters.properties).sort()).toEqual(['action','limit','offset','query']);
+  const inventoryBefore=database.query('SELECT name, type, hex(ciphertext) ciphertext FROM keychain_entries ORDER BY name').all();
+  requestedTool='keychain';await send(5);
+  expect(receipts[4]?.isError).not.toBe(true);
+  expect(JSON.parse(receipts[4].content[0].text)).toEqual({count:1,total:1,offset:0,entries:[{name:'fixture/mcp',type:'token',shellEnv:'FIXTURE_MCP'}]});
+  expect(JSON.stringify(receipts[4])).not.toContain(secret);
+  expect(database.query('SELECT name, type, hex(ciphertext) ciphertext FROM keychain_entries ORDER BY name').all()).toEqual(inventoryBefore);
+  expect(remoteCalls).toBe(2);
   expect(database.query('SELECT * FROM service_effect_s01_operations').all()).toEqual([]);
   const before=modelCalls;await backend.close();backend=await createDefaultApplicationRuntime(owner,async()=>services);await connected();expect(remoteCalls).toBe(2);expect(modelCalls).toBe(before);
  }finally{await backend?.close();await channel?.stop();await base.queue.shutdown();await pool?.shutdown();await closeDatabase();owner.release();setKeyMaterialProviderForTests(null);globalThis.fetch=originalFetch;}

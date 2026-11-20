@@ -215,7 +215,7 @@
       "deliveryOwner": "#1877",
       "originalSha256": "a64d2881c5a7e657f71e965f4beb5a581dc07e9797edd1123af3739af3f0ca63",
       "state": "retained-decoupled",
-      "currentSha256": "85de1db072f2c7e3f5280ca93cab21329da6a2ce8f3052e400202ecee97ce2a7",
+      "currentSha256": "8f54ce54249ca9a06d384f6b7b986f9d8c91fb7fa82443e3c6ebf4db6cd7456d",
       "currentPurpose": "application route/source/auth/resource composition and SDK lifecycle/result publication; no financial owner or native host execution slot",
       "directImportCallers": []
     },
@@ -1775,7 +1775,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "d9ac97d915129c33d421899c53dad4112f508194e2a5df11f7d42c08b85a1b84",
       "state": "retained-decoupled",
-      "currentSha256": "61c5d8b1d5736ea618642509ee730597dada7f49de1f342c29e765e0bf5948b1",
+      "currentSha256": "ddf9afbab50ebb9cba9f65a09fe20c0bcc8e43fc11de67c0d70b9d14864e8ff3",
       "currentPurpose": "existing nonfinancial tool/UI/route/schedule definition/occurrence control; monetary option/registration removed",
       "directImportCallers": [
         {
@@ -1843,7 +1843,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "c91655267013334a8413b3610fa2d2e0e2697bee07a6978b0ae884bc00939e1d",
       "state": "retained-decoupled",
-      "currentSha256": "3243d4482c27f6eaa1dd3c7eb5dc3ce205d575085d775d8d1f2b92f196b04fb7",
+      "currentSha256": "5c5884c3d5e44f482c3094f8716aa84fc017088b7f82a91018f5652d2fd8035d",
       "currentPurpose": "tool effect/read-only/replay and preparation classification; no financial tool or monetary admission",
       "directImportCallers": [
         {
@@ -1859,7 +1859,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "088a134760842dddd7adb401426001eef2dbdef1dc9f422388f1ca688474228b",
       "state": "retained-decoupled",
-      "currentSha256": "7e7cee875d878bd7c27d2a57d54ede5c2a4f9466a7c3d2f53efe848d548a42c2",
+      "currentSha256": "0e08d5cff22b7087a5b11309899e57a6b8e4e674f7456ea7cdaba28922d9821f",
       "currentPurpose": "tool effect/read-only/replay and preparation classification; no financial tool or monetary admission",
       "directImportCallers": [
         {
@@ -2304,7 +2304,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "43057fe8e650387ce57e56464d7c6073cff0b789d82be0fe0eb7f035551d8ce0",
       "state": "retained-decoupled",
-      "currentSha256": "de7e9d4d570ad1d7ab85b09deb243b5b825ddb16cb8b30de55a78c0404c7b236",
+      "currentSha256": "7c8e1d1be9b4bd8d2dae8cd4e4e0e617c7f7e9af0b244cd679258ec47536e090",
       "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
       "directImportCallers": []
     },
@@ -2326,7 +2326,7 @@
       "deliveryOwner": "#1881",
       "originalSha256": "92bf8e7afe1e2851b0f0f90262729411bd58776cbb38685ffd1dd5b1900350e6",
       "state": "retained-decoupled",
-      "currentSha256": "5e3212ee821b5c1f83ddbc3535ebb924c3316133a4cfa9397a70f5ad97fc69f9",
+      "currentSha256": "12e15dbd17dc5a35ab08ecc215cca8db67f2c62fefea15ef5c4aeb4284c85707",
       "currentPurpose": "documentation: current observational/source contract or explicitly archived earlier design; no runtime registration",
       "directImportCallers": []
     },

@@ -233,7 +233,7 @@ Image-editing example:
 - `list_models` — list available models/providers
 - `switch_model` — switch to a different model
 - `switch_thinking` — change thinking level (off → xhigh)
-- `keychain` — list, get, set, and delete encrypted keychain entries
+- `keychain` — [list local credential references and eligible shell variables](keychain.md#agent-tool); use Settings → Keychain to manage secrets
 - `env` — get, set, or clear persistent workspace-scoped environment variables (managed block in `/workspace/.env.sh`, with immediate `process.env` updates for later tool calls; `set` also accepts `$NAME`/`${NAME}` copies)
 - `schedule_task` — schedule agent prompts or shell commands (cron, interval, or one-shot)
 - `scheduled_tasks` — inspect scheduled-task records via a shared query surface (`list` / `get`, optional latest-run summaries)

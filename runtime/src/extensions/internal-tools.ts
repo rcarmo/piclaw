@@ -453,7 +453,7 @@ const HINT = [
   "- Keep output direct, concise, and specific. Lead with findings.",
   "- Attach generated files to the chat with attach_file instead of only naming paths.",
   `- Prefer Bun scripts over Python/uv. ${process.platform === "linux" ? "Use \\`brew install\\` for system tools, \\`sudo apt install\\` for system-level dependencies." : "Use \\`brew install\\` for system tools."}`,
-  "- Keychain entries are auto-injected as $ENV_VARS into bash (names with `/`, `-`, `.` become `_` and uppercase). Never fetch secrets and inline them.",
+  "- Use keychain action=list for local credential references and eligible shell variables. Prefer tool reference fields or a literal $NAME in bash. Manage secret values in Settings → Keychain, not in agent tool calls.",
 ].join("\n");
 
 const PRIMARY_TOOL_NAME = "list_tools";

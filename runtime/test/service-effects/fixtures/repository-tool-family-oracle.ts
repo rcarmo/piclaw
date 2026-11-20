@@ -385,14 +385,13 @@ export function extractLiteralRegistrationParameterFields(
   files: Readonly<Record<string, string>> = {},
 ): RegistrationParameterInventory {
   const ast = sourceFile(file, source);
-  const variables = variableInitializers(ast);
   const constants = stringConstants(ast);
   const fieldsByTool: Record<string, readonly string[]> = Object.create(null);
   const unresolvedSchemas: Array<Readonly<{ file: string; registration: string }>> = [];
-  const parameterKeys = (expression: ts.Expression, seen = new Set<string>()): string[] | null => {
+  const parameterKeys = (expression: ts.Expression, owner = file, parsed = ast, seen = new Set<string>()): string[] | null => {
     if (ts.isCallExpression(expression)) {
       const argument = expressionArgument(expression.arguments[0]);
-      if (argument) return parameterKeys(argument, seen);
+      if (argument) return parameterKeys(argument, owner, parsed, seen);
     }
     if (ts.isObjectExpression(expression)) {
       const jsonSchemaProperties = objectProperty(expression, "properties");
@@ -407,10 +406,21 @@ export function extractLiteralRegistrationParameterFields(
       }
       return names;
     }
-    if (ts.isIdentifier(expression) && !seen.has(expression.name)) {
-      seen.add(expression.name);
-      const initializer = variables.get(expression.name);
-      return initializer ? parameterKeys(initializer, seen) : null;
+    if (ts.isIdentifier(expression)) {
+      const identity = `${owner}#${expression.name}`;
+      if (seen.has(identity)) return null;
+      seen.add(identity);
+      const local = variableInitializers(parsed).get(expression.name);
+      if (local) return parameterKeys(local, owner, parsed, seen);
+      const binding = importBindings(parsed).get(expression.name);
+      const target = binding && resolveSourceFile(owner, binding.specifier, files);
+      if (!binding || !target) return null;
+      const other = sourceFile(target, files[target]);
+      for (const statement of other.statements) {
+        if (!ts.isExportNamedDeclaration(statement) || !ts.isVariableDeclaration(statement.declaration) || statement.declaration.kind !== "const") continue;
+        const initializer = statement.declaration.declarations.find(entry => ts.isIdentifier(entry.id) && entry.id.name === binding.imported)?.init;
+        if (initializer && ts.isExpression(initializer)) return parameterKeys(initializer, target, other, seen);
+      }
     }
     return null;
   };

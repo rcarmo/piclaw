@@ -331,12 +331,13 @@ const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
     }),
   },
   keychain: {
-    kind: "mixed",
+    kind: "read-only",
     weight: "lightweight",
     recommend: rec({
       domains: ["auth", "credentials", "secrets"],
-      verbs: ["inspect", "store", "update", "delete"],
-      nouns: ["keychain", "secret", "credential", "token", "password"],
+      verbs: ["find", "list", "inspect"],
+      nouns: ["keychain", "credential reference", "shell variable"],
+      negativeTerms: ["store", "delete", "rotate", "reveal"],
     }),
   },
 
