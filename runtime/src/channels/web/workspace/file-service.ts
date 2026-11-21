@@ -49,16 +49,28 @@ interface ArchiveEntrySummary {
   isDirectory: boolean;
 }
 
-function parseZipEntries(buffer: Buffer, maxEntries = 200): { entries: ArchiveEntrySummary[]; totalEntries: number; truncated: boolean } {
+function readZipEntries(filePath: string, maxEntries = 200): { entries: ArchiveEntrySummary[]; totalEntries: number; truncated: boolean } {
+  const fd = openSync(filePath, constants.O_RDONLY | constants.O_NONBLOCK);
+  try {
+    const stats = fstatSync(fd);
+    if (!stats.isFile()) throw Error("Preview requires a regular file");
+    return parseZipEntries(fd, stats.size, maxEntries);
+  } finally { closeSync(fd); }
+}
+
+function parseZipEntries(fd: number, size: number, maxEntries: number): { entries: ArchiveEntrySummary[]; totalEntries: number; truncated: boolean } {
   const eocdSignature = 0x06054b50;
   const cdSignature = 0x02014b50;
   const minEocdSize = 22;
   const maxCommentSize = 0xffff;
-  const searchStart = Math.max(0, buffer.length - (minEocdSize + maxCommentSize));
+  const tailSize = Math.min(size, minEocdSize + maxCommentSize);
+  const tail = Buffer.allocUnsafe(tailSize);
+  readExact(fd, tail, size - tailSize);
 
   let eocdOffset = -1;
-  for (let offset = buffer.length - minEocdSize; offset >= searchStart; offset -= 1) {
-    if (buffer.readUInt32LE(offset) === eocdSignature) {
+  for (let offset = tail.length - minEocdSize; offset >= 0; offset -= 1) {
+    if (tail.readUInt32LE(offset) === eocdSignature &&
+        offset + minEocdSize + tail.readUInt16LE(offset + 20) === tail.length) {
       eocdOffset = offset;
       break;
     }
@@ -67,36 +79,39 @@ function parseZipEntries(buffer: Buffer, maxEntries = 200): { entries: ArchiveEn
     throw new Error("ZIP end-of-central-directory record not found");
   }
 
-  const entryCount = buffer.readUInt16LE(eocdOffset + 10);
-  const centralDirectoryOffset = buffer.readUInt32LE(eocdOffset + 16);
+  const entryCount = tail.readUInt16LE(eocdOffset + 10);
+  const centralDirectoryOffset = tail.readUInt32LE(eocdOffset + 16);
+  const end = centralDirectoryOffset + tail.readUInt32LE(eocdOffset + 12);
+  if (tail.readUInt16LE(eocdOffset + 4) !== 0 || tail.readUInt16LE(eocdOffset + 6) !== 0 ||
+      tail.readUInt16LE(eocdOffset + 8) !== entryCount || end > size - tailSize + eocdOffset ||
+      entryCount === 0xffff || centralDirectoryOffset === 0xffffffff) throw Error("Unsupported ZIP directory");
 
   const entries: ArchiveEntrySummary[] = [];
+  const header = Buffer.allocUnsafe(46);
   let offset = centralDirectoryOffset;
   let totalEntries = 0;
+  let shownNameBytes = 0;
 
-  while (offset + 46 <= buffer.length && totalEntries < entryCount) {
-    if (buffer.readUInt32LE(offset) !== cdSignature) break;
-    const compressedSize = buffer.readUInt32LE(offset + 20);
-    const uncompressedSize = buffer.readUInt32LE(offset + 24);
-    const fileNameLength = buffer.readUInt16LE(offset + 28);
-    const extraLength = buffer.readUInt16LE(offset + 30);
-    const commentLength = buffer.readUInt16LE(offset + 32);
-    const externalAttrs = buffer.readUInt32LE(offset + 38);
-    const nameStart = offset + 46;
+  while (totalEntries < entryCount) {
+    if (offset + header.length > end) throw Error("Truncated ZIP directory");
+    readExact(fd, header, offset);
+    if (header.readUInt32LE(0) !== cdSignature) throw Error("Invalid ZIP directory entry");
+    const fileNameLength = header.readUInt16LE(28);
+    const nameStart = offset + header.length;
     const nameEnd = nameStart + fileNameLength;
-    if (nameEnd > buffer.length) break;
-    const name = buffer.toString("utf8", nameStart, nameEnd);
-    const isDirectory = name.endsWith("/") || ((externalAttrs >>> 16) & 0o170000) === 0o040000;
+    offset = nameEnd + header.readUInt16LE(30) + header.readUInt16LE(32);
+    if (offset > end) throw Error("Truncated ZIP directory entry");
     totalEntries += 1;
-    if (entries.length < maxEntries) {
-      entries.push({
-        name,
-        compressedSize,
-        uncompressedSize,
-        isDirectory,
-      });
-    }
-    offset = nameEnd + extraLength + commentLength;
+    // Bound displayed text as well as buffers. Once the first name cannot fit,
+    // keep counting headers, but don't read more names or any member data.
+    if (entries.length !== totalEntries - 1 || entries.length >= maxEntries ||
+        shownNameBytes + fileNameLength > MAX_PREVIEW_BYTES) continue;
+    const nameBytes = Buffer.allocUnsafe(fileNameLength);
+    readExact(fd, nameBytes, nameStart);
+    const name = nameBytes.toString("utf8");
+    shownNameBytes += fileNameLength;
+    entries.push({ name, compressedSize: header.readUInt32LE(20), uncompressedSize: header.readUInt32LE(24),
+      isDirectory: name.endsWith("/") || ((header.readUInt32LE(38) >>> 16) & 0o170000) === 0o040000 });
   }
 
   return {
@@ -104,6 +119,14 @@ function parseZipEntries(buffer: Buffer, maxEntries = 200): { entries: ArchiveEn
     totalEntries,
     truncated: totalEntries > entries.length,
   };
+}
+
+function readExact(fd: number, buffer: Buffer, position: number): void {
+  for (let offset = 0; offset < buffer.length;) {
+    const count = readSync(fd, buffer, offset, buffer.length - offset, position + offset);
+    if (count === 0) throw Error("Truncated ZIP archive");
+    offset += count;
+  }
 }
 
 function readFilePrefix(path: string, limit: number): Buffer {
@@ -342,9 +365,8 @@ export class WorkspaceFileService {
 
       if (!isEditMode && (ext === ".zip" || isTarGzPath(targetPath))) {
         try {
-          const buffer = readFileSync(targetPath);
           const isZip = ext === ".zip";
-          const parsed = isZip ? parseZipEntries(buffer) : parseTarEntries(gunzipSync(buffer));
+          const parsed = isZip ? readZipEntries(targetPath) : parseTarEntries(gunzipSync(readFileSync(targetPath)));
           return {
             status: 200,
             body: {

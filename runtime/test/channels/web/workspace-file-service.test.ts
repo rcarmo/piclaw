@@ -143,6 +143,49 @@ test("getFile handles invalid, directory, text/json/image, archive and binary mo
   }
 });
 
+test("ZIP preview reads only the directory, bounds names and keeps the 200-row listing", () => {
+  const { prefix, base, cleanup, service } = setupWorkspaceDir();
+  const path = join(base, "bundle.zip");
+  const entries = Object.fromEntries(Array.from({ length: 201 }, (_, index) => [`notes/${index}.txt`, strToU8("hello")]));
+  // Maximum EOCD comment must still leave the real directory discoverable.
+  const archive = Buffer.from(zipSync(entries));
+  const comment = Buffer.alloc(0xffff, 0x2e);
+  comment.writeUInt32LE(0x06054b50, 600); // not an EOCD at the end of this file
+  archive.writeUInt16LE(comment.length, archive.length - 2);
+  writeFileSync(path, Buffer.concat([archive, comment]));
+  const readAll = spyOn(fs, "readFileSync");
+  try {
+    const response = service.getFile(`${prefix}/bundle.zip`);
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ kind: "text", size: archive.length + comment.length, truncated: true });
+    const text = (response.body as { text: string }).text;
+    expect(text).toContain("Entries: 201");
+    expect(text).toContain("notes/199.txt");
+    expect(text).not.toContain("notes/200.txt");
+    expect(text).toContain("showing first 200 entries of 201");
+    expect(readAll.mock.calls.some(([target]) => target === path)).toBe(false);
+    const long = Buffer.from(zipSync({ [`a${"x".repeat(40_000)}`]: strToU8("a"), [`b${"x".repeat(40_000)}`]: strToU8("b") }));
+    writeFileSync(path, long);
+    const bounded = service.getFile(`${prefix}/bundle.zip`);
+    expect(bounded.body).toMatchObject({ kind: "text", truncated: true });
+    expect((bounded.body as { text: string }).text).toContain("showing first 1 entries of 2");
+    expect(Buffer.byteLength((bounded.body as { text: string }).text)).toBeLessThan(65_536);
+  } finally { readAll.mockRestore(); cleanup(); }
+});
+
+test("ZIP preview rejects a central directory outside the file without reading member data", () => {
+  const { prefix, base, cleanup, service } = setupWorkspaceDir();
+  const path = join(base, "bundle.zip");
+  const archive = Buffer.from(zipSync({ "ok.txt": strToU8("ok") }));
+  archive.writeUInt32LE(0xfffffff0, archive.length - 6);
+  writeFileSync(path, archive);
+  try {
+    const response = service.getFile(`${prefix}/bundle.zip`);
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ kind: "binary", truncated: false });
+  } finally { cleanup(); }
+});
+
 test("ordinary previews never read the whole file to truncate it", () => {
   const { prefix, base, cleanup, service } = setupWorkspaceDir();
   const path = join(base, "large.txt");
