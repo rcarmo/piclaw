@@ -8,7 +8,7 @@ import { Database } from "bun:sqlite";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
-import { Harness, LiveDoc, AssistantEntry, type Tx, type ConversationId } from "../../runtime/durable-engine/qualification/durable.ts";
+import { Harness, LiveDoc, AssistantEntry, defineEntry, type Tx, type ConversationId } from "../../runtime/durable-engine/qualification/durable.ts";
 import type { TerminalCommit, TerminalDatabaseEffect } from "../../runtime/src/service-effects/contracts/terminal-settlement-store.js";
 import type { AssistantMessage } from "../../runtime/durable-engine/qualification/ai.ts";
 import { HostConversationRuntime, type AcceptedInput, type RuntimeOptions, type SettledAnswer } from "../../runtime/durable-engine/src/index.js";
@@ -620,7 +620,10 @@ test("runtime: settled activity includes late optimiser receipts but not the nex
     id,name:'optimizer.learn',status:'complete',startedAt:1,at:2,input:{},output:{changes:{facts:[{claim:'private fact'}],suggestedTools:[],withdrawnTools:[]}}
   }),context);
   await commit('first');
-  const next=await f.accept('request-next','second request'); const nextId=await f.runtime.submit(next);await f.runtime.wait(next,nextId);
+  // A committed input marker is enough to establish the next read boundary;
+  // the existing fixture's first operation does not settle a host frontier.
+  await f.runtime.coreExtensionHarness().commit(tx => tx.appendEntry(defineEntry<{ chatJid: string; branchId: string }>('host.accepted'),binding.conversationId as ConversationId,
+    { data: { chatJid: binding.chatJid, branchId: binding.branchId } }),context);
   await commit('second');
   const before=f.base.host.modelCalls,turn=await f.runtime.readTurnEntries(binding,answer!);
   expect(turn?.entries.filter(entry=>entry.kind==='piclaw.token-optimizer.operation')).toHaveLength(1);

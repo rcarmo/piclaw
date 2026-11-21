@@ -304,7 +304,7 @@ for (const width of [390, 1000]) {
       await page.evaluate((value) => (window as any).turnActivityFixture.live(value), { status, draft: { text: '', fullText: '' }, thought: { text: '', fullText: '' }, turnId: 'turn-2' });
       const live = page.locator('.turn-activity-live');
       await live.locator('.turn-activity-header').click();
-      const row = live.locator('.turn-activity-tool-row');
+      const row = live.locator('.turn-activity-tool-row').filter({ has: page.locator('.turn-activity-stop') });
       await row.locator('.turn-activity-stop').waitFor();
       await row.locator('.turn-activity-tool-header').hover();
       const g = await row.evaluate((el) => {
