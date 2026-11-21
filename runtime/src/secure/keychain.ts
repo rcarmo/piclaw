@@ -8,8 +8,8 @@
  *   - Key derivation: PBKDF2-SHA256 with 150k iterations and a random salt.
  *   - Encryption: AES-256-GCM with a random 12-byte nonce and the entry
  *     name as additional authenticated data (AAD).
- *   - The master key material is read from the PICLAW_KEYCHAIN_KEY env var
- *     or from a file specified by PICLAW_KEYCHAIN_KEY_FILE.
+ *   - The master key comes from the process environment or a configured
+ *     key file. Settings store the file path, never the key itself.
  *
  * Placeholder resolution:
  *   - resolveKeychainEnv() replaces "keychain:name" values in env records.
@@ -87,22 +87,22 @@ export interface KeyMaterialProvider {
   getKeyMaterial(): Uint8Array;
 }
 
-function readKeyMaterialFromEnv(): Uint8Array {
+function readBootstrapKeyMaterial(): Uint8Array {
   const rawKey = readKeychainBootstrapKeyMaterial();
   if (!rawKey) {
-    throw new Error("Keychain is disabled. Set PICLAW_KEYCHAIN_KEY or PICLAW_KEYCHAIN_KEY_FILE.");
+    throw new Error("Keychain is disabled. Configure keychain.keyFile or set PICLAW_KEYCHAIN_KEY or PICLAW_KEYCHAIN_KEY_FILE.");
   }
   return encoder.encode(rawKey);
 }
 
 let keyMaterialProvider: KeyMaterialProvider = {
-  getKeyMaterial: readKeyMaterialFromEnv,
+  getKeyMaterial: readBootstrapKeyMaterial,
 };
 
 /** Secret-free availability for authenticated settings surfaces. */
 export function getKeychainStatus(): { enabled: boolean; reason: 'ready' | 'not_configured' | 'unavailable' } {
   try { return loadKeyMaterial().length > 0 ? { enabled: true, reason: 'ready' } : { enabled: false, reason: 'not_configured' }; }
-  catch { const config = getKeychainBootstrapConfig(); return { enabled: false, reason: config.key || config.keyFile ? 'unavailable' : 'not_configured' }; }
+  catch { const config = getKeychainBootstrapConfig(); return { enabled: false, reason: config.key || config.keyFile || config.fileSource ? 'unavailable' : 'not_configured' }; }
 }
 
 function loadKeyMaterial(): Uint8Array {
@@ -111,7 +111,7 @@ function loadKeyMaterial(): Uint8Array {
 
 /** Override/reset key material provider for tests and advanced runtime composition. */
 export function setKeyMaterialProviderForTests(provider: KeyMaterialProvider | null): void {
-  keyMaterialProvider = provider ?? { getKeyMaterial: readKeyMaterialFromEnv };
+  keyMaterialProvider = provider ?? { getKeyMaterial: readBootstrapKeyMaterial };
 }
 
 async function deriveAesKey(salt: Uint8Array, iterations: number): Promise<CryptoKey> {

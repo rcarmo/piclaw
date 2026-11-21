@@ -1207,7 +1207,7 @@
       ],
       "status": "bootstrap",
       "compatibilityAliasFor": null,
-      "deprecation": "retained process-only keychain key-file bootstrap; never persisted to JSON",
+      "deprecation": "retained process-env override; keychain.keyFile in JSON can supply a protected file path",
       "removalVersion": null,
       "bootstrapAllowed": true,
       "source": "runtime/src/core/config-secrets.ts keychain key-file bootstrap (#810B)",

@@ -126,6 +126,12 @@
       "purpose": "Bind the reviewed integrated runtime-facade source used by the SDK and native model cutover; preserve historical retention disposition and financial accounting unchanged."
     },
     {
+      "path": "runtime/src/task-scheduler.ts",
+      "beforeSha256": "e6615515668dd004c6359a74a5155c44d8af432f604aef3a77a182691ebc5ca6",
+      "afterSha256": "fde3f376a3efdd4936537efdc08af5f8775c632c9373fbb2ef8758291bd51539",
+      "purpose": "#1666 carries the settled occurrence notification policy to post-persistence Web Push without restoring any scheduler dispatch or financial usage owner."
+    },
+    {
       "path": "runtime/web/src/api.ts",
       "beforeSha256": "c22cccfe276ddb91a41fc401482e4b8ef607aad189b84f3ab7967e1ce87fc831",
       "afterSha256": "e76431d32eeb89a81e7bf55fb5f883961022f438d178ca68d32d0906c1ddc076",
