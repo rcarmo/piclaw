@@ -26,8 +26,8 @@
     {
       "path": "runtime/durable-engine/src/host-models.ts",
       "beforeSha256": "92e8c15ebdac6c8d4e1df588bd2f316fd1b3a42da4020021ffb3131ea7341d8a",
-      "afterSha256": "12e4ba12e8f4c76c8ba119162896b95e864655693494a40f464f84082a10315a",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. SDK 1.6 preserves provider-runtime identity; forward scoped cancellation at the existing host provider boundary."
+      "afterSha256": "18dedafe77507b1018189b3e7f1646e87c6512eafec0bd08e6011ba35cf8f16e",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. SDK 1.6 preserves provider-runtime identity; forward scoped cancellation at the existing host provider boundary. Project SDK placeholders for text-only tool-result images without rewriting history."
     },
     {
       "path": "runtime/durable-engine/src/host-runtime.ts",
@@ -62,8 +62,8 @@
     {
       "path": "runtime/src/extensions/index.ts",
       "beforeSha256": "08b491d3c83eeb439ce3bf5a8dfc310038a78e1330ed5a90c8870c342018b61a",
-      "afterSha256": "f477edc13e83e37c2b9f39a0425df3cf0dd5c80796c699c4bf98b9547583298a",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "220e47f7c0ec31546c85aa6ba53c569ba38eee2ea7e22694c31d72e723b8d300",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Remove the unreachable legacy result-sanitization hook."
     },
     {
       "path": "runtime/src/extensions/tool-capabilities.ts",
