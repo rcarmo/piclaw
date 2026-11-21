@@ -86,20 +86,20 @@
     {
       "path": "runtime/web/src/components/settings-dialog.ts",
       "beforeSha256": "b6383064b5084bcd046abb4c1c554b5068513c1590c1df21514aaab3eec62ce3",
-      "afterSha256": "0b7f6d85c33575969f5d96d7b5e552e79f2cf7ea5103ee7f7e6d8c4bc9b29d18",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "5738bc967b82c3b56c6e5edde63e3c35140726a0e01d5a7543bcbe7ea33803da",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Place Optimisation immediately after Models in the Classic navigation."
     },
     {
       "path": "runtime/web/src/dev/settings-widget-fixture.ts",
       "beforeSha256": "ad4d62fbdd108af040affde18a82d011fcbb4b09122d57a14869972f55bb2978",
-      "afterSha256": "29cce8c813717d8c39bc5079c5f6ad2cd1aa1a36c1ce2bb49f017d3970273c2e",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "685cfb9bb9863e42645f07627cbe253dcc7eb7f3385341867db544dbe9f3338b",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Use the global optimiser configuration shape in the disposable Settings fixture."
     },
     {
       "path": "runtime/web/static/classic/css/settings.css",
       "beforeSha256": "f4ea6b39bbef088bb0bf7ad8df8fb8d120fdec07e483999d5e0239fe54f758d4",
-      "afterSha256": "9cc2c14cbf6d3d24790099ebba18e827e0787873adb2d03d0284464a965c1005",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Group the Classic optimiser settings, disclosures and separate maintenance surface."
+      "afterSha256": "29a011e706abfb27a7e5775e3bbab0d7715626db9f368bd939550dfb0a5e6a7d",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Group the Classic optimiser settings, disclosures and separate maintenance surface. Remove styles for the retired Agent override controls."
     },
     {
       "path": "docs/tools-and-skills.md",

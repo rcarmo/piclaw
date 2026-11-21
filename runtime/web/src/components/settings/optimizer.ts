@@ -4,10 +4,7 @@ import { NumberStepper } from './number-stepper.js';
 
 const endpoint = '/agent/addons/api/token-optimizer/config';
 const modes = [['off', 'Off'], ['observe', 'Watch only'], ['active', 'On']];
-const overrides = [['inherit', 'Use instance default'], ...modes];
 const judgeOptions = [['generative', 'Generation model'], ['classifier', 'Classifier'], ['cascade', 'Classifier, then generation model']];
-const parts = (path: string) => /^(agents|oversightAgents)\./.test(path)
-    ? [path.slice(0, path.indexOf('.')), path.slice(path.indexOf('.') + 1)] : path.split('.');
 const modeName = (value: string) => modes.find(([mode]) => mode === value)?.[1] ?? 'Off';
 
 function presetOf(policy) {
@@ -51,16 +48,14 @@ export function OptimizerSection() {
 
     const dirty = draft && JSON.stringify(draft) !== JSON.stringify(data.config);
     const reload = () => { if (!dirty || confirm('Discard unsaved optimisation settings and reload?')) void load(); };
-    const read = (path: string) => parts(path).reduce((value, key) => value?.[key], draft);
+    const read = (path: string) => path.split('.').reduce((value, key) => value?.[key], draft);
     const patch = (path: string, value: any) => {
         setNotice('');
         setDraft(previous => {
-            const next = structuredClone(previous), keys = parts(path);
+            const next = structuredClone(previous), keys = path.split('.');
             let current = next;
             for (const part of keys.slice(0, -1)) current = current[part] ??= {};
-            const key = keys.at(-1)!;
-            if (value === 'inherit' && (keys[0] === 'agents' || keys[0] === 'oversightAgents')) delete current[key];
-            else current[key] = value;
+            current[keys.at(-1)!] = value;
             return next;
         });
     };
@@ -122,8 +117,6 @@ export function OptimizerSection() {
     const needsGeneration = enabled && (paidFacts || policy.offloadOutputs && policy.outputSummaries || toolJudge && policy.toolJudge !== 'classifier');
     const needsClassifier = enabled && toolJudge && policy.toolJudge !== 'generative' || modelOversight && policy.judge !== 'generative';
     const audits = needsClassifier || enabled && policy.pruning !== 'off' && (policy.savers.toolPrefilter || policy.savers.localToolDrops) || modelOversight && policy.savers.localLoop;
-    const agentKey = (agentId: string) => JSON.stringify([data.workspaceId, agentId]);
-    const watching = (defaultMode: string, agentModes) => defaultMode === 'observe' || defaultMode === 'active' && data.agents.some(agent => agentModes?.[agentKey(agent.id)] === 'observe');
     const pausedAgent = activity.find(state => state.accounting?.authPaused);
 
     return html`<div class="settings-section settings-dense-form settings-optimizer">
@@ -150,7 +143,7 @@ export function OptimizerSection() {
                 `}
                 ${needsGeneration && model('Optimisation model', 'policy.generativeModel', 'chat', 'Choose a model', 'Shared generation model for facts, summaries and judges unless a task overrides it.')}
                 ${toolJudge && check('Pick tools before new prompts', 'policy.autoToolPicks', 'Can add a model call and invalidate the prompt cache.')}
-                ${assisted && watching(mode, draft.agents) && check('Allow optimisation model calls while watching', 'policy.inferenceInObserve', 'Off means Watch only makes no optimisation model calls.')}
+                ${assisted && mode === 'observe' && check('Allow optimisation model calls while watching', 'policy.inferenceInObserve', 'Off means Watch only makes no optimisation model calls.')}
                 ${policy.offloadOutputs && disclosure('Stored outputs', html`
                     <p class="settings-hint">Store eligible output when either threshold is exceeded.</p>
                     ${number('Size threshold (KiB)', 'policy.offload.bytes', 1, 256, 1024, 0.5)}
@@ -178,7 +171,7 @@ export function OptimizerSection() {
                         ${policy.judge !== 'classifier' && model('Loop judge model', 'policy.models.loopJudge')}
                         ${policy.judge !== 'classifier' && !policy.savers.templates && model('Nudge writer', 'policy.models.writer')}
                         ${policy.judge !== 'generative' && model('Loop classifier', 'policy.models.loopClassifier', 'classifier')}
-                        ${watching(oversight, draft.oversightAgents) && check('Allow oversight model calls while watching', 'policy.oversightInferenceInObserve', 'Off means Watch only makes no oversight model calls.')}
+                        ${oversight === 'observe' && check('Allow oversight model calls while watching', 'policy.oversightInferenceInObserve', 'Off means Watch only makes no oversight model calls.')}
                         ${policy.goalChecks && check('Share the active Plan item with the judge', 'policy.sharePlanWithJudge', 'Sends one bounded, redacted current-task item, not the whole Plan or prompt.')}
                         ${check('Use template nudges', 'policy.savers.templates')}
                         ${check('Reuse identical judgements', 'policy.savers.reuse')}
@@ -198,16 +191,6 @@ export function OptimizerSection() {
             ${number('Time limit per call (seconds)', 'policy.budget.deadlineMs', 0.001, 180, 1000)}
             <div class="settings-row settings-dense-row"><label for=${id('cost-cap')}>Spending cap per session (USD)</label><input id=${id('cost-cap')} type="number" min="0" step="0.01" placeholder="No cap" value=${policy.budget.maxCostPerSession ?? ''} disabled=${busy} onChange=${event => patch('policy.budget.maxCostPerSession', event.currentTarget.value === '' ? null : Number(event.currentTarget.value))} /></div>
             ${audits && number('Model audit (%)', 'policy.savers.auditPercent', 0, 20)}
-        `)}
-        ${data.agents.length > 0 && disclosure('Agent overrides', html`
-            <p class="settings-hint">Settings above are instance defaults. An instance mode of Off takes precedence over Agent choices.</p>
-            ${data.agents.map(agent => {
-                const key = agentKey(agent.id);
-                return html`<fieldset key=${agent.id} class="settings-optimizer-agent"><legend>${agent.label}</legend>
-                    ${select(`${agent.label}: optimisation`, `agents.${key}`, read(`agents.${key}`) ?? 'inherit', overrides, value => patch(`agents.${key}`, value), '', !draft.hasEnabled && read(`agents.${key}`) !== 'active' ? 'active' : undefined)}
-                    ${select(`${agent.label}: oversight`, `oversightAgents.${key}`, read(`oversightAgents.${key}`) ?? 'inherit', overrides, value => patch(`oversightAgents.${key}`, value))}
-                </fieldset>`;
-            })}
         `)}
         <div class="settings-optimizer-save">
             <div class="settings-row"><button type="button" disabled=${busy || !dirty} onClick=${save}>Save settings</button><button type="button" disabled=${busy} onClick=${reload}>Reload saved settings</button>${dirty && html`<span class="settings-hint">Unsaved changes</span>`}</div>

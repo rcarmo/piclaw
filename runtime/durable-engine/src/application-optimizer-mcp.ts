@@ -27,7 +27,7 @@ export function createApplicationOptimizerMcp(options:{root:Database;workspaceRo
  const environmentRevision=createHash('sha256').update(JSON.stringify([hostname(),process.platform,process.arch,workspaceRoot,getPiclawAgentDir()])).digest('hex');
  const lifetime=new AbortController();let closed=false;
  const check=()=>{options.assertOwner();if(closed)throw Error('Application features are closed');};
- const database=applicationRetainedDatabase(options.root,check),configuration=new TokenOptimizerConfiguration(options.root,check),connections=new McpConnectionStore(options.root,check,mcpCredentialRevision);
+ const database=applicationRetainedDatabase(options.root,check),configuration=new TokenOptimizerConfiguration(options.root,check,workspaceId),connections=new McpConnectionStore(options.root,check,mcpCredentialRevision);
  async function roots(harness=options.harness()){
   check();const bindings=await options.bindings(harness);check();
   return bindings.flatMap(binding=>{const row=options.root.query<{agent_name:string},[string,string]>('SELECT agent_name FROM chat_branches WHERE chat_jid=? AND branch_id=? AND archived_at IS NULL').get(binding.chatJid,binding.branchId);return row?[{...binding,profile:row.agent_name}]:[];});

@@ -129,10 +129,10 @@ The existing authenticated Core surface serves:
 - `GET /agent/settings/mcp`: redacted connections, status, Agent choices and migration diagnostics.
 - `POST /agent/settings/mcp`: `save`, `remove`, `reconnect`, `sign_in`, `sign_out` or `forget_recall`.
 - `GET /agent/settings/mcp/oauth/callback`: browser/state-bound OAuth completion.
-- `/agent/addons/api/token-optimizer/config`: instance-wide defaults for token optimisation and task oversight, per-Agent overrides, and scoped maintenance actions.
+- `/agent/addons/api/token-optimizer/config`: instance-wide token optimisation and task oversight settings, and scoped maintenance actions.
 
 The Classic Optimisation pane keeps the two modes separate. On first enable, token optimisation starts in **Watch only**. **Basic** makes no extra optimisation model calls; **Model-assisted** exposes the model choice and **Custom** exposes individual features. Both features share model budgets, but permitting model calls while watching and sharing a Plan item are separate choices.
 
-The pane has no Workspace level. Reads project this instance's previously saved Workspace modes into the instance defaults without writing. The next explicit save stores those defaults and removes the old local overrides, preserving effective modes and Agent choices. Maintenance updates the activity view without saving or discarding edits.
+Optimisation sits immediately after Models in Classic Settings. Both modes apply to the entire instance. There are no Workspace or Agent settings. Older saved Workspace modes for this instance are carried forward on read; old Agent overrides no longer apply. The next explicit save stores only global settings. Agent activity and scoped maintenance remain available; maintenance does not save or discard settings edits.
 
 Operator configuration requires a single-user administrator context. MCP configuration bodies are bounded to64KiB and five seconds, decode UTF-8 strictly and honour cancellation. Save/remove revisions and execution-time source checks remain authoritative. Responses omit secrets and saved secret-reference values.

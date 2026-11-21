@@ -1,6 +1,6 @@
 import {addonLocalContextApi} from '../../src/addons/local-context.js';
 import type {createApplicationOptimizerMcp} from './application-optimizer-mcp.ts';
-import {parseOptimizerConfig,projectInstanceOptimizerConfig} from './token-optimizer-config.ts';
+import {parseOptimizerConfig} from './token-optimizer-config.ts';
 import {describeKnowledge,outputOffload,oversightPolicy} from '#token-optimizer/core';
 import {applicationRetainedDatabase,forgetRetainedCopies} from './mcp/retained-database.ts';
 import type {Database} from 'bun:sqlite';
@@ -25,14 +25,14 @@ export function optimizerSettingsApi(service:ReturnType<typeof createApplication
     facts:state.knowledge?describeKnowledge(state.knowledge.environment,state.knowledge.distiller,state.knowledge.factReviews).facts.slice(0,40):[],
     factsInContext:state.session?.injectedIds.length??0,nudges:state.run?.decisions.slice(-20)??[],hasRetainedCopies:retained.has(retainedOwner(record.agentId))});
   }
-  const config=projectInstanceOptimizerConfig(service.configuration.snapshot(),service.workspaceId);config.policy.offload??=outputOffload(config.policy);
-  return{ok:true,workspaceId:service.workspaceId,config,revision:service.configuration.revision(),models:service.refs.map(ref=>({...ref,name:ref.id})),agents:agents.map(record=>({id:record.agentId,label:record.title??record.label??record.agentId})),status};
+  const config=service.configuration.snapshot();config.policy.offload??=outputOffload(config.policy);
+  return{ok:true,config,revision:service.configuration.revision(),models:service.refs.map(ref=>({...ref,name:ref.id})),status};
  }
  return{
   get:(_payload:unknown,request:Request)=>snapshot(request),
   async set(payload:unknown,request:Request){
    check(request);if(!payload||typeof payload!=='object'||Array.isArray(payload))throw Error('Optimiser settings object required');const input=payload as Record<string,unknown>;
-   if(input.config!==undefined){if(typeof input.expectedRevision!=='string')throw Error('Expected optimiser revision required');await service.configuration.configure(projectInstanceOptimizerConfig(parseOptimizerConfig(input.config),service.workspaceId),{expectedRevision:input.expectedRevision,authorise:()=>check(request),signal:request.signal});return snapshot(request);}
+   if(input.config!==undefined){if(typeof input.expectedRevision!=='string')throw Error('Expected optimiser revision required');await service.configuration.configure(parseOptimizerConfig(input.config),{expectedRevision:input.expectedRevision,authorise:()=>check(request),signal:request.signal});return snapshot(request);}
    const agentId=input.agentId;
    if(typeof agentId!=='string'||!(await service.agents()).some(agent=>agent.agentId===agentId&&!agent.parentId))throw Error('Current Agent required');
    const host=await service.optimizer.hostForAgent(agentId),native=service.optimizer.optimizer,names=Array.isArray(input.names)&&input.names.every(name=>typeof name==='string')?input.names as string[]:undefined;

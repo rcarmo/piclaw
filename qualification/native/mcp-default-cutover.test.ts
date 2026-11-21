@@ -1,6 +1,7 @@
 import './src/test-guard.js';
 import {expect} from 'bun:test';
-import {mkdirSync,writeFileSync,readFileSync} from 'node:fs';
+import {mkdirSync,writeFileSync,readFileSync,realpathSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {join} from 'node:path';
 import {isolatedApplicationTest} from './src/isolated-application-test.js';
 import {initDatabase,getDb,closeDatabase} from '../../runtime/src/db/connection.js';
@@ -115,11 +116,17 @@ test('default outbound MCP migrates references, preserves script values, fences 
   expect(database.query('SELECT name, type, hex(ciphertext) ciphertext FROM keychain_entries ORDER BY name').all()).toEqual(inventoryBefore);
   expect(remoteCalls).toBe(2);
   const rawConfig=()=>database.query<{value:string},[]>("SELECT value FROM router_state WHERE key='native.token-optimizer.v1'").get()!.value;
-  const legacyOptimizer=JSON.parse(rawConfig());legacyOptimizer.workspaces[optimizer.workspaceId]='off';legacyOptimizer.policy.oversightMode='active';legacyOptimizer.oversightWorkspaces[optimizer.workspaceId]='observe';
+  const legacyOptimizer=JSON.parse(rawConfig());
+  const instanceId=createHash('sha256').update(realpathSync(workspace)).digest('hex');
+  const localAgent=JSON.stringify([instanceId,'web:default']);
+  Object.assign(legacyOptimizer,{workspaces:{[instanceId]:'off'},agents:{[localAgent]:'active'},oversightWorkspaces:{[instanceId]:'observe'},oversightAgents:{[localAgent]:'off'}});
+  legacyOptimizer.policy.oversightMode='active';
   const legacyBytes=JSON.stringify(legacyOptimizer);database.run("UPDATE router_state SET value=? WHERE key='native.token-optimizer.v1'",[legacyBytes]);
   const projected=await (await optimizerGet())!.json() as any;
-  expect(rawConfig()).toBe(legacyBytes);expect(projected.config.workspaces).toEqual({});expect(projected.config.oversightWorkspaces).toEqual({});
+  expect(rawConfig()).toBe(legacyBytes);
+  expect(Object.keys(projected.config).sort()).toEqual(['hasEnabled','policy','version']);
   expect(projected.config.policy).toMatchObject({enabled:false,mode:'off',oversightMode:'observe'});
+  expect(projected.status.find((state:{agentId:string})=>state.agentId==='web:default')?.policy).toMatchObject({enabled:false,mode:'off',oversightMode:'observe'});
   const savedInstance=await handleRegisteredAddonConfigApiRequest(request('POST',{config:projected.config,expectedRevision:projected.revision}),'token-optimizer','config',(body,status=200)=>Response.json(body,{status}));
   expect(savedInstance?.status).toBe(200);expect(JSON.parse(rawConfig())).toEqual(projected.config);
   expect(database.query('SELECT * FROM service_effect_s01_operations').all()).toEqual([]);

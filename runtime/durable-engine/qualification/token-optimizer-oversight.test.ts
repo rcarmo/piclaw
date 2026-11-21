@@ -35,7 +35,7 @@ async function setup(mode:'off'|'observe'|'active'='active',persistent=false,ret
  const dir=mkdtempSync(join(tmpdir(),'optimizer-oversight-')),file=join(dir,'state.sqlite'),db=new Database(file,{create:true});
  db.exec('PRAGMA journal_mode=WAL;PRAGMA secure_delete=ON;PRAGMA busy_timeout=0;CREATE TABLE router_state(key TEXT PRIMARY KEY,value TEXT NOT NULL);');
  cleanup.push(async()=>{db.close();rmSync(dir,{recursive:true,force:true});});
- const configuration=new TokenOptimizerConfiguration(db,()=>{});const config=await configuration.load();Object.assign(config.policy,{enabled:mode!=='off',mode,reduceOutputs:true,goalChecks:true});await configuration.configure(config);if(mode==='active'){const next=configuration.snapshot();next.policy.mode='active';await configuration.configure(next);}
+ const configuration=new TokenOptimizerConfiguration(db,()=>{},"fixture");const config=await configuration.load();Object.assign(config.policy,{enabled:mode!=='off',mode,reduceOutputs:true,goalChecks:true});await configuration.configure(config);if(mode==='active'){const next=configuration.snapshot();next.policy.mode='active';await configuration.configure(next);}
  const models=createModels(),faux=fauxProvider({tokensPerSecond:100000});models.setProvider(faux.provider);
  const registry=createRegistry(),sandbox=new CodemodeSandbox();let harness:Harness,calls=0;
  cleanup.push(()=>sandbox.close());
@@ -236,7 +236,7 @@ test("a provider retry cannot replay a goal nudge after switching to Watch only"
 test('oversight runs independently with optimisation off and advises before a third identical failed check',async()=>{
  const f=await setup('off',false,false,true);await f.configuration.update(config=>{config.policy.oversightMode='active';config.policy.goalChecks=true;return config;});let shown='';
  f.faux.setResponses([fauxAssistantMessage([fauxToolCall('bash',{command:'bun test'})],{stopReason:'toolUse'}),fauxAssistantMessage([fauxToolCall('bash',{command:'bun test'})],{stopReason:'toolUse'}),request=>{shown=request.messages.filter(message=>message.role==='user').map(message=>contentText(message.content)).join('\n');return fauxAssistantMessage('Done');}]);
- expect((await(await f.conversation.submit({type:'input',content:'Fix parser'},context)).wait(context)).status).toBe('done');expect(shown).toContain('choose a different hypothesis');expect(f.calls()).toBe(2);expect(f.faux.state.callCount).toBe(3);expect(f.configuration.policy('fixture','agent').mode).toBe('off');
+ expect((await(await f.conversation.submit({type:'input',content:'Fix parser'},context)).wait(context)).status).toBe('done');expect(shown).toContain('choose a different hypothesis');expect(f.calls()).toBe(2);expect(f.faux.state.callCount).toBe(3);expect(f.configuration.policy().mode).toBe('off');
  const notes=(await f.entries()).filter(GoalContextEntry.is);expect(notes).toHaveLength(1);expect(notes[0]?.model?.length??0).toBe(0);
 });
 test('a real user advisory-shaped instruction is never stripped by prefix matching',async()=>{

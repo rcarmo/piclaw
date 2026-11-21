@@ -4,7 +4,7 @@ import {Database} from 'bun:sqlite';
 import {chromium,webkit,type Browser} from 'playwright';
 import {Value} from 'typebox/value';
 import {McpConnectionInputSchema} from '../../durable-engine/src/mcp/connections.ts';
-import {TokenOptimizerConfiguration,projectInstanceOptimizerConfig} from '../../durable-engine/src/token-optimizer-config.ts';
+import {TokenOptimizerConfiguration} from '../../durable-engine/src/token-optimizer-config.ts';
 import {defaultMcpRecallSettings,outputOffload} from '#token-optimizer/core';
 const enabled=process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS==='1'&&process.env.PICLAW_E2E_DISPOSABLE==='1';
 const browserTest=enabled?test:test.skip,browsers=new Map<string,Browser>();let bundle='';
@@ -17,11 +17,11 @@ afterAll(async()=>{for(const browser of browsers.values())await browser.close();
 for(const engine of ['chromium','webkit'])for(const width of [1280,390,320])for(const colorScheme of ['light','dark'] as const)
 browserTest(`Classic cutover ${engine}/${width}/${colorScheme}: reference-safe MCP and independent oversight`,async()=>{
  const database=new Database(':memory:');database.exec('CREATE TABLE router_state(key TEXT PRIMARY KEY,value TEXT NOT NULL)');
- const config=new TokenOptimizerConfiguration(database,()=>{}),workspaceId='fixture_workspace',mcpPosts:any[]=[],optimizerPosts:any[]=[];
+ const workspaceId='fixture_workspace',config=new TokenOptimizerConfiguration(database,()=>{},workspaceId),mcpPosts:any[]=[],optimizerPosts:any[]=[];
  let revision=1,forceConflict=false,maintenance=0;
  let connection:any={id:'fixture',name:'fixture',workspaceId,agentIds:[],enabled:false,transport:'http',url:'https://fixture.invalid/mcp',auth:'bearer',bearerTokenKeychain:'SAVED_REFERENCE_NOT_IN_BROWSER',allowHttp:false,timeoutSeconds:30,recall:defaultMcpRecallSettings(),access:{kind:'workspaces',grants:[{workspaceId,agentIds:['default']},{workspaceId:'foreign_workspace',agentIds:['foreign_agent']}]}};
  const mcpSnapshot=()=>{const{bearerTokenKeychain,...publicRow}=connection;return{ok:true,workspaceId,connections:[{...publicRow,revision,hasSavedCredentials:!!bearerTokenKeychain,environmentNames:[],needsCredentialApproval:false}],agents:[{id:'default',label:'Default'}],defaults:{recall:defaultMcpRecallSettings()}};};
- const optimizerSnapshot=()=>{const value=projectInstanceOptimizerConfig(config.snapshot(),workspaceId);value.policy.offload??=outputOffload(value.policy);return{ok:true,workspaceId,config:value,revision:config.revision(),models:[{provider:'fixture',id:'judge',type:'chat'}],agents:[{id:'web:default',label:'Default'}],status:[{agentId:'web:default',label:'Default',policy:config.policy(workspaceId,'web:default'),accounting:{calls:1,dailyCalls:2,authPaused:!maintenance},hiddenTools:[],proposedTools:[],facts:[],nudges:[]}]};};
+ const optimizerSnapshot=()=>{const value=config.snapshot();value.policy.offload??=outputOffload(value.policy);return{ok:true,config:value,revision:config.revision(),models:[{provider:'fixture',id:'judge',type:'chat'}],status:[{agentId:'web:default',label:'Default',policy:config.policy(),accounting:{calls:1,dailyCalls:2,authPaused:!maintenance},hiddenTools:[],proposedTools:[],facts:[],nudges:[]}]};};
  const server=Bun.serve({hostname:'127.0.0.1',port:0,async fetch(req){
   const path=new URL(req.url).pathname;
   if(path==='/fixture.js')return new Response(bundle,{headers:{'Content-Type':'text/javascript'}});
@@ -55,7 +55,7 @@ browserTest(`Classic cutover ${engine}/${width}/${colorScheme}: reference-safe M
   expect(await page.getByLabel('Check task progress',{exact:true}).count()).toBe(0);expect(await page.getByLabel('Optimisation preset',{exact:true}).count()).toBe(0);expect(await optimisation.locator('option[value="active"]').isDisabled()).toBe(true);
   expect(await page.locator('.settings-optimizer .settings-optimizer-group').count()).toBe(3);
   expect(await page.locator('.settings-optimizer :is(input, select):visible').count()).toBe(2);
-  expect(await page.getByText('Workspace and Agent overrides',{exact:true}).count()).toBe(0);expect(optimizerPosts).toEqual([]);await checkWidth();
+  expect(await page.getByText('Agent overrides',{exact:true}).count()).toBe(0);expect(optimizerPosts).toEqual([]);await checkWidth();
   await oversight.selectOption('active');await page.getByLabel('Check task progress',{exact:true}).check();await page.getByLabel('Loop checks',{exact:true}).selectOption('judge');await page.getByText('Oversight details',{exact:true}).click();
   const plan=page.getByLabel('Share the active Plan item with the judge',{exact:true});expect(await plan.isChecked()).toBe(false);await plan.check();
   await page.getByText('Shared models and limits',{exact:true}).click();await page.getByLabel('Shared generation model',{exact:true}).selectOption({label:'fixture/judge'});await saveConfig.click();
@@ -66,9 +66,11 @@ browserTest(`Classic cutover ${engine}/${width}/${colorScheme}: reference-safe M
   await saveConfig.click();await page.getByText('Saved. Changes apply at the next eligible SDK boundary.',{exact:true}).waitFor();
   expect(config.snapshot().policy).toMatchObject({mode:'observe',oversightMode:'active',microSkills:'envfacts',offloadOutputs:true,reduceOutputs:true,pruning:'propose',toolJudge:'none',outputSummaries:false,autoToolPicks:false,inferenceInObserve:false});
   expect(await optimisation.locator('option[value="active"]').isDisabled()).toBe(false);
-  const agentOverrides=page.getByText('Agent overrides',{exact:true});if(width<600)await agentOverrides.tap();else{await agentOverrides.focus();await page.keyboard.press('Enter');}
-  const override=page.getByLabel('Default: optimisation',{exact:true});expect(await override.locator('option[value="inherit"]').innerText()).toBe('Use instance default');
-  await override.selectOption('off');await saveConfig.click();await page.getByText('Saved. Changes apply at the next eligible SDK boundary.',{exact:true}).waitFor();expect(config.policy(workspaceId,'web:default').mode).toBe('off');
+  const activity=page.getByText('Default · Optimisation Watch only · Oversight On',{exact:true});if(width<600)await activity.tap();else{await activity.focus();await page.keyboard.press('Enter');}
+  await page.getByText(/model calls this session/).waitFor();
+  expect(await page.getByLabel('Default: optimisation',{exact:true}).count()).toBe(0);
+  expect(Object.keys(optimizerPosts.at(-1).config).sort()).toEqual(['hasEnabled','policy','version']);
+  await optimisation.selectOption('off');await saveConfig.click();await page.getByText('Saved. Changes apply at the next eligible SDK boundary.',{exact:true}).waitFor();expect(config.policy().mode).toBe('off');
   forceConflict=true;await oversight.selectOption('off');await saveConfig.click();await page.getByRole('alert').filter({hasText:'Settings changed; reload before saving'}).waitFor();expect(config.snapshot().policy.oversightMode).toBe('active');expect(await oversight.inputValue()).toBe('off');
   page.once('dialog',dialog=>dialog.accept());await page.getByRole('button',{name:'Reload saved settings',exact:true}).click();await page.waitForFunction(()=>!(document.querySelector('[role="alert"]')));expect(await oversight.inputValue()).toBe('active');await checkWidth();expect(errors).toEqual([]);
  }finally{await page.close();server.stop(true);database.close();}
