@@ -2081,12 +2081,12 @@ export class HostConversationRuntime {
     return this.observe(()=>this.record(copy));
   }
   /** Current queued inputs from the exported SDK document, not a host FIFO. */
-  readMessageInbox(binding:{incarnation:string;chatJid:string;branchId:string;conversationId:number}):Promise<readonly {submissionId:number;mode:"steer"|"followUp";input:AcceptedInput;content:string}[]> {
+  readMessageInbox(binding:{incarnation:string;chatJid:string;branchId:string;conversationId:number}, selectedId?:number):Promise<readonly {submissionId:number;mode:"steer"|"followUp";input:AcceptedInput;content:string}[]> {
     const reader=this.sessionReader(binding);
     return this.observe(async()=>{
       const conversation=await reader.conversation();
       const items=await conversation.commit(async tx=>(await tx.doc(InboxDoc,reader.binding.conversationId as ConversationId)).items.flatMap(item=>{
-        if(item.mode==="write"||item.entry?.kind!=="host.accepted"||!item.entry.data||typeof item.content!=="string")return [];
+        if((selectedId!==undefined&&item.id!==selectedId)||item.mode==="write"||item.entry?.kind!=="host.accepted"||!item.entry.data||typeof item.content!=="string")return [];
         const input=inputSnapshot(item.entry.data as unknown as AcceptedInput);
         if(!isNativeMessageInput(input)||input.incarnation!==reader.binding.incarnation||input.conversationId!==reader.binding.conversationId||
             input.chatJid!==reader.binding.chatJid||input.branchId!==reader.binding.branchId)throw Error("Native inbox source conflict");
@@ -2113,7 +2113,7 @@ export class HostConversationRuntime {
   steerQueuedMessage(binding:{incarnation:string;chatJid:string;branchId:string;conversationId:number},id:number):Promise<boolean>{
     const reader=this.sessionReader(binding);
     return this.observe(async()=>{
-      const expected=(await this.readMessageInbox(binding)).find(item=>item.submissionId===id);reader.check();
+      const [expected]=await this.readMessageInbox(binding,id);reader.check();
       if(!expected)return false;
       const conversation=await reader.conversation();
       const changed=await conversation.commit(async tx=>{

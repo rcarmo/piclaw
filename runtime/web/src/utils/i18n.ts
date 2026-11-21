@@ -61,6 +61,7 @@ type MessageKey =
   | 'compose.injectSteer'
   | 'compose.steer'
   | 'compose.queueSteering'
+  | 'compose.requestingSteer'
   | 'compose.cancelQueued'
   | 'compose.resizeInput'
   | 'compose.resizeInputHint'
@@ -658,6 +659,7 @@ const EN: Record<MessageKey, string> = {
   'compose.injectSteer': 'Inject queued follow-up as steer',
   'compose.steer': 'Steer',
   'compose.queueSteering': 'After current tool calls',
+  'compose.requestingSteer': 'Requesting steer…',
   'compose.cancelQueued': 'Cancel queued message',
   'compose.resizeInput': 'Resize message input',
   'compose.resizeInputHint': 'Drag to resize message input',
@@ -1248,6 +1250,7 @@ const ZH_CN: Partial<Record<MessageKey, string>> = {
   'compose.injectSteer': '作为引导插入排队的后续消息',
   'compose.steer': '引导',
   'compose.queueSteering': '当前工具调用完成后',
+  'compose.requestingSteer': '正在请求引导…',
   'compose.cancelQueued': '取消排队消息',
   'compose.resizeInput': '调整消息输入框大小',
   'compose.resizeInputHint': '拖动以调整消息输入框大小',
@@ -1838,6 +1841,7 @@ const JA: Partial<Record<MessageKey, string>> = {
   'compose.injectSteer': 'キュー済みフォローアップをステアとして挿入',
   'compose.steer': 'ステア',
   'compose.queueSteering': '実行中のツール呼び出しが完了した後',
+  'compose.requestingSteer': 'ステアリングをリクエスト中…',
   'compose.cancelQueued': 'キュー済みメッセージをキャンセル',
   'compose.resizeInput': 'メッセージ入力欄のサイズ変更',
   'compose.resizeInputHint': 'ドラッグしてメッセージ入力欄のサイズを変更',

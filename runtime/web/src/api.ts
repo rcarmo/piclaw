@@ -592,23 +592,12 @@ export async function removeAgentQueueItem(rowId, chatJid = null) {
     return response.json();
 }
 
-/**
- * Atomically convert one queued follow-up into steering (when active) or an
- * immediate send (when no active stream remains).
- */
-export async function steerAgentQueueItem(rowId, chatJid = null) {
-    const response = await fetch(API_BASE + '/agent/queue-steer', {
+/** Request a mode change on one existing SDK inbox item. The SDK owns placement. */
+export function steerAgentQueueItem(rowId, chatJid = null) {
+    return request('/agent/queue-steer', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ row_id: rowId, chat_jid: chatJid || undefined }),
     });
-
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Failed to steer queued item' }));
-        throw new Error(error.error || `HTTP ${response.status}`);
-    }
-
-    return response.json();
 }
 
 /** Persist the whole queue in a new order (row ids); 409 when the queue changed meanwhile. */

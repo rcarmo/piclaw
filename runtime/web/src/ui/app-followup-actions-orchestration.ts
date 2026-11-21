@@ -106,7 +106,7 @@ export function useFollowupActionsOrchestration(options: UseFollowupActionsOrche
   } = options;
 
   const handleInjectQueuedFollowup = useCallback((queuedItem: any) => {
-    runInjectQueuedFollowup({
+    return runInjectQueuedFollowup({
       isCurrent: () => activeChatJidRef.current === currentChatJid,
       queuedItem,
       followupQueueItemsRef,

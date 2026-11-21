@@ -14,8 +14,8 @@
     {
       "path": "runtime/durable-engine/src/application-bootstrap.ts",
       "beforeSha256": "3a5948d7b2e4495a26d443561dbab0ec829b422636e4218eb52800cf20d3ec44",
-      "afterSha256": "5ac03b42bf88bca7b86b46654296086f2a78541f8f83fd40ab0a98a2f7ded088",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "113745355947f32b25459b9fe7390d1c24f2cfdfbb53187eb5e36979b969cfc1",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. #1973 skips optional idle prompt preparation for priority input and checks only the selected queued steer rather than re-reading unrelated accepted items."
     },
     {
       "path": "runtime/durable-engine/src/default-application-runtime.ts",
@@ -32,8 +32,8 @@
     {
       "path": "runtime/durable-engine/src/host-runtime.ts",
       "beforeSha256": "6eab0bd0a8cc8a90d068cc08a181aba0730e9c2210cf39cdef4e54d86b8fa54f",
-      "afterSha256": "f4dfb9f7831498cf1c219a4e701ea85b80e302d6fc3523a6b4c51af561a9a025",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Share the authenticated, scoped model catalogue without changing retention or accounting. Read bounded committed optimiser activity after the answer without reading the next turn into its transcript."
+      "afterSha256": "a07dbbaccb749db1da1cc4c2ccda55a3c04d1f8a080f4e1584ee9fa84ef99246",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Share the authenticated, scoped model catalogue without changing retention or accounting. Read bounded committed optimiser activity after the answer without reading the next turn into its transcript. #1973 skips optional idle prompt preparation for priority input and checks only the selected queued steer rather than re-reading unrelated accepted items."
     },
     {
       "path": "runtime/src/agent-pool.ts",
@@ -124,6 +124,12 @@
       "beforeSha256": "60b142469fd02aeb373109ebf275d08e829c4c6b8d630378e8c96c03b01f2f45",
       "afterSha256": "1adf37474310a6b1154e8bfd9371aa7743708479ee9f9d45f1214f7e60acce7b",
       "purpose": "Bind the reviewed integrated runtime-facade source used by the SDK and native model cutover; preserve historical retention disposition and financial accounting unchanged."
+    },
+    {
+      "path": "runtime/web/src/api.ts",
+      "beforeSha256": "c22cccfe276ddb91a41fc401482e4b8ef607aad189b84f3ab7967e1ce87fc831",
+      "afterSha256": "e76431d32eeb89a81e7bf55fb5f883961022f438d178ca68d32d0906c1ddc076",
+      "purpose": "#1973 uses the standard HTTP request receipt for queued steering so Classic can distinguish known rejection from uncertain delivery without replay."
     }
   ]
 }
