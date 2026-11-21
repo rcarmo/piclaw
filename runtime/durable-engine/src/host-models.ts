@@ -19,6 +19,7 @@ import type { previewSdkRequest, SimpleRequestPreview } from "../../src/agent-po
 import { awaitWithContext, BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
 import type { PreviewModels } from "./host-model-context.js";
 import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
+import { transformMessages } from "@earendil-works/pi-ai/api/transform-messages";
 
 export interface ModelRef { provider: string; id: string; type?: ModelType }
 type Operation = "chat" | "generateImages" | "classify";
@@ -350,7 +351,8 @@ export function createHostModels(
           output.end(projectMessage(result, model));
           return;
         }
-        const hasImages = context.messages.some(message =>
+        const needsImages = context.messages.some(message =>
+          (message.role !== "toolResult" || model.input.includes("image")) &&
           Array.isArray(message.content) && message.content.some(block => block.type === "image"));
         phase = "source";
         const assertSource = await policy.captureSourceGuard?.(options?.signal) ?? (() => {});
@@ -387,7 +389,7 @@ export function createHostModels(
             current.id !== ref.id || current.api !== listed.api || current.reasoning !== (listed as Model<Api>).reasoning ||
             current.contextWindow !== (listed as Model<Api>).contextWindow || current.maxTokens !== (listed as Model<Api>).maxTokens ||
             MODEL_THINKING_LEVELS.some(level => current.thinkingLevelMap?.[level] !== (listed as Model<Api>).thinkingLevelMap?.[level]) ||
-            (hasImages && !current.input.includes("image"))) throw new Error("Model owner changed");
+            (needsImages && !current.input.includes("image"))) throw new Error("Model owner changed");
           return current;
         };
         const physical = freeze(data(assertPhysicalCompatible()));
@@ -421,10 +423,17 @@ export function createHostModels(
           policy.assertCurrent(ref, "chat", signal); assertPhysicalCompatible();
           return transformed; // Host-only closure; no callback crosses the SDK bridge.
         } };
+        // Let the SDK project tool-only image placeholders without changing the
+        // committed history, provider-specific framing or accepted user inputs.
+        const request = data(context);
+        if (!model.input.includes("image")) request.messages = request.messages.map(message =>
+          message.role === "toolResult" && message.content.some(block => block.type === "image")
+            ? transformMessages([message], model)[0]! : message);
+        const providerContext = codex ? codex.context(request) : request;
         phase = "provider";
         const stream = simple
-          ? hostModelRuntime120.streamSimple(physical, codex ? codex.context(data(context)) : data(context), hostOptions)
-          : hostModelRuntime120.stream(physical, codex ? codex.context(data(context)) : data(context), hostOptions);
+          ? hostModelRuntime120.streamSimple(physical, providerContext, hostOptions)
+          : hostModelRuntime120.stream(physical, providerContext, hostOptions);
         providerResult = stream;
         let terminalReason: Extract<AssistantMessageEvent, { type: "done" }>["reason"] | undefined;
         for await (const event of stream) {

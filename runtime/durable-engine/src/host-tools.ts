@@ -3,6 +3,7 @@ import type { TSchema } from "typebox";
 import type { JsonValue } from "@earendil-works/chord/json";
 import { defineTool, type ToolRegistration, type ConversationId, type TaskId } from "@earendil-works/pi-durable";
 import { readToolCallSummary, toolCallSummary, type ToolCallSummary } from "../../src/tool-call-summary.js";
+import { getSessionPersistenceConfig } from "../../src/core/config.js";
 
 // Identity metadata only: no ownership, adoption, or execution ledger.
 const hostToolBindings = new WeakMap<object, { definition: object; execute: unknown; summary: ToolCallSummary | undefined; declaration: string; registrationDeclaration: string; registrationExecute: unknown; assertCurrent(): void }>();
@@ -55,6 +56,33 @@ export interface HostToolEffectPort<P extends TSchema, D extends JsonValue> {
     readonly signal: AbortSignal | undefined;
     readonly onUpdate: NonNullable<Parameters<ToolDefinition<P, D>["execute"]>[3]>;
   }): ReturnType<ToolDefinition<P, D>["execute"]>;
+}
+
+type ToolContent = Awaited<ReturnType<ToolDefinition<TSchema, JsonValue>["execute"]>>["content"];
+
+// Bound image-bearing output before the SDK commits it. Source files, stored
+// media and earlier entries are not rewritten; the SDK still owns text limits.
+function boundInlineImages(content: ToolContent): ToolContent {
+  const images = content.filter(block => block.type === "image");
+  if (!images.length) return content;
+  const { toolResultMaxPersistBytes: max, toolResultPreviewChars: preview } = getSessionPersistenceConfig();
+  const fits = (value: ToolContent) => Buffer.byteLength(JSON.stringify(value)) <= max;
+  const invalid = images.some(({ data, mimeType }) =>
+    !/^image\/(?:png|jpeg|gif|webp)$/.test(mimeType) || typeof data !== "string" || !data.length || data.length % 4 !== 0);
+  const oversized = !invalid && images.reduce((bytes, block) => bytes + block.data.length, 0) > max;
+  // Check lengths before serializing or scanning the encoded image bytes.
+  const malformed = invalid || !oversized && images.some(({ data }) => !/^[A-Za-z0-9+/]+={0,2}$/.test(data));
+  if (!malformed && !oversized && fits(content)) return content;
+  const text = content.filter(block => block.type === "text");
+  const note = { type: "text" as const, text: malformed ? "[Inline tool images omitted: invalid image data.]" : "[Inline tool images omitted: result exceeds the persistence budget.]" };
+  const fallback = [...text, note];
+  if (fits(fallback)) return fallback;
+  const first = text[0]?.text.slice(0, Math.min(preview, max));
+  if (first) {
+    const excerpt = [{ type: "text" as const, text: first }, note];
+    if (fits(excerpt)) return excerpt;
+  }
+  return fits([note]) ? [note] : [];
 }
 
 /** Bounded model-only bridge: JSON details and native text/image results.
@@ -130,7 +158,7 @@ export function createHostTool<P extends TSchema, D extends JsonValue>(
         assertAllowed();
         if (updateFailed) throw new Error("Host tool execution failed");
         // Host-trusted JSON details stay UI-only; never promote them to output.
-        return { output: result.content, details: result.details, isError: result.isError };
+        return { output: boundInlineImages(result.content), details: result.details, isError: result.isError };
       } catch {
         // Never export exception messages, subclasses, fields or causes from host code.
         assertAllowed();

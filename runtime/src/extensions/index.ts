@@ -55,7 +55,6 @@ import { providerResponseDiagnostics } from "./provider-response-diagnostics.js"
 import { providerRequestSanitizer } from "./provider-request-sanitizer.js";
 import { openRouterRequestFilter } from "./openrouter-request-filter.js";
 import { llmContextNormalizer } from "./llm-context-normalizer.js";
-import { persistedToolResultSanitizer } from "./persisted-tool-result-sanitizer.js";
 import { createContextPruneExtension } from "./context-prune.js";
 import { localLitePromptProfile } from "./local-lite-prompt-profile.js";
 import { createUiPromptWatchdogExtension } from "./ui-prompt-watchdog.js";
@@ -91,7 +90,6 @@ export function createBuiltinExtensionFactories(options?: {
     providerRequestSanitizer,
     openRouterRequestFilter,
     providerResponseDiagnostics,
-    persistedToolResultSanitizer,
     createContextPruneExtension({ modelRuntime: options?.modelRuntime }),
     llmContextNormalizer,
     localLitePromptProfile,

@@ -26,14 +26,14 @@
     {
       "path": "runtime/durable-engine/src/host-models.ts",
       "beforeSha256": "92e8c15ebdac6c8d4e1df588bd2f316fd1b3a42da4020021ffb3131ea7341d8a",
-      "afterSha256": "12e4ba12e8f4c76c8ba119162896b95e864655693494a40f464f84082a10315a",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. SDK 1.6 preserves provider-runtime identity; forward scoped cancellation at the existing host provider boundary."
+      "afterSha256": "18dedafe77507b1018189b3e7f1646e87c6512eafec0bd08e6011ba35cf8f16e",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. SDK 1.6 preserves provider-runtime identity; forward scoped cancellation at the existing host provider boundary. Project SDK placeholders for text-only tool-result images without rewriting history."
     },
     {
       "path": "runtime/durable-engine/src/host-runtime.ts",
       "beforeSha256": "6eab0bd0a8cc8a90d068cc08a181aba0730e9c2210cf39cdef4e54d86b8fa54f",
-      "afterSha256": "a708ec26e94daa2e042ea73b7a99ef55ae4f5d7eaa3e849888b281842421e8bf",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Share the authenticated, scoped model catalogue without changing retention or accounting."
+      "afterSha256": "f4dfb9f7831498cf1c219a4e701ea85b80e302d6fc3523a6b4c51af561a9a025",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Share the authenticated, scoped model catalogue without changing retention or accounting. Read bounded committed optimiser activity after the answer without reading the next turn into its transcript."
     },
     {
       "path": "runtime/src/agent-pool.ts",
@@ -62,8 +62,8 @@
     {
       "path": "runtime/src/extensions/index.ts",
       "beforeSha256": "08b491d3c83eeb439ce3bf5a8dfc310038a78e1330ed5a90c8870c342018b61a",
-      "afterSha256": "f477edc13e83e37c2b9f39a0425df3cf0dd5c80796c699c4bf98b9547583298a",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "220e47f7c0ec31546c85aa6ba53c569ba38eee2ea7e22694c31d72e723b8d300",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Remove the unreachable legacy result-sanitization hook."
     },
     {
       "path": "runtime/src/extensions/tool-capabilities.ts",
@@ -104,8 +104,8 @@
     {
       "path": "docs/tools-and-skills.md",
       "beforeSha256": "5e3212ee821b5c1f83ddbc3535ebb924c3316133a4cfa9397a70f5ad97fc69f9",
-      "afterSha256": "12e15dbd17dc5a35ab08ecc215cca8db67f2c62fefea15ef5c4aeb4284c85707",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Document the read-only agent discovery surface and direct users to Settings for credential management."
+      "afterSha256": "03a0de544aa82f0b8af8507963093a50fffe34a5ace65a4cdbd29543d530deb8",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Document the read-only agent discovery surface and direct users to Settings for credential management. Document native inline image budgets and text-only projection."
     },
     {
       "path": "runtime/scripts/schema-ownership.json",
