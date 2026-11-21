@@ -157,9 +157,9 @@ const mockMcpConnections = [
   { id: 'local', name: 'local_tools', workspaceId: 'fixture', agentIds: [], enabled: false, revision: 1, transport: 'stdio', url: '', auth: 'bearer', command: ['example-service'], hasSavedCredentials: false, allowHttp: false, timeoutSeconds: 30, recall: defaultMcpRecallSettings() },
 ];
 const mockMcpSnapshot = () => ({ ok: true, workspaceId: 'fixture', connections: mockMcpConnections, agents: [{ id: 'default', label: 'Default' }], defaults: { recall: defaultMcpRecallSettings() } });
-let mockOptimizerConfig = { version: 1, hasEnabled: false, policy: { ...defaultPolicy(), oversightMode: 'off', oversightInferenceInObserve: false, offload: outputOffload(defaultPolicy()) }, workspaces: {}, agents: {}, oversightWorkspaces: {}, oversightAgents: {} };
+let mockOptimizerConfig = { version: 1, hasEnabled: false, policy: { ...defaultPolicy(), oversightMode: 'off', oversightInferenceInObserve: false, offload: outputOffload(defaultPolicy()) } };
 let mockOptimizerRevision = 'fixture-1';
-const mockOptimizerSnapshot = () => ({ ok: true, workspaceId: 'fixture', config: mockOptimizerConfig, revision: mockOptimizerRevision, models: [{ provider: 'fixture', id: 'small', type: 'chat' }], agents: [{ id: 'web:default', label: 'Default' }], status: [] });
+const mockOptimizerSnapshot = () => ({ ok: true, config: mockOptimizerConfig, revision: mockOptimizerRevision, models: [{ provider: 'fixture', id: 'small', type: 'chat' }], status: [] });
 
 let mockMode = new URLSearchParams(window.location.search).get('real') !== '1';
 const originalFetch = window.fetch.bind(window);

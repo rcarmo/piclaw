@@ -40,7 +40,7 @@ export function createNativeTokenOptimizer(options:{workspaceId:string;harness:(
   let chipRefresh:Promise<void>|null = null, chipAgain = false, detached = false;
   /** Reads only the session, repository and run records the chip needs, once per refresh pass. */
   async function summarize(host:HostSession,sessions:Record<string,LearningSession>,knowledge:Knowledge|undefined):Promise<OptimizerChip|null> {
-    const policy = options.configuration.policy(options.workspaceId,actor(host));
+    const policy = options.configuration.policy();
     if (!policy.enabled || policy.mode === "off") return null;
     const session = sessions[sessionKey(host.scope,host.parent ?? host.id)], run = await options.harness().snapshot(RunDoc,sessionKey(host.scope,host.id),context);
     const current = run && !run.closed ? run.decisions.filter(decision => decision.runId === run.guard?.runId) : [];
@@ -135,12 +135,12 @@ export function createNativeTokenOptimizer(options:{workspaceId:string;harness:(
     const goal = plan?.revision === binding.revision ? judgeGoal(plan) : null;
     return goal ? {plan:goal,task} : null;
   }
-  const optimizer = createTokenEconomizer({harness:options.harness,backgroundOwner:() => {if (maintenance === undefined) throw new Error("Optimizer maintenance owner is not attached");return maintenance;},domain,...transport,goal:goalFor,onOperation:recordOptimizerOperation,policy:host => options.configuration.policy(options.workspaceId,actor(host)),onNotice:async notice => {if (["tools-applied","tools-restored","tool-publication-refused","still-stuck"].includes(notice.code)) return;const rows = (await options.harness().snapshot(NativeOptimizerSessions,context))?.sessions, host = rows?.[notice.sessionId]?.host ?? [...subagents.values()].find(row => row.id === notice.sessionId);if (host) await options.harness().commit(async tx => {const state = await tx.doc(NativeNotices);if (state.ids.includes(notice.id)) return;await tx.appendEntry(OptimizerNotice,host.conversationId,{data:{id:notice.id,text:notice.text,at:Date.now(),code:notice.code,runId:notice.runId}});state.ids.push(notice.id);},context);},onError:error => console.error("Token optimizer observation failed",error)});
+  const optimizer = createTokenEconomizer({harness:options.harness,backgroundOwner:() => {if (maintenance === undefined) throw new Error("Optimizer maintenance owner is not attached");return maintenance;},domain,...transport,goal:goalFor,onOperation:recordOptimizerOperation,policy:() => options.configuration.policy(),onNotice:async notice => {if (["tools-applied","tools-restored","tool-publication-refused","still-stuck"].includes(notice.code)) return;const rows = (await options.harness().snapshot(NativeOptimizerSessions,context))?.sessions, host = rows?.[notice.sessionId]?.host ?? [...subagents.values()].find(row => row.id === notice.sessionId);if (host) await options.harness().commit(async tx => {const state = await tx.doc(NativeNotices);if (state.ids.includes(notice.id)) return;await tx.appendEntry(OptimizerNotice,host.conversationId,{data:{id:notice.id,text:notice.text,at:Date.now(),code:notice.code,runId:notice.runId}});state.ids.push(notice.id);},context);},onError:error => console.error("Token optimizer observation failed",error)});
   const outputStore = createToolOutputStore(options.database);
   const outputScope = async (id:ConversationId) => {const host = await domain.session(id);return host ? {owner:JSON.stringify([options.workspaceId,options.environmentRevision,actor(host)]),lineage:await conversationLineage(options.harness(),id,context)} : null;};
   const outputExtension = createOptimizerOutputExtension({
     policyFor:async id => {
-      const host=await domain.session(id);if(!host||host.delegated)return null;const policy=options.configuration.policy(options.workspaceId,actor(host));
+      const host=await domain.session(id);if(!host||host.delegated)return null;const policy=options.configuration.policy();
       if(policy.offloadOutputs){const agent=await(await options.harness().conversation(id,context))?.agent(context);if(!agent?.tools.some(tool=>tool.name==='read_tool_output')&&!(agent?.tools.some(tool=>tool.name==='codemode')&&agent.callable.some(tool=>tool.name==='read_tool_output')))policy.offloadOutputs=false;}
       return policy;
     },
@@ -149,7 +149,7 @@ export function createNativeTokenOptimizer(options:{workspaceId:string;harness:(
   });
   let pruneTimer:ReturnType<typeof setInterval>|undefined,pruning:Promise<number>|undefined;
   const pruneOutputs = () => pruning ??= outputStore.prune().catch(error=>{console.error("Could not prune stored tool outputs",error);return 0;}).finally(()=>{pruning=undefined;});
-  const goalExtension = createOptimizerGoalsExtension({harness:options.harness,host:domain.session,policy:host => options.configuration.policy(options.workspaceId,actor(host)),drained:optimizer.drained,plan:options.plan,goal:goalFor});
+  const goalExtension = createOptimizerGoalsExtension({harness:options.harness,host:domain.session,policy:() => options.configuration.policy(),drained:optimizer.drained,plan:options.plan,goal:goalFor});
   optimizer.extension = {...optimizer.extension,tools:[...optimizer.extension.tools ?? [],...createToolOutputTools(outputStore,outputScope)],hooks:[...optimizer.extension.hooks ?? [],...outputExtension.hooks ?? [],...goalExtension.hooks ?? []]};
   async function start(conversation:Conversation,record:Pick<CoreOptimizerAgent,"agentId"|"parentId"|"readOnly"|"oneShotCallId">,event:"startup"|"new"|"resume"|"fork" = "startup",parentGroup?:string) {
     if (record.parentId || record.readOnly || record.oneShotCallId) return;
@@ -241,7 +241,7 @@ export function createNativeTokenOptimizer(options:{workspaceId:string;harness:(
      */
     async preparePrompt(id:ConversationId,task:string,attachments:AttachmentType[] = []) {
       const host = hosts.get(id);if (!host || !task.trim()) return;
-      const policy = options.configuration.policy(options.workspaceId,actor(host));
+      const policy = options.configuration.policy();
       if (!policy.autoToolPicks || policy.toolJudge === "none" || policy.pruning === "off" || !(policy.mode === "active" || policy.mode === "observe" && policy.inferenceInObserve)) return;
       if ((await options.harness().snapshot(LiveDoc,id,context))?.run) return;
       const began = Date.now(), work = prepare(host,task,crypto.randomUUID(),attachments,began+promptPickLimitMs).then(mask => ({mask}),error => ({error:errorMessage(error)}));

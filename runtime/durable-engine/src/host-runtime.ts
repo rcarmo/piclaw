@@ -644,7 +644,19 @@ export class HostConversationRuntime {
       const toolSummaries = collectToolCallSummaries(window, (name, args) => {
         reader.check(); const text = resolve(name, args); reader.check(); return text;
       });
-      return freezeTree({ entries: structuredClone(window), tasks, truncated, toolSummaries });
+      // Learning and publication can finish after the answer. Include their
+      // committed display receipts until the next accepted input, not the next
+      // turn's messages, usage or tool calls. Bound the extra read separately.
+      const afterAnswer: EntryRecord[] = [];
+      if (answerEntryId !== undefined) {
+        const page = await conversation.entries({ order: 'ascending', minEntryId: (answerEntryId + 1) as EntryRecord['id'] }, 100, undefined, this.context);
+        reader.check();
+        for (const entry of page.items) {
+          if (entry.kind === 'host.accepted' || entry.kind === 'pi.reset' || entry.kind === 'pi.assistant') break;
+          if (entry.kind === 'piclaw.token-optimizer.operation' && entry.conversationId === reader.binding.conversationId) afterAnswer.push(entry);
+        }
+      }
+      return freezeTree({ entries: structuredClone([...window, ...afterAnswer]), tasks, truncated, toolSummaries });
     });
   }
   /** Fork-aware public history across the explicit imported host-session bindings only. */

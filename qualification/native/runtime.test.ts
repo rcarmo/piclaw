@@ -8,7 +8,7 @@ import { Database } from "bun:sqlite";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
-import { Harness, LiveDoc, AssistantEntry, type Tx, type ConversationId } from "../../runtime/durable-engine/qualification/durable.ts";
+import { Harness, LiveDoc, AssistantEntry, defineEntry, type Tx, type ConversationId } from "../../runtime/durable-engine/qualification/durable.ts";
 import type { TerminalCommit, TerminalDatabaseEffect } from "../../runtime/src/service-effects/contracts/terminal-settlement-store.js";
 import type { AssistantMessage } from "../../runtime/durable-engine/qualification/ai.ts";
 import { HostConversationRuntime, type AcceptedInput, type RuntimeOptions, type SettledAnswer } from "../../runtime/durable-engine/src/index.js";
@@ -23,6 +23,8 @@ import { createCurrentPiclawServiceWorkStore } from "../../runtime/src/service-e
 import { createCurrentPiclawTerminalSettlementStore } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-store.js";
 import { createHostDurableBindings, initializeHostDurableBindings } from "../../runtime/durable-engine/src/index.js";
 import { estimateContextTokens } from "../../runtime/durable-engine/qualification/ai.ts";
+import { recordOptimizerOperation } from "../../runtime/durable-engine/src/token-optimizer-operations.js";
+import { projectTurnActivity } from "../../runtime/src/channels/web/agent/turn-activity.js";
 import { InMemoryEffectPayloadResolver } from "../../runtime/src/service-effects/testing/in-memory-payload-resolver.js";
 
 // Same known-row fixture as terminal-settlement-test-support.seedSqliteMedia, against
@@ -605,6 +607,32 @@ test("runtime: turn entries read one answer's committed window without model rep
   await expect(f.runtime.readTurnEntries({ ...binding, incarnation: "foreign" }, answer!)).rejects.toThrow("Host binding conflict");
   expect(f.base.host.modelCalls).toBe(calls);
 }), 20000);
+
+test("runtime: settled activity includes late optimiser receipts but not the next turn", () => fixture(async f => {
+  f.grantKnown();
+  const input = await f.accept();
+  const binding = { incarnation: input.incarnation, chatJid: input.chatJid, branchId: input.branchId, conversationId: input.conversationId };
+  const id = await f.runtime.submit(input); await f.runtime.wait(input,id);
+  const status = (await f.runtime.reconcile(input)).status;
+  const answer = status?.type === 'input' && status.status === 'done' ? status.answer : undefined;
+  expect(answer).toBeDefined();
+  const commit = (id: string) => f.runtime.coreExtensionHarness().commit(tx => recordOptimizerOperation(tx,binding.conversationId as ConversationId,{
+    id,name:'optimizer.learn',status:'complete',startedAt:1,at:2,input:{},output:{changes:{facts:[{claim:'private fact'}],suggestedTools:[],withdrawnTools:[]}}
+  }),context);
+  await commit('first');
+  // A committed input marker is enough to establish the next read boundary;
+  // the existing fixture's first operation does not settle a host frontier.
+  await f.runtime.coreExtensionHarness().commit(tx => tx.appendEntry(defineEntry<{ chatJid: string; branchId: string }>('host.accepted'),binding.conversationId as ConversationId,
+    { data: { chatJid: binding.chatJid, branchId: binding.branchId } }),context);
+  await commit('second');
+  const before=f.base.host.modelCalls,turn=await f.runtime.readTurnEntries(binding,answer!);
+  expect(turn?.entries.filter(entry=>entry.kind==='piclaw.token-optimizer.operation')).toHaveLength(1);
+  expect(turn?.entries.filter(entry=>entry.kind==='host.accepted')).toHaveLength(1);
+  const projected=projectTurnActivity(turn!,answer!);
+  expect(projected.steps.filter(step=>step.kind==='optimizer').map(step=>step.tool?.output_preview)).toEqual(['Complete.\nFacts updated: 1.']);
+  expect(JSON.stringify(projected)).not.toContain('private fact');
+  expect(f.base.host.modelCalls).toBe(before);
+}),20000);
 
 test("runtime: one running tool call can be stopped while its run continues", () => fixture(async f => {
   f.base.host.toolHold = barrier(); f.grantKnown();

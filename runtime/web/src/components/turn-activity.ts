@@ -287,12 +287,13 @@ function ToolImages({ chatJid, messageId, step, count, limit, className, describ
 
 function ToolStep({ step, chatJid, messageId, liveOutput = '', live = false }) {
     const tool = step.tool;
+    const optimizer = step.kind === 'optimizer';
     const [open, setOpen] = useState(false);
     const { detail, loading, failed, load, loadEmitted } = useStepDetail(chatJid, messageId, step.id);
     const bodyId = `turn-activity-${messageId}-${step.id}`.replace(/[^a-zA-Z0-9_-]/g, '-');
     const running = tool.status === 'running';
     // A card loads its full detail (readable input, emitted output) when first opened.
-    useEffect(() => { if (open && !detail && !loading && !failed && !running) load(0); }, [open, detail, loading, failed, running, load]);
+    useEffect(() => { if (!optimizer && open && !detail && !loading && !failed && !running) load(0); }, [optimizer, open, detail, loading, failed, running, load]);
     const toggle = (event) => {
         event.stopPropagation();
         setOpen((value) => !value);
@@ -331,11 +332,11 @@ function ToolStep({ step, chatJid, messageId, liveOutput = '', live = false }) {
                     ${tool.nested?.length ? html`<span class="turn-activity-badge">${tool.nested.length} call${tool.nested.length === 1 ? '' : 's'}</span>` : null}
                     ${duration && html`<span class="turn-activity-duration">${duration}</span>`}
                 </button>
-                ${live && running && html`<${ToolStopControl} chatJid=${chatJid} callId=${tool.call_id} title=${tool.title} />`}
+                ${live && running && !optimizer && html`<${ToolStopControl} chatJid=${chatJid} callId=${tool.call_id} title=${tool.title} />`}
             </div>
             <div id=${bodyId} class="turn-activity-tool-body" hidden=${!open}>
                 ${open && html`
-                    <${DetailRegion} key=${`input-${input ? 'full' : 'preview'}`} title=${inputTitle} views=${inputViews} className="turn-activity-input-region" />
+                    ${!optimizer && html`<${DetailRegion} key=${`input-${input ? 'full' : 'preview'}`} title=${inputTitle} views=${inputViews} className="turn-activity-input-region" />`}
                     ${tool.nested?.length ? html`
                         <div class="turn-activity-section-label">Calls</div>
                         <ol class="turn-activity-nested">
@@ -348,7 +349,8 @@ function ToolStep({ step, chatJid, messageId, liveOutput = '', live = false }) {
                             `)}
                         </ol>
                     ` : null}
-                    ${outputViews.length > 0 && html`<${DetailRegion} key=${`output-${emitted ? 'emitted' : 'model'}`} title="Output" views=${outputViews} className="turn-activity-output-region" />`}
+                    ${optimizer ? html`<${DetailRegion} title="Optimiser activity" views=${[{ key: 'receipt', label: 'Outcome', text: tool.output_preview, className: 'turn-activity-output' }]} className="turn-activity-output-region" />`
+                        : outputViews.length > 0 && html`<${DetailRegion} key=${`output-${emitted ? 'emitted' : 'model'}`} title="Output" views=${outputViews} className="turn-activity-output-region" />`}
                     ${tool.images > 0 && html`
                         <div class="turn-activity-section-label">Images</div>
                         <${ToolImages} chatJid=${chatJid} messageId=${messageId} step=${step} count=${tool.images} limit=${CARD_THUMBNAILS} className="turn-activity-images"
@@ -403,6 +405,15 @@ export function TurnActivity({ post, chatJid }) {
     }, [activity]);
     useLayoutEffect(() => { anchorRef.current?.compensate(); }, [expanded]);
 
+    // A learning checkpoint can commit after the reply was first loaded.
+    useEffect(() => {
+        if (!expanded || !messageId) return undefined;
+        let cancelled = false;
+        Promise.resolve().then(() => getTurnActivity(jid, messageId)).then(value => { if (!cancelled && value) setActivity(value); })
+            .catch(error => console.debug('[turn-activity] Could not refresh settled activity.', error));
+        return () => { cancelled = true; };
+    }, [expanded, jid, messageId]);
+
     const toggle = useCallback((event) => {
         event.stopPropagation();
         anchorRef.current?.mark();
@@ -426,7 +437,7 @@ export function TurnActivity({ post, chatJid }) {
             <div id=${detailId} class="turn-activity-detail" ref=${panelRef} hidden=${!expanded}>
                 ${expanded && html`
                     <ol class="turn-activity-steps">
-                        ${activity.steps.map((step) => step.kind === 'tool'
+                        ${activity.steps.map((step) => step.kind === 'tool' || step.kind === 'optimizer'
                             ? html`<${ToolStep} key=${step.id} step=${step} chatJid=${jid} messageId=${messageId} />`
                             : html`<${TextStep} key=${step.id} step=${step} chatJid=${jid} messageId=${messageId} />`)}
                     </ol>
@@ -473,7 +484,7 @@ export function LiveTurnActivity({ chatJid, status, draft, thought, turnId, stat
     }, [active]);
 
     // Refetch the committed steps when the visible activity changes, only while open.
-    const signature = JSON.stringify([turnId, status?.type, status?.tool_call_id, status?.status, status?.phase,
+    const signature = JSON.stringify([turnId, status?.type, status?.tool_call_id, status?.status, status?.phase, status?.optimizer_activity_entry,
         (status?.active_tools || []).map((tool) => [tool?.tool_call_id, tool?.status])]);
     useEffect(() => {
         if (!active || !expanded) return undefined;
@@ -529,7 +540,7 @@ export function LiveTurnActivity({ chatJid, status, draft, thought, turnId, stat
                     <div id=${detailId} class="turn-activity-detail" hidden=${!expanded}>
                         ${expanded && html`
                             <ol class="turn-activity-steps">
-                                ${(activity?.steps || []).map((step) => step.kind === 'tool'
+                                ${(activity?.steps || []).map((step) => step.kind === 'tool' || step.kind === 'optimizer'
                                     ? html`<${ToolStep} key=${step.id} step=${step} chatJid=${chatJid} messageId=${null} live=${true} liveOutput=${liveOutputs.get(step.tool.call_id) || ''} />`
                                     : html`<${TextStep} key=${step.id} step=${step} chatJid=${chatJid} messageId=${null} />`)}
                                 ${showThinkingTail && html`<li class="turn-activity-step turn-activity-thinking turn-activity-live-thinking"><div class="turn-activity-markdown">${thinkingTail}</div></li>`}
