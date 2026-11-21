@@ -85,6 +85,7 @@ export interface SchedulerDeps {
     forceRoot?: boolean;
     threadId?: number | null;
     source?: string;
+    notifyOnComplete?: boolean;
     mediaIds?: number[];
     contentBlocks?: Array<Record<string, unknown>>;
   }) => Promise<void>;
@@ -913,7 +914,9 @@ async function runClaimedScheduledTask(
       const text = formatOutbound(outcome.deliveryText, detectChannel(finalLease.task.chatJid));
       try {
         if (text) {
-          await deps.sendMessage(finalLease.task.chatJid, text, { forceRoot: true, source: 'scheduled' });
+          await deps.sendMessage(finalLease.task.chatJid, text, {
+            forceRoot: true, source: 'scheduled', notifyOnComplete: finalLease.task.notifyOnComplete,
+          });
           if (finalLease.task.notifyOnComplete && canRunLegacyScheduledWork()) await deps.sendNudge?.(text);
         }
       } catch (error) {

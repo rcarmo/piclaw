@@ -43,6 +43,8 @@ interface IpcMessageOptions {
   forceRoot?: boolean;
   threadId?: number | null;
   source?: string;
+  /** Host-only completion policy; never read from IPC message JSON. */
+  notifyOnComplete?: boolean;
   mediaIds?: number[];
   contentBlocks?: Array<Record<string, unknown>>;
 }

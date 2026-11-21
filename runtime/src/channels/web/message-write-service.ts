@@ -1,6 +1,10 @@
 /** Outgoing web message writes and dashboard publication. */
 import type { InteractionRow } from "../../db.js";
+import { createLogger } from "../../utils/logger.js";
 import { postDashboardWidget as postDashboardWidgetMessage } from "./dashboard-widget.js";
+import { sendStoredAgentReplyWebPushNotification } from "./push/web-push-service.js";
+
+const log = createLogger("web.message-write");
 
 /** Supported send forms; numeric thread IDs still have live callers. */
 export type SendMessageOptions =
@@ -15,6 +19,7 @@ export type SendMessageOptions =
       authorise?: (phase?: "before" | "after") => void;
       signal?: AbortSignal;
       source?: string;
+      notifyOnComplete?: boolean;
       mediaIds?: number[];
       contentBlocks?: Array<Record<string, unknown>>;
     };
@@ -29,6 +34,7 @@ export interface WebMessageWriteServiceDeps {
     authorise?: (phase?: "before" | "after") => void, signal?: AbortSignal
   ): Promise<InteractionRow | null>;
   broadcastAgentResponse(interaction: InteractionRow): void;
+  sendStoredReplyPush?: typeof sendStoredAgentReplyWebPushNotification;
 }
 
 export class WebMessageWriteService {
@@ -52,6 +58,13 @@ export class WebMessageWriteService {
     }
     // The store resolved root threading in its original transaction, before any receipt.
     if (forceRoot && !threadId) interaction.data.thread_id = interaction.id;
+    if (normalized.source === "scheduled" && normalized.notifyOnComplete === true) {
+      const send = this.deps.sendStoredReplyPush ?? sendStoredAgentReplyWebPushNotification;
+      // Best-effort notification of this committed row, not part of task settlement.
+      void Promise.resolve().then(() => send(interaction, { kind: "scheduled" })).catch(() => {
+        log.warn("Scheduled Web Push delivery failed", { operation: "web_message.scheduled_push_failed", rowId: interaction.id });
+      });
+    }
     this.deps.broadcastAgentResponse(interaction);
   }
 

@@ -7,7 +7,7 @@ import { getTestWorkspace, importFresh, setEnv } from "./helpers.js";
 
 setDefaultTimeout(15_000);
 
-const sentMessages: Array<{ jid: string; text: string }> = [];
+const sentMessages: Array<{ jid: string; text: string; notifyOnComplete?: boolean }> = [];
 const sentNudges: string[] = [];
 let restoreEnv: (() => void) | null = null;
 let db: typeof import("../src/db.js") | null = null;
@@ -56,11 +56,12 @@ test("admitted scheduled task executes shell command and sends output", async ()
   await runAdmittedScheduledTask(task!, {
     queue: {} as any,
     agentPool: {} as any,
-    sendMessage: async (jid, text) => { sentMessages.push({ jid, text }); },
+    sendMessage: async (jid, text, options) => { sentMessages.push({ jid, text, notifyOnComplete: options?.notifyOnComplete }); },
     sendNudge: async (text) => { sentNudges.push(text); },
   });
 
   expect(sentMessages.length).toBe(1);
+  expect(sentMessages[0].notifyOnComplete).toBe(true);
   expect(sentMessages[0].text).toContain("```");
   expect(sentMessages[0].text).toContain("hi");
   expect(sentNudges).toEqual([sentMessages[0].text]);
@@ -119,11 +120,12 @@ test("admitted scheduled task can suppress Pushover nudges for shell output", as
   await runAdmittedScheduledTask(task, {
     queue: {} as any,
     agentPool: {} as any,
-    sendMessage: async (jid, text) => { sentMessages.push({ jid, text }); },
+    sendMessage: async (jid, text, options) => { sentMessages.push({ jid, text, notifyOnComplete: options?.notifyOnComplete }); },
     sendNudge: async (text) => { sentNudges.push(text); },
   });
 
   expect(sentMessages.length).toBe(1);
+  expect(sentMessages[0].notifyOnComplete).toBe(false);
   expect(sentMessages[0].text).toContain("hi");
   expect(sentNudges).toEqual([]);
 });
