@@ -24,7 +24,7 @@ async function fixture({sqlite=false,beforeSend,replace}: {sqlite?:boolean;befor
  const dir=mkdtempSync(join(tmpdir(),'optimizer-host-bridge-')),file=sqlite?join(dir,'state.sqlite'):':memory:',db=new Database(file,{create:true});
  db.exec('PRAGMA journal_mode=WAL;PRAGMA secure_delete=ON;PRAGMA busy_timeout=0;CREATE TABLE router_state(key TEXT PRIMARY KEY,value TEXT NOT NULL);');
  cleanup.push(async()=>{db.close();rmSync(dir,{recursive:true,force:true});});
- const config=new TokenOptimizerConfiguration(db,()=>{}),ref={provider:'optimizer-fixture',id:'small'};
+ const config=new TokenOptimizerConfiguration(db,()=>{},"fixture"),ref={provider:'optimizer-fixture',id:'small'};
  const model={...ref,name:'Fixture',api:'openai-completions' as const,input:['text'] as ('text')[],reasoning:false,contextWindow:128000,maxTokens:4096,baseUrl:'https://fixture.invalid',cost:{input:0,output:0,cacheRead:0,cacheWrite:0}};
  const host=await ModelRuntime.create({credentials:{read:async()=>({type:'api_key' as const,key:'SYNTHETIC'}),list:async()=>[{providerId:ref.provider,type:'api_key' as const}],modify:async()=>undefined,delete:async()=>{}},modelsPath:null,allowModelNetwork:false,refreshOnCreate:false});
  let calls=0,hold=false,payloadChecks=0;const entered=Promise.withResolvers<void>(),released=Promise.withResolvers<void>(),headerNames:string[][]=[];

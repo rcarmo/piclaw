@@ -5,10 +5,10 @@ const root=resolve(import.meta.dir,'../..'),text=(path:string)=>readFileSync(res
 test('Classic registers native MCP and independent optimisation using existing lazy settings panes',()=>{
  const classic=text('web/src/components/settings-dialog.ts');
  expect(classic).toContain("id: 'mcp', label: 'MCP'");expect(classic).toContain("import('./settings/mcp.js').then(mod => mod.McpSection)");expect(classic).toContain("case 'mcp': return html`<${Comp} />`");
- expect(classic).toContain("id: 'optimizer', label: 'Optimisation'");expect(classic).toContain("import('./settings/optimizer.js').then(mod => mod.OptimizerSection)");expect(classic).toContain('order: 31.5');
+ expect(classic).toContain("id: 'optimizer', label: 'Optimisation'");expect(classic).toContain("import('./settings/optimizer.js').then(mod => mod.OptimizerSection)");expect(classic).toMatch(/id: 'models'[^\n]*order: 30 \},\n\s*\{ id: 'optimizer'[^\n]*order: 30\.1 \}/);
  const mcp=text('web/src/components/settings/mcp.ts'),optimizer=text('web/src/components/settings/optimizer.ts');
  for(const legacy of ['Engine to preview','Preview compatibility','Apply MCP settings','acknowledgeInterruptions','createMcpSettingsController','/servers/preview'])expect(mcp).not.toContain(legacy);
  expect(mcp).toContain('/agent/settings/mcp');expect(mcp).toContain('expectedRevision:');expect(mcp).toContain('approveCredentialReuse: false');expect(mcp).toContain('hasSavedCredentials');
- expect(optimizer).toContain('/agent/addons/api/token-optimizer/config');expect(optimizer).toContain('policy.oversightMode');expect(optimizer).toContain('policy.sharePlanWithJudge');
+ expect(optimizer).toContain('/agent/addons/api/token-optimizer/config');expect(optimizer).toContain('policy.oversightMode');expect(optimizer).toContain('policy.sharePlanWithJudge');expect(optimizer).not.toContain('Agent overrides');expect(optimizer).not.toContain('oversightAgents');
  const locales=text('web/src/utils/i18n.ts');expect((locales.match(/'settings\.section\.mcp': 'MCP'/g)||[]).length).toBe(3);expect((locales.match(/'settings\.section\.optimizer':/g)||[]).length).toBe(3);
 });

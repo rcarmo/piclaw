@@ -2,6 +2,7 @@ import type Database from "bun:sqlite";
 import { readNativeDelegateProgress, formatNativeDelegateProgress } from "../../../agent-pool/delegate-progress.js";
 import { buildPreview, createToolTitleTracker } from "./agent-utils.js";
 import type { ToolCallSummaryResolver } from "../../../tool-call-summary.js";
+import { optimizerFactContextKind, optimizerOperationKind } from "./optimizer-activity.js";
 
 /** Projection of the public pi-durable conversation watch onto existing web events. */
 export interface NativeTurnViewChannel {
@@ -20,9 +21,10 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
   const titles = createToolTitleTracker();
   let queuedIds=new Set<number>();
   let lastStatus = "", queued = 0, entryFrontier: number | undefined, lastPrimary="";
+  let optimizerFrontier = 0;
   const status = (data: Record<string, unknown>) => {
     const payload = { chat_jid: chat, source: "durable_runtime", sdk_observation: true, queued_count: queued,
-      state: "active", ...base, ...data };
+      state: "active", ...base, ...data, ...(optimizerFrontier ? { optimizer_activity_entry: optimizerFrontier } : {}) };
     const signature = JSON.stringify(payload);
     if (signature === lastStatus) return;
     lastStatus = signature;
@@ -55,7 +57,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
     for(const id of queuedIds)if(!nextQueuedIds.has(id))channel.broadcastEvent("agent_followup_consumed",{chat_jid:chat,row_id:id});
     queuedIds=nextQueuedIds;queued=inbox.length;
     if (!live.run) {
-      runId = undefined; titles.clear();
+      runId = undefined; optimizerFrontier = 0; titles.clear();
       if (live.compactions?.length) {
         base = undefined;
         status({ type: "intent", state: "active", title: "Compacting context", phase: "compaction", intent_key: "compaction",
@@ -75,7 +77,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
       if (!input) return;
       if(lastPrimary!==input.source_id){channel.publishInput?.(input.source_id);lastPrimary=input.source_id;}
       runId = live.run.taskId;
-      operationId = input.operation_id; lastTool = undefined;
+      operationId = input.operation_id; lastTool = undefined; optimizerFrontier = 0;
       base = { chat_jid: chat, agent_id: "default", task_id: live.run.taskId, turn_id: input.rowid ? `durable:${input.rowid}` : `durable-operation:${input.operation_id}`,
         thread_id: input.thread_id ?? input.rowid,
         operation_id: input.operation_id.startsWith("native-message:") ? `sdk-run:${view.conversation.id}:${live.run.inputs[0]}` : input.operation_id,
@@ -90,6 +92,10 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
     // entries are authoritative for completed text/results; partials are not a ledger.
     const first = view.entries.findIndex((entry: any) => entry.kind === "host.accepted" && entry.data?.operationId === operationId);
     const runEntries = first >= 0 ? view.entries.slice(first) : view.entries.filter((entry: any) => entry.byTaskId >= live.run.taskId);
+    const previousOptimizerFrontier = optimizerFrontier;
+    for (const entry of runEntries) {
+      if (entry.kind === optimizerOperationKind || entry.kind === optimizerFactContextKind) optimizerFrontier = Math.max(optimizerFrontier, entry.id);
+    }
     const messages = runEntries.flatMap((entry: any) => entry.model ?? []);
     const assistants = messages.filter((item: any) => item.role === "assistant");
     const textFor = (item: any, kind: string) => (item?.content ?? []).filter((block: any) => block.type === kind).map((block: any) => block[kind === "thinking" ? "thinking" : "text"] ?? "").join(kind === "thinking" ? "\n" : "");
@@ -163,5 +169,6 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
       status(lastTool ? { ...lastTool, active_tools: [], active_tool_count: 0, last_activity: true, phase: partialDraft ? "drafting" : "thinking" }
         : { type: "thinking", title: partialDraft ? "Writing response..." : "Thinking...", phase: partialDraft ? "drafting" : "thinking", active_tools: [], active_tool_count: 0 });
     } else if (currentTool && lastTool) status(lastTool);
+    else if (optimizerFrontier !== previousOptimizerFrontier) status({ type: 'thinking', title: 'Thinking...', phase: 'thinking', active_tools: [], active_tool_count: 0 });
   };
 }

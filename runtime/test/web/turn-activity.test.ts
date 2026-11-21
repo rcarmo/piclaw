@@ -44,6 +44,33 @@ function sampleTurn(): DurableTurnEntries {
 }
 
 describe("turn activity projection", () => {
+  test("shows one tool-style row per committed optimiser operation without inflating tool counts", () => {
+    const entry = (id: number, name: string, status: string, output: unknown, operation = name) => ({
+      id, kind: 'piclaw.token-optimizer.operation', data: { id: operation, name, status, startedAt: 2_100, at: 2_500,
+        input: { reason: 'verification-debt', prompt: 'PRIVATE_SIDE_PROMPT' }, output },
+    });
+    const sample = sampleTurn();
+    const turn = { ...sample, entries: [...sample.entries.slice(0, 3),
+      entry(9, 'optimizer.goal-check', 'running', null),
+      entry(10, 'optimizer.learn', 'complete', { changes: { facts: [], suggestedTools: [], withdrawnTools: [] } }),
+      ...sample.entries.slice(3),
+      entry(11, 'optimizer.goal-check', 'complete', { delivery: 'simulated', evidence: 'PRIVATE_EVIDENCE' }),
+      entry(12, 'optimizer.loop-judge', 'failed', { error: 'PRIVATE_PROVIDER_ERROR' }),
+    ] };
+    const activity = projectTurnActivity(turn, 8);
+    expect(activity.tools).toBe(3);expect(activity.errors).toBe(1);expect(activity.tool_ms).toBe(4_900);
+    const operations = activity.steps.filter(step => step.kind === 'optimizer');
+    expect(operations.map(step => [step.id, step.tool?.title, step.tool?.status])).toEqual([
+      ['optimizer:9', 'Optimiser · Flagged unverified edits (Watch only)', 'ok'],
+      ['optimizer:12', 'Optimiser · Check whether the run is stuck', 'error'],
+    ]);
+    expect(activity.steps.findIndex(step => step.id === 'optimizer:9')).toBeLessThan(activity.steps.findIndex(step => step.id === 'input:5'));
+    const detail = projectTurnStepDetail(turn, 'optimizer:9');
+    expect(detail).toMatchObject({ kind: 'optimizer', output: 'Observed only. No advice was sent.' });
+    expect(projectTurnStepDetail(turn, 'optimizer:11')).toBeNull();
+    expect(projectTurnStepDetail(turn, 'tool:optimizer.goal-check')).toBeNull();
+    expect(JSON.stringify([activity, detail, projectTurnStepDetail(turn,'optimizer:12')])).not.toContain('PRIVATE_');
+  });
   test("orders thinking, commentary, steering and tool steps and keeps the final answer in the post", () => {
     const activity = projectTurnActivity(sampleTurn(), 8);
     expect(activity.steps.map((step) => step.id)).toEqual([

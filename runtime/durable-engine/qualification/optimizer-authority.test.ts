@@ -14,7 +14,7 @@ const kinds=['inference','fold','checkpoint','guard-judge','auto-publication','f
 for(const suffix of kinds)test('SDK optimiser source correlation: '+suffix,async()=>{
  const database=new Database(':memory:');database.exec('CREATE TABLE router_state(key TEXT PRIMARY KEY,value TEXT NOT NULL)');
  const registry=createRegistry(),models=createModels(),agents:{agentId:string;durableId:ConversationId}[]=[];let harness:Harness,current=true;
- const native=createNativeTokenOptimizer({workspaceId:'workspace',workspaceRoot:process.env.PICLAW_WORKSPACE!,environmentRevision:'owned',registry,models,harness:()=>harness,configuration:new TokenOptimizerConfiguration(database,()=>{}),agents:async()=>agents,plan:async()=>null,readSavedOutput:async()=>({status:'unavailable'}),database:applicationRetainedDatabase(database,()=>{})});registry.install(native.optimizer.extension);
+ const native=createNativeTokenOptimizer({workspaceId:'workspace',workspaceRoot:process.env.PICLAW_WORKSPACE!,environmentRevision:'owned',registry,models,harness:()=>harness,configuration:new TokenOptimizerConfiguration(database,()=>{},"workspace"),agents:async()=>agents,plan:async()=>null,readSavedOutput:async()=>({status:'unavailable'}),database:applicationRetainedDatabase(database,()=>{})});registry.install(native.optimizer.extension);
  harness=await Harness.open(new MemoryStorage(),{registry,models},context);
  try{
   const root=await harness.root(context);agents.push({agentId:'root_agent',durableId:root.id});await native.start(root,agents[0]!);const host=native.host(root.id),key=sessionKey(host.scope,host.id),scope=scopeKey(host.scope),kind='token-economizer.'+suffix;

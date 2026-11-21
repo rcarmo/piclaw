@@ -40,6 +40,21 @@ export async function openSettings(engine: string, width: number, section: strin
 }
 
 for (const engine of ['chromium', 'webkit']) {
+  browserTest(`${engine}: Optimisation follows Models in Settings`, async () => {
+    const { page, errors } = await openSettings(engine, 1280, 'models');
+    try {
+      const nav = page.locator('.settings-nav-item');
+      const names = await nav.allTextContents();
+      const modelIndex = names.findIndex(name => name.trim() === 'Models');
+      expect(modelIndex).toBeGreaterThanOrEqual(0);
+      expect(names[modelIndex + 1]?.trim()).toBe('Optimisation');
+      await nav.nth(modelIndex + 1).click();
+      await page.getByLabel('Optimisation mode', { exact: true }).waitFor();
+      expect(await page.getByText('Agent overrides', { exact: true }).count()).toBe(0);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+
   browserTest(`${engine}: Models can update the provider catalogues like pi update --models`, async () => {
     const { page, errors } = await openSettings(engine, 1280, 'models');
     try {

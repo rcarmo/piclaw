@@ -11,6 +11,7 @@
 
 import type { DurableTurnEntries } from "../../../agent-pool/durable-runtime-adapter.js";
 import { formatToolTitle } from "./agent-utils.js";
+import { optimizerActivityRows } from "./optimizer-activity.js";
 import { languageForPath, originalToolInput, readableToolInput, type EmittedOutput, type ReadableInput } from "./tool-presentation.js";
 
 export type TurnStepStatus = "ok" | "error" | "running" | "aborted";
@@ -24,7 +25,7 @@ export interface TurnNestedCall {
 
 export interface TurnActivityStep {
   id: string;
-  kind: "thinking" | "text" | "tool" | "input";
+  kind: "thinking" | "text" | "tool" | "input" | "optimizer";
   /** Bounded preview for thinking, text and steering input. */
   text?: string;
   chars?: number;
@@ -119,10 +120,19 @@ export function projectTurnActivity(turn: DurableTurnEntries, answerEntryId: num
   const commentary = options.commentary !== false;
   const steps: TurnActivityStep[] = [];
   const toolSteps = new Map<string, NonNullable<TurnActivityStep["tool"]>>();
+  const optimizerRows = optimizerActivityRows(turn.entries);
   const spans: Array<[number, number]> = [];
   let outputTokens = 0, startedAt: number | null = null, endedAt: number | null = null, inputs = 0;
 
   for (const entry of turn.entries) {
+    const optimizer = optimizerRows.get(entry.id);
+    if (optimizer) {
+      const id = `optimizer:${entry.id}`;
+      const { details, ...row } = optimizer;
+      steps.push({ id, kind: 'optimizer', tool: { ...row, call_id: id, args_preview: '', output_preview: details,
+        output_chars: details.length, output_lines: details.split('\n').length, images: 0 } });
+      continue;
+    }
     const task = entry.byTaskId === undefined ? undefined : turn.tasks[entry.byTaskId];
     if (task && finite(task.startedAt)) startedAt = startedAt === null ? task.startedAt : Math.min(startedAt, task.startedAt);
     if (task && finite(task.endedAt)) endedAt = endedAt === null ? task.endedAt : Math.max(endedAt, task.endedAt);
@@ -210,6 +220,11 @@ export interface TurnStepDetail {
 /** Full (bounded, paged) content for one step of a settled turn. */
 export function projectTurnStepDetail(turn: DurableTurnEntries, stepId: string, offset = 0): TurnStepDetail | null {
   const [kind, ...rest] = stepId.split(":");
+  if (kind === 'optimizer') {
+    if (rest.length !== 1 || !/^\d+$/.test(rest[0]!)) return null;
+    const row = optimizerActivityRows(turn.entries).get(Number(rest[0]));
+    return row ? { id: stepId, kind, output: row.details, truncated: false } : null;
+  }
   if (kind === "tool") {
     const callId = rest.join(":");
     let args: string | undefined, output: string | undefined, input: TurnStepDetail["input"], outputLanguage: string | undefined;
