@@ -5,6 +5,7 @@ import { Type, createModels, createProvider, type AssistantMessage, type Model }
 import { AssistantMessageEventStream } from "../../runtime/durable-engine/qualification/event-stream.ts";
 import { Harness, MemoryStorage, createRegistry, defineExtension, type ToolExecutionApi } from "../../runtime/durable-engine/qualification/durable.ts";
 import { createHostTool, type HostToolEffectPort } from "../../runtime/durable-engine/src/index.js";
+import { getSessionPersistenceConfig } from "../../runtime/src/core/config.js";
 
 const parameters = Type.Object({ value: Type.String() });
 type Details = { phase: string; privateJson?: { count: number; items: (string | null)[] } };
@@ -180,6 +181,36 @@ test("host thrown errors are sanitized; explicit authorized error content/detail
   const result = await g.tool().execute({ value: "error text" }, g.api, context);
   expect(result.isError).toBe(true); expect(result.details).toEqual(g.details);
   expect(result.output).toEqual([{ type: "text", text: "error text" }, g.image]);
+});
+
+test('native image-bearing results retain valid blocks at the budget and bound the whole batch', async () => {
+  const f = fixture();
+  const invoke = (content: Awaited<ReturnType<Definition['execute']>>['content']) => createHostTool({ ...f.definition,
+    async execute() { return { content, details: f.details }; },
+  }, f.host).execute({ value: 'image fixture' }, f.api, context);
+  const max = getSessionPersistenceConfig().toolResultMaxPersistBytes;
+  const bytes = (output: unknown) => Buffer.byteLength(JSON.stringify(output));
+  const note = { type: 'text' as const, text: '' };
+  const atLimit = [note, f.image, f.image];
+  note.text = 'a'.repeat(max - bytes(atLimit));
+  expect(bytes(atLimit)).toBe(max);
+  expect((await invoke(atLimit)).output).toEqual(atLimit);
+  const overLimit = [{ ...note, text: `${note.text}a` }, f.image, f.image];
+  const bounded = await invoke(overLimit);
+  expect(bytes(bounded.output)).toBeLessThanOrEqual(max);
+  expect(bounded.output?.every(block => block.type === 'text')).toBe(true);
+  expect(JSON.stringify(bounded.output)).toContain('exceeds the persistence budget');
+  expect(bounded.details).toEqual(f.details);
+  expect(overLimit[1]).toEqual(f.image);
+
+  const text = { type: 'text' as const, text: 'Keep exact surrounding text 🖼' };
+  for (const bad of [{ ...f.image, data: '' }, { ...f.image, data: 'invalid!' }, { ...f.image, mimeType: 'image/svg+xml' }]) {
+    const result = await invoke([text, bad]);
+    expect(result.output?.[0]).toEqual(text);
+    expect(result.output?.every(block => block.type === 'text')).toBe(true);
+    expect(JSON.stringify(result.output)).toContain('invalid image data');
+  }
+  expect((await invoke([text])).output).toEqual([text]);
 });
 
 test("registration snapshots actual Type.Object schema and execute/prepare callbacks", async () => {

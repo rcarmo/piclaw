@@ -26,6 +26,13 @@ access grants, Delegate capability limits or explicit SDK restrictions.
 Settings → Tools lists capability metadata without selection or per-tool
 compaction checkboxes. Local-lite mode changes the prompt only.
 
+`read` can return inline images. Vision models receive supported images that fit
+the result budget; text-only models receive the SDK’s omission notice in place
+of the image, without changing the saved result. For host tools, image-bearing
+output exceeding `domains.sessionPersistence.toolResultMaxPersistBytes`
+(default 256 KiB for the combined inline output, including base64) falls back to
+text. This does not change original files, stored media, or earlier history.
+
 ### Built-in Delegate
 
 Core registers `delegate` without an installed package. Settings → Delegate keeps

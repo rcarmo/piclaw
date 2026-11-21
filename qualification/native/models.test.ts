@@ -1,7 +1,7 @@
 import {withTaskModelRequestScope} from "../../runtime/durable-engine/src/task-model-boundary-shim.js";
 import "./src/test-guard.js";
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Harness, createRegistry, defineExtension, defineTool } from "../../runtime/durable-engine/qualification/durable.ts";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
@@ -17,6 +17,7 @@ import { modelFailureUpstreamMessage } from "../../runtime/durable-engine/src/ho
 import type { HostModelEventObserver } from "../../runtime/durable-engine/src/host-models.js";
 import { HostCodexModelServices } from '../../runtime/durable-engine/src/host-codex-model-services.js';
 import { addLogSink, removeLogSink, type LogRecord } from "../../runtime/src/utils/logger.js";
+import { createHostBuiltinTools } from "../../runtime/durable-engine/src/host-builtins.js";
 
 // These ESM-only public exports have no require condition; resolve from root.
 const root = new URL("../../package.json", import.meta.url).href;
@@ -24,6 +25,8 @@ const { ModelRuntime }: typeof import("../../node_modules/@earendil-works/pi-cod
   await import(import.meta.resolve("@earendil-works/pi-coding-agent", root));
 const { createAssistantMessageEventStream }: typeof import("../../node_modules/@earendil-works/pi-ai") =
   await import(import.meta.resolve("@earendil-works/pi-ai", root));
+const { streamSimple: streamOpenAI }: typeof import("@earendil-works/pi-ai/api/openai-completions") =
+  await import(import.meta.resolve("@earendil-works/pi-ai/api/openai-completions", root));
 import { Type, normalizeContext } from "../../runtime/durable-engine/qualification/ai.ts";
 const ref = { provider: "qualification-provider", id: "qualification-model" };
 const token = "SYNTHETIC-HOST-ONLY-TOKEN";
@@ -101,8 +104,12 @@ async function fixture(multimodal = false, keyless = false, deferred = false, im
     authorize: async (_owner, kind) => { admissions.push(kind); if (!(kind === "cancelDeferred" && cleanup)) check(); },
     assertCurrent: (_owner, kind) => { if (!ownerAllowed) throw new Error(token); if (!(kind === "cancelDeferred" && cleanup)) check(); },
   };
+  let useWireAfterTool = false;
   const run = (owner: Model<Api>, context: HostTranscript, options?: unknown) => {
     calls++; captured = { owner, context, options };
+    if (useWireAfterTool && context.messages.some(message => message.role === 'toolResult')) {
+      return streamOpenAI(owner as Model<'openai-completions'>, context, options as Parameters<typeof streamOpenAI>[2]);
+    }
     const stream = createAssistantMessageEventStream();
     const result = deferred ? { ...message, stopReason: "deferred" as const, deferred: privateHandle } : structuredClone(message);
     if (finalDelta) stream.push({ type: "text_delta", contentIndex: 0, delta: "final delta", partial: result });
@@ -185,7 +192,7 @@ async function fixture(multimodal = false, keyless = false, deferred = false, im
   const models = createHostModels(runtime, approvedModels, policy);
   return { runtime, models, policy, requested, message, entered, held, admissions,
     model: models.getModel(ref.provider, ref.id)!,
-    calls: () => calls, captured: () => captured,
+    calls: () => calls, captured: () => captured, sendResultThroughOpenAI: () => { useWireAfterTool = true; },
     cleanup: () => { cleanup = true; }, denyOwner: () => { ownerAllowed = false; },
     hold: () => { hold = true; }, fail: () => { fail = true; },
     finalDelta: () => { finalDelta = true; message.content.unshift({ type: "text", text: "final delta" }); },
@@ -754,6 +761,78 @@ test("image capability: authorization, real post-auth fence, and accepted SQLite
     expect((await continuation.status(durableContext)).status).toBe("unanswered");
     expect(f.calls()).toBe(callsBeforeReopen);
   } finally { await harness.close(durableContext); await rm(directory, { recursive: true, force: true }); }
+});
+
+for (const mode of ['vision', 'text-only', 'oversized', 'malformed'] as const) test(`native read PNG uses the stock provider: ${mode}`, async () => {
+  const sharp = (await import('sharp')).default;
+  const small = await sharp({ create: { width: 32, height: 24, channels: 3, background: '#2970b5' } }).png().toBuffer();
+  const pixels = Buffer.alloc(360 * 300 * 3);
+  if (mode === 'oversized') {
+    let next = 1837441;
+    for (let i = 0; i < pixels.length; i++) {
+      next ^= next << 13; next ^= next >>> 17; next ^= next << 5;
+      pixels[i] = next & 255;
+    }
+  }
+  const bytes = mode === 'malformed' ? small.subarray(0, 20) : mode === 'oversized'
+    ? await sharp(pixels, { raw: { width: 360, height: 300, channels: 3 } }).png().toBuffer() : small;
+  const png = bytes.toString('base64');
+  if (mode === 'oversized') expect(png.length).toBeGreaterThan(256 * 1024);
+  const directory = await mkdtemp(join(process.env.PICLAW_WORKSPACE!, 'read-png-'));
+  const file = join(directory, 'sample.png');
+  await writeFile(file, bytes);
+  const f = await fixture(false, false, false, mode !== 'text-only');
+  f.message.content = [{ type: 'toolCall', id: 'read-png', name: 'read', arguments: { path: 'sample.png' } }];
+  f.sendResultThroughOpenAI();
+  const registry = createRegistry();
+  const tools = createHostBuiltinTools({ cwd: directory, names: ['read'], authority: { assertAllowed() {} } });
+  const extension = defineExtension({ name: 'read-png', tools });
+  registry.install(extension);
+  const savedFetch = globalThis.fetch;
+  const requests: string[] = [];
+  const event = { id: 'synthetic', object: 'chat.completion.chunk', created: 1, model: ref.id,
+    choices: [{ index: 0, delta: { role: 'assistant', content: 'Provider received result' }, finish_reason: 'stop' }] };
+  globalThis.fetch = Object.assign(async (input: string | URL | Request, init?: RequestInit) => {
+    const request = new Request(input, init);
+    expect(new URL(request.url).hostname).toBe('fixture.invalid');
+    requests.push(await request.text());
+    return new Response(`data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`, { headers: { 'Content-Type': 'text/event-stream' } });
+  }, { preconnect: () => { throw Error('No network'); } }) as typeof fetch;
+  const open = async () => Harness.open(await SqliteStorage.open(new BunSqliteDatabase(join(directory, 'candidate.sqlite'))), {
+    models: f.models, registry: withTaskModelRequestScope(registry), settings: { retry: { enabled: false }, compaction: { enabled: false } },
+  }, durableContext);
+  let harness: Harness | undefined;
+  try {
+    harness = await open();
+    const root = await harness.root(durableContext, { agent: { model: { provider: ref.provider, modelId: ref.id }, extensions: [extension], tools } });
+    const submission = await root.submit({ type: 'input', requestId: 'native-read-png', content: 'Read the image' }, durableContext);
+    expect((await submission.wait(durableContext)).status).toBe('done');
+    expect(f.calls()).toBe(2);
+    expect(requests).toHaveLength(1);
+    if (mode === 'vision') expect(requests[0]).toContain(`data:image/png;base64,${png}`);
+    else {
+      expect(requests[0]).not.toContain('data:image/');
+      expect(JSON.stringify(f.captured().context)).not.toContain(png);
+      expect(requests[0]).toContain(mode === 'text-only' ? '(tool image omitted: model does not support images)'
+        : mode === 'oversized' ? 'exceeds the persistence budget' : 'Image omitted');
+    }
+    const history = (await root.context(durableContext)).messages;
+    const stored = history.find(message => message.role === 'toolResult');
+    if (mode === 'vision' || mode === 'text-only') {
+      expect(stored?.content).toContainEqual({ type: 'image', data: png, mimeType: 'image/png' });
+    } else expect(stored?.content.every(block => block.type === 'text')).toBe(true);
+    await harness.close(durableContext);
+    harness = undefined;
+    harness = await open();
+    const reopened = await harness.root(durableContext);
+    expect((await reopened.context(durableContext)).messages.find(message => message.role === 'toolResult')).toEqual(stored);
+    expect(f.calls()).toBe(2);
+    expect((await readFile(file)).toString('base64')).toBe(png);
+  } finally {
+    globalThis.fetch = savedFetch;
+    await harness?.close(durableContext);
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("post-admission fence observes revocation queued during header preparation", async () => {
