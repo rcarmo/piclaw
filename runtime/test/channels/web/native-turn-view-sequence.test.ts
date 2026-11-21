@@ -22,7 +22,7 @@ function fixture() {
   const call = (id: string) => entries.push({ kind: 'pi.assistant', model: [{ role: 'assistant', content: [
     { type: 'toolCall', id, name: 'exec_command', arguments: { cmd: `printf ${id}`, workdir: '/fixture', max_output_tokens: 2000 } },
   ] }] });
-  return { db, events, frame, complete, call };
+  return { db, events, entries, frame, complete, call };
 }
 
 test('native command titles retain actual tool names and command parameters', () => {
@@ -56,6 +56,20 @@ test('successive native tools cannot be replaced by reconstructed older completi
     f.frame({ generation: { attempt: 0 } });
     expect(f.events.at(-1).tool_call_id).toBe('three');
     expect(f.events.at(-1).last_activity).toBe(true);
+    const count = f.events.length;
+    f.frame({ generation: { attempt: 0 } });
+    expect(f.events.length).toBe(count);
+  } finally { f.db.close(); }
+});
+
+test('a new optimiser receipt refreshes live activity without announcing a tool call', () => {
+  const f = fixture();
+  try {
+    f.frame({ generation: { attempt: 0 } });
+    f.entries.push({ id: 12, kind: 'piclaw.token-optimizer.operation', data: { id: 'receipt' } });
+    f.frame({ generation: { attempt: 0 } });
+    expect(f.events.at(-1)).toMatchObject({ type: 'thinking', optimizer_activity_entry: 12, active_tool_count: 0 });
+    expect(f.events.at(-1)).not.toHaveProperty('tool_call_id');
     const count = f.events.length;
     f.frame({ generation: { attempt: 0 } });
     expect(f.events.length).toBe(count);

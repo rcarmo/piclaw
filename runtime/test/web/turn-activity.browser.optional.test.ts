@@ -18,6 +18,8 @@ const liveActivity = {
     { id: 'thinking:20:0', kind: 'thinking', text: 'Scan the workspace first.', chars: 25 },
     { id: 'tool:call-live', kind: 'tool', tool: { call_id: 'call-live', name: 'bash', title: 'bash: long scan', status: 'running', duration_ms: null,
       args_preview: '{\n  "command": "long scan"\n}', output_preview: '', output_chars: 0, output_lines: 0, images: 0 } },
+    { id: 'optimizer:22', kind: 'optimizer', tool: { call_id: 'optimizer:22', name: 'optimizer.learn', title: 'Optimiser · Learn from recent work', status: 'running', duration_ms: null,
+      args_preview: '', output_preview: 'Running.', output_chars: 8, output_lines: 1, images: 0 } },
   ],
 };
 const longOutput = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join('\n');
@@ -227,8 +229,13 @@ browserTest('live turn shows elapsed work and streamed text, discloses running t
     expect(requests.filter((query) => query.includes('live=1'))).toEqual([]);
 
     await header.click();
-    const tool = live.locator('.turn-activity-tool');
+    const tool = live.locator('.turn-activity-tool', { hasText: 'bash: long scan' });
     await tool.waitFor();
+    const optimiser = live.locator('.turn-activity-tool', { hasText: 'Optimiser · Learn from recent work' });
+    await optimiser.locator('.turn-activity-tool-header').click();
+    expect(await optimiser.locator('.turn-activity-output').innerText()).toBe('Running.');
+    expect(await optimiser.locator('.turn-activity-stop').count()).toBe(0);
+    expect(await optimiser.locator('.turn-activity-input-region').count()).toBe(0);
     expect(requests.some((query) => query.includes('live=1'))).toBe(true);
     await tool.locator('.turn-activity-tool-header').click();
     expect(await tool.locator('.turn-activity-output').innerText()).toContain('scanning step 2');
