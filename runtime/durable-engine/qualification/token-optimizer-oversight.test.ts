@@ -35,7 +35,7 @@ async function setup(mode:'off'|'observe'|'active'='active',persistent=false,ret
  const dir=mkdtempSync(join(tmpdir(),'optimizer-oversight-')),file=join(dir,'state.sqlite'),db=new Database(file,{create:true});
  db.exec('PRAGMA journal_mode=WAL;PRAGMA secure_delete=ON;PRAGMA busy_timeout=0;CREATE TABLE router_state(key TEXT PRIMARY KEY,value TEXT NOT NULL);');
  cleanup.push(async()=>{db.close();rmSync(dir,{recursive:true,force:true});});
- const configuration=new TokenOptimizerConfiguration(db,()=>{},"fixture");const config=await configuration.load();Object.assign(config.policy,{enabled:mode!=='off',mode,reduceOutputs:true,goalChecks:true});await configuration.configure(config);if(mode==='active'){const next=configuration.snapshot();next.policy.mode='active';await configuration.configure(next);}
+ const configuration=new TokenOptimizerConfiguration(db,()=>{},"fixture");const config=await configuration.load();Object.assign(config.policy,{enabled:mode!=='off',mode,oversightMode:mode,reduceOutputs:true,goalChecks:true});await configuration.configure(config);if(mode==='active'){const next=configuration.snapshot();next.policy.mode='active';await configuration.configure(next);}
  const models=createModels(),faux=fauxProvider({tokensPerSecond:100000});models.setProvider(faux.provider);
  const registry=createRegistry(),sandbox=new CodemodeSandbox();let harness:Harness,calls=0;
  cleanup.push(()=>sandbox.close());
@@ -150,7 +150,7 @@ test("explicit steering changes the quoted goal without treating automated conte
 
 for (const scenario of ["active","changed plan","observe","old plan","no consent","standalone","revoked on retry","changed while queued","changed during SDK auth","steered input"] as const) test(`existing loop judge supplies goal oversight: ${scenario}`, async () => {
   const mode=scenario==="observe"?"observe":"active",f=await setup(mode,false,scenario==="revoked on retry",true);
-  const config=f.configuration.snapshot();Object.assign(config.policy,{loop:"judge",sharePlanWithJudge:scenario!=="no consent",inferenceInObserve:true,generativeModel:{provider:"faux",id:"faux-1"},thresholds:{min_turns:1,gate_min_turns:1,gate_error_outputs:1}});await f.configuration.configure(config);
+  const config=f.configuration.snapshot();Object.assign(config.policy,{loop:"judge",sharePlanWithJudge:scenario!=="no consent",oversightInferenceInObserve:true,generativeModel:{provider:"faux",id:"faux-1"},thresholds:{min_turns:1,gate_min_turns:1,gate_error_outputs:1}});await f.configuration.configure(config);
   if(scenario==="changed while queued"){const options=f.configuration.snapshot();Object.assign(options.policy,{offloadOutputs:true,outputSummaries:true});await f.configuration.configure(options);}
   const planStore=agentPlanStore();const planned=await planStore.change("fixture","agent",{action:"update",plan:[{step:"Verify parser edge cases",status:"in_progress"},{step:"Unrelated private plan item",status:"pending"}]});
   await f.harness.commit(async tx=>{(await tx.doc(KnowledgeDoc,scopeKey(f.host.scope),f.host.scope)).envelope.resolved_turns=[40,40,40,40,40];},context);
