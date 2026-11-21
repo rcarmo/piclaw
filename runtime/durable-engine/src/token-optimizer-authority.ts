@@ -43,7 +43,7 @@ export function createOptimizerAuthority(options:{workspaceId:string;environment
     const repository=record.input.repository;if(typeof repository!=='string')return false;
     const waiter=(await harness.snapshot(AutoWaitersDoc,context))?.repositories[repository];check();
     if(!waiter||waiter.task!==record.id||!waiter.items.length)return false;
-    for(const item of waiter.items)if(item.scope.repository!==repository||scopeKey(item.scope)!==scopeKey(item.host.scope)||item.sessionKey!==sessionKey(item.host.scope,item.host.id)||JSON.stringify(sessions.hosts[item.sessionKey])!==JSON.stringify(item.host)||!await hostCurrent(harness,item.host))return false;
+    for(const item of waiter.items)if(JSON.stringify([item.scope.host,item.scope.repository])!==repository||scopeKey(item.scope)!==scopeKey(item.host.scope)||item.sessionKey!==sessionKey(item.host.scope,item.host.id)||JSON.stringify(sessions.hosts[item.sessionKey])!==JSON.stringify(item.host)||!await hostCurrent(harness,item.host))return false;
     return true;
    }
    const key=record.input.key,host=typeof key==='string'?sessions.hosts[key]:undefined;
