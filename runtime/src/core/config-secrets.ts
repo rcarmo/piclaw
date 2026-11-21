@@ -1,8 +1,10 @@
-/** Secret bootstrap accessors. Values remain process/.env/keychain backed and are never domain-persisted here. */
+/** Secret bootstrap accessors. Settings may point to key material without storing it. */
 
-import { readFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readFileSync, readSync } from "node:fs";
+import { isAbsolute } from "node:path";
 
-import { envConfig } from "./config-context.js";
+import { envConfig, getRuntimeConfigPaths } from "./config-context.js";
+import { readJsonConfig } from "./config-store.js";
 import { clearEnvValue, readEnvValue, readMergedEnvValue, writeEnvValue } from "./env.js";
 
 export interface WebSecretBootstrapConfig {
@@ -35,20 +37,59 @@ export function setWebSecretCompatibilityValue(
 export interface KeychainBootstrapConfig {
   key: string;
   keyFile: string;
+  fileSource?: "config";
 }
 
-/** Keychain bootstrap is process-env-only; `.env` and JSON persistence are intentionally excluded. */
+/** Preserve environment overrides; JSON can supply a path only. */
 export function getKeychainBootstrapConfig(): Readonly<KeychainBootstrapConfig> {
-  return Object.freeze({
-    key: readEnvValue("PICLAW_KEYCHAIN_KEY") || "",
-    keyFile: readEnvValue("PICLAW_KEYCHAIN_KEY_FILE") || "",
-  });
+  const key = readEnvValue("PICLAW_KEYCHAIN_KEY") || "";
+  const keyFile = readEnvValue("PICLAW_KEYCHAIN_KEY_FILE") || "";
+  if (key || keyFile) return Object.freeze({ key, keyFile });
+
+  const section = readJsonConfig(getRuntimeConfigPaths().configPath).keychain;
+  if (section && typeof section === "object" && "keyFile" in section) {
+    return Object.freeze({ key, keyFile: typeof section.keyFile === "string" ? section.keyFile : "", fileSource: "config" });
+  }
+  return Object.freeze({ key, keyFile });
 }
 
-/** Resolve configured key material, preferring the direct key over the key file. */
+/** Read the checked descriptor, never the path again after checking ownership and permissions. */
+function readPrivateKeyFile(path: string): string {
+  const maxBytes = 4096;
+  const failure = "Cannot load the configured keychain key file. Use an absolute path to a private regular file owned by the current user.";
+  const uid = process.geteuid?.();
+  if (uid === undefined || !constants.O_NOFOLLOW || !isAbsolute(path)) throw new Error(failure);
+  try {
+    const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    try {
+      const stat = fstatSync(fd);
+      const mode = stat.mode & 0o7777;
+      if (!stat.isFile() || stat.uid !== uid || stat.nlink !== 1 || (mode !== 0o400 && mode !== 0o600) || stat.size > maxBytes) {
+        throw new Error(failure);
+      }
+      const bytes = Buffer.alloc(maxBytes + 1);
+      try {
+        let used = 0;
+        while (used < bytes.length) {
+          const count = readSync(fd, bytes, used, bytes.length - used, used);
+          if (!count) break;
+          used += count;
+        }
+        const key = bytes.toString("utf8", 0, used).trim();
+        if (key && used <= maxBytes) return key;
+        throw new Error(failure);
+      } finally { bytes.fill(0); }
+    } finally { closeSync(fd); }
+  } catch {
+    // Do not include file paths or key material in diagnostics.
+    throw new Error(failure);
+  }
+}
+
+/** Resolve the direct env key, env key file, or protected file in settings, in that order. */
 export function readKeychainBootstrapKeyMaterial(): string {
   const config = getKeychainBootstrapConfig();
   if (config.key) return config.key;
-  if (!config.keyFile) return "";
-  return readFileSync(config.keyFile, "utf8").trim();
+  if (config.fileSource === "config") return readPrivateKeyFile(config.keyFile);
+  return config.keyFile ? readFileSync(config.keyFile, "utf8").trim() : "";
 }

@@ -738,7 +738,9 @@ In single-user mode, internal automation can use `/internal/post` with the confi
 
 See [keychain.md](keychain.md) for full details. Preserve existing key material and historical authentication records in coordinated backups.
 
-The keychain is disabled unless you provide a master key:
+The keychain needs a master key. On Linux and macOS, set `keychain.keyFile` in the workspace's `.piclaw/config.json` to the absolute path of a protected key file. Both the service and CLI can then use the keychain without an environment variable. See [key file requirements](keychain.md#configuration).
+
+Existing environment variables still override that setting:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
