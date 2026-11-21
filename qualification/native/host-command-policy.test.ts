@@ -5,6 +5,48 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHostCommandPolicy } from '../../runtime/durable-engine/src/host-command-policy.ts';
+import { Harness, MemoryStorage, createRegistry, UserEntry } from '../../runtime/durable-engine/qualification/durable.ts';
+import { createModels, fauxProvider, fauxAssistantMessage } from '../../runtime/durable-engine/qualification/ai.ts';
+import { context } from './src/fixture.ts';
+
+test('idle native context is discarded and the next turn rereads the same history', async () => {
+  const root = new Database(':memory:');
+  root.exec('CREATE TABLE router_state(key TEXT PRIMARY KEY,value TEXT)');
+  const policy = createHostCommandPolicy(root, () => {});
+  const storage = new MemoryStorage();
+  const scan = storage.scanEntries.bind(storage);
+  let fullScans = 0, countReads = false;
+  storage.scanEntries = async (query, limit, cursor, ctx) => {
+    if (countReads && query.order !== 'ascending' && query.minEntryId === undefined && limit === 256 && cursor === undefined) fullScans++;
+    return scan(query, limit, cursor, ctx);
+  };
+  const faux = fauxProvider({ tokensPerSecond: 100_000 });
+  const models = createModels(); models.setProvider(faux.provider);
+  faux.setResponses([fauxAssistantMessage('first answer'), fauxAssistantMessage('second answer')]);
+  const harness = await Harness.open(storage, { registry: createRegistry(), models,
+    settings: { ...policy.settings, compaction: { enabled: false }, retry: { enabled: false } },
+  }, context);
+  try {
+    const c = await harness.root(context, { agent: { model: { provider: 'faux', modelId: 'faux-1' } } });
+    const seed = await c.commit(tx => tx.appendEntry(UserEntry, c.id, {
+      model: [{ role: 'user', content: 'durable history marker', timestamp: 1 }],
+    }), context);
+    countReads = true;
+    const first = await c.submit({ type: 'input', requestId: 'idle-cache-one', content: 'first prompt' }, context);
+    expect((await first.wait(context)).status).toBe('done');
+    await c.waitForIdle(context);
+    expect(fullScans).toBeGreaterThan(0);
+    fullScans = 0;
+    const second = await c.submit({ type: 'input', requestId: 'idle-cache-two', content: 'second prompt' }, context);
+    expect((await second.wait(context)).status).toBe('done');
+    expect(fullScans).toBeGreaterThan(0);
+    countReads = false;
+    expect((await c.context(context)).entries[0]).toEqual(seed);
+    expect((await c.context(context)).messages.flatMap(message => typeof message.content === 'string' ? [message.content] : message.content.flatMap(block => block.type === 'text' ? [block.text] : []))).toEqual([
+      'durable history marker', 'first prompt', 'first answer', 'second prompt', 'second answer',
+    ]);
+  } finally { await harness.close(context); root.close(); }
+});
 
 for (const revoke of [false, true]) test(`retry policy yields under owned WAL contention; revoke=${revoke}`, async () => {
   const dir = await mkdtemp(join(tmpdir(), 'policy-admission-'));
