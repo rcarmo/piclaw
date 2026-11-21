@@ -6,6 +6,9 @@
  */
 
 import { afterAll, expect, test } from "bun:test";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createTempWorkspace, setEnv, importFresh } from "./helpers.js";
 
 const ws = createTempWorkspace("piclaw-cli-keychain-");
@@ -136,6 +139,7 @@ test("cli keychain errors when disabled", async () => {
 
   const errors: string[] = [];
   const originalError = console.error;
+  const originalExit = process.exitCode ?? 0;
   console.error = (...args: any[]) => {
     errors.push(args.map(String).join(" "));
   };
@@ -143,10 +147,58 @@ test("cli keychain errors when disabled", async () => {
   try {
     const handled = await handleCliOptions(["keychain", "get", "cli/alpha"]);
     expect(handled).toBe(true);
+    expect(process.exitCode).toBe(1);
   } finally {
     console.error = originalError;
+    process.exitCode = originalExit;
     restoreDisabled();
   }
 
   expect(errors.some((line) => line.includes("Keychain is disabled"))).toBe(true);
+});
+
+test.skipIf(process.platform === "win32")("CLI stores a token using workspace config with no master key environment variables", () => {
+  const fixture = createTempWorkspace("piclaw-cli-key-file-");
+  const configDir = join(fixture.workspace, ".piclaw");
+  const keyFile = join(fixture.base, "key");
+  const tokenFile = join(fixture.base, "token");
+  const key = "synthetic-global-master-key";
+  const token = "synthetic-automation-token";
+  const env: NodeJS.ProcessEnv = { ...process.env, PICLAW_LOG_LEVEL: "error" };
+  delete env.PICLAW_KEYCHAIN_KEY;
+  delete env.PICLAW_KEYCHAIN_KEY_FILE;
+  delete env.PICLAW_DB_IN_MEMORY;
+  const cli = fileURLToPath(new URL("../src/index.ts", import.meta.url));
+  const run = (...args: string[]) => Bun.spawnSync({
+    cmd: [process.execPath, "--no-env-file", cli, "--workspace", fixture.workspace, "keychain", ...args],
+    cwd: fixture.workspace, env,
+  });
+  try {
+    mkdirSync(configDir);
+    writeFileSync(join(configDir, "config.json"), JSON.stringify({ keychain: { keyFile } }), { mode: 0o600 });
+    writeFileSync(keyFile, key, { mode: 0o600 });
+    writeFileSync(tokenFile, token, { mode: 0o600 });
+    const stored = run("set", "infra/monitor", "--type", "token", "--secret-file", tokenFile);
+    expect(stored.stderr.toString()).toBe("");
+    expect(stored.exitCode).toBe(0);
+    expect(stored.stdout.toString().trim()).toBe("Stored keychain entry infra/monitor.");
+
+    // A separate process can decrypt the same store with the old bootstrap.
+    env.PICLAW_KEYCHAIN_KEY = key;
+    const loaded = run("get", "infra/monitor");
+    expect(loaded.exitCode).toBe(0);
+    expect(JSON.parse(loaded.stdout.toString()).secret).toBe(token);
+    delete env.PICLAW_KEYCHAIN_KEY;
+
+    chmodSync(keyFile, 0o644);
+    const refused = run("set", "infra/refused", "--secret-file", tokenFile);
+    expect(refused.exitCode).toBe(1);
+    expect(refused.stdout.toString()).toBe("");
+    expect(refused.stderr.toString().trim()).toBe("Cannot load the configured keychain key file. Use an absolute path to a private regular file owned by the current user.");
+    const list = run("list");
+    expect(list.exitCode).toBe(0);
+    expect(JSON.parse(list.stdout.toString()).map((entry: { name: string }) => entry.name)).toEqual(["infra/monitor"]);
+  } finally {
+    fixture.cleanup();
+  }
 });

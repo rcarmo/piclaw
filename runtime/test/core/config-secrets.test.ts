@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, linkSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { createTempWorkspace, setEnv } from "../helpers.js";
 
 import {
   getKeychainBootstrapConfig,
@@ -38,14 +39,26 @@ test("web secret bootstrap keeps process env precedence and live rotation", () =
   }
 });
 
-test("keychain bootstrap is process-env-only and prefers direct key over file", () => {
-  const keys = ["PICLAW_KEYCHAIN_KEY", "PICLAW_KEYCHAIN_KEY_FILE"];
-  const before = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
-  const dir = join("/tmp", `piclaw-config-secrets-${process.pid}-${Date.now()}`);
-  const keyFile = join(dir, "key");
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(keyFile, "file-key\n", "utf8");
+function withKeyFiles(run: (fixture: { directory: string; configure: (keyFile: unknown) => void }) => void): void {
+  const ws = createTempWorkspace("piclaw-config-secrets-");
+  const restore = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_KEYCHAIN_KEY: undefined, PICLAW_KEYCHAIN_KEY_FILE: undefined });
+  const directory = join(ws.workspace, ".piclaw");
   try {
+    mkdirSync(directory);
+    run({ directory, configure: (keyFile) => {
+      writeFileSync(join(directory, "config.json"), JSON.stringify({ keychain: { keyFile, key: "ignored-inline-key" } }));
+    } });
+  } finally {
+    restore();
+    ws.cleanup();
+  }
+}
+
+test("keychain bootstrap keeps environment precedence and ignores inline JSON keys", () => {
+  withKeyFiles(({ directory, configure }) => {
+    const keyFile = join(directory, "env-key");
+    writeFileSync(keyFile, "file-key\n", "utf8");
+    configure(join(directory, "configured-but-missing"));
     process.env.PICLAW_KEYCHAIN_KEY = "direct-key";
     process.env.PICLAW_KEYCHAIN_KEY_FILE = keyFile;
     expect(getKeychainBootstrapConfig()).toEqual({ key: "direct-key", keyFile });
@@ -53,9 +66,37 @@ test("keychain bootstrap is process-env-only and prefers direct key over file", 
     delete process.env.PICLAW_KEYCHAIN_KEY;
     expect(readKeychainBootstrapKeyMaterial()).toBe("file-key");
     delete process.env.PICLAW_KEYCHAIN_KEY_FILE;
+    configure(undefined);
     expect(readKeychainBootstrapKeyMaterial()).toBe("");
-  } finally {
-    restoreEnv(before);
-    rmSync(dir, { recursive: true, force: true });
-  }
+  });
+});
+
+test.skipIf(process.platform === "win32")("configured key files require an absolute path to a private, owner-owned regular file", () => {
+  withKeyFiles(({ directory, configure }) => {
+    const keyFile = join(directory, "master");
+    const symlink = join(directory, "symlink");
+    const hardlink = join(directory, "hardlink");
+    writeFileSync(keyFile, "configured-key\n", { mode: 0o600 });
+    configure(keyFile);
+    expect(readKeychainBootstrapKeyMaterial()).toBe("configured-key");
+    chmodSync(keyFile, 0o400);
+    expect(readKeychainBootstrapKeyMaterial()).toBe("configured-key");
+    symlinkSync(keyFile, symlink);
+    const refuses = (path: unknown) => {
+      configure(path);
+      expect(readKeychainBootstrapKeyMaterial).toThrow("Cannot load the configured keychain key file");
+    };
+    for (const path of [symlink, directory, join(directory, "missing"), "master", null, ""]) refuses(path);
+    chmodSync(keyFile, 0o644);
+    refuses(keyFile);
+    chmodSync(keyFile, 0o600);
+    writeFileSync(keyFile, " ");
+    refuses(keyFile);
+    writeFileSync(keyFile, "x".repeat(4097));
+    refuses(keyFile);
+    writeFileSync(keyFile, "configured-key\n");
+    linkSync(keyFile, hardlink);
+    refuses(hardlink);
+    refuses(keyFile);
+  });
 });
