@@ -13,14 +13,27 @@ Piclaw includes an encrypted SQLite-backed keychain for tool credentials. Intern
 
 ## Configuration
 
-The keychain is disabled unless you provide a master key:
+The service and CLI share the workspace's `.piclaw/config.json`. To use the keychain without setting an environment variable, add the path to a file containing the master key:
 
-| Variable | Purpose |
-|----------|---------|
-| `PICLAW_KEYCHAIN_KEY` | Master key for encrypting/decrypting secrets |
-| `PICLAW_KEYCHAIN_KEY_FILE` | Path to a file containing the master key |
+```json
+{
+  "keychain": {
+    "keyFile": "/secure/path/piclaw-master-key"
+  }
+}
+```
 
-Without a master key, local encryption and decryption are unavailable. Metadata listing and explicit external-provider lookup do not require the local master key.
+On Linux and macOS, use an absolute path outside the workspace in a directory controlled by the operator. The key file must be a non-empty regular file of at most 4 KiB, owned by the user running Piclaw, with mode `0600` or `0400`. The loader rejects symlinks, hard links and unsafe permissions. Settings contain only the path. This keeps the key out of environment variables, arguments and normal CLI output; a shell running as the same OS user can still read the file.
+
+Piclaw uses these sources in order:
+
+1. `PICLAW_KEYCHAIN_KEY` in the process environment.
+2. `PICLAW_KEYCHAIN_KEY_FILE` in the process environment.
+3. `keychain.keyFile` in the workspace configuration.
+
+Existing environment settings still take precedence. To move an existing store to the protected-file option, use the **same master key**; changing the key would make existing entries unreadable. Use `piclaw --workspace /path/to/workspace …` if the CLI's default workspace is not the one the service uses.
+
+Local encryption and decryption require a master key. Metadata listing and explicit external-provider lookup do not.
 
 ## Entry format
 
@@ -47,8 +60,8 @@ You can update an entry by calling `set` again with the same name.
 ## Listing and deleting
 
 ```bash
-PICLAW_KEYCHAIN_KEY="your-master-key" piclaw keychain list
-PICLAW_KEYCHAIN_KEY="your-master-key" piclaw keychain delete github/foo/bar
+piclaw keychain list
+piclaw keychain delete github/foo/bar
 ```
 
 ## Agent tool
@@ -251,8 +264,7 @@ All existing keychain consumers work without changes:
 
 Settings exposes secret-free storage availability (`ready`, `not_configured`, or
 `unavailable`) and disables adding entries when local encrypted storage cannot
-load key material. Configure `PICLAW_KEYCHAIN_KEY` or a persistent key file via
-`PICLAW_KEYCHAIN_KEY_FILE`; restart through the normal operator workflow after
-changing bootstrap configuration. External-provider listing remains independent.
+load key material. Restart through the normal operator workflow after changing
+bootstrap configuration. External-provider listing remains independent.
 Failed web writes log an outcome/reason only, never the entry name, posted secret,
 notes, key material or configured path.
