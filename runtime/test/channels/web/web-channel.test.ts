@@ -72,7 +72,7 @@ function totpCode(secret: string, timeMs = Date.now(), stepSeconds = 30, digits 
   return (code % 10 ** digits).toString().padStart(digits, "0");
 }
 
-async function createStoredTotpCardFixture(options: {
+async function createStoredTotpSurfaceFixture(options: {
   currentSecret?: string;
   command: Record<string, unknown>;
 }) {
@@ -91,9 +91,10 @@ async function createStoredTotpCardFixture(options: {
   const freshSuffix = `?t=${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const totp = await import(`../../../src/agent-control/handlers/totp.js${freshSuffix}`) as typeof import("../../../src/agent-control/handlers/totp.js");
   const result = await totp.handleTotp({} as any, options.command as any);
-  const block = (Array.isArray(result.contentBlocks) ? result.contentBlocks[0] : null) as Record<string, any> | null;
-  const token = block?.payload?.actions?.[0]?.data?.__totp_token as string | undefined;
-  const cardId = typeof block?.card_id === "string" ? block.card_id : "";
+  const { isA2uiSurfaceBlock } = await import("../../../src/channels/web/a2ui/surface.js");
+  const { buildA2uiAction } = await import("../../../src/channels/web/a2ui/action.js");
+  const block = result.contentBlocks?.find(isA2uiSurfaceBlock);
+  if (!block) throw new Error("Expected protected TOTP surface");
 
   const sourceRowId = db.storeMessage({
     id: `msg-${Math.random()}`,
@@ -109,9 +110,6 @@ async function createStoredTotpCardFixture(options: {
   });
   db.getDb().prepare("UPDATE messages SET thread_id = ? WHERE rowid = ?").run(sourceRowId, sourceRowId);
 
-  const totpCard = await import("../../../src/channels/web/auth/totp-card.js");
-  const parsed = totpCard.parseTotpCardToken(token || "");
-
   const webMod = await import(`../../../src/channels/web.js${freshSuffix}`) as typeof import("../../../src/channels/web.js");
   const web = new (webMod.WebChannel as any)({
     getInputSourceAdmission: () => () => {}, dispatchAcceptedInput: async (_chat:string,_id:string,row:number) => ({submission_id:row,queued:false}),
@@ -124,7 +122,25 @@ async function createStoredTotpCardFixture(options: {
     },
   });
 
-  return { db, config, result, block, token, cardId, parsed, sourceRowId, web };
+  const action = (private_code?: string, cookie?: string) => web.handleRequest(new Request("http://test/agent/a2ui-action", {
+    method: "POST", headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: `piclaw_session=${cookie}` } : {}) },
+    body: JSON.stringify({ chat_jid: "web:default", post_id: sourceRowId, thread_id: sourceRowId, revision: block.revision,
+      request_id: crypto.randomUUID(), message: buildA2uiAction(block.surface, "open", new Map(), new Date().toISOString()),
+      ...(private_code !== undefined ? { private_code } : {}) }),
+  }));
+  const reveal = async (cookie?: string) => {
+    const response = await action(undefined, cookie);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    const secret = (await response.json()).totp_presentation.manual_code as string;
+    expect(JSON.stringify(result.contentBlocks)).not.toContain(secret);
+    return secret;
+  };
+  const updated = () => db.getMessageByRowId("web:default", sourceRowId)?.data.content_blocks?.[0];
+  const verify = (secret: string) => web.handleRequest(new Request("http://test/auth/verify", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: totpCode(secret) }),
+  }));
+  return { db, config, action, reveal, updated, verify };
 }
 
 test("web channel timeline and search endpoints", async () => {
@@ -1130,249 +1146,103 @@ test("web channel rejects simulated adaptive-card test submit failures without c
   expect(submission).toBeUndefined();
 });
 
-test("web channel commits TOTP setup only after successful same-card confirmation", async () => {
-  const fixture = await createStoredTotpCardFixture({
-    command: { type: "totp", action: "enrol" },
-  });
-  expect(fixture.parsed.ok).toBe(true);
-  if (!fixture.parsed.ok) return;
-
-  const req = new Request("http://test/agent/card-action", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      post_id: fixture.sourceRowId,
-      thread_id: fixture.sourceRowId,
-      card_id: fixture.cardId,
-      action: {
-        type: "Action.Submit",
-        title: "Confirm setup",
-        data: {
-          intent: "totp-confirm",
-          __totp_token: fixture.token,
-          confirmation_code: totpCode(fixture.parsed.state.secret),
-        },
-      },
-    }),
-  });
-
-  const res = await (fixture.web as any).handleRequest(req);
-  expect(res.status).toBe(200);
-  expect(res.headers.get("Set-Cookie")).toContain("piclaw_session=");
-  expect(fixture.config.WEB_RUNTIME_CONFIG.totpSecret).toBe(fixture.parsed.state.secret);
-
-  const updated = fixture.db.getMessageByRowId("web:default", fixture.sourceRowId);
-  expect((updated?.data.content_blocks?.[0] as any)?.state).toBe("completed");
-
-  const timeline = fixture.db.getTimeline("web:default", 10);
-  const feedback = timeline.find((entry: any) => entry.id !== fixture.sourceRowId && entry.data?.content?.includes("TOTP setup confirmed."));
-  expect(feedback).toBeDefined();
-
-  const verifyRes = await (fixture.web as any).handleRequest(new Request("http://test/auth/verify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code: totpCode(fixture.parsed.state.secret) }),
-  }));
-  expect(verifyRes.status).toBe(200);
+test("web channel commits TOTP setup only after successful private confirmation", async () => {
+  const f = await createStoredTotpSurfaceFixture({ command: { type: "totp", action: "enrol" } });
+  const secret = await f.reveal();
+  expect(f.config.WEB_RUNTIME_CONFIG.totpSecret).toBe("");
+  const response = await f.action(totpCode(secret));
+  expect(response.status).toBe(200);
+  expect(response.headers.get("Set-Cookie")).toContain("piclaw_session=");
+  expect(f.config.WEB_RUNTIME_CONFIG.totpSecret).toBe(secret);
+  expect(f.updated()).toMatchObject({ state: "completed", fallback_text: expect.stringContaining("TOTP setup confirmed.") });
+  expect((await f.verify(secret)).status).toBe(200);
 });
 
-test("concurrent TOTP confirmations commit one card and issue one surviving login", async () => {
-  const fixture = await createStoredTotpCardFixture({ command: { type: "totp", action: "enrol" } });
-  expect(fixture.parsed.ok).toBe(true);
-  if (!fixture.parsed.ok) return;
-  const secret = fixture.parsed.state.secret;
-  const request = () => new Request("http://test/agent/card-action", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ post_id: fixture.sourceRowId, thread_id: fixture.sourceRowId, card_id: fixture.cardId,
-      action: { type: "Action.Submit", title: "Confirm setup", data: { intent: "totp-confirm", __totp_token: fixture.token, confirmation_code: totpCode(secret) } } }),
-  });
-  const outcomes = await Promise.allSettled([fixture.web.handleRequest(request()), fixture.web.handleRequest(request())]);
+test("concurrent TOTP confirmations commit one surface and issue one surviving login", async () => {
+  const f = await createStoredTotpSurfaceFixture({ command: { type: "totp", action: "enrol" } });
+  const secret = await f.reveal();
+  const code = totpCode(secret);
+  const outcomes = await Promise.allSettled([f.action(code), f.action(code)]);
   const accepted = outcomes.filter((entry): entry is PromiseFulfilledResult<Response> => entry.status === "fulfilled" && entry.value.status === 200);
   expect(accepted).toHaveLength(1);
   expect(accepted[0]!.value.headers.get("Set-Cookie")).toContain("piclaw_session=");
-  expect(fixture.db.getDb().query("SELECT count(*) n FROM web_sessions WHERE auth_method='totp'").get()).toEqual({ n: 1 });
-  expect(fixture.config.WEB_RUNTIME_CONFIG.totpSecret).toBe(secret);
-  expect((fixture.db.getMessageByRowId("web:default", fixture.sourceRowId)?.data.content_blocks?.[0] as any)?.state).toBe("completed");
+  expect(f.db.getDb().query("SELECT count(*) n FROM web_sessions WHERE auth_method='totp'").get()).toEqual({ n: 1 });
+  expect(f.config.WEB_RUNTIME_CONFIG.totpSecret).toBe(secret);
+  expect(f.updated()).toMatchObject({ state: "completed" });
 });
 
-test("web channel invalidates existing sessions when TOTP setup is first confirmed", async () => {
-  const fixture = await createStoredTotpCardFixture({
-    command: { type: "totp", action: "enrol" },
-  });
-  expect(fixture.parsed.ok).toBe(true);
-  if (!fixture.parsed.ok) return;
-
-  fixture.db.createWebSession("pre-setup-session", fixture.db.DEFAULT_WEB_USER_ID, 3600, "passkey");
-
-  const req = new Request("http://test/agent/card-action", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Cookie": "piclaw_session=pre-setup-session" },
-    body: JSON.stringify({
-      post_id: fixture.sourceRowId,
-      thread_id: fixture.sourceRowId,
-      card_id: fixture.cardId,
-      action: {
-        type: "Action.Submit",
-        title: "Confirm setup",
-        data: {
-          intent: "totp-confirm",
-          __totp_token: fixture.token,
-          confirmation_code: totpCode(fixture.parsed.state.secret),
-        },
-      },
-    }),
-  });
-
-  const res = await (fixture.web as any).handleRequest(req);
-  expect(res.status).toBe(200);
-  const setCookie = res.headers.get("Set-Cookie");
-  expect(setCookie).toContain("piclaw_session=");
-  expect(fixture.config.WEB_RUNTIME_CONFIG.totpSecret).toBe(fixture.parsed.state.secret);
-  expect(fixture.db.getWebSession("pre-setup-session")).toBeNull();
-
-  const nextSessionToken = setCookie?.match(/piclaw_session=([^;]+)/)?.[1];
-  expect(nextSessionToken).toBeTruthy();
-  expect(fixture.db.getWebSession(decodeURIComponent(nextSessionToken || ""))?.auth_method).toBe("totp");
-
-  const timeline = fixture.db.getTimeline("web:default", 10);
-  const feedback = timeline.find((entry: any) => entry.id !== fixture.sourceRowId && entry.data?.content?.includes("Existing web sessions were invalidated."));
-  expect(feedback).toBeDefined();
+test("web channel invalidates existing sessions only when TOTP setup is confirmed", async () => {
+  const f = await createStoredTotpSurfaceFixture({ command: { type: "totp", action: "enrol" } });
+  f.db.createWebSession("pre-setup-session", f.db.DEFAULT_WEB_USER_ID, 3600, "passkey");
+  const secret = await f.reveal("pre-setup-session");
+  expect(f.db.getWebSession("pre-setup-session")).not.toBeNull();
+  const response = await f.action(totpCode(secret), "pre-setup-session");
+  expect(response.status).toBe(200);
+  const cookie = response.headers.get("Set-Cookie");
+  expect(cookie).toContain("piclaw_session=");
+  expect(f.config.WEB_RUNTIME_CONFIG.totpSecret).toBe(secret);
+  expect(f.db.getWebSession("pre-setup-session")).toBeNull();
+  const nextSession = cookie?.match(/piclaw_session=([^;]+)/)?.[1];
+  expect(nextSession).toBeTruthy();
+  expect(f.db.getWebSession(decodeURIComponent(nextSession || ""))?.auth_method).toBe("totp");
+  expect(f.updated()).toMatchObject({ fallback_text: expect.stringContaining("Existing web sessions were invalidated.") });
 });
 
-test("web channel leaves TOTP setup unchanged on invalid same-card confirmation", async () => {
-  const fixture = await createStoredTotpCardFixture({
-    command: { type: "totp", action: "enrol" },
-  });
-  expect(fixture.parsed.ok).toBe(true);
-  if (!fixture.parsed.ok) return;
-
-  const req = new Request("http://test/agent/card-action", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      post_id: fixture.sourceRowId,
-      thread_id: fixture.sourceRowId,
-      card_id: fixture.cardId,
-      action: {
-        type: "Action.Submit",
-        title: "Confirm setup",
-        data: {
-          intent: "totp-confirm",
-          __totp_token: fixture.token,
-          confirmation_code: "000000",
-        },
-      },
-    }),
-  });
-
-  const res = await (fixture.web as any).handleRequest(req);
-  expect(res.status).toBe(200);
-  expect(res.headers.get("Set-Cookie")).toBeNull();
-  expect(fixture.config.WEB_RUNTIME_CONFIG.totpSecret).toBe("");
-
-  const updated = fixture.db.getMessageByRowId("web:default", fixture.sourceRowId);
-  expect((updated?.data.content_blocks?.[0] as any)?.state).toBe("active");
-
-  const timeline = fixture.db.getTimeline("web:default", 10);
-  const feedback = timeline.find((entry: any) => entry.id !== fixture.sourceRowId && entry.data?.content?.includes("No changes were made."));
-  expect(feedback).toBeDefined();
-
-  const verifyRes = await (fixture.web as any).handleRequest(new Request("http://test/auth/verify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code: totpCode(fixture.parsed.state.secret) }),
-  }));
-  expect(verifyRes.status).toBe(404);
+test("web channel leaves TOTP setup unchanged on invalid private confirmation", async () => {
+  const f = await createStoredTotpSurfaceFixture({ command: { type: "totp", action: "enrol" } });
+  const secret = await f.reveal();
+  const response = await f.action(totpCode(secret) === "000000" ? "999999" : "000000");
+  expect(response.status).toBe(422);
+  expect(response.headers.get("Set-Cookie")).toBeNull();
+  expect((await response.json()).error).toContain("No changes were made.");
+  expect(f.config.WEB_RUNTIME_CONFIG.totpSecret).toBe("");
+  expect(f.updated()).toMatchObject({ state: "active" });
+  expect((await f.verify(secret)).status).toBe(404);
 });
 
-test("web channel commits TOTP reset only after successful new-secret confirmation", async () => {
+test("web channel commits TOTP reset only after successful private new-secret confirmation", async () => {
   const currentSecret = "CURRENTSECRET";
-  const fixture = await createStoredTotpCardFixture({
-    currentSecret,
-    command: { type: "totp", action: "reset", code: totpCode(currentSecret) },
-  });
-  expect(fixture.parsed.ok).toBe(true);
-  if (!fixture.parsed.ok) return;
-
-  fixture.db.createWebSession("browser-session", fixture.db.DEFAULT_WEB_USER_ID, 3600, "passkey");
-  fixture.db.createWebSession("old-session", fixture.db.DEFAULT_WEB_USER_ID, 3600, "passkey");
-
-  const req = new Request("http://test/agent/card-action", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Cookie": "piclaw_session=browser-session" },
-    body: JSON.stringify({
-      post_id: fixture.sourceRowId,
-      thread_id: fixture.sourceRowId,
-      card_id: fixture.cardId,
-      action: {
-        type: "Action.Submit",
-        title: "Confirm reset",
-        data: {
-          intent: "totp-confirm",
-          __totp_token: fixture.token,
-          confirmation_code: totpCode(fixture.parsed.state.secret),
-        },
-      },
-    }),
-  });
-
-  const res = await (fixture.web as any).handleRequest(req);
-  expect(res.status).toBe(200);
-  expect(res.headers.get("Set-Cookie")).toContain("piclaw_session=");
-  expect(fixture.config.WEB_RUNTIME_CONFIG.totpSecret).toBe(fixture.parsed.state.secret);
-  expect(fixture.db.getWebSession("old-session")).toBeNull();
-
-  const updated = fixture.db.getMessageByRowId("web:default", fixture.sourceRowId);
-  expect((updated?.data.content_blocks?.[0] as any)?.state).toBe("completed");
-
-  const timeline = fixture.db.getTimeline("web:default", 10);
-  const feedback = timeline.find((entry: any) => entry.id !== fixture.sourceRowId && entry.data?.content?.includes("Existing web sessions were invalidated."));
-  expect(feedback).toBeDefined();
+  const f = await createStoredTotpSurfaceFixture({ currentSecret, command: { type: "totp", action: "reset", code: totpCode(currentSecret) } });
+  f.db.createWebSession("browser-session", f.db.DEFAULT_WEB_USER_ID, 3600, "passkey");
+  f.db.createWebSession("old-session", f.db.DEFAULT_WEB_USER_ID, 3600, "passkey");
+  expect((await f.action()).status).toBe(401);
+  const secret = await f.reveal("browser-session");
+  const response = await f.action(totpCode(secret), "browser-session");
+  expect(response.status).toBe(200);
+  expect(response.headers.get("Set-Cookie")).toContain("piclaw_session=");
+  expect(f.config.WEB_RUNTIME_CONFIG.totpSecret).toBe(secret);
+  expect(secret).not.toBe(currentSecret);
+  expect(f.db.getWebSession("old-session")).toBeNull();
+  expect(f.updated()).toMatchObject({ state: "completed", fallback_text: expect.stringContaining("Existing web sessions were invalidated.") });
 });
 
 test("web channel preserves existing secret and sessions when reset confirmation fails", async () => {
   const currentSecret = "CURRENTSECRET";
-  const fixture = await createStoredTotpCardFixture({
-    currentSecret,
-    command: { type: "totp", action: "reset", code: totpCode(currentSecret) },
-  });
-  expect(fixture.parsed.ok).toBe(true);
-  if (!fixture.parsed.ok) return;
+  const f = await createStoredTotpSurfaceFixture({ currentSecret, command: { type: "totp", action: "reset", code: totpCode(currentSecret) } });
+  f.db.createWebSession("browser-session", f.db.DEFAULT_WEB_USER_ID, 3600, "passkey");
+  f.db.createWebSession("old-session", f.db.DEFAULT_WEB_USER_ID, 3600, "passkey");
+  const secret = await f.reveal("browser-session");
+  const response = await f.action(totpCode(secret) === "000000" ? "999999" : "000000", "browser-session");
+  expect(response.status).toBe(422);
+  expect(response.headers.get("Set-Cookie")).toBeNull();
+  expect((await response.json()).error).toContain("No changes were made.");
+  expect(f.config.WEB_RUNTIME_CONFIG.totpSecret).toBe(currentSecret);
+  expect(f.db.getWebSession("old-session")).not.toBeNull();
+  expect(f.updated()).toMatchObject({ state: "active" });
+});
 
-  fixture.db.createWebSession("browser-session", fixture.db.DEFAULT_WEB_USER_ID, 3600, "passkey");
-  fixture.db.createWebSession("old-session", fixture.db.DEFAULT_WEB_USER_ID, 3600, "passkey");
-
-  const req = new Request("http://test/agent/card-action", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Cookie": "piclaw_session=browser-session" },
-    body: JSON.stringify({
-      post_id: fixture.sourceRowId,
-      thread_id: fixture.sourceRowId,
-      card_id: fixture.cardId,
-      action: {
-        type: "Action.Submit",
-        title: "Confirm reset",
-        data: {
-          intent: "totp-confirm",
-          __totp_token: fixture.token,
-          confirmation_code: "000000",
-        },
-      },
-    }),
-  });
-
-  const res = await (fixture.web as any).handleRequest(req);
-  expect(res.status).toBe(200);
-  expect(res.headers.get("Set-Cookie")).toBeNull();
-  expect(fixture.config.WEB_RUNTIME_CONFIG.totpSecret).toBe(currentSecret);
-  expect(fixture.db.getWebSession("old-session")).not.toBeNull();
-
-  const updated = fixture.db.getMessageByRowId("web:default", fixture.sourceRowId);
-  expect((updated?.data.content_blocks?.[0] as any)?.state).toBe("active");
-
-  const timeline = fixture.db.getTimeline("web:default", 10);
-  const feedback = timeline.find((entry: any) => entry.id !== fixture.sourceRowId && entry.data?.content?.includes("No changes were made."));
-  expect(feedback).toBeDefined();
+test("second TOTP device does not rotate the secret or revoke existing sessions", async () => {
+  const currentSecret = "CURRENTSECRET";
+  const f = await createStoredTotpSurfaceFixture({ currentSecret, command: { type: "totp" } });
+  f.db.createWebSession("browser-session", f.db.DEFAULT_WEB_USER_ID, 3600, "passkey");
+  const secret = await f.reveal("browser-session");
+  expect(secret).toBe(currentSecret);
+  const response = await f.action(totpCode(secret), "browser-session");
+  expect(response.status).toBe(200);
+  expect(response.headers.get("Set-Cookie")).toContain("piclaw_session=");
+  expect(f.config.WEB_RUNTIME_CONFIG.totpSecret).toBe(currentSecret);
+  expect(f.db.getWebSession("browser-session")).not.toBeNull();
+  expect(f.updated()).toMatchObject({ state: "completed" });
 });
 
 test("web channel supports keep-active submit behavior without completing the card", async () => {

@@ -31,6 +31,11 @@ for (const engine of [chromium, webkit]) {
         window.events = [];
         const submit = async (payload) => {
           window.events.push(payload);
+          if (payload.message.action.name === 'totp-open') {
+            if (payload.private_code) return { status: 'ok', totp_result: 'success' };
+            return { status: 'ok', totp_presentation: { manual_code: 'FAKEAUTHCODE', expires_at: Date.now()+60000,
+              qr: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg"/>') } };
+          }
           if (window.events.length === 1) throw new Error('Try again');
         };
         window.draw = (block, readOnly = false) => render(html\`<\${Post} capabilities=\${{cardActions: !readOnly}}
@@ -77,6 +82,23 @@ for (const engine of [chromium, webkit]) {
       expect(await button.isDisabled()).toBe(true);
       await page.evaluate((block) => (window as any).draw(block, true), { ...block, revision: 3 });
       expect(await button.isDisabled()).toBe(true);
+      const auth = { ...block, owner: 'totp', revision: 4,
+        surface: applyA2uiMessages('totp-form', compileA2uiExpress('open = Button(Text("Open private TOTP setup"), action=Event("totp-open")); root = Column([open])', 'totp-form')) };
+      await page.evaluate((block) => (window as any).draw(block), auth);
+      expect(await page.getByText('FAKEAUTHCODE').count()).toBe(0);
+      const open = page.getByRole('button', { name: 'Open private TOTP setup' });
+      await open.click();
+      const dialog = page.getByRole('dialog', { name: 'TOTP enrolment' });
+      await dialog.getByText('FAKEAUTHCODE').waitFor();
+      await page.keyboard.press('Escape');
+      await dialog.waitFor({state:'detached'});
+      expect(await page.getByText('FAKEAUTHCODE').count()).toBe(0);
+      await open.click();
+      await dialog.getByRole('textbox', {name:'Six-digit code'}).fill('123456');
+      await dialog.getByRole('button', {name:'Confirm'}).click();
+      await dialog.waitFor({state:'detached'});
+      const confirmation = await page.evaluate(() => (window as any).events.at(-1));
+      expect(confirmation).toMatchObject({ private_code: '123456', message: { action: { context: {} } } });
       expect(errors).toEqual([]);
     } finally {
       await browser?.close();

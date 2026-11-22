@@ -464,7 +464,8 @@ export async function handleAgentMessage(
   if (ordinaryInput || !admitUserInput) return channel.json({ error: 'Native input admission is unavailable.' }, 503);
   let interaction: InteractionRow | null;
   try {
-    interaction = await admitUserInput(chatJid, content, false, normalized.mediaIds, {
+    const controlContent = command?.type === 'totp' ? (command.action?.toLowerCase() === 'reset' ? '/totp reset' : '/totp') : content;
+    interaction = await admitUserInput(chatJid, controlContent, false, normalized.mediaIds, {
       contentBlocks: normalized.contentBlocks, linkPreviews: normalized.linkPreviews,
       threadId: normalized.threadId ?? undefined, screenHint: normalized.screenHint,
     }, revalidateInputAuthority, req.signal);

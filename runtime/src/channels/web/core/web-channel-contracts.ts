@@ -90,6 +90,7 @@ interface AuthGatewayLike {
   preparePrincipal?(req: Request): Promise<void>;
   isTotpSession(req: Request): boolean;
   createTotpContext(): TotpAuthContext;
+  setTotpSecret(secret: string): void;
   createWebauthnContext(): WebauthnAuthContext;
   createWebauthnEnrolPageContext(): WebauthnEnrolPageContext;
 }

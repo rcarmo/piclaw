@@ -1,6 +1,7 @@
 /** Render the admitted A2UI catalog in Classic's Preact timeline. */
-import { html, useRef, useState } from '../vendor/preact-htm.js';
+import { html, useCallback, useRef, useState } from '../vendor/preact-htm.js';
 import { a2uiBindingPath, buildA2uiAction, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
+import { A2uiTotpDialog, readTotpPresentation, type TotpPresentation } from './a2ui-totp-dialog.js';
 import type { A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
 
 type Submit = (request: A2uiActionRequest) => Promise<unknown>;
@@ -14,6 +15,8 @@ export function A2uiSurface({ block, source, onSubmit }: {
     const [edits, setEdits] = useState(new Map<string, unknown>());
     const [pending, setPending] = useState(false);
     const [error, setError] = useState('');
+    const [totp, setTotp] = useState<{ presentation: TotpPresentation; request: A2uiActionRequest } | null>(null);
+    const dismissTotp = useCallback(() => setTotp(null), []);
     const lastAttempt = useRef<{ key: string; request: A2uiActionRequest } | null>(null);
     const inFlight = useRef(false);
     const disabled = block.state !== 'active' || !onSubmit;
@@ -40,7 +43,13 @@ export function A2uiSurface({ block, source, onSubmit }: {
             if (!lastAttempt.current || lastAttempt.current.key !== key) {
                 lastAttempt.current = { key, request: { ...source, revision: block.revision, request_id: Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''), message } };
             }
-            await onSubmit(lastAttempt.current.request);
+            const request = lastAttempt.current.request;
+            const response = await onSubmit(request);
+            if (block.owner === 'totp') {
+                const presentation = readTotpPresentation(response);
+                if (!presentation) throw new Error('TOTP setup is unavailable. Run /totp again.');
+                setTotp({ presentation, request });
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Unable to submit this form.');
         } finally {
@@ -99,6 +108,11 @@ export function A2uiSurface({ block, source, onSubmit }: {
     }
     return html`<section class="a2ui-surface" aria-busy=${pending} onClick=${(event: Event) => event.stopPropagation()}>
         ${renderComponent('root', 0) || block.fallback_text}
+        ${totp && !disabled && html`<${A2uiTotpDialog} presentation=${totp.presentation} dismiss=${dismissTotp}
+            confirm=${async (code: string) => {
+                const reply = await onSubmit!({ ...totp.request, private_code: code });
+                if ((reply as { totp_result?: string } | undefined)?.totp_result !== 'success') throw new Error('TOTP was not confirmed.');
+            }} />`}
         ${error && html`<p class="a2ui-error" role="alert">${error}</p>`}
     </section>`;
 }

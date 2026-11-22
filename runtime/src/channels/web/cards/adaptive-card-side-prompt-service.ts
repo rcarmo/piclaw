@@ -2,14 +2,10 @@ import { getDb } from "../../../db/connection.js";
 import { admitSqliteWrite } from "../../../db/sqlite-async-admission.js";
 import { captureWebRequestAuthority } from "../auth/auth-gateway.js";
 import {
-  DEFAULT_WEB_USER_ID,
-  createWebSession,
-  deleteAllWebSessions,
   getMessageByAnyRowId,
   getMessageByRowId,
   replaceMessageContent,
 } from "../../../db.js";
-import { setWebTotpSecret } from "../../../core/config.js";
 import { isSingleUserAccess } from "../../../core/config-access.js";
 import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import type { SendMessageOptions } from "../message-write-service.js";
@@ -24,10 +20,8 @@ import {
   sanitizeAdaptiveCardSubmissionData,
   type AdaptiveCardActionPayload,
 } from "./adaptive-card-actions.js";
-import { randomSessionToken, verifyTotp } from "../auth/auth.js";
 import type { InteractionRow } from "../../../db.js";
 import { parseJsonObjectRequest } from "../json-body.js";
-import { hashTotpSecret, parseTotpCardToken } from "../auth/totp-card.js";
 import { handleAgentMessage as handleAgentMessageRequest } from "../handlers/agent.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
 import { runAddonAdaptiveCardIntent } from "../../../addons/runtime-contributions.js";
@@ -452,12 +446,12 @@ export class WebAdaptiveCardSidePromptService {
       );
     }
 
-    const isTotpFlow = rawSubmissionData && rawSubmissionData.intent === "totp-confirm";
+    if (rawSubmissionData?.intent === "totp-confirm") return this.options.json({ error: "Run /totp again to open private setup." }, 409);
 
     const addonIntent = rawSubmissionData && typeof rawSubmissionData.intent === "string"
       ? rawSubmissionData.intent.trim()
       : "";
-    if (addonIntent && !isTotpFlow) {
+    if (addonIntent) {
       try {
         const handledAddonIntent = await runAddonAdaptiveCardIntent(addonIntent, {
           chatJid,
@@ -506,104 +500,6 @@ export class WebAdaptiveCardSidePromptService {
           submitted_at: submittedAt,
         }, 200);
       }
-    }
-
-    if (isTotpFlow) {
-      const safeSubmissionMeta = {
-        action_type: normalized.actionType,
-        title: normalized.actionTitle || undefined,
-        data: { intent: "totp-confirm" },
-        submitted_at: submittedAt,
-      };
-      const completeTotpCard = (state: "completed" | "failed") => updateSourceCard(
-        markAdaptiveCardState(
-          sourceInteraction.data?.content_blocks,
-          normalized.cardId,
-          state,
-          submittedAt,
-          safeSubmissionMeta,
-        ),
-      );
-      const sendTotpFeedback = async (message: string, state: "active" | "completed" | "failed", setCookie?: string | null) => {
-        await this.options.sendMessage(chatJid, message, { threadId });
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (setCookie) headers["Set-Cookie"] = setCookie;
-        return new Response(JSON.stringify({
-          status: "ok",
-          source_post_id: sourcePostId,
-          card_id: normalized.cardId,
-          card_state: state,
-          submitted_at: submittedAt,
-          totp_result: state === "completed" ? "success" : "error",
-          message,
-        }), { status: 200, headers });
-      };
-
-      const confirmationCode = typeof rawSubmissionData.confirmation_code === "string"
-        ? rawSubmissionData.confirmation_code.trim()
-        : "";
-      const token = typeof rawSubmissionData.__totp_token === "string"
-        ? rawSubmissionData.__totp_token.trim()
-        : "";
-
-      if (!confirmationCode) {
-        return await sendTotpFeedback("TOTP validation failed: missing confirmation code. No changes were made.", "active");
-      }
-
-      const parsedTotp = parseTotpCardToken(token);
-      if (!parsedTotp.ok) {
-        await completeTotpCard("failed");
-        const message = parsedTotp.error === "expired"
-          ? "TOTP validation failed: this confirmation card expired. No changes were made. Run /totp again."
-          : "TOTP validation failed: this confirmation card is invalid. No changes were made. Run /totp again.";
-        return await sendTotpFeedback(message, "failed");
-      }
-
-      const activeSecret = (this.options.webRuntimeConfig.totpSecret || "").trim();
-      if (hashTotpSecret(activeSecret) !== parsedTotp.state.previousSecretHash) {
-        completeTotpCard("failed");
-        return await sendTotpFeedback(
-          "TOTP validation failed: active TOTP state changed since this card was created. No changes were made. Run /totp again.",
-          "failed",
-        );
-      }
-
-      if (!verifyTotp(parsedTotp.state.secret, confirmationCode, this.options.webRuntimeConfig.totpWindow)) {
-        return await sendTotpFeedback(
-          "TOTP validation failed: the code did not match the secret shown in the card. No changes were made.",
-          "active",
-        );
-      }
-
-      const rotate = parsedTotp.state.flow === "setup" || parsedTotp.state.flow === "reset";
-      const feedback = parsedTotp.state.flow === "setup"
-        ? "TOTP setup confirmed. Secret saved. Existing web sessions were invalidated. This browser is now TOTP-authenticated."
-        : parsedTotp.state.flow === "reset"
-          ? "TOTP reset confirmed. New secret saved. Existing web sessions were invalidated. This browser is now TOTP-authenticated."
-          : "TOTP device validation succeeded. Existing secret unchanged. This browser is now TOTP-authenticated.";
-      const sessionToken = randomSessionToken();
-      const completedBlocks = markAdaptiveCardState(sourceInteraction.data?.content_blocks, normalized.cardId, "completed", submittedAt, safeSubmissionMeta);
-      const updated = await admitSqliteWrite(getDb(), () => {
-        const latest = getMessageByRowId(chatJid, sourcePostId);
-        const active = latest?.data?.content_blocks?.find((block: any) => block?.type === "adaptive_card" && block.card_id === normalized.cardId) as { state?: string } | undefined;
-        if (!active || (active.state && active.state !== "active")) throw Error("TOTP confirmation card is no longer active");
-        if (rotate) deleteAllWebSessions();
-        createWebSession(sessionToken, DEFAULT_WEB_USER_ID, this.getWebSessionTtlSeconds(), "totp");
-        return persistSourceCard(completedBlocks);
-      }, phase => {
-        req.signal.throwIfAborted();
-        if (!isSingleUserAccess() || !parseTotpCardToken(token).ok || hashTotpSecret((this.options.webRuntimeConfig.totpSecret || "").trim()) !== parsedTotp.state.previousSecretHash)
-          throw Error("TOTP confirmation authority changed");
-        // Rotation intentionally revokes this request's old cookie. The signed
-        // one-use card and unchanged prior secret remain the commit authority.
-        if (phase === "before") authorise();
-      }, req.signal);
-      // Invalidate old cookies first. No old session can authenticate during
-      // writer admission after the secret changes; publish the new cookie last.
-      if (rotate) { setWebTotpSecret(parsedTotp.state.secret); this.options.authGateway.setTotpSecret(parsedTotp.state.secret); }
-      if (updated) this.options.interactionBroadcaster.broadcastInteractionUpdated(updated);
-      const setCookie = this.options.authGateway.createTotpContext().buildSessionCookie(sessionToken, req);
-      return await sendTotpFeedback(feedback, "completed", setCookie);
     }
 
     const forwardReq = new Request(`http://internal/agent/${this.options.defaultAgentId}/message`, {
@@ -791,10 +687,5 @@ export class WebAdaptiveCardSidePromptService {
         "X-Accel-Buffering": "no",
       },
     });
-  }
-
-  private getWebSessionTtlSeconds(): number {
-    const rawTtl = this.options.webRuntimeConfig.sessionTtl;
-    return Math.max(60, rawTtl || 0);
   }
 }

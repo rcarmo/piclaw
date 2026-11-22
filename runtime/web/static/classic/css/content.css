@@ -2063,3 +2063,11 @@
 .a2ui-surface :focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
 .a2ui-button[aria-disabled="true"] { cursor: default; opacity: 0.65; }
 .a2ui-error { margin-block: 8px 0; color: var(--error-color, var(--text-primary)); }
+.a2ui-private-dialog {
+    margin: auto;
+    width: min(38rem, calc(100vw - 2rem));
+    max-height: min(80vh, 48rem);
+    overflow: auto;
+    padding: 16px;
+}
+.a2ui-private-dialog img { align-self: center; }

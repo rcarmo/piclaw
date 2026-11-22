@@ -50,8 +50,8 @@
     {
       "path": "runtime/src/channels/web/core/web-channel-contracts.ts",
       "beforeSha256": "6addeb6df3f99944d7b3f8048e8f35b1b69c8e3fdd24712d43c5d1a86c5876d7",
-      "afterSha256": "be9fe50e7bc1ef4068e6e14d1b41704464bcc9f35ab3e99e1126bb4e44902485",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "5e84a24d97d35510383ae0da0c33b610f568d5b8e1a40220f614a2031fd29ff1",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Expose the existing auth gateway rotation sink to the private A2UI TOTP handler; no retention changes."
     },
     {
       "path": "runtime/src/channels/web/http/dispatch-agent.ts",

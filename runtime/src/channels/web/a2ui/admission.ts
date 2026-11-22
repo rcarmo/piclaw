@@ -8,6 +8,7 @@ import type { WebChannelLike } from '../core/web-channel-contracts.js';
 import { handleAgentMessage } from '../handlers/agent.js';
 import { bindInputRequestAuthority, captureInputTarget, releaseInputRequestAuthority, type ValidateInputAuthority } from '../messaging/input-request-authority.js';
 import { validateA2uiAction } from './action.js';
+import { handleTotpSurfaceAction } from './totp.js';
 import { replaceSurfaceBlocks } from './persistence.js';
 import { isA2uiSurfaceBlock } from './surface.js';
 
@@ -47,8 +48,8 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
   catch { return json({ error: 'Surface action not authorised.' }, 403); }
   try { payload = await readBody(req); }
   catch { return json({ error: 'Invalid or oversized surface action.' }, 400); }
-  if (!record(payload) || Object.keys(payload).length !== 6) return json({ error: 'Invalid surface action.' }, 400);
-  const { chat_jid: chatJid, post_id: postId, thread_id: threadId, revision, request_id: requestId, message } = payload;
+  if (!record(payload) || Object.keys(payload).length !== (Object.hasOwn(payload, 'private_code') ? 7 : 6)) return json({ error: 'Invalid surface action.' }, 400);
+  const { chat_jid: chatJid, post_id: postId, thread_id: threadId, revision, request_id: requestId, message, private_code: code } = payload;
   if (typeof chatJid !== 'string' || !chatJid.startsWith('web:') || chatJid.length > 240
     || typeof postId !== 'number' || !Number.isSafeInteger(postId) || postId < 1
     || typeof threadId !== 'number' || !Number.isSafeInteger(threadId) || threadId < 1
@@ -73,11 +74,31 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
   if (threadId !== sourceThread || !root || (root.data?.thread_id != null && root.data.thread_id !== root.id)) return changed();
   const block = sourceBlock(source);
   if (!isA2uiSurfaceBlock(block)) return json({ error: 'Surface not found.' }, 404);
-  // Privileged owners require their own host-controlled route; an event name is never authority.
-  if (block.owner !== 'agent') return json({ error: 'Surface action not authorised.' }, 403);
+  if (block.owner === 'totp' && (block.state !== 'active' || block.revision !== revision)) return changed();
   let action: ReturnType<typeof validateA2uiAction>;
   try { action = validateA2uiAction(block.surface, message); }
   catch { return json({ error: 'Invalid surface action.' }, 400); }
+  if (block.owner === 'totp') {
+    if (action.name !== 'totp-open') return changed();
+    if (code !== undefined && (typeof code !== 'string' || !/^\d{6}$/.test(code))) return json({ error: 'Enter a six-digit code.' }, 400);
+    return handleTotpSurfaceAction({ channel, req, chatJid, block, code,
+      authorise: () => validate(), assertBinding: binding,
+      complete(database, feedback) {
+        const current = readSource();
+        const latest = sourceBlock(current);
+        if (!current || (current.data?.thread_id ?? postId) !== threadId || current.data?.type !== 'agent_response'
+          || !isA2uiSurfaceBlock(latest) || latest.owner !== 'totp' || latest.state !== 'active' || latest.revision !== revision) throw Error('TOTP surface changed');
+        replaceSurfaceBlocks(database, chatJid, postId, current.data!.content_blocks!.map(item =>
+          item === latest ? { ...latest, state: 'completed', revision: revision + 1, fallback_text: feedback,
+            surface: { ...latest.surface, components: [{ id: 'root', component: 'Text', text: feedback }] } } : item));
+      },
+      publish() {
+        const current = readSource();
+        if (current) channel.interactionBroadcaster.broadcastInteractionUpdated(current);
+      },
+    });
+  }
+  if (block.owner !== 'agent' || code !== undefined) return json({ error: 'Surface action not authorised.' }, 403);
   const { timestamp: _timestamp, ...submitted } = action;
   const digest = createHash('sha256').update(JSON.stringify(submitted)).digest('hex');
   const duplicate = (latest: unknown) => isA2uiSurfaceBlock(latest) && latest.last_submission?.request_id === requestId

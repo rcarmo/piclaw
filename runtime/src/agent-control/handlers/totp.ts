@@ -2,23 +2,18 @@
  * agent-control/handlers/totp.ts – Build TOTP enrolment/setup confirmation flows.
  *
  * Commands:
- *   /totp                  – show single-card TOTP setup/secondary-device flow
+ *   /totp                  – show private TOTP setup/secondary-device flow
  *   /totp enrol / enroll   – alias for the same flow
- *   /totp reset <code>     – verify current code, then show single-card reset confirmation flow
+ *   /totp reset <code>     – verify current code, then show private reset confirmation flow
  */
 
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { isSingleUserAccess } from "../../core/config-access.js";
 import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
 import { getIdentityConfig, getWebRuntimeConfig } from "../../core/config.js";
-import { getChatChannel } from "../../core/chat-context.js";
+import { getChatChannel, getChatJid } from "../../core/chat-context.js";
 import { verifyTotp } from "../../channels/web/auth/auth.js";
-import {
-  buildTotpAdaptiveCard,
-  createTotpCardToken,
-  hashTotpSecret,
-  type TotpCardFlow,
-} from "../../channels/web/auth/totp-card.js";
+import { stageTotpSurface, type TotpFlow } from "../../channels/web/a2ui/totp.js";
 import { generateTotpQr } from "../../utils/totp-qr.js";
 
 type TotpCommand = Extract<AgentControlCommand, { type: "totp" }>;
@@ -27,7 +22,7 @@ function createCandidateSecret(issuer: string, label: string): string {
   return generateTotpQr({ issuer, label }).secret;
 }
 
-function describeFlow(flow: TotpCardFlow): string {
+function describeFlow(flow: TotpFlow): string {
   switch (flow) {
     case "setup":
       return "TOTP setup";
@@ -40,7 +35,7 @@ function describeFlow(flow: TotpCardFlow): string {
   }
 }
 
-/** Handle `/totp` control commands for single-card setup/reset flows. */
+/** Handle `/totp` control commands for private setup/reset flows. */
 export async function handleTotp(_session: AgentSession | undefined, command: TotpCommand): Promise<AgentControlResult> {
   if (!isSingleUserAccess()) return { status: "error", message: "Single-user authentication is required." };
   const action = (command.action || "").toLowerCase();
@@ -50,7 +45,7 @@ export async function handleTotp(_session: AgentSession | undefined, command: To
 
   const channel = getChatChannel();
   if (channel !== "web") {
-    return { status: "error", message: "TOTP setup cards are only available in the web UI." };
+    return { status: "error", message: "TOTP setup is only available in the web UI." };
   }
 
   const webRuntimeConfig = getWebRuntimeConfig();
@@ -79,30 +74,19 @@ export async function handleTotp(_session: AgentSession | undefined, command: To
   const identity = getIdentityConfig();
   const issuer = identity.assistantName || "Piclaw";
   const label = identity.userName ? `${issuer}:${identity.userName}` : issuer;
-  const flow: TotpCardFlow = isReset ? "reset" : hasSecret ? "secondary" : "setup";
+  const flow: TotpFlow = isReset ? "reset" : hasSecret ? "secondary" : "setup";
   const candidateSecret = flow === "secondary" ? currentSecret : createCandidateSecret(issuer, label);
-  const token = createTotpCardToken({
-    flow,
-    secret: candidateSecret,
-    previousSecretHash: hashTotpSecret(currentSecret),
-  });
-  const card = buildTotpAdaptiveCard({
-    flow,
-    secret: candidateSecret,
-    issuer,
-    label,
-    token,
-  });
+  const surface = stageTotpSurface({ chatJid: getChatJid(), flow, candidate: candidateSecret, activeSecret: currentSecret, issuer, label });
 
   const message = flow === "setup"
-    ? "Use the card below to set up TOTP, then confirm it with a live 6-digit code from your authenticator. Nothing is saved until confirmation succeeds."
+    ? "Open the private form below to set up TOTP, then confirm it with a live 6-digit code from your authenticator. Nothing is saved until confirmation succeeds."
     : flow === "secondary"
-      ? "Use the card below to add another TOTP device, then confirm it with a live 6-digit code. The active secret will not change."
-      : "Current TOTP code accepted. Use the card below to confirm the new secret with a live 6-digit code. Nothing changes until confirmation succeeds.";
+      ? "Open the private form below to add another TOTP device, then confirm it with a live 6-digit code. The active secret will not change."
+      : "Current TOTP code accepted. Open the private form below to confirm the new secret with a live 6-digit code. Nothing changes until confirmation succeeds.";
 
   return {
     status: "success",
     message: `${describeFlow(flow)} — ${message}`,
-    contentBlocks: [card],
+    contentBlocks: [surface],
   };
 }
