@@ -17,7 +17,7 @@ interface ReferenceCase {
   tests: { description: string; valid: boolean; data: Record<string, unknown> }[];
 }
 
-for (const file of ['button_checks','call_agent_function_message','call_function_message','checkable_components','contact_form_example_test','function_response','icon_checks','initial_state_validation','renderer_messages','tabs_checks','text_variants']) {
+for (const file of ['button_checks','call_agent_function_message','call_function_message','checkable_components','contact_form_example_test','function_catalog_validation','function_response','icon_checks','initial_state_validation','renderer_messages','tabs_checks','text_variants']) {
   const suite: ReferenceCase = await fixture(`cases/${file}.json`).json();
   const validate = (suite.catalog ? testing : basic)(suite.schema);
   for (const sample of suite.tests) {

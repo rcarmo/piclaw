@@ -89,8 +89,21 @@ function containsCall(value: unknown, name?: string): boolean {
     || Object.values(value).some(item => containsCall(item, name)));
 }
 
-function checkArgumentNames(args: unknown) {
-  requireClassic(args===undefined || (record(args) && Object.keys(args).every(isClassicEntityName)), 'invalid function arguments');
+function checkFunctionArguments(name:string,args:unknown) {
+  requireClassic(args===undefined || (record(args) && Object.keys(args).every(isClassicEntityName)),'invalid function arguments');
+  const definition=basicCatalog.functions.get(name);
+  if (!definition || name==='@index') return;
+  // The installed SDK's Zod schemas strip surplus arguments and retain some
+  // JSON Schema constraints as annotations. Enforce those at wire admission.
+  const {shape}=definition.schema as {shape?:Record<string,unknown>};
+  requireClassic(record(args) && shape && Object.keys(args).every(key=>Object.hasOwn(shape,key)),`invalid ${name} arguments`);
+  if (name==='length' || name==='numeric') {
+    requireClassic(Object.hasOwn(args,'min') || Object.hasOwn(args,'max'),`${name} requires at least one bound`);
+    if (name==='length') for (const key of ['min','max'] as const) {
+      const value=args[key];
+      requireClassic(value===undefined || (typeof value==='number' && Number.isInteger(value) && value>=0),'invalid length bound');
+    }
+  }
 }
 
 function checkValueCalls(value: unknown, allowRemote = false): void {
@@ -106,7 +119,7 @@ function checkValueCalls(value: unknown, allowRemote = false): void {
       && allowedKeys(value, ['@call', 'args', 'catalogId'])
       && (value.catalogId === undefined || (name !== '@index' && value.catalogId === CLASSIC_A2UI_CATALOG)), 'unsupported function in a value');
     const args = value.args;
-    checkArgumentNames(args);
+    checkFunctionArguments(name,args);
     if (name === '@index' && record(args)) requireClassic(allowedKeys(args, ['offset']) && (args.offset === undefined
       || typeof args.offset === 'number' || (record(args.offset) && (Object.hasOwn(args.offset, '@path') || isClassicValueFunction(args.offset['@call'])
         || (allowRemote && isClassicFunctionName(args.offset['@call']))))), 'invalid @index arguments');
@@ -139,7 +152,7 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
       if (key === '@metadata') continue;
       const call = key === 'action' ? readClassicActionFunction(value) : undefined;
       if (call) {
-        checkArgumentNames(call.args);
+        checkFunctionArguments(call.name,call.args);
         checkValueCalls(call.args,call.name!=='openUrl');
       } else if (key==='action') {
         mapA2uiActionExpressions(value,part=>{ checkValueCalls(part,true); return part; });
