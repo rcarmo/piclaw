@@ -26,6 +26,16 @@ describe("Classic A2UI Express", () => {
     }));
   });
 
+  test("compiles standard fixed List children and keeps their order in the snapshot", () => {
+    const messages = compileA2uiExpress('root = List(children=[first, second], direction="horizontal", align="center"); first = Text("First"); second = Text("Second")', "list-1");
+    const snapshot = applyA2uiMessages("list-1", messages)!;
+    expect(snapshot.components.find(({ id }) => id === "root")).toEqual({
+      id: "root", component: "List", children: ["first", "second"], direction: "horizontal", align: "center",
+    });
+    const broken = { ...snapshot, components: snapshot.components.filter(({ id }) => id !== "second") };
+    expect(() => applyA2uiMessages("list-1", [{ version: "1.0", updateDataModel: { surfaceId: "list-1", path: "/x", value: 1 } }], broken)).toThrow();
+  });
+
   test("applies component and data updates atomically to a rehydrated snapshot, then deletes it", () => {
     const initial = applyA2uiMessages("form-1", compileA2uiExpress(form, "form-1"))!;
     const original = JSON.stringify(initial);

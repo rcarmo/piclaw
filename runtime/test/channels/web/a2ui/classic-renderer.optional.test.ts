@@ -11,6 +11,7 @@ const source = `
   $/notify = false;
   $/choice = ["small"];
   root = Column([Text("<img src=x onerror=alert(1)>"),
+    List(children=[Text("First step"), Text("Second step")], direction="horizontal", align="center"),
     TextField(label="Note", value=$/note),
     CheckBox(label="Notify", value=$/notify),
     ChoicePicker(label="Size", options=[{label:"Small",value:"small"},{label:"Large",value:"large"}],value=$/choice),
@@ -66,6 +67,9 @@ for (const engine of [chromium, webkit]) {
       await page.waitForFunction(() => typeof (window as any).draw === "function");
       const block = { type: "a2ui_surface", state: "active", revision: 1, surface: applyA2uiMessages("test-form", compileA2uiExpress(source, "test-form")), fallback_text: "Form fallback" };
       await page.evaluate((block) => (window as any).draw(block), block);
+      const list = page.locator('.a2ui-surface').getByRole('list');
+      expect(await list.getByRole('listitem').allTextContents()).toEqual(['First step', 'Second step']);
+      expect(await list.evaluate(el => getComputedStyle(el).flexDirection)).toBe('row');
       const field = page.getByRole("textbox", { name: "Note" });
       await field.fill("Keep this draft");
       await page.evaluate((block) => (window as any).draw(block), block);

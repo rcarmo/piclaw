@@ -85,7 +85,7 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
       if (key !== "action" || !readA2uiLink(value)) requireClassic(!containsCall(value), "functions are not supported in values");
     }
     ids.add(component.id);
-    if (name === "Row" || name === "Column") {
+    if (name === "Row" || name === "Column" || name === "List") {
       requireClassic(Array.isArray(component.children) && component.children.every(isId), "only fixed child lists are supported");
     }
     if (name === "TextField" && component.variant === "obscured") {

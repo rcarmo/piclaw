@@ -1637,6 +1637,9 @@
 .a2ui-row, .a2ui-column, .a2ui-field, .a2ui-checkbox { display: flex; gap: 8px; min-width: 0; }
 .a2ui-row { flex-wrap: wrap; }
 .a2ui-column, .a2ui-field { flex-direction: column; }
+.a2ui-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.a2ui-list-horizontal { flex-direction: row; overflow-x: auto; }
+.a2ui-list-horizontal > [role="listitem"] { flex: 0 0 auto; max-width: 100%; }
 .a2ui-checkbox { align-items: center; }
 .a2ui-caption { color: var(--text-secondary); font-size: var(--font-size-sm); }
 .a2ui-card { border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px; }

@@ -81,6 +81,12 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 return html`<div key=${id} class=${`a2ui-${direction}`} style=${{ alignItems: align, justifyContent: justify }}>
                     ${Array.isArray(item.children) ? item.children.map(child) : null}</div>`;
             }
+            case 'List': {
+                const direction = item.direction === 'horizontal' ? 'a2ui-list-horizontal' : '';
+                const align = item.align === 'start' || item.align === 'center' || item.align === 'end' ? item.align : 'stretch';
+                return html`<div key=${id} role="list" class=${`a2ui-list ${direction}`} style=${{ alignItems: align }}>
+                    ${Array.isArray(item.children) && item.children.map(childId => html`<div key=${childId} role="listitem">${child(childId)}</div>`)}</div>`;
+            }
             case 'Divider': return html`<hr key=${id} class=${item.axis === 'vertical' ? 'a2ui-divider-vertical' : ''} />`;
             case 'Button': {
                 const link = readA2uiLink(item.action);
