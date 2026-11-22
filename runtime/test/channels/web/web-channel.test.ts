@@ -397,6 +397,9 @@ test("web channel includes archived branches when requested", async () => {
     root_chat_jid: "web:default",
     agent_name: "research",
   });
+  const archivedActivity = '2026-10-02T00:00:00.000Z';
+  db.storeMessage({ id: 'archived-activity', chat_jid: 'web:default:branch:1', sender: 'assistant', sender_name: 'Research',
+    timestamp: archivedActivity, content: 'Archive reply is not part of the branches response.', is_from_me: true, is_bot_message: true });
   db.archiveChatBranch("web:default:branch:1");
 
   const webMod = await import("../../../src/channels/web.js");
@@ -432,6 +435,9 @@ test("web channel includes archived branches when requested", async () => {
   expect(withArchived.status).toBe(200);
   const withArchivedJson = await withArchived.json();
   expect(withArchivedJson.chats.map((chat: any) => chat.chat_jid)).toEqual(["web:default", "web:default:branch:1"]);
+  expect(withArchivedJson.chats[0]).not.toHaveProperty('last_activity_at');
+  expect(withArchivedJson.chats[1]).toHaveProperty('last_activity_at', archivedActivity);
+  expect(withArchivedJson.chats[1]).not.toHaveProperty('last_reply');
 });
 
 test("web channel renames a registry-backed chat branch", async () => {

@@ -371,7 +371,7 @@ export function handleAgentActiveChatsRequest(channel: Pick<WebChannelLike, "age
   });
 }
 
-export function handleAgentBranchesRequest(req: Request, channel: Pick<WebChannelLike, "agentPool" | "json">): Response {
+export function handleAgentBranchesRequest(req: Request, channel: Pick<WebChannelLike, "agentPool" | "endpointContexts" | "json">): Response {
   const { result, durationMs } = measureSync(() => {
     const url = new URL(req.url);
     const rootChatJid = typeof url.searchParams.get("root_chat_jid") === "string"
@@ -381,7 +381,14 @@ export function handleAgentBranchesRequest(req: Request, channel: Pick<WebChanne
       String(url.searchParams.get("include_archived") || "").trim().toLowerCase(),
     );
     const chats = channel.agentPool.listKnownChats(rootChatJid || null, { includeArchived });
-    return channel.json({ chats }, 200);
+    const archivedJids = includeArchived ? chats.filter(chat => chat.archived_at).map(chat => chat.chat_jid) : [];
+    if (!archivedJids.length) return channel.json({ chats }, 200);
+    // Active rows get recency from /agent/active-chats. Supply the same
+    // timestamp for archived rows, without returning their reply excerpts.
+    const activity = channel.endpointContexts.agentStatus().getChatActivitySummaries?.(archivedJids);
+    return channel.json({ chats: chats.map(chat => chat.archived_at
+      ? { ...chat, last_activity_at: activity?.get(chat.chat_jid)?.last_activity_at ?? null }
+      : chat) }, 200);
   });
   return appendServerTiming(result, {
     name: "agent_branches",

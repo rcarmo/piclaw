@@ -438,6 +438,8 @@ for (const engine of ['chromium', 'webkit']) {
       // Running sessions come straight after the current one.
       expect(await page.locator('.sessions-sidebar-section-heading').allTextContents()).toEqual(['Current', 'Active', 'Other sessions', 'Archived (1)']);
       expect((await page.locator('.sessions-sidebar-section-active .sessions-sidebar-handle').allTextContents())).toEqual(['@proxmox']);
+      expect(await page.locator('.sessions-sidebar-section-other .sessions-sidebar-handle').allTextContents())
+        .toEqual(['@release-notes', '@tree-eval', '@steering-latency', '@lunch']);
       expect((await page.locator('.workbench-activity-badge').textContent())?.trim()).toBe('1');
       const proxmox = page.locator('.sessions-sidebar-item', { has: page.locator('.sessions-sidebar-handle', { hasText: '@proxmox' }) });
       expect(await proxmox.locator('.sessions-sidebar-activity').count()).toBe(1);
