@@ -4,7 +4,8 @@ export { a2uiBindingPath, readA2uiValue } from "./functions.js";
 import { checkA2uiComponent } from "./checks.js";
 import { a2uiInstanceId, projectA2uiTemplates } from "./templates.js";
 import { a2uiDateTimeType, validA2uiDateTime, validA2uiEventTimestamp } from "./date-time.js";
-import { a2uiSliderRange, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
+import { a2uiSliderRange, type A2uiComponent, type A2uiMetadata, type A2uiSnapshot } from "./surface.js";
+import { readA2uiActionMetadata } from './rpc-json.js';
 import { isA2uiActionValue, type A2uiActionValue as ActionValue, type A2uiDraftEdit, type A2uiDraftPatch } from './drafts.js';
 export { isA2uiActionValue } from './drafts.js';
 import type { ClassicA2uiRendererCapabilities } from './capabilities.js';
@@ -16,6 +17,7 @@ export interface A2uiAction {
   timestamp: string;
   context: Record<string, ActionValue>;
   userMessage?: string;
+  metadata?: A2uiMetadata;
 }
 
 export interface A2uiActionMessage {
@@ -110,7 +112,7 @@ function resolveUserMessage(snapshot: A2uiSnapshot, descriptor: unknown, edits: 
 }
 
 /** Send only context declared by this button. Neither edits nor snapshot leave the browser wholesale. */
-export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string, edits: ReadonlyMap<string, unknown>, timestamp: string, instancePath?: string, drafts: readonly A2uiDraftEdit[] = []): A2uiActionMessage {
+export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string, edits: ReadonlyMap<string, unknown>, timestamp: string, instancePath?: string, drafts: readonly A2uiDraftEdit[] = [], metadata?: A2uiMetadata): A2uiActionMessage {
   const projection = projectA2uiTemplates(source);
   const { snapshot } = projection;
   const event = eventDescriptor(projection, sourceComponentId, instancePath);
@@ -132,6 +134,7 @@ export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string,
   const message: A2uiActionMessage = { version: "1.0", action: {
     surfaceId: snapshot.surfaceId, sourceComponentId, name: event.name, timestamp, context,
     ...(userMessage === undefined ? {} : {userMessage}),
+    ...(metadata === undefined ? {} : {metadata:readA2uiActionMetadata(metadata)}),
   } };
   validateProjectedA2uiAction(projection, message, instancePath, drafts);
   return message;
@@ -152,9 +155,11 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
     throw new Error("Invalid surface action");
   }
   const action = payload.action;
-  if (Object.keys(action).length !== 5 + Number(Object.hasOwn(action, 'userMessage')) || action.surfaceId !== snapshot.surfaceId || typeof action.sourceComponentId !== "string"
+  if (Object.keys(action).length !== 5 + Number(Object.hasOwn(action, 'userMessage')) + Number(Object.hasOwn(action, 'metadata'))
+    || action.surfaceId !== snapshot.surfaceId || typeof action.sourceComponentId !== "string"
     || !validA2uiEventTimestamp(action.timestamp)
     || !record(action.context)) throw new Error("Invalid surface action");
+  const metadata = readA2uiActionMetadata(action.metadata);
   const event = eventDescriptor(projection, action.sourceComponentId, instancePath);
   if (event.name !== action.name || Object.keys(event.context).length !== Object.keys(action.context).length) {
     throw new Error("Invalid surface action");
@@ -189,6 +194,7 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
   return { edits: boundValues, action: {
     surfaceId: snapshot.surfaceId, name: event.name, sourceComponentId: action.sourceComponentId, timestamp: action.timestamp,
     ...(userMessage === undefined ? {} : {userMessage}), context: Object.fromEntries(Object.keys(event.context).map((key) => [key, (action.context as Record<string, ActionValue>)[key]])),
+    ...(metadata === undefined ? {} : {metadata}),
   } };
 }
 

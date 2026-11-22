@@ -33,11 +33,13 @@ test('A2UI input metadata is an immutable projection for the exact recipient, ou
   const {lastInsertRowid} = db.query(`INSERT INTO messages (id,chat_jid,is_bot_message,content) VALUES (?, ?, 0, ?)`).run(sender.sourceId,sender.chatJid,'Continue');
   const ref = `message-row:${lastInsertRowid}`;
   const metadata = {version:'1.0' as const,surfaces:{form:{synced:'draft value'}}};
-  const write = () => storeA2uiInputMetadata(db, sender, metadata);
+  const rendererMessage = {version:'1.0' as const,action:{surfaceId:'form',sourceComponentId:'submit',name:'save',timestamp:'2026-11-22T09:00:00Z',
+    context:{},metadata:{extensions:{rendererExample:true}}}};
+  const write = () => storeA2uiInputMetadata(db,sender,metadata,undefined,undefined,rendererMessage);
   expect(write).toThrow();
   db.transaction(write)();
   expect(() => db.transaction(write)()).toThrow();
-  expect(readApplicationMessagePayload(db,'inc',sender,ref)).toContain(JSON.stringify({a2uiRendererDataModel:metadata}));
+  expect(readApplicationMessagePayload(db,'inc',sender,ref)).toBe(`Continue\n\nA2UI renderer metadata:\n${JSON.stringify({a2uiRendererDataModel:metadata,a2uiRendererMessage:rendererMessage})}`);
   expect(readApplicationMessagePayload(db,'inc',sender,`queued-source:${sender.sourceId}`)).toBe(readApplicationMessagePayload(db,'inc',sender,ref));
   expect(readApplicationMessagePayload(db,'inc',{...sender,conversationId:24},ref)).toBe('Continue');
   expect(readApplicationMessagePayload(db,'inc',{chatJid:sender.chatJid,sourceId:sender.sourceId},ref)).toBe('Continue');

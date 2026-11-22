@@ -26,6 +26,19 @@ test("Classic emits a v1.0 action from local drafts without sending the data mod
   expect(validateA2uiAction(snapshot, event)).toEqual(event.action);
 });
 
+test('preserves bounded opaque action extensions without granting them context or authority', () => {
+  const event = buildA2uiAction(snapshot,'submit',new Map(),timestamp);
+  const metadata = {extensions:{rendererExample:JSON.parse('{"@call":"opaque","__proto__":{"note":[null,1]}}'),α:42}};
+  const wire = {...event,action:{...event.action,metadata}};
+  expect(validateA2uiAction(snapshot,wire)).toEqual(wire.action);
+  expect(Object.hasOwn(validateA2uiAction(snapshot,wire).metadata!.extensions!.rendererExample as object,'__proto__')).toBe(true);
+  expect(buildA2uiAction(snapshot,'submit',new Map(),timestamp,undefined,[],metadata)).toEqual(wire);
+  for (const invalid of [null,[],{context:{}},{extensions:{'bad-key':true}},{extensions:{oversize:'x'.repeat(16_384)}}]) {
+    expect(()=>validateA2uiAction(snapshot,{...event,action:{...event.action,metadata:invalid}})).toThrow();
+  }
+  expect(()=>validateA2uiAction(snapshot,{...wire,action:{...wire.action,name:'another-action'}})).toThrow();
+});
+
 test('requires an ISO date-time with a zone on A2UI actions', () => {
   const event = buildA2uiAction(snapshot,'submit',new Map(),timestamp);
   for (const value of ['2026-11-22','11/22/2026','2026-11-22T09:00:00','2026-02-30T09:00:00Z']) {

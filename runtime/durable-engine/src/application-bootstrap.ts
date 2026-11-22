@@ -31,7 +31,7 @@ import { createHostController, type HostControllerOptions } from "./host-control
 import { createHostDurableBindings, createInputHandoffCompletion } from "./host-bindings.js";
 import { prepareHostSchema } from "./host-schema.js";
 import { readApplicationMessagePayload } from "./accepted-payload-recovery.js";
-import { ownsA2uiModelSync, projectA2uiAgentInput, readA2uiRendererDataModel, storeA2uiInputMetadata } from '../../src/channels/web/a2ui/input-metadata.js';
+import { ownsA2uiModelSync, projectA2uiAgentInput, readA2uiRendererDataModel, readA2uiSurfaceOwner, storeA2uiInputMetadata } from '../../src/channels/web/a2ui/input-metadata.js';
 import { A2uiAgentRpc, type A2uiAgentFunction } from '../../src/channels/web/a2ui/agent-rpc.js';
 import type { RendererRpcBroker } from '../../src/channels/web/a2ui/renderer-rpc.js';
 import { value, effect, sealed } from "./host-effects.js";
@@ -484,10 +484,14 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
           const conversationId = scope.conversationId;
           if (renderer.submittedSurfaceId && !ownsA2uiModelSync(root, chat, `a2ui:${renderer.submittedSurfaceId}`, conversationId))
             throw Error('Surface renderer belongs to another conversation');
-          if (renderer.capabilities) {
-            const data = readA2uiRendererDataModel(root, chat, conversationId, renderer);
-            storeA2uiInputMetadata(root, { chatJid: chat, sourceId: message.id, conversationId }, data, renderer.capabilities, renderer.peer);
-          }
+          const action=renderer.action;
+          const owner=action && readA2uiSurfaceOwner(root,chat,`a2ui:${action.message.action.surfaceId}`);
+          if (owner && (owner.conversation_id!==conversationId || owner.post_id!==action!.postId))
+            throw Error('A2UI action belongs to another conversation or post');
+          // Surfaces published before owner tracking keep their legacy text path.
+          if (!owner && action?.message.action.metadata!==undefined) throw Error('A2UI action extensions require an owned surface');
+          const data=renderer.capabilities ? readA2uiRendererDataModel(root,chat,conversationId,renderer) : undefined;
+          storeA2uiInputMetadata(root,{chatJid:chat,sourceId:message.id,conversationId},data,renderer.capabilities,renderer.peer,owner ? action?.message : undefined);
         }
         checkInput();
         assert();

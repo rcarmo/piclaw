@@ -240,6 +240,7 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
       requireReplyThread: true,
       authorise: () => {},
       a2uiSubmission: {
+        ...(block.owner === 'agent' ? {action:{postId,message:{version:'1.0',action}}} : {}),
         ...(block.owner === 'agent' && block.surface.sendDataModel ? { submittedSurfaceId: surfaceId, editedSurface } : {}),
         peer: capabilities ? bindRendererOffer(channel,req,chatJid,payload.renderer_peer,payload.metadata) : undefined,
       },

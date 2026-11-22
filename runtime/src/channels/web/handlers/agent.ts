@@ -113,7 +113,7 @@ export async function handleAgentMessage(
   chatJid: string,
   defaultAgentId: string,
   post?: { requireReplyThread: boolean; authorise: ValidateInputAuthority; onAccepted?: StoreWebMessageOptions["acceptSource"];
-    a2uiSubmission?: Pick<A2uiRendererInput, 'submittedSurfaceId' | 'editedSurface' | 'peer'> },
+    a2uiSubmission?: Pick<A2uiRendererInput, 'submittedSurfaceId' | 'editedSurface' | 'peer' | 'action'> },
 ): Promise<Response> {
   if (!isSingleUserAccess()) return channel.json({ error: "Single-user message admission is required." }, 403);
   let internalAuthority: ReturnType<typeof readInputRequestAuthority>;

@@ -187,15 +187,25 @@ applicationTest('packed Autoresearch binds the native tool and consumes a later 
    const forged = [{...drafts(1)[0]!,edits:[{component_id:'label',value:'Not an input'}]}];
    assert.equal((await request('/agent/default/message',{content:'Reject forged draft',...offer,a2ui_drafts:forged})).status,400);
    assert.equal(lookup.get('Reject forged draft'),null);
+   const actionMessage=buildA2uiAction(syncBlock.surface,'submit',new Map([['/name','Edited']]),new Date().toISOString());
+   const extensions={rendererExample:{note:'Private renderer extension',operation:'opaque'}};
    const syncedAction={...offer,chat_jid:chat,post_id:syncPost.rowid,thread_id:form.thread_id,revision:1,request_id:crypto.randomUUID(),
-     message:buildA2uiAction(syncBlock.surface,'submit',new Map([['/name','Edited']]),new Date().toISOString()),
+     message:{...actionMessage,action:{...actionMessage.action,metadata:{extensions}}},
      a2ui_drafts:[{...drafts(1)[0]!,edits:[{component_id:'memo',value:'Action-only model edit'}]}]};
    assert.equal((await request('/agent/a2ui-action',syncedAction)).status,201);
    assert.equal((await request('/agent/a2ui-action',syncedAction)).status,200);
    await waitFor(() => settled(form.thread_id).total===2 || undefined, 'synced action did not settle');
-   assert.equal(latestUserInput,`Submitted saveName\nname: "Edited"\n\nA2UI renderer metadata:\n${modelFor('Edited','Action-only model edit')}`);
-   assert(lookup.get('Submitted saveName\nname: "Edited"'));
-   const after=await issue('Read latest model',{...offer,a2ui_drafts:drafts(1)});
+   const [visibleAction, privateAction]=latestUserInput.split('\n\nA2UI renderer metadata:\n');
+   assert.equal(visibleAction,'Submitted saveName\nname: "Edited"');
+   assert.deepEqual(JSON.parse(privateAction!),{...JSON.parse(modelFor('Edited','Action-only model edit')),a2uiRendererMessage:syncedAction.message});
+   const actionRow=lookup.get(visibleAction) as {rowid:number};
+   assert(actionRow);
+   assert(!JSON.stringify(getMessageByRowId(chat,actionRow.rowid)).includes('Private renderer extension'));
+   const changedExtension={...syncedAction,message:{...syncedAction.message,action:{...syncedAction.message.action,
+     metadata:{extensions:{rendererExample:'Changed after acceptance'}},
+   }}};
+   assert.equal((await request('/agent/a2ui-action',changedExtension)).status,409);
+   const after=await issue('Read latest model',{metadata:{...offer.metadata,a2uiRendererMessage:changedExtension.message},a2ui_drafts:drafts(1)});
    await waitFor(() => settled(after.thread_id).total || undefined, 'model query did not settle');
    assert.equal(latestUserInput,`Read latest model\n\nA2UI renderer metadata:\n${modelFor('Edited','Action-only model edit')}`);
    expectedTool='send_a2ui';

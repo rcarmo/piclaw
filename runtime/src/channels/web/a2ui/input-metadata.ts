@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
 import { isA2uiSurfaceBlock, type A2uiSnapshot, type A2uiSurfaceBlock } from './surface.js';
-import { validateA2uiDraftEdits } from './action.js';
+import { validateA2uiDraftEdits, type A2uiActionMessage } from './action.js';
 import { InvalidA2uiDraftError, type A2uiDraftPatch } from './drafts.js';
 import { negotiateClassicA2ui, type ClassicA2uiRendererCapabilities } from './capabilities.js';
 
@@ -16,6 +16,7 @@ export interface AcceptedRendererPeer { hash: string; catalogues: readonly strin
 export interface A2uiRendererInput {
   capabilities?: ClassicA2uiRendererCapabilities;
   peer?: AcceptedRendererPeer;
+  action?: {postId: number; message: A2uiActionMessage};
   submittedSurfaceId?: string;
   editedSurface?: A2uiSnapshot;
   draftSurface?: (block: A2uiSurfaceBlock) => A2uiSnapshot | undefined;
@@ -79,11 +80,11 @@ export function readA2uiRendererDataModel(database: Database, chatJid: string, c
 }
 
 /** Native input metadata is separate from the user-visible message and its content blocks. */
-export function storeA2uiInputMetadata(database: Database, recipient: Recipient, model?: A2uiRendererDataModel, capabilities?: ClassicA2uiRendererCapabilities, peer?: AcceptedRendererPeer): void {
+export function storeA2uiInputMetadata(database: Database, recipient: Recipient, model?: A2uiRendererDataModel, capabilities?: ClassicA2uiRendererCapabilities, peer?: AcceptedRendererPeer, message?: A2uiActionMessage): void {
   if (!database.inTransaction) throw Error('A2UI input metadata requires the source admission transaction');
   const dataModel = model && Object.keys(model.surfaces).length ? model : undefined;
-  if (!dataModel && !capabilities) return;
-  const metadata = JSON.stringify({ a2uiRendererDataModel: dataModel, a2uiRendererCapabilities: capabilities });
+  if (!dataModel && !capabilities && !message) return;
+  const metadata = JSON.stringify({ a2uiRendererDataModel: dataModel, a2uiRendererCapabilities: capabilities, a2uiRendererMessage: message });
   if (Buffer.byteLength(metadata) > 256 * 1024) throw Error('A2UI input metadata exceeds its size limit');
   const result = database.query(`INSERT INTO a2ui_input_metadata (chat_jid, message_id, conversation_id, metadata, renderer_peer)
     SELECT chat_jid, id, ?, ?, ? FROM messages WHERE chat_jid=? AND id=? AND is_bot_message=0`)
