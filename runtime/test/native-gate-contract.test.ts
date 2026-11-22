@@ -56,7 +56,7 @@ describe('canonical offline native contract', () => {
     expect(stages[3].cwd).toBe(join(ROOT, 'qualification/native'));
     expect(() => nativeStages({ ...contract, typeProjects: [] })).toThrow('both private type projects');
     expect(() => nativeStages({ ...contract, integrationTests: [] })).toThrow('required accepted-source');
-    for (const required of ['native-http-input.test.ts', 'direct-sdk-message.test.ts', 'native-source-cursor-ack.test.ts', 'native-factory-compaction.test.ts', 'runtime.test.ts', 'goal-tools.test.ts', 'goal-usage.test.ts', 'goal-settlement.test.ts', 'goal-terminal-race.test.ts', 'installed-goal-catalog.test.ts', 'native-compaction-settings.test.ts', 'routing-policy.test.ts', 'native-ui-projection.test.ts']) expect(contract.tests).toContain(required);
+    for (const required of ['native-http-input.test.ts', 'native-autoresearch-a2ui.test.ts', 'direct-sdk-message.test.ts', 'native-source-cursor-ack.test.ts', 'native-factory-compaction.test.ts', 'runtime.test.ts', 'goal-tools.test.ts', 'goal-usage.test.ts', 'goal-settlement.test.ts', 'goal-terminal-race.test.ts', 'installed-goal-catalog.test.ts', 'native-compaction-settings.test.ts', 'routing-policy.test.ts', 'native-ui-projection.test.ts']) expect(contract.tests).toContain(required);
   });
 
   test('qualification targets current SDK pins and rejects historical-version drift', async () => {
@@ -81,8 +81,8 @@ describe('canonical offline native contract', () => {
         expect(Bun.spawnSync(['git', '-C', root, ...args]).exitCode).toBe(0);
       }
       const ref = new TextDecoder().decode(Bun.spawnSync(['git', '-C', root, 'rev-parse', 'HEAD']).stdout).trim();
-      const prepared = { ...contract, fixtures: { ...contract.fixtures, native: { ...contract.fixtures.native, ref }, contract: { ...contract.fixtures.contract, ref } } };
-      const env = { DURABLE_ADDONS_ROOT: root, DURABLE_CORE_ADDONS_ROOT: root, DURABLE_GOAL_ADDON_ROOT: root, DURABLE_CONTRACT_ADDONS_ROOT: root };
+      const prepared = { ...contract, fixtures: { ...contract.fixtures, native: { ...contract.fixtures.native, ref }, contract: { ...contract.fixtures.contract, ref }, autoresearch: { ...contract.fixtures.autoresearch, ref } } };
+      const env = { DURABLE_ADDONS_ROOT: root, DURABLE_CORE_ADDONS_ROOT: root, DURABLE_GOAL_ADDON_ROOT: root, DURABLE_CONTRACT_ADDONS_ROOT: root, DURABLE_AUTORESEARCH_ROOT: root };
       const problems = () => nativePreflight(prepared, env).then(() => '', error => String(error));
       expect(await problems()).toContain('addons/code-review/node_modules');
       mkdirSync(join(root, 'addons/code-review/node_modules'), { recursive: true });
@@ -92,6 +92,7 @@ describe('canonical offline native contract', () => {
 
   test('missing prerequisites and selection state fail actionably before any package or provider work', async () => {
     await expect(nativePreflight(contract, {})).rejects.toThrow('DURABLE_ADDONS_ROOT: export an existing disposable');
+    await expect(nativePreflight(contract, {})).rejects.toThrow('DURABLE_AUTORESEARCH_ROOT: export an existing disposable');
     await expect(nativePreflight(contract, {})).rejects.toThrow('DURABLE_CATALOG_DEPENDENCIES');
     await expect(nativePreflight(contract, { PICLAW_DEFAULT_FACTORY_CASE: 'one' })).rejects.toThrow('unset PICLAW_DEFAULT_FACTORY_CASE');
     await expect(nativePreflight(contract, { BUN_OPTIONS: '--test-name-pattern=one' })).rejects.toThrow('unset BUN_OPTIONS');

@@ -11,7 +11,7 @@ runs:
           import { appendFileSync, readFileSync } from "node:fs";
           const contract = JSON.parse(readFileSync("scripts/native-gate-contract.json", "utf8"));
           if (contract.version !== 1) throw new Error("Unsupported native gate contract");
-          for (const name of ["native", "contract"]) {
+          for (const name of ["native", "contract", "autoresearch"]) {
             const fixture = contract.fixtures[name];
             if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(fixture.repository) ||
                 !/^[0-9a-f]{40}$/.test(fixture.ref)) {
@@ -22,9 +22,10 @@ runs:
           }
           const roots = {
             DURABLE_ADDONS_ROOT: "native", DURABLE_CORE_ADDONS_ROOT: "native",
-            DURABLE_GOAL_ADDON_ROOT: "native", DURABLE_CONTRACT_ADDONS_ROOT: "contract"
+            DURABLE_GOAL_ADDON_ROOT: "native", DURABLE_CONTRACT_ADDONS_ROOT: "contract",
+            DURABLE_AUTORESEARCH_ROOT: "autoresearch"
           };
-          if (Object.keys(contract.roots).length !== 4 ||
+          if (Object.keys(contract.roots).length !== 5 ||
               Object.entries(roots).some(([key, value]) => contract.roots[key] !== value) ||
               contract.catalogDependencies !== "qualification/native/node_modules" ||
               JSON.stringify(contract.typeProjects) !== JSON.stringify([
@@ -48,6 +49,14 @@ runs:
         path: .qualification-addons
         persist-credentials: false
 
+    - name: Checkout pinned Autoresearch add-on
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: ${{ steps.contract.outputs.autoresearch-repository }}
+        ref: ${{ steps.contract.outputs.autoresearch-ref }}
+        path: .qualification-autoresearch
+        persist-credentials: false
+
     # Network access belongs to hosted provisioning, never to ci:native.
     - name: Install private native engine dependencies
       shell: bash
@@ -69,14 +78,14 @@ runs:
       working-directory: .qualification-native-addons/addons/code-review
       run: bun install --frozen-lockfile --ignore-scripts
 
-    - name: Export all five prepared fixture paths
+    - name: Export all six prepared fixture paths
       shell: bash
       run: |
         bun --eval '
           import { appendFileSync, readFileSync } from "node:fs";
           import { resolve } from "node:path";
           const contract = JSON.parse(readFileSync("scripts/native-gate-contract.json", "utf8"));
-          const checkouts = { native: ".qualification-native-addons", contract: ".qualification-addons" };
+          const checkouts = { native: ".qualification-native-addons", contract: ".qualification-addons", autoresearch: ".qualification-autoresearch" };
           for (const [name, fixture] of Object.entries(contract.roots)) {
             appendFileSync(process.env.GITHUB_ENV, `${name}=${resolve(process.env.GITHUB_WORKSPACE, checkouts[fixture])}\n`);
           }

@@ -9,13 +9,18 @@
     "contract": {
       "repository": "rcarmo/piclaw-addons",
       "ref": "08746aa3f114d49f954c1dff712d9f74acca460f"
+    },
+    "autoresearch": {
+      "repository": "rcarmo/piclaw-addons",
+      "ref": "0582459ceb62f65859cfceec28f6e808c8ed59db"
     }
   },
   "roots": {
     "DURABLE_ADDONS_ROOT": "native",
     "DURABLE_CORE_ADDONS_ROOT": "native",
     "DURABLE_GOAL_ADDON_ROOT": "native",
-    "DURABLE_CONTRACT_ADDONS_ROOT": "contract"
+    "DURABLE_CONTRACT_ADDONS_ROOT": "contract",
+    "DURABLE_AUTORESEARCH_ROOT": "autoresearch"
   },
   "catalogDependencies": "qualification/native/node_modules",
   "typeProjects": [
@@ -114,6 +119,7 @@
     "native-a2a-history.test.ts",
     "native-admission-boundary.test.ts",
     "native-admission-close.test.ts",
+    "native-autoresearch-a2ui.test.ts",
     "native-compaction-settings.test.ts",
     "native-config-request.test.ts",
     "native-control-bootstrap.test.ts",

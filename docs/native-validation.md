@@ -9,7 +9,7 @@
 | `make ci-full` / `bun run ci:full` | `ci:fast` followed by `ci:native` |
 | `make ci-integration` | Integration stages including required `ci:native`; Docker/Playwright skip flags do not skip native qualification |
 
-[`scripts/native-gate-contract.json`](../scripts/native-gate-contract.json) defines fixture repositories and immutable SHAs, four source-root mappings, catalogue dependencies, the two type projects, the accepted-source and test-isolation contracts, and the complete required file inventory. Goal catalogue, tools, usage, settlement and terminal-race files are mandatory. No filter, skip, empty discovery or missing fixture can produce native success.
+[`scripts/native-gate-contract.json`](../scripts/native-gate-contract.json) defines fixture repositories and immutable SHAs, five source-root mappings, catalogue dependencies, the two type projects, the accepted-source and test-isolation contracts, and the complete required file inventory. Goal catalogue, tools, usage, settlement and terminal-race files are mandatory. No filter, skip, empty discovery or missing fixture can produce native success.
 
 The root and `runtime/durable-engine` pin the SDK version named in the gate contract, with separate physical dependency graphs and lockfiles. Qualification imports the engine graph through public re-exports; do not symlink root dependencies into the engine or mix SDK handles, contexts, telemetry spans or TypeBox objects across them. Package acquisition records the matching published bytes before offline validation.
 
@@ -19,29 +19,33 @@ The contract’s `sdkVersion` must match the root/private manifest pins, install
 
 Use a disposable checkout with previously provisioned dependencies and add-on source. Nothing in the gate downloads source, installs packages or repairs fixtures. Root tooling, `runtime/durable-engine/node_modules`, `qualification/native/node_modules` and the native add-on checkout's `node_modules` must already be available from frozen-lockfile provisioning. Catalogue tests use the qualification directory's frozen dependencies, never a live profile's installation. Keep the engine's recorded package bytes unchanged; the gate imports the existing provenance verifier and never runs its acquisition/record mode.
 
-Run the following from the repository root. Replace the two example paths with existing local checkouts. The native checkout must match `fixtures.native.ref`; the historical contract checkout must match `fixtures.contract.ref`. The commands read the SHAs from the JSON and check local Git objects without fetching:
+Run the following from the repository root. Replace the three example paths with existing local checkouts. The native checkout must match `fixtures.native.ref`; the historical contract checkout must match `fixtures.contract.ref`. The Autoresearch checkout must match `fixtures.autoresearch.ref`. The commands read the SHAs from the JSON and check local Git objects without fetching:
 
 ```sh
 set -eu
 NATIVE_FIXTURE=/absolute/path/to/provisioned-native-addons
 CONTRACT_FIXTURE=/absolute/path/to/provisioned-contract-addons
+AUTORESEARCH_FIXTURE=/absolute/path/to/pinned-autoresearch-addons
 native_ref="$(bun -e 'console.log(require("./scripts/native-gate-contract.json").fixtures.native.ref)')"
 contract_ref="$(bun -e 'console.log(require("./scripts/native-gate-contract.json").fixtures.contract.ref)')"
+autoresearch_ref="$(bun -e 'console.log(require("./scripts/native-gate-contract.json").fixtures.autoresearch.ref)')"
 ```
 
 If only a local Git object store exists, prepare source worktrees before dependency provisioning. These optional commands use existing objects only; use new paths and do not reset a working checkout:
 
 ```sh
-# LOCAL_ADDONS_REPO already contains both JSON SHAs. No clone or fetch runs here.
+# LOCAL_ADDONS_REPO already contains all three JSON SHAs. No clone or fetch runs here.
 git -C "$LOCAL_ADDONS_REPO" cat-file -e "$native_ref^{commit}"
 git -C "$LOCAL_ADDONS_REPO" cat-file -e "$contract_ref^{commit}"
+git -C "$LOCAL_ADDONS_REPO" cat-file -e "$autoresearch_ref^{commit}"
 git -C "$LOCAL_ADDONS_REPO" worktree add --detach "$NATIVE_FIXTURE" "$native_ref"
 git -C "$LOCAL_ADDONS_REPO" worktree add --detach "$CONTRACT_FIXTURE" "$contract_ref"
+git -C "$LOCAL_ADDONS_REPO" worktree add --detach "$AUTORESEARCH_FIXTURE" "$autoresearch_ref"
 ```
 
 A new worktree supplies source only. It cannot pass until its required dependency graph has been provisioned separately. If an object or dependency is missing, stop and arrange provisioning outside the gate; do not add acquisition commands or fallback roots to `ci:native`.
 
-With provisioned checkouts and dependencies, verify the local revisions, export all five paths and run the gate in the same shell:
+With provisioned checkouts and dependencies, verify the local revisions, export all six paths and run the gate in the same shell:
 
 ```sh
 git -C "$NATIVE_FIXTURE" cat-file -e "$native_ref^{commit}"
@@ -50,6 +54,8 @@ test "$(git -C "$NATIVE_FIXTURE" rev-parse HEAD)" = "$native_ref"
 test "$(git -C "$CONTRACT_FIXTURE" rev-parse HEAD)" = "$contract_ref"
 test -z "$(git -C "$NATIVE_FIXTURE" status --porcelain --untracked-files=normal)"
 test -z "$(git -C "$CONTRACT_FIXTURE" status --porcelain --untracked-files=normal)"
+test "$(git -C "$AUTORESEARCH_FIXTURE" rev-parse HEAD)" = "$autoresearch_ref"
+test -z "$(git -C "$AUTORESEARCH_FIXTURE" status --porcelain --untracked-files=normal)"
 # These fixture packages have independent frozen locks; provision both outside the gate.
 (cd "$NATIVE_FIXTURE" && bun install --frozen-lockfile --ignore-scripts)
 (cd "$NATIVE_FIXTURE/addons/code-review" && bun install --frozen-lockfile --ignore-scripts)
@@ -62,19 +68,20 @@ export DURABLE_ADDONS_ROOT="$NATIVE_FIXTURE"
 export DURABLE_CORE_ADDONS_ROOT="$NATIVE_FIXTURE"
 export DURABLE_GOAL_ADDON_ROOT="$NATIVE_FIXTURE"
 export DURABLE_CONTRACT_ADDONS_ROOT="$CONTRACT_FIXTURE"
+export DURABLE_AUTORESEARCH_ROOT="$AUTORESEARCH_FIXTURE"
 export DURABLE_CATALOG_DEPENDENCIES="$(pwd -P)/qualification/native/node_modules"
 
 make ci-native
 # Run make ci-full when both host and native evidence are required.
 ```
 
-All five exports are required. ADDONS, CORE and GOAL use the same physical native checkout. CONTRACT uses the separate historical source. Preflight rejects `DURABLE_CORE_ROOT`, inherited case-selection variables and `BUN_OPTIONS`; unset them before running. Merely having a checkout at another revision, or a live installed add-on with the same version number, does not satisfy preflight.
+All six exports are required. ADDONS, CORE and GOAL use the same physical native checkout. CONTRACT uses the separate historical source. AUTORESEARCH is a source-only checkout; the test runs its Pages packer without installing anything. Preflight rejects `DURABLE_CORE_ROOT`, inherited case-selection variables and `BUN_OPTIONS`; unset them before running. Merely having a checkout at another revision, or a live installed add-on with the same version number, does not satisfy preflight.
 
 Make creates project-scoped scratch through `policy-dirs`. `make policy-config` prints the selected paths without creating directories. Direct Bun invocation must use those paths and create the scratch directories first, as described in [AGENTS.md](../AGENTS.md#portable-build-caches-and-scratch). The native runner owns its run scratch and prints its receipt path.
 
 ## Hosted provisioning and required execution
 
-[CI](../.github/workflows/ci.yml) and the reusable [integration gate](../.github/workflows/integration-gate.yml) use [native-qualification-setup](../.github/actions/native-qualification-setup/action.yml). The composite reads and validates immutable pins from the shared JSON, checks out both fixtures without persisted credentials, installs the private engine, qualification and native add-on dependencies with `--frozen-lockfile --ignore-scripts`, then exports all five paths through `GITHUB_ENV`. Hosted provisioning may use the network. The subsequent native gate is offline.
+[CI](../.github/workflows/ci.yml) and the reusable [integration gate](../.github/workflows/integration-gate.yml) use [native-qualification-setup](../.github/actions/native-qualification-setup/action.yml). The composite reads and validates immutable pins from the shared JSON, checks out all three fixtures without persisted credentials, installs the private engine, qualification and native add-on dependencies with `--frozen-lockfile --ignore-scripts`, then exports all six paths through `GITHUB_ENV`. Hosted provisioning may use the network. The subsequent native gate is offline.
 
 CI runs `make ci-full` after setup. Integration runs `make ci-integration` after the same setup; its native stage is required even when Docker or Playwright is unavailable or explicitly skipped. Native failures are never advisory. Workflow security, exact-SHA release routing and the integration timeout remain in force.
 
