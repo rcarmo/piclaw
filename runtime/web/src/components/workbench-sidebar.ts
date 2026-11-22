@@ -87,18 +87,30 @@ export function readStoredSessionsWidth(): number {
   return clampSessionsWidth(getLocalStorageItem(SESSIONS_WIDTH_STORAGE_KEY) ?? SESSIONS_DEFAULT_WIDTH);
 }
 
-/** Sidebar sections: the same groups as the compose session picker, without archived sessions. */
-/** Archived sessions, newest first, filtered with the same search as the other sections. */
+function sessionActivityTime(chat) {
+  const stamp = chat?.last_activity_at;
+  const time = typeof stamp === 'string' ? Date.parse(stamp) : NaN;
+  return Number.isFinite(time) ? time : -Infinity;
+}
+
+function compareSessionActivity(a, b) {
+  const first = sessionActivityTime(a), second = sessionActivityTime(b);
+  // Equal or unknown timestamps retain the picker's stable name order.
+  return first === second ? 0 : second - first;
+}
+
+/** Archived sessions share activity ordering, with archive date as a tie-break. */
 export function buildArchivedSessions(activeChatAgents, currentChatJid, query = '') {
   const archived = resolveSessionPopupChats(activeChatAgents, currentChatJid).filter((chat) => chat?.archived_at);
   return filterSessionPickerChats(archived, query)
-    .sort((a, b) => String(b.archived_at).localeCompare(String(a.archived_at)));
+    .sort((a, b) => compareSessionActivity(a, b) || String(b.archived_at).localeCompare(String(a.archived_at)));
 }
 
+/** Keep the picker's groups, but order each sidebar group by last activity. */
 export function buildSessionsSidebarSections(activeChatAgents, currentChatJid, pinnedChatJids, query = '') {
   const chats = resolveSessionPopupChats(activeChatAgents, currentChatJid).filter((chat) => !chat?.archived_at);
   return groupSessionPickerChats(filterSessionPickerChats(chats, query), currentChatJid, pinnedChatJids)
-    .filter((section) => section.key !== 'archived');
+    .map((section) => ({ ...section, items: section.items.sort(compareSessionActivity) }));
 }
 
 /** Plain /agent/status for one chat: status, data, draft and thought only. */
@@ -150,6 +162,7 @@ export function resolveSessionRowContext(chat, fetched): { percent: number; labe
 export function selectSessionsPreviewTargets(activeChatAgents, currentChatJid, limit = SESSIONS_PREVIEW_LIMIT): string[] {
   return resolveSessionPopupChats(activeChatAgents, currentChatJid)
     .filter((chat) => chat?.is_active && !chat?.archived_at && chat.chat_jid !== currentChatJid)
+    .sort(compareSessionActivity)
     .map((chat) => chat.chat_jid)
     .slice(0, limit);
 }
