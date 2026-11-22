@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { buildA2uiAction, readA2uiValue, validateA2uiAction } from "../../../../src/channels/web/a2ui/action.js";
+import { a2uiTopologyDrafts, buildA2uiAction, readA2uiValue, validateA2uiAction, validateA2uiActionWithEdits } from "../../../../src/channels/web/a2ui/action.js";
 import { applyA2uiMessages, compileA2uiExpress } from "../../../../src/channels/web/a2ui/express.js";
 import { CLASSIC_A2UI_CATALOG } from '../../../../src/channels/web/a2ui/surface.js';
 import { checkA2uiComponent } from '../../../../src/channels/web/a2ui/checks.js';
@@ -135,6 +135,28 @@ test('template actions bind relative edits and immutable context to the selected
   for (const forged of [undefined, '/0', '/2', '/01', '/1/0']) expect(() => validateA2uiAction(forms, second, forged)).toThrow();
   expect(() => validateA2uiAction(forms, { ...second, action: { ...second.action, sourceComponentId: ':send:/1' } })).toThrow();
   expect(buildA2uiAction(forms, 'send', drafts, timestamp, '/0').action.context.note).toBe('first draft');
+});
+
+test('nested topology evidence must name an occurrence available at each edit', () => {
+  const surfaceId='ordered-layout';
+  const source=applyA2uiMessages(surfaceId,compileA2uiExpress(`
+    $/rows=["North"];
+    $/choices=[];
+    root=Column([outer,List(_template($/rows,group))]);
+    outer=ChoicePicker(label="Regions",value=$/rows,variant="multipleSelection",options=[{label:"North",value:"North"},{label:"South",value:"South"}]);
+    group=Column([inner,List(_template($/choices,submit))]);
+    inner=ChoicePicker(label="Options",value=$/choices,options=[{label:"One",value:"One"}]);
+    submit=Button(Text("Submit"),action=Event("save",{row:$/rows,selected:$/choices}));
+  `,surfaceId))!;
+  const edits=[{component_id:'outer',value:['North','South']},{component_id:'inner',instance_path:'/1',value:['One']}];
+  expect(a2uiTopologyDrafts(source,edits)).toEqual(edits);
+  const request=buildA2uiAction(source,'submit',new Map(),timestamp,'/1/0',edits);
+  expect(request.action.context).toEqual({row:['North','South'],selected:['One']});
+  expect(validateA2uiActionWithEdits(source,request,'/1/0',edits).action).toEqual(request.action);
+  expect(()=>validateA2uiActionWithEdits(source,request,'/1/0',edits.toReversed())).toThrow('Invalid draft control');
+  const removed=[...edits,{component_id:'outer',value:['North']}];
+  expect(()=>validateA2uiActionWithEdits(source,request,'/1/0',removed)).toThrow('Invalid surface action');
+  expect(source.dataModel).toEqual({rows:['North'],choices:[]});
 });
 
 test('the server derives @index from the selected template, including a declared offset edit', () => {

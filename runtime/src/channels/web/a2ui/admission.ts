@@ -107,12 +107,13 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
   const block = sourceBlock(source);
   if (!isA2uiSurfaceBlock(block)) return source.data?.content_blocks?.some(isA2uiSurfaceBlock) ? changed() : json({ error: 'Surface not found.' }, 404);
   if (block.owner !== 'agent' && block.owner !== 'recovery' && (block.state !== 'active' || block.revision !== revision)) return changed();
-  if (drafts?.length && (block.owner !== 'agent' || message.action.name === 'cancel')) return json({ error: 'Unexpected A2UI draft.' }, 400);
+  if (drafts?.length && (block.owner!=='agent' || (message.action.name==='cancel' && drafts.some(patch=>patch.surface_id!==surfaceId))))
+    return json({error:'Unexpected A2UI draft.'},400);
   if ((receiptIds || derivedIds) && block.owner!=='agent') return json({error:'Unexpected A2UI receipts.'},400);
   const selfDraft = drafts?.find(patch => patch.surface_id === surfaceId);
-  if (selfDraft && (!block.surface.sendDataModel || selfDraft.revision !== revision)) return changed();
-  // A committed model edit may hide or remove the original template occurrence. Match
-  // an exact synced retry before re-resolving that occurrence against the new revision.
+  if (selfDraft && selfDraft.revision!==revision) return changed();
+  // An action's draft can change its occurrence. Match an exact retry before trying
+  // to replay that draft against the newer, already updated revision.
   const replayDigest = block.owner === 'agent' && (block.surface.sendDataModel || drafts?.length || capabilities || receiptIds || derivedIds) && code === undefined && privateValue === undefined
     ? createHash('sha256').update(JSON.stringify(['a2ui-draft-action', { ...message, action: { ...message.action, timestamp: undefined } }, instancePath, drafts, capabilities, payload.renderer_peer, ...(receiptIds ? [receiptIds] : []), ...(derivedIds ? [payload.rpc_derived_receipts] : [])])).digest('hex')
     : undefined;

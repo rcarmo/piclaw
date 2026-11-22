@@ -2,7 +2,8 @@
 import { a2uiBindingPath, evaluateA2uiValue, hasA2uiAgentFunction, readA2uiValue, type A2uiRemoteValueResolver } from "./functions.js";
 export { a2uiBindingPath, readA2uiValue } from "./functions.js";
 import { checkA2uiComponent } from "./checks.js";
-import { a2uiInstanceId, projectA2uiTemplates } from "./templates.js";
+import { a2uiInstanceId, affectsA2uiCollection, createA2uiModelOverlay, overlayA2uiModel, projectA2uiTemplates } from "./templates.js";
+import { readA2uiPath, setA2uiOverlay } from './data-path.js';
 import { a2uiDateTimeDisplay, a2uiDateTimeType, validA2uiDateTime, validA2uiEventTimestamp } from "./date-time.js";
 import { a2uiSliderRange, type A2uiComponent, type A2uiMetadata, type A2uiSnapshot } from "./surface.js";
 import { boundedRpcJson, readA2uiActionMetadata } from './rpc-json.js';
@@ -81,22 +82,38 @@ function validControlValue(control: A2uiComponent, value: ActionValue): boolean 
   return typeof value === "string" && (control.variant !== "number" || value === "" || /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value));
 }
 
-function resolveDraftEdits(projection: Projection, drafts: readonly A2uiDraftEdit[]): Map<string, unknown> {
-  const values = new Map<string, unknown>();
+function replayDraftEdits(source: A2uiSnapshot, drafts: readonly A2uiDraftEdit[]) {
+  const model=drafts.length ? createA2uiModelOverlay(source) : undefined;
+  let projection=projectA2uiTemplates(model?.read() ?? source);
+  const collections=new Set(projection.collectionPaths), paths:string[]=[];
+  const membershipEdits=new Set<number>();
+  const values=new Map<string,unknown>();
   for (const draft of drafts) {
     const id = a2uiInstanceId(draft.component_id, draft.instance_path);
     const identity = projection.instances.get(id);
     const control = projection.snapshot.components.find(item => item.id === id);
     const path = control && isInput(control) ? a2uiBindingPath(control.value) : undefined;
-    if (!control || !path || identity?.id !== draft.component_id || identity.instancePath !== draft.instance_path || values.has(path)
+    if (!control || !path || identity?.id!==draft.component_id || identity.instancePath!==draft.instance_path
       || !validControlValue(control,draft.value)) throw Error('Invalid draft control');
-    values.set(path, draft.value);
+    const changesCollection=affectsA2uiCollection(path,projection.collectionPaths,projection.snapshot.dataModel);
+    model!.write(path,draft.value);
+    setA2uiOverlay(values,path,draft.value);
+    paths.push(path);
+    if (changesCollection) {
+      membershipEdits.add(paths.length-1);
+      projection=projectA2uiTemplates(model!.read());
+      for (const collection of projection.collectionPaths) collections.add(collection);
+    }
   }
-  return values;
+  return {projection,values,topology:drafts.filter((_,index)=>membershipEdits.has(index) || affectsA2uiCollection(paths[index]!,collections))};
 }
 
-export function validateA2uiDraftEdits(snapshot: A2uiSnapshot, drafts: readonly A2uiDraftEdit[]): Map<string, unknown> {
-  return resolveDraftEdits(projectA2uiTemplates(snapshot), drafts);
+export function a2uiTopologyDrafts(source: A2uiSnapshot, drafts: readonly A2uiDraftEdit[]): readonly A2uiDraftEdit[] {
+  return replayDraftEdits(source,drafts).topology;
+}
+
+export function validateA2uiDraftEdits(snapshot: A2uiSnapshot, drafts: readonly A2uiDraftEdit[]): Map<string,unknown> {
+  return replayDraftEdits(snapshot,drafts).values;
 }
 
 function defaultControlValue(component: A2uiComponent | undefined): ActionValue {
@@ -108,12 +125,12 @@ function defaultControlValue(component: A2uiComponent | undefined): ActionValue 
 
 export type A2uiDerivedResolver = (site:string)=>A2uiRemoteValueResolver | undefined;
 
-function readActionValue(snapshot: A2uiSnapshot, descriptor: unknown, edits: ReadonlyMap<string,unknown>, instancePath: string | undefined,
+function readActionValue(snapshot: A2uiSnapshot, descriptor: unknown, edits: ReadonlyMap<string,unknown> | undefined, instancePath: string | undefined,
   scope: string, remote?: A2uiRemoteValueResolver): unknown {
   return evaluateA2uiValue(snapshot,descriptor,edits,instancePath,scope,remote);
 }
 
-function resolveUserMessage(snapshot: A2uiSnapshot, descriptor: unknown, edits: ReadonlyMap<string, unknown>, instancePath: string | undefined, scope: string, remote?: A2uiRemoteValueResolver): string | undefined {
+function resolveUserMessage(snapshot: A2uiSnapshot, descriptor: unknown, edits: ReadonlyMap<string,unknown> | undefined, instancePath: string | undefined, scope: string, remote?: A2uiRemoteValueResolver): string | undefined {
   const value = readActionValue(snapshot, descriptor, edits, instancePath, scope, remote);
   if (value === undefined || value === null) return;
   const text = typeof value === 'number' && Number.isFinite(value) ? String(value) : value;
@@ -122,19 +139,27 @@ function resolveUserMessage(snapshot: A2uiSnapshot, descriptor: unknown, edits: 
 }
 
 export function prepareA2uiActionEvaluation(source: A2uiSnapshot, sourceComponentId: string, edits: ReadonlyMap<string,unknown>, instancePath?: string, drafts: readonly A2uiDraftEdit[] = []) {
-  const projection = projectA2uiTemplates(source);
-  const { snapshot } = projection;
-  const event = eventDescriptor(projection, sourceComponentId, instancePath);
-  const contextBindings = Object.entries(event.context);
-  const declaredEdits = resolveDraftEdits(projection, drafts);
-  for (const [, binding] of contextBindings) {
-    const path = a2uiBindingPath(binding);
-    const control = path ? controlForPath(snapshot, path) : undefined;
-    if (path && control) declaredEdits.set(path, readA2uiValue(snapshot, binding, edits) ?? defaultControlValue(control));
+  const {projection,values:declaredEdits,topology}=replayDraftEdits(source,drafts);
+  const {snapshot}=projection;
+  const event=eventDescriptor(projection,sourceComponentId,instancePath);
+  if ((!source.sendDataModel || event.name==='cancel') && topology.length!==drafts.length) throw Error('Unexpected A2UI draft control');
+  const contextBindings=Object.entries(event.context);
+  const view=edits.size ? overlayA2uiModel(source,edits) : snapshot;
+  const contextEdits=new Map<string,unknown>();
+  for (const [,binding] of contextBindings) {
+    const path=a2uiBindingPath(binding);
+    const control=path ? controlForPath(snapshot,path) : undefined;
+    if (path && control) {
+      const value=readA2uiPath(view.dataModel,path) ?? defaultControlValue(control);
+      contextEdits.set(path,value);
+      declaredEdits.set(path,value);
+    }
   }
+  const resolved=overlayA2uiModel(snapshot,contextEdits);
+  for (const path of declaredEdits.keys()) declaredEdits.set(path,readA2uiPath(resolved.dataModel,path));
   const derived = contextBindings.map(([key,value])=>({site:`context:${key}`,value}));
   derived.push({site:'userMessage',value:event.userMessage});
-  return {projection,event,contextBindings,declaredEdits,derived};
+  return {projection:{...projection,snapshot:resolved},event,contextBindings,declaredEdits,derived};
 }
 
 export function actionValidationExpressions(evaluation: ReturnType<typeof prepareA2uiActionEvaluation>) {
@@ -155,21 +180,21 @@ export function actionValidationExpressions(evaluation: ReturnType<typeof prepar
 
 /** Send only context declared by this button. Neither edits nor snapshot leave the browser wholesale. */
 export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string, edits: ReadonlyMap<string, unknown>, timestamp: string, instancePath?: string, drafts: readonly A2uiDraftEdit[] = [], metadata?: A2uiMetadata, resolveRemote?: A2uiRemoteValueResolver, resolveDerived?: A2uiDerivedResolver): A2uiActionMessage {
-  const {projection,event,contextBindings,declaredEdits}=prepareA2uiActionEvaluation(source,sourceComponentId,edits,instancePath,drafts);
+  const {projection,event,contextBindings}=prepareA2uiActionEvaluation(source,sourceComponentId,edits,instancePath,drafts);
   const {snapshot}=projection;
   const context = Object.fromEntries(contextBindings.map(([key, binding]) => {
     const path = a2uiBindingPath(binding);
     const control = path ? controlForPath(snapshot, path) : undefined;
-    const value = readActionValue(snapshot,binding,declaredEdits,instancePath,event.scope,resolveDerived?.(`context:${key}`)) ?? defaultControlValue(control);
+    const value=readActionValue(snapshot,binding,undefined,instancePath,event.scope,resolveDerived?.(`context:${key}`)) ?? defaultControlValue(control);
     return [key,boundedRpcJson(value)];
   }));
-  const userMessage = resolveUserMessage(snapshot,event.userMessage,declaredEdits,instancePath,event.scope,resolveDerived?.('userMessage'));
+  const userMessage=resolveUserMessage(snapshot,event.userMessage,undefined,instancePath,event.scope,resolveDerived?.('userMessage'));
   const message: A2uiActionMessage = { version: "1.0", action: {
     surfaceId: snapshot.surfaceId, sourceComponentId, name: event.name, timestamp, context,
     ...(userMessage === undefined ? {} : {userMessage}),
     ...(metadata === undefined ? {} : {metadata:readA2uiActionMetadata(metadata)}),
   } };
-  validateProjectedA2uiAction(projection,message,instancePath,drafts,resolveRemote,resolveDerived);
+  validateA2uiActionWithEdits(source,message,instancePath,drafts,resolveRemote,resolveDerived);
   return message;
 }
 
@@ -179,10 +204,12 @@ export function validateA2uiAction(source: A2uiSnapshot, payload: unknown, insta
 }
 
 export function validateA2uiActionWithEdits(source: A2uiSnapshot, payload: unknown, instancePath?: string, drafts?: readonly A2uiDraftEdit[], resolveRemote?: A2uiRemoteValueResolver, resolveDerived?: A2uiDerivedResolver) {
-  return validateProjectedA2uiAction(projectA2uiTemplates(source),payload,instancePath,drafts,resolveRemote,resolveDerived);
+  const {projection,values,topology}=replayDraftEdits(source,drafts ?? []);
+  return validateProjectedA2uiAction(projection,payload,instancePath,values,(drafts?.length ?? 0)!==topology.length,resolveRemote,resolveDerived);
 }
 
-function validateProjectedA2uiAction(projection: Projection, payload: unknown, instancePath?: string, drafts: readonly A2uiDraftEdit[] = [], resolveRemote?: A2uiRemoteValueResolver, resolveDerived?: A2uiDerivedResolver): { action: A2uiAction; edits: ReadonlyMap<string, unknown> } {
+function validateProjectedA2uiAction(projection: Projection,payload:unknown,instancePath:string | undefined,boundValues:Map<string,unknown>,hasOtherDrafts:boolean,
+  resolveRemote?: A2uiRemoteValueResolver,resolveDerived?: A2uiDerivedResolver): { action: A2uiAction; edits: ReadonlyMap<string,unknown> } {
   const { snapshot } = projection;
   if (!record(payload) || payload.version !== "1.0" || Object.keys(payload).length !== 2 || !record(payload.action)) {
     throw new Error("Invalid surface action");
@@ -197,8 +224,8 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
   if (event.name !== action.name || Object.keys(event.context).length !== Object.keys(action.context).length) {
     throw new Error("Invalid surface action");
   }
-  const boundValues = resolveDraftEdits(projection, drafts);
-  const submittedPaths = new Set<string>();
+  if ((!snapshot.sendDataModel || event.name==='cancel') && hasOtherDrafts) throw Error('Unexpected A2UI draft control');
+  const submitted=new Map<string,unknown>();
   const derived: [string,unknown,CanonicalJsonValue][]=[];
   const context: Record<string,CanonicalJsonValue>={};
   for (const [key, binding] of Object.entries(event.context)) {
@@ -211,13 +238,16 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
     if (!path || !control) derived.push([key,binding,canonical]);
     else {
       if (!isA2uiActionValue(input) || !validControlValue(control, input)) throw new Error('Invalid form value');
-      if (boundValues.has(path) && !sameValue(boundValues.get(path), input)) throw new Error("Conflicting form values");
-      boundValues.set(path, input);
-      submittedPaths.add(path);
+      const already=submitted.has(path) ? submitted.get(path) : readA2uiPath(snapshot.dataModel,path);
+      if ((boundValues.has(path) || submitted.has(path) || affectsA2uiCollection(path,projection.collectionPaths,snapshot.dataModel))
+        && !sameValue(already ?? defaultControlValue(control),input)) throw Error('Conflicting form values');
+      boundValues.set(path,input);
+      submitted.set(path,input);
     }
   }
+  const resolved=overlayA2uiModel(snapshot,submitted);
   for (const [key,binding,input] of derived) {
-    const expected=boundedRpcJson(readActionValue(snapshot,binding,boundValues,instancePath,event.scope,resolveDerived?.(`context:${key}`)) ?? null);
+    const expected=boundedRpcJson(readActionValue(resolved,binding,undefined,instancePath,event.scope,resolveDerived?.(`context:${key}`)) ?? null);
     if (JSON.stringify(input)!==JSON.stringify(expected)) throw Error('Invalid form value');
   }
   for (const component of snapshot.components) {
@@ -225,18 +255,18 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
     const instance=projection.instances.get(component.id);
     if (component.component==='DateTimeInput' && path && boundValues.has(path) && boundValues.get(path)!=='') {
       const type=a2uiDateTimeType(component);
-      const lower=readActionValue(snapshot,component.min,boundValues,instance?.instancePath,instance?.scope ?? '/',resolveRemote);
-      const upper=readActionValue(snapshot,component.max,boundValues,instance?.instancePath,instance?.scope ?? '/',resolveRemote);
+      const lower=readActionValue(resolved,component.min,undefined,instance?.instancePath,instance?.scope ?? '/',resolveRemote);
+      const upper=readActionValue(resolved,component.max,undefined,instance?.instancePath,instance?.scope ?? '/',resolveRemote);
       if (!type || (lower!=null && hasA2uiAgentFunction(component.min) && !a2uiDateTimeDisplay(lower,type))
         || (upper!=null && hasA2uiAgentFunction(component.max) && !a2uiDateTimeDisplay(upper,type))
         || !validA2uiDateTime(type,boundValues.get(path),lower,upper)) throw Error('Invalid form value');
     }
-    if (component !== event.source && (path === undefined || !submittedPaths.has(path))) continue;
-    const error = checkA2uiComponent(component,condition=>evaluateA2uiValue(snapshot,condition,boundValues,instance?.instancePath,instance?.scope,resolveRemote))
+    if (component!==event.source && (path===undefined || !submitted.has(path))) continue;
+    const error=checkA2uiComponent(component,condition=>evaluateA2uiValue(resolved,condition,undefined,instance?.instancePath,instance?.scope,resolveRemote))
       .find(finding=>finding.severity==='error');
     if (error) throw new Error(error.message);
   }
-  const userMessage = resolveUserMessage(snapshot,event.userMessage,boundValues,instancePath,event.scope,resolveDerived?.('userMessage'));
+  const userMessage=resolveUserMessage(resolved,event.userMessage,undefined,instancePath,event.scope,resolveDerived?.('userMessage'));
   if (userMessage !== action.userMessage) throw new Error('Invalid action description');
   return { edits: boundValues, action: {
     surfaceId: snapshot.surfaceId, name: event.name, sourceComponentId: action.sourceComponentId, timestamp: action.timestamp,

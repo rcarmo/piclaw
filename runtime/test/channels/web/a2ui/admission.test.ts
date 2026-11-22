@@ -124,7 +124,7 @@ test('repeated buttons are admitted from a real instance and cannot share a retr
   expect(f.dispatch()).toBe(1);
 });
 
-test('draft sync validates component occurrences and deduplicates an action that removes its own row', async () => {
+test('draft sync rejects a removed occurrence and deduplicates the surviving occurrence', async () => {
   const surfaceId = 'shrink-template';
   const template = applyA2uiMessages(surfaceId, compileA2uiExpress(`
     $/rows = ["First","Second"];
@@ -142,7 +142,8 @@ test('draft sync validates component occurrences and deduplicates an action that
     expect((await f.send({...f.payload,a2ui_drafts:[{...draft,edits:[edit]}]})).status).toBe(400);
   }
   expect(f.dispatch()).toBe(0);
-  const request = {...f.payload,a2ui_drafts:[draft]};
+  expect((await f.send({...f.payload,a2ui_drafts:[draft]})).status).toBe(400);
+  const request={...f.payload,instance_path:'/0',a2ui_drafts:[draft]};
   expect((await f.send(request)).status).toBe(201);
   expect(getMessageByRowId(chat,f.payload.post_id)?.data?.content_blocks?.[0])
     .toMatchObject({revision:2,surface:{dataModel:{rows:['First']}}});
@@ -150,6 +151,39 @@ test('draft sync validates component occurrences and deduplicates an action that
   expect((await f.send({...request,message:{...request.message,action:{...request.message.action,timestamp:'2026-11-22'}}})).status).toBe(400);
   expect((await f.send({...request,a2ui_drafts:[{...draft,edits:[{component_id:'selection',value:['Second']}]}]})).ok).toBe(false);
   expect(f.dispatch()).toBe(1);
+});
+
+test.each([false,true])('a newly visible template occurrence needs exact declared control evidence (sync=%s)',async sync=>{
+  const surfaceId='new-visible-row';
+  const [catalogId]=CLASSIC_A2UI_RENDERER_CAPABILITIES['1.0'].supportedCatalogIds;
+  const template=applyA2uiMessages(surfaceId,[{version:'1.0',createSurface:{surfaceId,catalogId,dataModel:{rows:['First','Second'],note:''},components:[
+    {id:'root',component:'Column',children:['selection','note','rows']},
+    {id:'selection',component:'ChoicePicker',label:'Rows',value:{'@path':'/rows'},variant:'multipleSelection',
+      options:['First','Second','Third'].map(value=>({label:value,value}))},
+    {id:'note',component:'TextField',label:'Other note',value:{'@path':'/note'}},
+    {id:'rows',component:'List',children:{componentId:'submit',path:'/rows'}},
+    {id:'submit',component:'Button',child:'label',action:{event:{name:'save',context:{row:{'@path':'.'}}}}},
+    {id:'label',component:'Text',text:'Select row'},
+  ]}}],undefined,true)!;
+  const f=await fixture({template,sync,keep:true});
+  const {message,revision}=f.payload;
+  const attempt={...f.payload,instance_path:'/2',metadata:{a2uiRendererCapabilities:CLASSIC_A2UI_RENDERER_CAPABILITIES},
+    message:{...message,action:{...message.action,context:{row:'Third'}}},
+  };
+  const patch={surface_id:message.action.surfaceId,revision,edits:[{component_id:'selection',value:['First','Second','Third']}]};
+  expect((await f.send(attempt)).status).toBe(400);
+  expect((await f.send({...attempt,a2ui_drafts:[{...patch,edits:[{...patch.edits[0],instance_path:'/2'}]}]})).status).toBe(400);
+  expect((await f.send({...attempt,a2ui_drafts:[patch],message:{...attempt.message,action:{...attempt.message.action,context:{row:'Second'}}}})).status).toBe(400);
+  if (!sync) expect((await f.send({...attempt,a2ui_drafts:[{...patch,edits:[...patch.edits,
+    {component_id:'note',value:'Outside the topology evidence'},
+  ]}]})).status).toBe(400);
+  const accepted={...attempt,a2ui_drafts:[patch]};
+  expect((await f.send(accepted)).status).toBe(201);
+  expect((await f.send(accepted)).status).toBe(200);
+  expect(f.dispatch()).toBe(1);
+  expect(getMessageByRowId(chat,f.payload.post_id)?.data?.content_blocks?.[0]).toMatchObject({revision:2,
+    surface:{dataModel:{rows:sync ? ['First','Second','Third'] : ['First','Second']}},
+  });
 });
 
 test('async checks require an accepted result for the exact resolved arguments and login', async () => {

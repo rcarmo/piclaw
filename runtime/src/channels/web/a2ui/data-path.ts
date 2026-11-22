@@ -18,6 +18,12 @@ export function scopedA2uiPointer(path: unknown, base = '/'): string | undefined
   return absoluteA2uiPointer(absolute, true) ? absolute : undefined;
 }
 
+/** The order of overlapping writes is significant; a parent replaces its children. */
+export function setA2uiOverlay<T>(edits:Map<string,T>,path:string,value:T):void {
+  for (const previous of edits.keys()) if (previous===path || previous.startsWith(`${path}/`)) edits.delete(previous);
+  edits.set(path,value);
+}
+
 export function readA2uiPath(model: unknown, path: string): unknown {
   const keys = absoluteA2uiPointer(path, true);
   if (!keys) return;

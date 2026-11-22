@@ -583,6 +583,38 @@ for (const engine of [chromium, webkit]) {
       const maskAction=await page.evaluate(()=>(window as any).events.at(-1));
       expect(maskAction.message.action.context).toEqual({entry:'ordinary answer'});
       expect(maskAction).not.toHaveProperty('private_value');
+      for (const sync of [false,true]) {
+        const repeatId=`reactive-list-${sync}`;
+        const form=applyA2uiMessages(repeatId,[{version:'1.0',createSurface:{surfaceId:repeatId,catalogId:basicCatalogue,sendDataModel:sync,
+          dataModel:{rows:['North'],note:''},components:[
+            {id:'root',component:'Column',children:['choice','note','rows']},
+            {id:'choice',component:'ChoicePicker',label:'Visible rows',variant:'multipleSelection',value:{'@path':'/rows'},
+              options:[{label:'Show North',value:'North'},{label:'Show South',value:'South'}]},
+            {id:'note',component:'TextField',label:'Unrelated note',value:{'@path':'/note'}},
+            {id:'rows',component:'List',children:{componentId:'send',path:'/rows'}},
+            {id:'send',component:'Button',child:'label',action:{event:{name:'choose_row',context:{row:{'@path':'.'},index:{'@call':'@index'}}}}},
+            {id:'label',component:'Text',text:{'@path':'.'}},
+          ],
+        }}],undefined,true)!;
+        await page.evaluate(item=>(window as any).draw(item),{...block,owner:'agent',revision:19,surface:form});
+        const list=panel.getByRole('list');
+        await list.getByRole('button',{name:'North'}).waitFor();
+        await panel.getByRole('textbox',{name:'Unrelated note'}).fill('Do not include if unsynced');
+        const showSouth=panel.getByRole('checkbox',{name:'Show South'});
+        await showSouth.check();
+        const south=list.getByRole('button',{name:'South'});
+        await south.waitFor({timeout:2000});
+        await showSouth.uncheck();
+        await south.waitFor({state:'detached',timeout:2000});
+        await showSouth.check();
+        await south.click();
+        const submission=await page.evaluate(()=>(window as any).events.at(-1));
+        expect(submission).toMatchObject({instance_path:'/1',message:{action:{surfaceId:repeatId,context:{row:'South',index:1}}}});
+        expect(submission.a2ui_drafts.find((patch:any)=>patch.surface_id===repeatId).edits).toEqual([
+          ...(sync ? [{component_id:'note',value:'Do not include if unsynced'}] : []),
+          {component_id:'choice',value:['North','South']},
+        ]);
+      }
       const legacyRequests: string[] = [];
       page.on('request', request => { if (request.url().includes('adaptivecards')) legacyRequests.push(request.url()); });
       await page.evaluate(() => (window as any).draw({

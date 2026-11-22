@@ -4,13 +4,12 @@ import {
   RendererState,
 } from "@a2ui/agent";
 import { basicCatalog } from "@a2ui/web_core/catalogs/basic/v1";
-import { DataModel } from '@a2ui/web_core/state';
 import { MessageProcessor } from '@a2ui/web_core/processing';
 import { CLASSIC_A2UI_FUNCTIONS, isClassicValueFunction } from "./functions.js";
 import { isA2uiContextExpression, isClassicEntityName, isClassicFunctionName, mapA2uiActionExpressions, readClassicActionFunction } from './function-call.js';
 import { absoluteA2uiPointer, scopedA2uiPointer } from "./data-path.js";
 import { ClassicA2uiValidationError } from './protocol-errors.js';
-import { a2uiChildReferences, projectA2uiTemplates, readA2uiTemplate } from "./templates.js";
+import { a2uiChildReferences, overlayA2uiModel, projectA2uiTemplates, readA2uiTemplate } from "./templates.js";
 import { CLASSIC_A2UI_CATALOG, CLASSIC_A2UI_PROPERTIES, a2uiSliderRange, readA2uiLink, readA2uiLinkTarget, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
 
 const MAX_SOURCE_BYTES = 16_384;
@@ -332,12 +331,8 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
 /** Apply already validated control edits; use the same pointer and size policy as wire updates. */
 export function applyA2uiControlEdits(snapshot: A2uiSnapshot, edits: ReadonlyMap<string, unknown>): A2uiSnapshot {
   if (!edits.size) return snapshot;
-  const model = new DataModel(structuredClone(snapshot.dataModel));
-  for (const [path, value] of edits) {
-    requireClassic(absoluteA2uiPointer(path), 'invalid control binding');
-    model.set(path, value, true);
-  }
-  const updated: A2uiSnapshot = { ...snapshot, dataModel: JSON.parse(JSON.stringify(model.get('/'))) };
+  const overlay=overlayA2uiModel(snapshot,edits);
+  const updated: A2uiSnapshot={...overlay,dataModel:JSON.parse(JSON.stringify(overlay.dataModel))};
   verifySnapshot(updated);
   return updated;
 }

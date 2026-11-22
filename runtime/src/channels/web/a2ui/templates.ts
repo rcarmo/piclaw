@@ -1,3 +1,4 @@
+import { DataModel } from '@a2ui/web_core/state';
 import { absoluteA2uiPointer, readA2uiPath, scopedA2uiPointer } from './data-path.js';
 import { mapA2uiActionExpressions } from './function-call.js';
 import type { A2uiComponent, A2uiSnapshot } from './surface.js';
@@ -42,8 +43,41 @@ function scopeBindings(value: unknown, scope: string): unknown {
   return Object.fromEntries(Object.entries(item).map(([key, field]) => [key, scopeBindings(field, scope)]));
 }
 
-/** Resolve layout and bindings afresh from the committed revision, not from submitted context. */
+export function createA2uiModelOverlay(snapshot:A2uiSnapshot) {
+  const model=new DataModel(structuredClone(snapshot.dataModel));
+  return {
+    write(path:string,value:unknown) {
+      if (!absoluteA2uiPointer(path)) throw Error('Invalid A2UI control path');
+      model.set(path,structuredClone(value),true);
+    },
+    read:()=>({...snapshot,dataModel:model.get('/') as A2uiSnapshot['dataModel']}),
+  };
+}
+
+export function overlayA2uiModel(snapshot:A2uiSnapshot,edits:ReadonlyMap<string,unknown>): A2uiSnapshot {
+  if (!edits.size) return snapshot;
+  const overlay=createA2uiModelOverlay(snapshot);
+  for (const [path,value] of edits) overlay.write(path,value);
+  return overlay.read();
+}
+
+export function affectsA2uiCollection(path:string,collections:Iterable<string>,dataModel?:A2uiSnapshot['dataModel']):boolean {
+  for (const collection of collections) {
+    if (path===collection || collection.startsWith(`${path}/`)) return true;
+    if (!dataModel || collection==='/' || !path.startsWith(`${collection}/`)) continue;
+    // A child write affects membership only if it can create an array slot.
+    // Regular edits to a visible row are not part of a topology proof.
+    const index=path.slice(collection.length+1).split('/',1)[0]!;
+    if (!/^\d+$/.test(index)) continue;
+    const rows=readA2uiPath(dataModel,collection);
+    if (rows==null || (Array.isArray(rows) && !Object.hasOwn(rows,index))) return true;
+  }
+  return false;
+}
+
+/** Resolve occurrences and scope from a committed model or a verified local overlay. */
 export function projectA2uiTemplates(snapshot: A2uiSnapshot) {
+  const collectionPaths=new Set<string>();
   const definitions = new Map(snapshot.components.map(component => [component.id, component]));
   const instances = new Map<string, { id: string; scope: string; instancePath?: string }>();
   const projected: A2uiComponent[] = [];
@@ -62,6 +96,7 @@ export function projectA2uiTemplates(snapshot: A2uiSnapshot) {
     if (template) {
       const path = scopedA2uiPointer(template.path, scope);
       if (path === undefined) throw Error('Invalid A2UI template path');
+      collectionPaths.add(path);
       const rows = readA2uiPath(snapshot.dataModel, path);
       component.children = Array.isArray(rows) ? rows.map((_, index) => {
         const rowScope = `${path === '/' ? '' : path}/${index}`;
@@ -80,5 +115,5 @@ export function projectA2uiTemplates(snapshot: A2uiSnapshot) {
     return instanceId;
   }
   walk('root', 0, '/');
-  return { snapshot: { ...snapshot, components: projected }, instances };
+  return { snapshot: { ...snapshot, components: projected }, instances, collectionPaths };
 }

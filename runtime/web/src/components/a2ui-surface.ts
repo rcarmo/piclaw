@@ -1,6 +1,6 @@
 /** Render the admitted A2UI catalog in Classic's Preact timeline. */
 import { html, useCallback, useLayoutEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
-import { a2uiBindingPath, actionValidationExpressions, buildA2uiAction, isA2uiActionValue, prepareA2uiActionEvaluation, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
+import { a2uiBindingPath, actionValidationExpressions, a2uiTopologyDrafts, buildA2uiAction, isA2uiActionValue, prepareA2uiActionEvaluation, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
 import { a2uiRendererContext } from '../ui/a2ui-renderer-peer.js';
 import { evaluateA2uiFunction, reportA2uiRendererError } from '../ui/a2ui-agent-function.js';
 import { useA2uiValueFunctions } from '../ui/use-a2ui-value-functions.js';
@@ -8,8 +8,9 @@ import { readClassicActionFunction, readClassicFunctionCall } from '../../../src
 import { A2uiExpressionFailure, A2UI_LOCAL_EXPRESSION_ERROR, coerceA2uiBoolean, hasA2uiAgentFunction, type A2uiRemoteValueResolver } from '../../../src/channels/web/a2ui/functions.js';
 import { a2uiActionEvaluationSite, a2uiRpcArgumentKey } from '../../../src/channels/web/a2ui/rpc-json.js';
 import { checkA2uiComponent } from '../../../src/channels/web/a2ui/checks.js';
-import { a2uiDraftsFor, discardOldA2uiDraft, readA2uiDraft, rememberA2uiDraftEdit, subscribeA2uiDraft } from '../ui/a2ui-drafts.js';
-import { projectA2uiTemplates } from '../../../src/channels/web/a2ui/templates.js';
+import { a2uiDraftsFor, discardOldA2uiDraft, readA2uiDraft, readA2uiDraftSteps, rememberA2uiDraftEdit, subscribeA2uiDraft } from '../ui/a2ui-drafts.js';
+import { affectsA2uiCollection, overlayA2uiModel, projectA2uiTemplates } from '../../../src/channels/web/a2ui/templates.js';
+import { setA2uiOverlay } from '../../../src/channels/web/a2ui/data-path.js';
 import { a2uiDateTimeDisplay, a2uiDateTimeType } from '../../../src/channels/web/a2ui/date-time.js';
 import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
 import { a2uiIconPaths } from './a2ui-icon-paths.js';
@@ -26,17 +27,13 @@ const remoteField = (value: unknown) => !!readClassicFunctionCall(value) && hasA
 
 type Submit = (request: A2uiActionRequest, options?: { signal?: AbortSignal }) => Promise<unknown>;
 let nextCheckPrefix = 0;
+const NO_EDITS=new Map<string,unknown>();
 
 export function A2uiSurface({ block, source, onSubmit }: {
     block: A2uiSurfaceBlock;
     source: Pick<A2uiActionRequest, 'chat_jid' | 'post_id' | 'thread_id'>;
     onSubmit?: Submit;
 }) {
-    const projection: ReturnType<typeof projectA2uiTemplates> | undefined = useMemo(() => {
-        try { return projectA2uiTemplates(block.surface); }
-        catch { return undefined; } // An invalid stored surface still has a plain-text fallback.
-    }, [block.surface]);
-    const snapshot = projection?.snapshot ?? block.surface;
     const [checkPrefix] = useState(() => `a2ui-check-${++nextCheckPrefix}`);
     const tracksDraft = block.owner === 'agent' && !!onSubmit;
     const syncDraft = tracksDraft && block.surface.sendDataModel === true;
@@ -51,6 +48,11 @@ export function A2uiSurface({ block, source, onSubmit }: {
             if (revision === block.revision) setEdits(new Map(Array.from(draft, ([path, edit]) => [path, edit.value])));
         });
     }, [tracksDraft, chat, surfaceId, block.revision]);
+    const projection: ReturnType<typeof projectA2uiTemplates> | undefined=useMemo(()=>{
+        try { return projectA2uiTemplates(overlayA2uiModel(block.surface,edits)); }
+        catch { return undefined; } // An invalid stored surface still has a plain-text fallback.
+    },[block.surface,edits]);
+    const snapshot=projection?.snapshot ?? block.surface;
     const [pending, setPending] = useState(false);
     const [error, setError] = useState('');
     const [totp, setTotp] = useState<{ presentation: TotpPresentation; request: A2uiActionRequest } | null>(null);
@@ -59,7 +61,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
     const inFlight = useRef(false);
     const privateInput = useRef<HTMLInputElement | null>(null);
     const disabled = block.state !== 'active' || !onSubmit;
-    const valueFunctions = useA2uiValueFunctions(projection,edits,{...source,revision:block.revision},!disabled && block.owner==='agent');
+    const valueFunctions = useA2uiValueFunctions(projection,NO_EDITS,{...source,revision:block.revision},!disabled && block.owner==='agent');
     const components = new Map((projection?.snapshot.components ?? []).map(item => [item.id, item]));
     const functionLifetime = useRef<AbortController | null>(null);
     const invalidProjection = !projection;
@@ -73,11 +75,19 @@ export function A2uiSurface({ block, source, onSubmit }: {
     }, [disabled, block.owner, chat, source.post_id, source.thread_id, surfaceId, block.revision, invalidProjection]);
     function edit(id: string, path: string | undefined, value: unknown) {
         if (!path || disabled || inFlight.current) return;
-        const instance = projection?.instances.get(id);
-        if (tracksDraft && instance && isA2uiActionValue(value)) rememberA2uiDraftEdit(chat, surfaceId, block.revision, path, {
-            component_id: instance.id, ...(instance.instancePath ? { instance_path: instance.instancePath } : {}), value,
-        }, syncDraft);
-        else setEdits((previous: Map<string, unknown>) => new Map(previous).set(path, value));
+        const instance=projection?.instances.get(id);
+        const collection=affectsA2uiCollection(path,projection?.collectionPaths ?? [],snapshot.dataModel);
+        const next=new Map<string,unknown>(edits);
+        setA2uiOverlay(next,path,value);
+        try {
+            const model=overlayA2uiModel(block.surface,next);
+            if (collection) projectA2uiTemplates(model);
+        } catch { setError('This edit cannot be applied to the form.'); return; }
+        if (tracksDraft && instance && isA2uiActionValue(value)) {
+            if (!rememberA2uiDraftEdit(chat,surfaceId,block.revision,path,{
+                component_id:instance.id,...(instance.instancePath ? {instance_path:instance.instancePath} : {}),value,
+            },syncDraft,collection)) { setError('This form has too many pending edits.'); return; }
+        } else setEdits(next);
         setError('');
     }
     async function submit(event: Event, componentId: string) {
@@ -96,13 +106,15 @@ export function A2uiSurface({ block, source, onSubmit }: {
         setError('');
         try {
             if (functionCall && signal) {
-                await evaluateA2uiFunction(action?.functionCall,{snapshot,edits,instance,source:{...source,revision:block.revision},signal,action:true});
+                await evaluateA2uiFunction(action?.functionCall,{snapshot,edits:NO_EDITS,instance,source:{...source,revision:block.revision},signal,action:true});
                 return;
             }
-            const drafts = block.owner === 'agent' && action?.event?.name !== 'cancel' ? a2uiDraftsFor(chat) : undefined;
-            const selfDraft = syncDraft ? drafts?.find(draft => draft.surface_id === surfaceId && draft.revision === block.revision) : undefined;
-            const currentDrafts = drafts?.filter(draft => draft.surface_id !== surfaceId || draft === selfDraft);
-            const evaluation=derivesRemotely || staleEvidence ? prepareA2uiActionEvaluation(block.surface,instance.id,edits,instance.instancePath,selfDraft?.edits) : undefined;
+            const cancels=action?.event?.name==='cancel';
+            const steps=tracksDraft ? readA2uiDraftSteps(chat,surfaceId,block.revision) : [];
+            const own=syncDraft && !cancels ? steps : a2uiTopologyDrafts(block.surface,steps);
+            const others=block.owner==='agent' && !cancels ? a2uiDraftsFor(chat)?.filter(draft=>draft.surface_id!==surfaceId) ?? [] : [];
+            const currentDrafts=own.length ? [...others.slice(-6),{surface_id:surfaceId,revision:block.revision,edits:[...own]}] : others;
+            const evaluation=derivesRemotely || staleEvidence ? prepareA2uiActionEvaluation(block.surface,instance.id,edits,instance.instancePath,own) : undefined;
             const settledSites=new Map<string,{id:string;key:string;value:unknown}[]>();
             if (derivesRemotely && signal && evaluation) {
                 for (const {site,value} of evaluation.derived) {
@@ -144,7 +156,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
             };
             let message: ReturnType<typeof buildA2uiAction>;
             try {
-                message=buildA2uiAction(block.surface,instance.id,edits,new Date().toISOString(),instance.instancePath,selfDraft?.edits,undefined,resolveForEvent,resolveDerived);
+                message=buildA2uiAction(block.surface,instance.id,edits,new Date().toISOString(),instance.instancePath,own,undefined,resolveForEvent,resolveDerived);
             } catch (error) {
                 const lifetime=functionLifetime.current;
                 if (error instanceof A2uiExpressionFailure && lifetime && error.message===A2UI_LOCAL_EXPRESSION_ERROR)
@@ -189,7 +201,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 if (valueFunctions.expressions.has(value)) return valueFunctions.values?.get(value);
                 if (valueFunctions.localResults.values.has(value)) return valueFunctions.localResults.values.get(value);
             }
-            return readA2uiValue(snapshot,value,edits,instance?.instancePath,instance?.scope);
+            return readA2uiValue(snapshot,value,undefined,instance?.instancePath,instance?.scope);
         };
         const text = (value: unknown) => {
             const resolved = read(value);

@@ -2,6 +2,7 @@ import { CallRendererFunctionMessageSchema, type RendererFunctionResponseMessage
 import { readA2uiDraft } from './a2ui-drafts.js';
 import { CLASSIC_A2UI_CATALOG, isA2uiSurfaceBlock, type A2uiSnapshot } from '../../../src/channels/web/a2ui/surface.js';
 import { boundedRpcJson, malformedRendererInvocation, MAX_RPC_VALUE, type RendererReplyMessage } from '../../../src/channels/web/a2ui/rpc-json.js';
+import { overlayA2uiModel } from '../../../src/channels/web/a2ui/templates.js';
 import { evaluateA2uiValue, isClassicValueFunction } from '../../../src/channels/web/a2ui/functions.js';
 
 export interface RendererCallOptions {
@@ -71,9 +72,12 @@ export async function runRendererCall(raw: unknown, options: RendererCallOptions
     } else if (raw.source !== undefined) return invalid('An unbound call has no surface source.');
 
     // Only the admitted, pure Basic evaluator can resolve nested argument expressions.
-    const context=snapshot ?? {surfaceId:'isolated',components:[],dataModel:{}};
-    const edits=new Map(Array.from(snapshot && source ? readA2uiDraft(options.chatJid,snapshot.surfaceId,source.revision) ?? [] : [],
-        ([path,edit])=>[path,edit.value]));
+    let context:A2uiSnapshot=snapshot ?? {surfaceId:'isolated',components:[],dataModel:{}};
+    if (snapshot && source) {
+        const draft=readA2uiDraft(options.chatJid,snapshot.surfaceId,source.revision);
+        if (draft) try { context=overlayA2uiModel(snapshot,new Map([...draft].map(([path,edit])=>[path,edit.value]))); }
+        catch { return invalid('The renderer’s draft model could not be resolved.'); }
+    }
     const resolve=(value:unknown): unknown => {
         if (Array.isArray(value)) return value.map(resolve);
         if (!record(value)) return value;
@@ -81,11 +85,11 @@ export async function runRendererCall(raw: unknown, options: RendererCallOptions
             const name=value['@call'];
             if (name==='@index' || !isClassicValueFunction(name) || (value.catalogId ?? context.catalogId)!==CLASSIC_A2UI_CATALOG)
                 throw Error('Unsupported argument expression');
-            return evaluateA2uiValue(context,value,edits);
+            return evaluateA2uiValue(context,value);
         }
         if (Object.hasOwn(value,'@path')) {
             if (Object.keys(value).length!==1 || typeof value['@path']!=='string') throw Error('Invalid argument binding');
-            return evaluateA2uiValue(context,value,edits);
+            return evaluateA2uiValue(context,value);
         }
         return Object.fromEntries(Object.entries(value).map(([key,item])=>[key,resolve(item)]));
     };
