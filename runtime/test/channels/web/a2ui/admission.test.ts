@@ -138,6 +138,7 @@ test('draft sync validates component occurrences and deduplicates an action that
   expect(getMessageByRowId(chat,f.payload.post_id)?.data?.content_blocks?.[0])
     .toMatchObject({revision:2,surface:{dataModel:{rows:['First']}}});
   expect((await f.send(request)).status).toBe(200);
+  expect((await f.send({...request,message:{...request.message,action:{...request.message.action,timestamp:'2026-11-22'}}})).status).toBe(400);
   expect((await f.send({...request,a2ui_drafts:[{...draft,edits:[{component_id:'selection',value:['Second']}]}]})).ok).toBe(false);
   expect(f.dispatch()).toBe(1);
 });

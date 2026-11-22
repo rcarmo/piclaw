@@ -50,17 +50,25 @@ for (const engine of [chromium,webkit]) {
       const build=await Bun.build({entrypoints:[entry],outdir:scratch,target:'browser',format:'esm',splitting:true});
       expect(build.success).toBe(true);
       const js=new Set(build.outputs.filter(file=>file.path.endsWith('.js')).map(file=>new URL(`file://${file.path}`).pathname.split('/').at(-1)!));
-      let peerOpened=false;
+      let peerOpened=false, mainConnections=0;
+      const dropFirstPeer=new AbortController();
       const seenDescriptions: string[]=[];
       const peerHashes=new Set<string>();
       let transmittedLocalDraft=false;
       server=Bun.serve({hostname:'127.0.0.1',port:0,async fetch(req) {
         const {pathname}=new URL(req.url);
         if(js.has(pathname.slice(1))) return new Response(Bun.file(join(scratch,pathname.slice(1))));
-        if(pathname==='/sse/stream') return new Response(new ReadableStream({start(controller) {
-          controller.enqueue(new TextEncoder().encode('event: connected\ndata: {}\n\n'));
-        }}),{headers:{'Content-Type':'text/event-stream'}});
-        if(pathname==='/agent/a2ui-peer') { peerOpened=true; return handleA2uiRendererPeer(channel,req); }
+        if(pathname==='/sse/stream') {
+          mainConnections++;
+          return new Response(new ReadableStream({start(controller) {
+            controller.enqueue(new TextEncoder().encode('event: connected\ndata: {}\n\n'));
+          }}),{headers:{'Content-Type':'text/event-stream'}});
+        }
+        if(pathname==='/agent/a2ui-peer') {
+          const peerRequest=peerOpened ? req : new Request(req,{signal:AbortSignal.any([req.signal,dropFirstPeer.signal])});
+          peerOpened=true;
+          return handleA2uiRendererPeer(channel,peerRequest);
+        }
         if(pathname==='/agent/a2ui-renderer-reply') return handleA2uiRendererReply(channel,req);
         if(pathname===`/thread/${post_id}`) return Response.json({thread:[{id:post_id,chat_jid:chatJid,data:{thread_id,
           content_blocks:[{type:'a2ui_surface',state:'active',owner:'agent',revision,fallback_text:'Renderer fixture',
@@ -112,9 +120,14 @@ for (const engine of [chromium,webkit]) {
         rendererFunctionResponse:{functionCallId:denied,error:{code:'INVALID_FUNCTION_CALL'}}});
       expect(await call('illegal-result')).toMatchObject({rendererFunctionResponse:{functionCallId:'illegal-result',error:{code:'EXECUTION_ERROR'}}});
       expect(page.context().pages()).toHaveLength(1);
-      await page.evaluate(()=>(window as any).reconnectFixture());
-      for(let attempt=0;attempt<50 && peerHashes.size<2;attempt++) { await call('ready'); await Bun.sleep(30); }
+      dropFirstPeer.abort();
+      for(let attempt=0;attempt<60 && peerHashes.size<2;attempt++) { await call('ready'); await Bun.sleep(100); }
       expect(peerHashes.size).toBe(2);
+      expect(mainConnections).toBe(1);
+      expect(await call('bound')).toEqual({version:'1.0',rendererFunctionResponse:{functionCallId:'bound',value:'Browser draft'}});
+      await page.evaluate(()=>(window as any).reconnectFixture());
+      for(let attempt=0;attempt<50 && peerHashes.size<3;attempt++) { await call('ready'); await Bun.sleep(30); }
+      expect(peerHashes.size).toBe(3);
       expect(await call('bound')).toEqual({version:'1.0',rendererFunctionResponse:{functionCallId:'bound',value:'Browser draft'}});
       await page.evaluate(()=>(window as any).disconnectFixture());
       expect(await call('after-disconnect')).toEqual({connected:false});

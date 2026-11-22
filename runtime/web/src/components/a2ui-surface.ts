@@ -5,6 +5,7 @@ import { a2uiRendererContext } from '../ui/a2ui-renderer-peer.js';
 import { evaluateA2uiFunction } from '../ui/a2ui-agent-function.js';
 import { useA2uiValueFunctions } from '../ui/use-a2ui-value-functions.js';
 import { readClassicActionFunction } from '../../../src/channels/web/a2ui/function-call.js';
+import { coerceA2uiBoolean } from '../../../src/channels/web/a2ui/functions.js';
 import { checkA2uiComponent } from '../../../src/channels/web/a2ui/checks.js';
 import { a2uiDraftsFor, discardOldA2uiDraft, readA2uiDraft, rememberA2uiDraftEdit, subscribeA2uiDraft } from '../ui/a2ui-drafts.js';
 import { projectA2uiTemplates } from '../../../src/channels/web/a2ui/templates.js';
@@ -219,11 +220,12 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 const name = buttonChild?.component === 'Icon' ? read(buttonChild.name) : undefined;
                 const buttonLabel = buttonChild?.component !== 'Icon' ? undefined : typeof name === 'string' && Object.hasOwn(a2uiIconPaths, name)
                     ? name.replace(/([A-Z])/g, ' $1').replace(/^./, char => char.toUpperCase()) : link ? 'Open link' : 'Action';
-                if (link && !disabled && !invalid) return checked(html`<a key=${id} class="a2ui-button a2ui-button-borderless" href=${link} aria-label=${buttonLabel} ...${aria}
+                const buttonClass = `a2ui-button a2ui-button-${item.variant || 'default'}`;
+                if (link && !disabled && !invalid) return checked(html`<a key=${id} class=${buttonClass} href=${link} aria-label=${buttonLabel} ...${aria}
                     aria-haspopup=${openModal ? 'dialog' : undefined} onClick=${openModal}
                     target="_blank" rel="noopener noreferrer">${buttonContent()}</a>`);
                 if (block.owner === 'login' && (id === 'continue' || id === 'check')) return null;
-                return checked(html`<button key=${id} type="button" class=${`a2ui-button a2ui-button-${item.variant || 'default'}`}
+                return checked(html`<button key=${id} type="button" class=${buttonClass}
                 disabled=${disabled} aria-disabled=${pending || disabled || invalid || isLink || functionBlocked} aria-label=${buttonLabel} ...${aria} aria-haspopup=${openModal ? 'dialog' : undefined}
                 onClick=${(event: Event) => {
                     if (pending || disabled || invalid || isLink || functionBlocked) return;
@@ -266,7 +268,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 </label>`);
             }
             case 'CheckBox': return checked(html`<label key=${id} class="a2ui-checkbox"><input type="checkbox" ...${aria} disabled=${locked}
-                checked=${read(item.value) === true} onChange=${(event: Event) => edit(item.id, path, (event.currentTarget as HTMLInputElement).checked)} />${label}</label>`);
+                checked=${coerceA2uiBoolean(read(item.value))} onChange=${(event: Event) => edit(item.id, path, (event.currentTarget as HTMLInputElement).checked)} />${label}</label>`);
             case 'ChoicePicker': {
                 const selected = read(item.value);
                 const choices = Array.isArray(selected) ? selected : [];

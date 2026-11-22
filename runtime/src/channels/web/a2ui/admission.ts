@@ -11,6 +11,7 @@ import type { WebChannelLike } from '../core/web-channel-contracts.js';
 import { handleAgentMessage } from '../handlers/agent.js';
 import { bindInputRequestAuthority, captureInputTarget, releaseInputRequestAuthority, type ValidateInputAuthority } from '../messaging/input-request-authority.js';
 import { validateA2uiActionWithEdits, type A2uiAction } from './action.js';
+import { validA2uiEventTimestamp } from './date-time.js';
 import { releaseA2uiModelSync } from './input-metadata.js';
 import { MAX_A2UI_DRAFT_BYTES, parseA2uiDrafts } from './drafts.js';
 import { negotiateClassicA2ui } from './capabilities.js';
@@ -74,7 +75,7 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
     || typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 1
     || typeof requestId !== 'string' || !requestIdentity.test(requestId) || !record(message) || !record(message.action)
     || typeof message.action.surfaceId !== 'string'
-    || typeof message.action.timestamp !== 'string' || message.action.timestamp.length > 35 || !Number.isFinite(Date.parse(message.action.timestamp))
+    || !validA2uiEventTimestamp(message.action.timestamp)
     || (instancePath !== undefined && (typeof instancePath !== 'string' || !/^(?:\/(?:0|[1-9][0-9]?)){1,24}$/.test(instancePath)))) return json({ error: 'Invalid surface action.' }, 400);
   let drafts: ReturnType<typeof parseA2uiDrafts>;
   try { drafts = parseA2uiDrafts(payload.a2ui_drafts); }

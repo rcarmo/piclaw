@@ -3,7 +3,7 @@ import { a2uiBindingPath, readA2uiValue } from "./functions.js";
 export { a2uiBindingPath, readA2uiValue } from "./functions.js";
 import { checkA2uiComponent } from "./checks.js";
 import { a2uiInstanceId, projectA2uiTemplates } from "./templates.js";
-import { a2uiDateTimeType, validA2uiDateTime } from "./date-time.js";
+import { a2uiDateTimeType, validA2uiDateTime, validA2uiEventTimestamp } from "./date-time.js";
 import { a2uiSliderRange, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
 import { isA2uiActionValue, type A2uiActionValue as ActionValue, type A2uiDraftEdit, type A2uiDraftPatch } from './drafts.js';
 export { isA2uiActionValue } from './drafts.js';
@@ -153,7 +153,7 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
   }
   const action = payload.action;
   if (Object.keys(action).length !== 5 + Number(Object.hasOwn(action, 'userMessage')) || action.surfaceId !== snapshot.surfaceId || typeof action.sourceComponentId !== "string"
-    || typeof action.timestamp !== "string" || action.timestamp.length > 35 || !Number.isFinite(Date.parse(action.timestamp))
+    || !validA2uiEventTimestamp(action.timestamp)
     || !record(action.context)) throw new Error("Invalid surface action");
   const event = eventDescriptor(projection, action.sourceComponentId, instancePath);
   if (event.name !== action.name || Object.keys(event.context).length !== Object.keys(action.context).length) {

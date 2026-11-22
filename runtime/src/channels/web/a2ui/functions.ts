@@ -18,6 +18,14 @@ function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+/** v1.0 DynamicBoolean coercion, not JavaScript truthiness. */
+export function coerceA2uiBoolean(value: unknown): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) && value !== 0;
+  if (typeof value === 'string') return value.toLowerCase() === 'true';
+  return record(value) && value.valid === true;
+}
+
 export function a2uiBindingPath(value: unknown): string | undefined {
   return record(value) && Object.hasOwn(value, '@path') && typeof value['@path'] === 'string' ? value['@path'] : undefined;
 }
@@ -34,6 +42,9 @@ export function evaluateClassicLocalFunction(name: string, args: Record<string, 
   if (!pureNames.has(name) || (name === 'formatString' && (typeof args.value !== 'string' || args.value.length > 4096))) return;
   // Interpolation may resolve scoped bindings, but has no transport or window capability.
   const context = { surface: { protocolVersion: '1.0' }, resolveSignal } as unknown as DataContext;
+  if ((name === 'and' || name === 'or') && Array.isArray(args.values)) args = {...args,values:args.values.map(coerceA2uiBoolean)};
+  if (name === 'not' && Object.hasOwn(args,'value')) args = {...args,value:coerceA2uiBoolean(args.value)};
+  if ((name === 'formatNumber' || name === 'formatCurrency') && Object.hasOwn(args,'grouping')) args = {...args,grouping:coerceA2uiBoolean(args.grouping)};
   const result = pureCatalog.invoker(name, args, context);
   return isSignal(result) ? peekValue(result) : result;
 }

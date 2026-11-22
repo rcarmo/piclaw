@@ -31,7 +31,7 @@ const source = `
     Image(url=$/unsafe, description="Unavailable preview"),
     AudioPlayer(url=$/audio, description="Fixture recording"),
     Video(url="/media/43", posterUrl=$/preview),
-    TextField(label="Note", value=$/note, checks=[{condition:required($/note),message:"Enter a note"}]),
+    TextField(label="Note", value=$/note, checks=[{condition:not(not(required($/note))),message:"Enter a note"}]),
     CheckBox(label="Notify", value=$/notify),
     Slider(label="Level", min=0, max=10, steps=5, value=$/level),
     DateTimeInput(label="Due date", enableDate=true, min="2028-02-28", max="2028-03-31", value=$/date),
@@ -39,7 +39,7 @@ const source = `
     ChoicePicker(label="Size", options=[{label:"Small",value:"small"},{label:"Large",value:"large"}],value=$/choice),
     ChoicePicker(label="Tags", options=[{label:"Frontend",value:"front"},{label:"Backend",value:"back"}], value=$/tags, variant="multipleSelection", displayStyle="chips", filterable=true),
     Button(Text("**Submit**"), variant="primary", action=Event("save", {note:$/note,notify:$/notify,size:$/choice,level:$/level,date:$/date,tags:$/tags}),
-      checks=[{condition:required($/note),message:"Cannot submit an empty note"}])]);
+      checks=[{condition:not(not(required($/note))),message:"Cannot submit an empty note"}])]);
   summary = Text("Summary panel");
   details = Text("Details panel");
   show = Text("Show help");
@@ -300,11 +300,12 @@ for (const engine of [chromium, webkit]) {
       expect(authSubmit).toMatchObject({ private_value: 'synthetic-only-key', revision: 6, message: { action: { context: {} } } });
       const docsId = 'docs-link';
       const docs = { ...block, revision: 7, surface: applyA2uiMessages(docsId,
-        compileA2uiExpress('$/target="https://example.test/docs"; root = Button(Text("Docs"), action=openUrl(formatString("${/target}")))', docsId))! };
+        compileA2uiExpress('$/target="https://example.test/docs"; root = Button(Text("Docs"), variant="primary", action=openUrl(formatString("${/target}")))', docsId))! };
       await page.evaluate((block) => (window as any).draw(block), docs);
       const link = page.getByRole('link', { name: 'Docs' });
       expect(await link.getAttribute('href')).toBe('https://example.test/docs');
       expect(await link.getAttribute('rel')).toBe('noopener noreferrer');
+      expect(await link.evaluate(element=>element.classList.contains('a2ui-button-primary'))).toBe(true);
       const brokenLink = applyA2uiMessages(docsId, [{version:'1.0',updateDataModel:{surfaceId:docsId,path:'/target',value:'javascript:void(0)'}}], docs.surface);
       const count = await page.evaluate(() => (window as any).events.length);
       await page.evaluate((block) => (window as any).draw(block), {...docs, surface:brokenLink});
@@ -317,11 +318,12 @@ for (const engine of [chromium, webkit]) {
       const binding = { '@path': '/a~1b/~0label text' };
       const pointerSurface = applyA2uiMessages(pointerId, [{ version:'1.0', createSurface:{
         surfaceId:pointerId, catalogId:'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json',
-        components:[{id:'root',component:'Column',children:['field','send','status'], '@accessibility':{label:'Wire form',live:'polite'}},
+        components:[{id:'root',component:'Column',children:['field','send','status','checked'], '@accessibility':{label:'Wire form',live:'polite'}},
+          {id:'checked',component:'CheckBox',label:'Coerced checkbox',value:{'@call':'required',args:{value:binding}}},
           {id:'status',component:'Text',text:'Visible but decorative', '@accessibility':{hidden:{'@path':'/hide'}}},
           {id:'field',component:'TextField',label:'Escaped field',value:binding, '@accessibility':{label:{'@path':'/accessibleName'},description:'Use ordinary text'}},
           {id:'send',component:'Button',child:'label',action:{event:{name:'send',context:{field:binding}}}}, {id:'label',component:'Text',text:'Send escaped value'}],
-        dataModel:{'a/b':{'~label text':'Stored value'},accessibleName:'Escaped value',hide:true},
+        dataModel:{'a/b':{'~label text':'Stored value'},accessibleName:'Escaped value',hide:'TrUe'},
       }}]);
       await page.evaluate((block) => (window as any).draw(block), {...block, revision: 8, surface:pointerSurface});
       const pointerFrame = page.getByRole('group', {name:'Wire form'});
@@ -330,6 +332,7 @@ for (const engine of [chromium, webkit]) {
       expect(await pointerField.getAttribute('aria-description')).toBe('Use ordinary text');
       expect(await pointerFrame.getByText('Visible but decorative').getAttribute('aria-hidden')).toBe('true');
       expect(await pointerFrame.getByText('Visible but decorative').isVisible()).toBe(true);
+      expect(await pointerFrame.getByRole('checkbox',{name:'Coerced checkbox'}).isChecked()).toBe(true);
       expect(await pointerField.inputValue()).toBe('Stored value');
       await pointerField.fill('Edited value');
       await page.getByRole('button', {name:'Send escaped value'}).click();

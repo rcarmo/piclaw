@@ -1,0 +1,5 @@
+import{c,He}from"./app-pjkx5abb.js";var ct="piclaw:workspace-client-settings-updated",lt="workspaceRefreshIntervalSec",ut="workspaceFolderPreviewDepth",n=60,o=3;function i(r,t=n){let e=Number(r);if(!Number.isFinite(e))return t;return Math.min(300,Math.max(15,Math.round(e)))}function s(r,t=o){let e=Number(r);if(!Number.isFinite(e))return t;return Math.min(8,Math.max(0,Math.round(e)))}function re(){return{refreshIntervalSec:i(He(lt,n),n),folderPreviewDepth:s(He(ut,o),o)}}function Nn(r={}){let t=re(),e={refreshIntervalSec:i(Object.prototype.hasOwnProperty.call(r,"refreshIntervalSec")?r.refreshIntervalSec:t.refreshIntervalSec,t.refreshIntervalSec),folderPreviewDepth:s(Object.prototype.hasOwnProperty.call(r,"folderPreviewDepth")?r.folderPreviewDepth:t.folderPreviewDepth,t.folderPreviewDepth)};if(c(lt,String(e.refreshIntervalSec)),c(ut,String(e.folderPreviewDepth)),typeof window<"u")window.dispatchEvent(new CustomEvent(ct,{detail:{settings:e}}));return e}
+export{ct,lt,ut,re,Nn};
+
+//# debugId=648E2AFD87A366F264756E2164756E21
+//# sourceMappingURL=app-9vjym499.js.map

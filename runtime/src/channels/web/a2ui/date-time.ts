@@ -10,6 +10,13 @@ export function a2uiDateTimeType(item: A2uiComponent): DateTimeType | undefined 
 
 const datePattern = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/;
 const timePattern = /^([01][0-9]|2[0-3]):([0-5][0-9])(?::([0-5][0-9])(?:\.([0-9]+))?)?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])?$/;
+const eventTimestampPattern = /^(\d{4}-\d{2}-\d{2})T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/i;
+
+export function validA2uiEventTimestamp(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length > 35 || value.trim() !== value) return false;
+  const match = eventTimestampPattern.exec(value);
+  return !!match && validDate(match[1]!);
+}
 
 function validDate(value: string) {
   const match = datePattern.exec(value);

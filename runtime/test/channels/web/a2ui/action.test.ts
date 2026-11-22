@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { buildA2uiAction, readA2uiValue, validateA2uiAction } from "../../../../src/channels/web/a2ui/action.js";
 import { applyA2uiMessages, compileA2uiExpress } from "../../../../src/channels/web/a2ui/express.js";
 import { CLASSIC_A2UI_CATALOG } from '../../../../src/channels/web/a2ui/surface.js';
+import { checkA2uiComponent } from '../../../../src/channels/web/a2ui/checks.js';
 
 const snapshot = applyA2uiMessages("owned-1", compileA2uiExpress(`
   $/choice = ["blue"];
@@ -23,6 +24,15 @@ test("Classic emits a v1.0 action from local drafts without sending the data mod
     context: { colour: ["red"], note: "hello", example: true, fixed: "literal" },
   } });
   expect(validateA2uiAction(snapshot, event)).toEqual(event.action);
+});
+
+test('requires an ISO date-time with a zone on A2UI actions', () => {
+  const event = buildA2uiAction(snapshot,'submit',new Map(),timestamp);
+  for (const value of ['2026-11-22','11/22/2026','2026-11-22T09:00:00','2026-02-30T09:00:00Z']) {
+    expect(()=>validateA2uiAction(snapshot,{...event,action:{...event.action,timestamp:value}})).toThrow('Invalid surface action');
+  }
+  const offset='2028-02-29T09:00:00.125+05:30';
+  expect(validateA2uiAction(snapshot,{...event,action:{...event.action,timestamp:offset}}).timestamp).toBe(offset);
 });
 
 test("a Slider submits a number within the stored range and step grid", () => {
@@ -129,6 +139,7 @@ test('emits the stored userMessage after resolving only declared draft values', 
 test('Basic Catalogue functions resolve on the server and can derive action context', () => {
   const authored = applyA2uiMessages('functions', compileA2uiExpress(`
     $/name="Initial";
+    $/boolValues={no:"FALSE",yes:"TrUe",n:-1,list:[],text:"hello",result:{valid:true}};
     root=Column([Text(formatNumber(1234.5,decimals=2)),TextField(label="Name",value=$/name),send]);
     send=Button(Text("Send"),action=Event("send",{name:$/name,description:formatString("Hello \${/name}")}));
   `, 'functions'))!;
@@ -142,6 +153,11 @@ test('Basic Catalogue functions resolve on the server and can derive action cont
     [call('email',{value:'person@example.test'}),true],
     [call('and',{values:[true,call('not',{value:call('required',{value:''})})]}),true],
     [call('or',{values:[false,true]}),true],
+    [call('or',{values:[{'@path':'/boolValues/no'},{'@path':'/boolValues/list'}]}),false],
+    [call('and',{values:[{'@path':'/boolValues/yes'},{'@path':'/boolValues/n'}]}),true],
+    [call('not',{value:{'@path':'/boolValues/text'}}),true],
+    [call('not',{value:{'@path':'/boolValues/result'}}),false],
+    [call('formatNumber',{value:1234,decimals:0,grouping:{'@path':'/boolValues/no'}}),'1234'],
     [call('formatNumber',{value:1234.5,decimals:2}),'1,234.50'],
     [call('formatCurrency',{value:19.5,currency:'USD'}),'$19.50'],
     [call('formatDate',{value:'2028-02-29T12:00:00Z',format:'yyyy-MM-dd'}),'2028-02-29'],
@@ -155,13 +171,33 @@ test('Basic Catalogue functions resolve on the server and can derive action cont
   expect(readA2uiValue(authored,call('openUrl',{url:'https://example.test'}))).toBeUndefined();
 });
 
+test('check messages fall back only when the condition supplies no message', () => {
+  const form = applyA2uiMessages('check-messages',compileA2uiExpress(`
+    $/value="";
+    $/warning={valid:false,message:"Specific guidance",severity:"warning"};
+    $/noDetail={valid:false};
+    root=TextField(label="Value",value=$/value,checks=[
+      {condition:required($/value),message:"Fallback for required"},
+      {condition:$/warning,message:"Fallback for warning"},
+      {condition:$/noDetail,message:"No details"},
+      {condition:not(true),message:"Boolean fallback"}
+    ]);
+  `,'check-messages'))!;
+  expect(checkA2uiComponent(form,form.components[0])).toEqual([
+    {message:'This field is required.',severity:'error'},
+    {message:'Specific guidance',severity:'warning'},
+    {message:'No details',severity:'error'},
+    {message:'Boolean fallback',severity:'error'},
+  ]);
+});
+
 test('checks are enforced against accepted drafts and warnings do not veto an action', () => {
   const source = `
     $/email="";
     $/enabled=true;
     $/warning={valid:false,message:"Review this choice",severity:"warning"};
     root=Column([field,send]);
-    field=TextField(label="Email",value=$/email,checks=[{condition:email($/email),message:"Use a valid email"}]);
+    field=TextField(label="Email",value=$/email,checks=[{condition:not(not(email($/email))),message:"Use a valid email"}]);
     send=Button(Text("Send"),action=Event("send",{email:$/email}),checks=[{condition:$/enabled},{condition:$/warning}]);
   `;
   const form = applyA2uiMessages('checks',compileA2uiExpress(source,'checks'))!;

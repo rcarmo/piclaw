@@ -25,27 +25,35 @@ function record(value: unknown): value is Record<string, unknown> {
 export function openA2uiRendererPeer(options: Options): () => void {
     const { chatJid }=options;
     const stream=new EventSource(`/agent/a2ui-peer?chat_jid=${encodeURIComponent(chatJid)}`);
-    const lifetime=new AbortController();
-    const seen=new Set<string>();
-    let peer: PeerOffer | undefined;
-    const close=()=>{
-        lifetime.abort(); stream.close();
-        if (peer && connected.get(chatJid)===peer) connected.delete(chatJid);
+    let peer: (PeerOffer & {lifetime:AbortController;seen:Set<string>}) | undefined;
+    const dropLease=()=>{
+        if (!peer) return;
+        peer.lifetime.abort();
+        if (connected.get(chatJid)===peer) connected.delete(chatJid);
+        peer=undefined;
     };
-    stream.onerror=()=>{ close(); options.onLost?.(); }; // No separate retry loop.
+    const close=()=>{ stream.close(); dropLease(); };
+    const fail=()=>{ close(); options.onLost?.(); };
+    stream.onerror=()=>{
+        dropLease();
+        // EventSource retries transient stream loss; permanent HTTP errors still
+        // leave acquisition to the next main-stream connection or accepted post.
+        if (stream.readyState===EventSource.CLOSED) fail();
+    };
     stream.addEventListener('a2ui_peer',event=>{
-        if (lifetime.signal.aborted || peer) return;
+        if (stream.readyState!==EventSource.OPEN || peer) return;
         try {
             const {renderer_peer:lease}=JSON.parse((event as MessageEvent<string>).data);
-            if (typeof lease!=='string' || !uuid.test(lease)) return close();
+            if (typeof lease!=='string' || !uuid.test(lease)) return fail();
             const ids=[...new Set([CLASSIC_A2UI_CATALOG,...(options.catalogues ?? []).filter(c=>c.protocolVersion==='1.0').map(c=>c.id)])].slice(0,32);
-            peer={lease,capabilities:{'1.0':{supportedCatalogIds:ids}}};
+            peer={lease,capabilities:{'1.0':{supportedCatalogIds:ids}},lifetime:new AbortController(),seen:new Set()};
             connected.set(chatJid,peer);
-        } catch { close(); }
+        } catch { fail(); }
     });
     stream.addEventListener('a2ui_call',event=>{
         const accepted=peer;
-        if (!accepted || lifetime.signal.aborted || connected.get(chatJid)!==accepted) return;
+        if (!accepted || connected.get(chatJid)!==accepted) return;
+        const {lifetime,seen}=accepted;
         let raw: unknown;
         try { raw=JSON.parse((event as MessageEvent<string>).data); }
         catch { return; }
