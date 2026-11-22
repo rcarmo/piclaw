@@ -1,4 +1,4 @@
-import { html, render, useState } from "../vendor/preact-htm.js";
+import { html, render, useEffect, useMemo, useState } from "../vendor/preact-htm.js";
 import { ComposeBox } from "../components/compose-box.js";
 
 const sessions = Array.from({ length: 30 }, (_, index) => {
@@ -26,6 +26,13 @@ const sessions = Array.from({ length: 30 }, (_, index) => {
 function Fixture() {
   const [currentChatJid, setCurrentChatJid] = useState("web:root-0");
   const [lastAction, setLastAction] = useState("none");
+  const [activity, setActivity] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const refresh = (event: Event) => setActivity((event as CustomEvent<Record<string, string>>).detail);
+    window.addEventListener('fixture-session-activity', refresh);
+    return () => window.removeEventListener('fixture-session-activity', refresh);
+  }, []);
+  const rows = useMemo(() => sessions.map(chat => ({ ...chat, last_activity_at: activity[chat.chat_jid] })), [activity]);
   const act = (name: string, chatJid?: string) => {
     setLastAction(`${name}:${chatJid || currentChatJid}`);
     if (chatJid) setCurrentChatJid(chatJid);
@@ -36,7 +43,7 @@ function Fixture() {
       <output id="session-picker-action">${lastAction}</output>
       <${ComposeBox}
         currentChatJid=${currentChatJid}
-        activeChatAgents=${sessions}
+        activeChatAgents=${rows}
         activeModel="openai/gpt-5.4"
         onSwitchChat=${(jid) => act("switch", jid)}
         onRestoreSession=${async (jid) => act("restore", jid)}

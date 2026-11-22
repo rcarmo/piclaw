@@ -114,6 +114,19 @@ export function resolveSessionLivePreview(status: any, retained: SessionLivePrev
   return { preview: live || resolveToolPreview(status.data) || nextRetained, retained: nextRetained };
 }
 
+function activityTime(value: unknown): number {
+  const time = typeof value === 'string' ? Date.parse(value) : NaN;
+  return Number.isFinite(time) ? time : -Infinity;
+}
+
+/** Latest message first; unknown times last, with archive date breaking archived ties. */
+export function compareSessionActivity(a: Record<string, unknown>, b: Record<string, unknown>): number {
+  const first = activityTime(a.last_activity_at), second = activityTime(b.last_activity_at);
+  if (first !== second) return second - first;
+  const archivedFirst = activityTime(a.archived_at), archivedSecond = activityTime(b.archived_at);
+  return archivedFirst === archivedSecond ? 0 : archivedSecond - archivedFirst;
+}
+
 /** Compact age such as "now", "5m", "3h", "2d" or a short date. */
 export function formatSessionActivityAge(value: unknown, now = Date.now()): string {
   const time = Date.parse(String(value ?? ''));

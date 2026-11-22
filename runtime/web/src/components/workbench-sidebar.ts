@@ -33,6 +33,7 @@ import { buildChatWindowUrl } from '../ui/chat-window.js';
 import { matchesKeyboardShortcutAction } from '../ui/keyboard-shortcuts.js';
 import {
   cleanSessionPreviewText,
+  compareSessionActivity,
   formatSessionActivityAge,
   formatSessionActivityStatus,
   isNewTabSessionClick,
@@ -87,30 +88,16 @@ export function readStoredSessionsWidth(): number {
   return clampSessionsWidth(getLocalStorageItem(SESSIONS_WIDTH_STORAGE_KEY) ?? SESSIONS_DEFAULT_WIDTH);
 }
 
-function sessionActivityTime(chat) {
-  const stamp = chat?.last_activity_at;
-  const time = typeof stamp === 'string' ? Date.parse(stamp) : NaN;
-  return Number.isFinite(time) ? time : -Infinity;
-}
-
-function compareSessionActivity(a, b) {
-  const first = sessionActivityTime(a), second = sessionActivityTime(b);
-  // Equal or unknown timestamps retain the picker's stable name order.
-  return first === second ? 0 : second - first;
-}
-
 /** Archived sessions share activity ordering, with archive date as a tie-break. */
 export function buildArchivedSessions(activeChatAgents, currentChatJid, query = '') {
   const archived = resolveSessionPopupChats(activeChatAgents, currentChatJid).filter((chat) => chat?.archived_at);
-  return filterSessionPickerChats(archived, query)
-    .sort((a, b) => compareSessionActivity(a, b) || String(b.archived_at).localeCompare(String(a.archived_at)));
+  return filterSessionPickerChats(archived, query).sort(compareSessionActivity);
 }
 
-/** Keep the picker's groups, but order each sidebar group by last activity. */
+/** Use the picker's groups and order; archived rows have a separate disclosure. */
 export function buildSessionsSidebarSections(activeChatAgents, currentChatJid, pinnedChatJids, query = '') {
   const chats = resolveSessionPopupChats(activeChatAgents, currentChatJid).filter((chat) => !chat?.archived_at);
-  return groupSessionPickerChats(filterSessionPickerChats(chats, query), currentChatJid, pinnedChatJids)
-    .map((section) => ({ ...section, items: section.items.sort(compareSessionActivity) }));
+  return groupSessionPickerChats(filterSessionPickerChats(chats, query), currentChatJid, pinnedChatJids);
 }
 
 /** Plain /agent/status for one chat: status, data, draft and thought only. */
