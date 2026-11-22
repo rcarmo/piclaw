@@ -21,7 +21,7 @@ export type CatalogueSnapshot = {
   revision: string; source: string; complete: boolean; tools: ToolInfo[];
 };
 export type Trajectory =
-  | { kind: "ready"; cutoff: string; observations: Observation[]; prompts: number | null; transcriptActivity: number; work?: FactDigest["work"] }
+  | { kind: "ready"; cutoff: string; observations: Observation[]; prompts: number | null; transcriptActivity: number; work?: FactDigest["work"]; partial?: boolean }
   | { kind: "absent"; reason: string }
   | { kind: "later"; reason: string }
   | { kind: "unreadable"; reason: string };

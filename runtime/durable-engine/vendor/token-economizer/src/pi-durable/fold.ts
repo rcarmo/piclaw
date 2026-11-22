@@ -28,7 +28,7 @@ export function createMechanismFolder(options: {harness:() => Harness;domain:Hos
       && !observeEnvironment([call],host.repositoryRoot).obs.some(observation => uncertainIntents.has(observation.intent)));
     // Partial output may hide a contradiction about the same command/intent.
     // Hold that subject back while still using unrelated complete observations.
-    const hasEvidence = observations.length > 0, incomplete = partial.length, held = relevant.length-partial.length-observations.length;
+    const hasEvidence = observations.length > 0, incomplete = partial.length+Number(trajectory.partial === true), held = relevant.length-partial.length-observations.length;
     // One vote per committed user-request run, not per tool call. Same-run tails
     // and retries reuse credits. Carry legacy credits into the first group so
     // upgrading cannot award old observations a second vote.
@@ -101,12 +101,15 @@ export function createMechanismFolder(options: {harness:() => Harness;domain:Hos
     const catalogue = await options.domain.catalogue(host);
     // Final fold reconciles the complete session; checkpoints contribute only new prompts.
     const source = !incremental && session.learning?.cutoff ? await options.domain.trajectory(host,trajectory.cutoff) : trajectory;
-    if (source.kind !== "ready") throw new Error("Complete tool-evidence trajectory is not ready");
-    const prompts = learning && !incremental && source.prompts !== null ? Math.max(0,source.prompts-(learning.toolPrompts ?? 0)) : source.prompts;
-    const countSession = !learning?.toolCounted;
+    if (source.kind !== "ready") throw new Error("Tool-evidence trajectory is not ready");
+    // Kintsugi v0.8.7: missing evidence never counts as a vote for tool disuse.
+    if (learning && (source.partial || trajectory.partial)) learning.toolIncomplete = true;
+    const incompleteTools = source.partial || trajectory.partial || learning?.toolIncomplete;
+    const prompts = incompleteTools ? 0 : learning && !incremental && source.prompts !== null ? Math.max(0,source.prompts-(learning.toolPrompts ?? 0)) : source.prompts;
+    const countSession = !incompleteTools && !learning?.toolCounted;
     if (catalogue.complete) {
       tools = foldEvidence(tools,source.observations.filter(call => call.semantic !== "wrapper").map(call => call.tool),catalogue.tools,prompts,policy,now,session.frozenMask.length === 0,countSession);
-      if (learning && policy.pruning !== "off" && policy.enabled && policy.mode !== "off" && (prompts !== 0 || !countSession)) {
+      if (learning && !incompleteTools && policy.pruning !== "off" && policy.enabled && policy.mode !== "off" && (prompts !== 0 || !countSession)) {
         learning.toolCounted = true;learning.toolPrompts = (learning.toolPrompts ?? 0)+(prompts ?? 0);
       }
     }

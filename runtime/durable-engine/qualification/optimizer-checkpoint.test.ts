@@ -17,7 +17,7 @@ import {BunSqliteDatabase} from '../src/bun-sqlite.ts';
 import {createOptimizerCodemodeTool} from '../src/optimizer-codemode.ts';
 import {createNativeTokenOptimizer,type CoreOptimizerAgent} from '../src/token-optimizer.ts';
 import {TokenOptimizerConfiguration} from '../src/token-optimizer-config.ts';
-import {optimizerEntries,optimizerModelFree,optimizerSections,readOptimizerContext} from '../src/token-optimizer-source.ts';
+import {optimizerEntries,optimizerEvidenceBytes,optimizerModelFree,optimizerSections,readOptimizerContext} from '../src/token-optimizer-source.ts';
 import {applicationRetainedDatabase} from '../src/mcp/retained-database.ts';
 const cleanups:(()=>Promise<void>)[]=[];afterEach(async()=>{for(const close of cleanups.splice(0).reverse())await close();});
 async function settleLearning(harness:Harness){
@@ -119,6 +119,29 @@ test('the bounded metadata read follows SDK compaction, fork and reset visibilit
  await compare(c);
  expect(await readOptimizerContext(c)).toMatchObject({sections:{},modelFree:false,visibleHistory:false});
  expect(head).toBeLessThan(at);
+},15_000);
+
+test('checkpoint bounds derived evidence, keeps the newest results and marks missing evidence partial',async()=>{
+ const f=await setup('sqlite'),c=f.conversation;
+ const usage={input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}};
+ const {last,oldest}=await c.commit(async tx=>{
+  let last:Awaited<ReturnType<typeof c.entries>>['items'][number]|undefined, oldest=0;
+  for(let n=0;n<40;n++) {
+   const callId=`evidence-${n}`;
+   await tx.appendEntry(AssistantEntry,c.id,{model:[{role:'assistant',content:[{type:'toolCall',id:callId,name:'bash',arguments:{command:`pytest case-${n}`}}],api:'openai-completions',provider:'faux',model:'faux-1',stopReason:'toolUse',timestamp:n,usage}]});
+   last=await tx.appendEntry(ToolResultEntry,c.id,{data:{diagnostics:[]},model:[{role:'toolResult',toolCallId:callId,toolName:'bash',content:[{type:'text',text:`case-${n}\n`+'x'.repeat(18_000)}],isError:false,timestamp:n}]});
+   if (n===0) oldest=last.id;
+  }
+  return {last:last!.id,oldest};
+ },context);
+ const result=await f.native.domain.trajectory(f.host,String(last));
+ expect(result.kind).toBe('ready');if(result.kind!=='ready')throw Error(result.reason);
+ expect(result.cutoff).toBe(String(last));expect(result.partial).toBe(true);
+ expect(result.observations.length).toBeLessThan(40);
+ expect(Buffer.byteLength(JSON.stringify(result.observations))).toBeLessThanOrEqual(optimizerEvidenceBytes);
+ expect(result.observations.at(-1)?.command).toBe('pytest case-39');
+ expect(result.observations.some(row=>row.command==='pytest case-0')).toBe(false);
+ expect((await c.entries({minEntryId:oldest as typeof last,maxEntryId:oldest as typeof last},1,undefined,context)).items).toHaveLength(1);
 },15_000);
 
 test('a tool result without a matching call or durable task is still unreadable',async()=>{

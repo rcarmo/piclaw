@@ -34,10 +34,10 @@ async function setup(propose = false) {
   let session:LearningSession = prepareSession(null,{id:host.id,scope:host.scope,conversation:String(root.id),group:host.classificationGroup,now,event:"new",visibleHistory:false,carriedSections:{},carriedIds:[],cachedSection:"frozen",cachedIds:[],publishedMask:[],mode:"active"});
   session.learning = {cutoff:null,credits:{confirms:[],contradicts:[],exercises:[]},ticks:0,lastProposalAt:null,requested:0,processed:0,lastRun:null};
   let knowledge = await harness.commit(async tx => {await tx.doc(KnowledgeDoc,scopeKey(host.scope),host.scope);return null;},context).then(() => harness.snapshot(KnowledgeDoc,scopeKey(host.scope),context));
-  async function checkpoint(observations:Observation[],incremental = true) {
+  async function checkpoint(observations:Observation[],incremental = true,partial = false) {
     session.learning!.requested++;
     session.learning!.lastRun = observations[0]?.runId ?? session.learning!.lastRun;
-    const result = await folder({knowledge:knowledge!,policy,session,host,trajectory:{kind:"ready",cutoff:String(session.learning!.requested),observations,prompts:1,transcriptActivity:now},signal:new AbortController().signal,incremental});
+    const result = await folder({knowledge:knowledge!,policy,session,host,trajectory:{kind:"ready",cutoff:String(session.learning!.requested),observations,prompts:1,transcriptActivity:now,partial},signal:new AbortController().signal,incremental});
     knowledge = {...knowledge!,...result};session = {...session,learning:result.learning};
   }
   return {harness,policy,requests,checkpoint,advance:(ms:number) => {now+=ms;},get calls() {return calls;},get session() {return session;},get knowledge() {return knowledge!;}};
@@ -81,6 +81,19 @@ test("replayed evidence within one group cannot promote a fact or supply duplica
   expect(state.facts[0]!.life.state).toBe("CANDIDATE");expect(state.window).toHaveLength(1);
   expect(admitFact(state,{id:"duplicate",claim:"The repository test runner is pytest.",detector:{scope:"missing_command",confirm:"command not found"},cite:["same-session","same-session"]})).toEqual({accepted:false,reason:"grounding-fail(1/2)"});
 });
+test("a truncated trajectory learns recent facts and tool usage without voting for disuse",async()=>{
+  const f=await setup();f.policy.microSkills="envfacts";f.policy.pruning="propose";
+  await f.checkpoint([observation("recent")],true,true);
+  expect(f.knowledge.environment.facts.map(fact=>fact.id)).toContain("absent_tool:pytest");
+  expect(f.knowledge.tools).toMatchObject({used:["bash"],sessions:0,prompts:0});
+  expect(f.session.learning?.cutoff).toBe("1");
+  expect(f.session.learning?.toolCounted).toBeUndefined();
+  expect(f.session.learning?.toolIncomplete).toBe(true);
+  await f.checkpoint([observation("next")]);
+  await f.checkpoint([],false);
+  expect(f.knowledge.tools).toMatchObject({used:["bash"],sessions:0,prompts:0});
+});
+
 test("partial calls are omitted; complete shell evidence still learns",async () => {
   const f = await setup();f.policy.microSkills = "envfacts";
   await f.checkpoint([{...observation("read"),semantic:"read",coverage:"partial"},observation("complete")]);
