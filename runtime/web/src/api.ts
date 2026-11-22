@@ -1010,7 +1010,7 @@ export class SSEClient {
         if (!this.enableA2uiRpc || !chatJid || this.closeRendererPeer) return;
         const close=openA2uiRendererPeer({chatJid,catalogues:this.rendererCatalogues,
             readPost:(id,signal) => request(`/thread/${id}?chat_jid=${encodeURIComponent(chatJid)}`,{signal}),
-            reply:(body,signal) => request('/agent/a2ui-renderer-reply',{method:'POST',body:JSON.stringify(body),signal}),
+            reply:(body,signal) => request('/agent/a2ui-renderer-reply',{method:'POST',body:JSON.stringify({...body,a2ui_drafts:a2uiDraftsFor(chatJid)}),signal}),
             onLost:()=>{ if (this.closeRendererPeer===close) this.closeRendererPeer=null; },
         });
         this.closeRendererPeer=close;
@@ -1249,9 +1249,9 @@ export function postA2uiRendererError(source: A2uiSource, surfaceId: string, mes
     return request('/agent/a2ui-error',{method:'POST',signal,body:JSON.stringify({...source,surface_id:surfaceId,message})});
 }
 
-export function requestA2uiAgentFunction(source: A2uiSource, message: CallAgentFunctionMessage, signal: AbortSignal): Promise<unknown> {
+export function requestA2uiAgentFunction(source: A2uiSource, message: CallAgentFunctionMessage, signal: AbortSignal, evaluationSite?: string): Promise<unknown> {
     const {metadata}=a2uiRendererContext(source.chat_jid);
-    return request('/agent/a2ui-rpc',{method:'POST',signal,body:JSON.stringify({ ...source,message,metadata,
+    return request('/agent/a2ui-rpc',{method:'POST',signal,body:JSON.stringify({ ...source,message,metadata,evaluation_site:evaluationSite,
         a2ui_drafts:a2uiDraftsFor(source.chat_jid),
     })});
 }

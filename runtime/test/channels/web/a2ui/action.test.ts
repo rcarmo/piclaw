@@ -39,6 +39,19 @@ test('preserves bounded opaque action extensions without granting them context o
   expect(()=>validateA2uiAction(snapshot,{...wire,action:{...wire.action,name:'another-action'}})).toThrow();
 });
 
+test('event context preserves structured JSON and verifies it against the stored descriptor', () => {
+  const surfaceId='structured';
+  const fixed={details:['label',3,{active:true}]};
+  const surface=applyA2uiMessages(surfaceId,[{version:'1.0',createSurface:{surfaceId,catalogId:CLASSIC_A2UI_CATALOG,dataModel:{record:{z:null,a:[true,7]}},components:[
+    {id:'root',component:'Button',child:'label',action:{event:{name:'save',context:{fixed,bound:{'@path':'/record'}}}}},
+    {id:'label',component:'Text',text:'Save'},
+  ]}}],undefined,true)!;
+  const message=buildA2uiAction(surface,'root',new Map(),timestamp);
+  expect(message.action.context).toEqual({fixed,bound:{a:[true,7],z:null}});
+  expect(validateA2uiAction(surface,{...message,action:{...message.action,context:{fixed,bound:{z:null,a:[true,7]}}}})).toEqual(message.action);
+  expect(()=>validateA2uiAction(surface,{...message,action:{...message.action,context:{fixed,bound:{z:null,a:[true,8]}}}})).toThrow();
+});
+
 test('requires an ISO date-time with a zone on A2UI actions', () => {
   const event = buildA2uiAction(snapshot,'submit',new Map(),timestamp);
   for (const value of ['2026-11-22','11/22/2026','2026-11-22T09:00:00','2026-02-30T09:00:00Z']) {
@@ -79,6 +92,21 @@ test.each([
     expect(() => validateA2uiAction(picker, { ...message, action: { ...message.action, context: { when } } })).toThrow();
   }
   expect(buildA2uiAction(picker, "submit", new Map([["/when", ""]]), timestamp).action.context.when).toBe("");
+});
+
+test('asynchronous date bounds must resolve before accepting a date', () => {
+  const surfaceId='async-date';
+  const surface=applyA2uiMessages(surfaceId,[{version:'1.0',createSurface:{surfaceId,catalogId:CLASSIC_A2UI_CATALOG,dataModel:{date:'2028-03-01'},components:[
+    {id:'root',component:'Column',children:['date','send']},
+    {id:'date',component:'DateTimeInput',enableDate:true,value:{'@path':'/date'},min:{'@call':'firstDate'}},
+    {id:'send',component:'Button',child:'label',action:{event:{name:'save',context:{date:{'@path':'/date'}}}}},
+    {id:'label',component:'Text',text:'Save'},
+  ]}}],undefined,true)!;
+  const build=(date:string, bound?:string)=>buildA2uiAction(surface,'send',new Map([['/date',date]]),timestamp,undefined,[],undefined,()=>bound);
+  expect(()=>build('2028-03-01')).toThrow('did not resolve');
+  expect(()=>build('2028-03-01','not a date')).toThrow('Invalid form value');
+  expect(()=>build('2028-02-29','2028-03-01')).toThrow('Invalid form value');
+  expect(build('2028-03-01','2028-03-01').action.context.date).toBe('2028-03-01');
 });
 
 test("a modal trigger and content keep their explicitly authored actions", () => {

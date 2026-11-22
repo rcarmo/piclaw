@@ -3,7 +3,8 @@ import { expect, test } from 'bun:test';
 import { getDb, initDatabase, storeMessage } from '../../../../src/db.js';
 import { publishAgentA2ui } from '../../../../src/channels/web/a2ui/publish.js';
 import { A2uiAgentRpc, defineA2uiAgentFunction } from '../../../../src/channels/web/a2ui/agent-rpc.js';
-import { handleA2uiRendererError, handleA2uiRpc } from '../../../../src/channels/web/a2ui/rpc.js';
+import { handleA2uiRendererError, handleA2uiRendererReply, handleA2uiRpc } from '../../../../src/channels/web/a2ui/rpc.js';
+import { RendererRpcBroker } from '../../../../src/channels/web/a2ui/renderer-rpc.js';
 import { takeA2uiRendererErrors } from '../../../../src/channels/web/a2ui/renderer-errors.js';
 import { CLASSIC_A2UI_CATALOG } from '../../../../src/channels/web/a2ui/surface.js';
 import type { WebChannelLike } from '../../../../src/channels/web/core/web-channel-contracts.js';
@@ -23,9 +24,10 @@ async function fixture() {
   const agent = new A2uiAgentRpc([defineA2uiAgentFunction(normalize), defineA2uiAgentFunction({...normalize,name:'captureOnly',allowedCallers:'agentOnly'}),
     defineA2uiAgentFunction({...normalize,name:'gestureOnly',requiresUserActivation:true}), defineA2uiAgentFunction({...normalize,name:'noop',run:() => undefined}),
     defineA2uiAgentFunction({...normalize,name:'fail',run:() => { throw Error('Internal fixture diagnostic'); }})]);
+  const renderer=new RendererRpcBroker();
   const channel = {authGateway:{getPrincipal:(req:Request) => ({kind:'local',userId:'default',mode:'single-user',role:'admin',
     authentication:{method:'local',sessionId:req.headers.get('x-test-session') || 'session-one',expiresAt:null}})},
-  a2uiRpcScope: (chat: string) => chat === chatJid ? {conversationId, agent, assertCurrent() {}} : undefined} as unknown as WebChannelLike;
+  a2uiRpcScope: (chat: string) => chat === chatJid ? {conversationId, agent, renderer, assertCurrent() {}} : undefined} as unknown as WebChannelLike;
   const make = (name = 'normalizeLabel', functionCallId: string = crypto.randomUUID(), args: Record<string, unknown> = {label:'  piccolo  '}) => ({
     chat_jid:chatJid,post_id:post.rowId,thread_id:thread,revision:post.revision,
     metadata:{a2uiRendererCapabilities:{'1.0':{supportedCatalogIds:[CLASSIC_A2UI_CATALOG,catalogue]}}},
@@ -35,7 +37,8 @@ async function fixture() {
     headers:{'x-test-session':session},body:JSON.stringify(body)}));
   const report = (body: unknown, session = 'session-one') => handleA2uiRendererError(channel,new Request('http://fixture/agent/a2ui-error',{method:'POST',
     headers:{'x-test-session':session},body:JSON.stringify(body)}));
-  return {root,publish,post,make,send,report,calls:() => calls, swapConversation(id: number) { conversationId=id; }, pause(promise: Promise<void>) { hold=promise; }};
+  const reply=(body:unknown) => handleA2uiRendererReply(channel,new Request('http://fixture/agent/a2ui-renderer-reply',{method:'POST',body:JSON.stringify(body)}));
+  return {root,publish,post,make,send,report,reply,renderer,calls:() => calls, swapConversation(id: number) { conversationId=id; }, pause(promise: Promise<void>) { hold=promise; }};
 }
 
 test('a registered agent function returns v1.0 output and exact retries execute once', async () => {
@@ -71,6 +74,29 @@ test('unregistered, malformed and disallowed function calls cannot execute', asy
   f.swapConversation(12);
   expect((await f.send(request)).status).toBe(409);
   expect(f.calls()).toBe(0);
+});
+
+test('reverse replies project owned, opted-in drafts instead of accepting models from the browser', async () => {
+  const f=await fixture();
+  const surface=await publishAgentA2ui(f.publish,{fallback:'Synced',messages:[{version:'1.0',createSurface:{surfaceId:'draft',catalogId:CLASSIC_A2UI_CATALOG,
+    sendDataModel:true,dataModel:{title:'Committed'},components:[{id:'root',component:'TextField',label:'Title',value:{'@path':'/title'}}],
+  }}]});
+  const scope={chatJid:f.publish.chatJid,conversationId:11,sessionId:'session-one'};
+  const peer=f.renderer.register(scope,()=>{},()=>{},()=>{});
+  const functionCallId='reverse-model';
+  const pending=f.renderer.invoke(f.renderer.bind(peer.lease,scope)!,scope.chatJid,11,{message:{version:'1.0',callRendererFunction:{functionCallId,
+    callFunction:{'@call':'inspect',catalogId:catalogue},
+  }}},()=>{});
+  try {
+    const message={version:'1.0',rendererFunctionResponse:{functionCallId,value:null}};
+    const body={chat_jid:scope.chatJid,renderer_peer:peer.lease,message};
+    expect((await f.reply({...body,metadata:{a2uiRendererDataModel:{version:'1.0',surfaces:{other:{}}}}})).status).toBe(400);
+    const patch={surface_id:surface.surfaceId,revision:surface.revision};
+    expect((await f.reply({...body,a2ui_drafts:[{...patch,edits:[{component_id:'missing',value:'Private'}]}]})).status).toBe(400);
+    expect((await f.reply({...body,a2ui_drafts:[{...patch,edits:[{component_id:'root',value:'Private'}]}]})).status).toBe(204);
+    expect(await pending).toEqual({message,metadata:{a2uiRendererDataModel:{version:'1.0',surfaces:{[surface.surfaceId]:{title:'Private'}}}}});
+    expect((await f.reply(body)).status).toBe(409);
+  } finally {peer.disconnect();}
 });
 
 test('private renderer diagnostics are correlated, scrubbed and delivered once with committed input', async () => {

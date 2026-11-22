@@ -2,6 +2,7 @@ import type { CanonicalJsonValue } from '../../../service-effects/contracts/comm
 import type { A2uiMetadata } from './surface.js';
 
 export const MAX_RPC_VALUE = 16 * 1024;
+export const A2UI_RPC_RECEIPT_TTL_MS = 60_000;
 
 function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -24,6 +25,15 @@ function boundedJson(input: unknown, opaque: boolean, depth = 0): CanonicalJsonV
 
 export function boundedRpcJson(input: unknown): CanonicalJsonValue {
   return boundedJson(input,false);
+}
+
+export function a2uiActionEvaluationSite(componentId: string, instancePath: string | undefined, field: string): string {
+  return JSON.stringify([componentId,instancePath ?? '',field]);
+}
+
+/** A scoped call's comparable resolved arguments, not its client call ID. */
+export function a2uiRpcArgumentKey(catalogId: string, name: string, args: Record<string, unknown>): string {
+  return JSON.stringify([catalogId,name,boundedRpcJson(args)]);
 }
 
 /** Extensions remain JSON data; their nested keys have no reserved directive semantics. */

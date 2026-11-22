@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { CallRendererFunctionMessage, RendererFunctionResponseMessage } from '@a2ui/web_core/v1_0';
+import type { A2uiRendererDataModel } from './input-metadata.js';
 
 export interface RendererPeerScope {
   chatJid: string;
@@ -12,9 +13,14 @@ export interface RendererRpcPacket {
   source?: RendererSurfaceRevision;
 }
 
+export interface RendererRpcResult {
+  message: RendererFunctionResponseMessage;
+  metadata?: {a2uiRendererDataModel: A2uiRendererDataModel};
+}
+
 type Pending = {
   assertCurrent: () => void;
-  finish: (reply: RendererFunctionResponseMessage) => void;
+  finish: (reply: RendererFunctionResponseMessage, metadata?: RendererRpcResult['metadata']) => void;
 };
 type Peer = RendererPeerScope & {
   assertCurrent: () => void;
@@ -67,22 +73,22 @@ export class RendererRpcBroker {
     if (peer?.chatJid === scope.chatJid && peer.conversationId === scope.conversationId && peer.sessionId === scope.sessionId) return key;
   }
 
-  async invoke(key: string, chatJid: string, conversationId: number, packet: RendererRpcPacket, assertCurrent: () => void, signal?: AbortSignal): Promise<RendererFunctionResponseMessage> {
+  async invoke(key: string, chatJid: string, conversationId: number, packet: RendererRpcPacket, assertCurrent: () => void, signal?: AbortSignal): Promise<RendererRpcResult> {
     const id = packet.message.callRendererFunction.functionCallId;
     const peer = this.current(key);
     if (!peer || peer.chatJid !== chatJid || peer.conversationId !== conversationId)
-      return rendererRpcError(id,'INVALID_FUNCTION_CALL','The accepted renderer is no longer connected.');
+      return {message:rendererRpcError(id,'INVALID_FUNCTION_CALL','The accepted renderer is no longer connected.')};
     if (peer.used.has(id) || peer.used.size >= 1024 || peer.pending.size >= 16)
-      return rendererRpcError(id,'INVALID_FUNCTION_CALL','This call ID is already used or the renderer is at capacity.');
+      return {message:rendererRpcError(id,'INVALID_FUNCTION_CALL','This call ID is already used or the renderer is at capacity.')};
     assertCurrent();
     signal?.throwIfAborted();
     peer.used.add(id);
     return new Promise(resolve => {
-      const finish = (reply: RendererFunctionResponseMessage) => {
+      const finish = (reply: RendererFunctionResponseMessage, metadata?: RendererRpcResult['metadata']) => {
         peer.pending.delete(id);
         clearTimeout(timer);
         signal?.removeEventListener('abort',onAbort);
-        resolve(reply);
+        resolve({message:reply,...(metadata ? {metadata} : {})});
       };
       const onAbort = () => finish(rendererRpcError(id,'CANCELLED','The agent cancelled the call.'));
       const timer = setTimeout(() => finish(rendererRpcError(id,'TIMEOUT','The renderer did not reply.')),this.timeoutMs);
@@ -93,7 +99,7 @@ export class RendererRpcBroker {
     });
   }
 
-  reply(lease: unknown, scope: RendererPeerScope, message: RendererFunctionResponseMessage): boolean {
+  reply(lease: unknown, scope: RendererPeerScope, message: RendererFunctionResponseMessage, project?: () => RendererRpcResult['metadata']): boolean {
     const key = this.bind(lease,scope);
     if (!key) return false;
     const id = message.rendererFunctionResponse.functionCallId;
@@ -104,7 +110,8 @@ export class RendererRpcBroker {
       pending.finish(rendererRpcError(id,'INVALID_FUNCTION_CALL','The call owner or surface changed.'));
       return false;
     }
-    pending.finish(message);
+    const metadata=project?.(); // Projection must succeed before consuming the correlation.
+    pending.finish(message,metadata);
     return true;
   }
 }

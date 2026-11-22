@@ -3,6 +3,7 @@ import { Type } from 'typebox';
 import { CallRendererFunctionMessageSchema } from '@a2ui/web_core/v1_0';
 import { boundedRpcJson, MAX_RPC_VALUE } from '../../src/channels/web/a2ui/rpc-json.js';
 import { readAcceptedRendererPeer, readA2uiSurfaceOwner } from '../../src/channels/web/a2ui/input-metadata.js';
+import { A2UI_RENDERER_TOOL, A2UI_PRIVATE_REPLY_METADATA, MAX_A2UI_METADATA_BYTES } from '../../src/channels/web/a2ui/transport-metadata.js';
 import { rendererRpcError, type RendererRpcBroker } from '../../src/channels/web/a2ui/renderer-rpc.js';
 import { CLASSIC_A2UI_CATALOG, isA2uiSurfaceBlock } from '../../src/channels/web/a2ui/surface.js';
 import { getMessageByRowIdFromDatabase } from '../../src/db/messages.js';
@@ -13,7 +14,7 @@ import { resolveAcceptedMessageThread } from './host-message-thread.js';
 /** RPC sends no code and cannot choose a destination other than the accepted renderer. */
 export function createHostA2uiRendererTool(options: Omit<Parameters<typeof createHostA2uiTool>[0], 'broadcast'> & {renderer: RendererRpcBroker}) {
   return defineTool({
-    name:'call_a2ui_renderer',
+    name:A2UI_RENDERER_TOOL,
     description:'Send one A2UI v1.0 callRendererFunction message to the renderer for this turn. Only offered catalogues are available. For a surface call, include its post_id and current revision. Returns a correlated rendererFunctionResponse. Basic Catalogue functions cannot be called remotely.',
     parameters:Type.Object({message:Type.Record(Type.String(),Type.Unknown()),post_id:Type.Optional(Type.Integer({minimum:1})),
       revision:Type.Optional(Type.Integer({minimum:1}))},{additionalProperties:false}),
@@ -56,14 +57,18 @@ export function createHostA2uiRendererTool(options: Omit<Parameters<typeof creat
           || owner?.post_id !== source.post_id || owner.conversation_id !== api.conversationId) throw Error('A2UI renderer surface changed');
       };
       try { checkSurface(); } catch { return error('The requested surface is not active in the accepted thread.'); }
-      const response = await options.renderer.invoke(peer.hash,chatJid,api.conversationId,{message,source},() => {
+      const {message:response,metadata} = await options.renderer.invoke(peer.hash,chatJid,api.conversationId,{message,source},() => {
         checkTurn();
         if (readAcceptedRendererPeer(options.root,recipient)?.hash !== peer.hash || resolveAcceptedMessageThread(options.root,primary) !== threadId)
           throw Error('A2UI renderer turn changed');
         checkSurface();
       },context.abortSignal);
       checkTurn();
-      return {isError:!!response.rendererFunctionResponse.error,output:[{type:'text' as const,text:JSON.stringify(response)}]};
+      const encoded=metadata ? JSON.stringify(metadata) : undefined;
+      if (encoded && Buffer.byteLength(encoded)>MAX_A2UI_METADATA_BYTES) throw Error('A2UI renderer reply metadata is too large');
+      return {isError:!!response.rendererFunctionResponse.error,output:[{type:'text' as const,text:JSON.stringify(response)}],
+        ...(encoded ? {details:{[A2UI_PRIVATE_REPLY_METADATA]:encoded}} : {}),
+      };
     },
   });
 }

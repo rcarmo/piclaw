@@ -18,13 +18,18 @@ test('only the exact live peer receives the call and can resolve its correlation
     const pending = broker.invoke(hash,scope.chatJid,scope.conversationId,packet('one'),() => {});
     expect(sent).toEqual([packet('one')]);
     expect(otherPackets).toEqual([]);
-    expect(broker.reply(other.lease,scope,value('one'))).toBe(false);
-    expect(broker.reply(peer.lease,{...scope,conversationId:18},value('one'))).toBe(false);
-    expect(broker.reply(peer.lease,scope,value('one'))).toBe(true);
-    expect(await pending).toEqual(value('one'));
+    const metadata={a2uiRendererDataModel:{version:'1.0' as const,surfaces:{fixture:{memo:'private'}}}};
+    let projections=0;
+    const project=()=>{projections++;return metadata;};
+    expect(broker.reply(other.lease,scope,value('one'),project)).toBe(false);
+    expect(broker.reply(peer.lease,{...scope,conversationId:18},value('one'),project)).toBe(false);
+    expect(projections).toBe(0);
+    expect(broker.reply(peer.lease,scope,value('one'),project)).toBe(true);
+    expect(await pending).toEqual({message:value('one'),metadata});
+    expect(projections).toBe(1);
     expect(broker.reply(peer.lease,scope,value('one'))).toBe(false);
     expect(await broker.invoke(hash,scope.chatJid,scope.conversationId,packet('one'),() => {}))
-      .toMatchObject({rendererFunctionResponse:{functionCallId:'one',error:{code:'INVALID_FUNCTION_CALL'}}});
+      .toMatchObject({message:{rendererFunctionResponse:{functionCallId:'one',error:{code:'INVALID_FUNCTION_CALL'}}}});
     expect(sent).toHaveLength(1);
   } finally { peer.disconnect(); other.disconnect(); }
 });
@@ -39,17 +44,17 @@ test('stale, cancelled, timed out and disconnected calls cannot consume replies'
   });
   live = false;
   expect(broker.reply(peer.lease,scope,value('stale'))).toBe(false);
-  expect(await pending).toMatchObject({rendererFunctionResponse:{error:{code:'INVALID_FUNCTION_CALL'}}});
+  expect(await pending).toMatchObject({message:{rendererFunctionResponse:{error:{code:'INVALID_FUNCTION_CALL'}}}});
   const controller = new AbortController();
   const cancelled = broker.invoke(hash,scope.chatJid,scope.conversationId,packet('cancel'),() => {},controller.signal);
   controller.abort();
-  expect(await cancelled).toMatchObject({rendererFunctionResponse:{error:{code:'CANCELLED'}}});
+  expect(await cancelled).toMatchObject({message:{rendererFunctionResponse:{error:{code:'CANCELLED'}}}});
   expect(await broker.invoke(hash,scope.chatJid,scope.conversationId,packet('timeout'),() => {}))
-    .toMatchObject({rendererFunctionResponse:{error:{code:'TIMEOUT'}}});
+    .toMatchObject({message:{rendererFunctionResponse:{error:{code:'TIMEOUT'}}}});
   expect(broker.reply(peer.lease,scope,value('timeout'))).toBe(false);
   const lost = broker.invoke(hash,scope.chatJid,scope.conversationId,packet('lost'),() => {});
   peer.disconnect();
-  expect(await lost).toMatchObject({rendererFunctionResponse:{error:{code:'CANCELLED'}}});
+  expect(await lost).toMatchObject({message:{rendererFunctionResponse:{error:{code:'CANCELLED'}}}});
   expect(broker.reply(peer.lease,scope,value('lost'))).toBe(false);
   expect(closed).toBe(1);
 });

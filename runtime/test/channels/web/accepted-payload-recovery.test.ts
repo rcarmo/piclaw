@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { initializeDatabaseSchema } from '../../../src/db/connection.js';
-import { storeA2uiInputMetadata } from '../../../src/channels/web/a2ui/input-metadata.js';
+import { projectPublicA2uiInput, storeA2uiInputMetadata } from '../../../src/channels/web/a2ui/input-metadata.js';
 import { readApplicationMessagePayload } from '../../../durable-engine/src/accepted-payload-recovery.ts';
 
 function fixture(chatJid = 'chat') {
@@ -39,12 +39,19 @@ test('A2UI input metadata is an immutable projection for the exact recipient, ou
   expect(write).toThrow();
   db.transaction(write)();
   expect(() => db.transaction(write)()).toThrow();
-  expect(readApplicationMessagePayload(db,'inc',sender,ref)).toBe(`Continue\n\nA2UI renderer metadata:\n${JSON.stringify({a2uiRendererDataModel:metadata,a2uiRendererMessage:rendererMessage})}`);
+  const privatePayload=`Continue\n\nA2UI renderer metadata:\n${JSON.stringify({a2uiRendererDataModel:metadata,a2uiRendererMessage:rendererMessage})}`;
+  expect(readApplicationMessagePayload(db,'inc',sender,ref)).toBe(privatePayload);
+  expect(projectPublicA2uiInput(db,sender,privatePayload)).toBe('Continue');
+  expect(projectPublicA2uiInput(db,{...sender,conversationId:24},privatePayload)).toBe('Continue');
+  const literal='Literal heading\n\nA2UI renderer metadata:\n{"test":true}';
+  db.query(`INSERT INTO messages (id,chat_jid,is_bot_message,content) VALUES (?, ?, 0, ?)`).run('literal',sender.chatJid,literal);
+  expect(projectPublicA2uiInput(db,{...sender,sourceId:'literal'},literal)).toBe(literal);
   expect(readApplicationMessagePayload(db,'inc',sender,`queued-source:${sender.sourceId}`)).toBe(readApplicationMessagePayload(db,'inc',sender,ref));
   expect(readApplicationMessagePayload(db,'inc',{...sender,conversationId:24},ref)).toBe('Continue');
   expect(readApplicationMessagePayload(db,'inc',{chatJid:sender.chatJid,sourceId:sender.sourceId},ref)).toBe('Continue');
   expect(db.query('SELECT content,content_blocks FROM messages WHERE rowid=?').get(lastInsertRowid)).toEqual({content:'Continue',content_blocks:null});
   db.query('DELETE FROM messages WHERE rowid=?').run(lastInsertRowid);
+  expect(projectPublicA2uiInput(db,sender,privatePayload)).toBe('Continue');
   expect(db.query('SELECT COUNT(*) AS count FROM a2ui_input_metadata').get()).toEqual({count:0});
 });
 

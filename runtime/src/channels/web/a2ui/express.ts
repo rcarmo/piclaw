@@ -121,7 +121,7 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     const checks = component['@checks'] ?? component.checks;
     if (checks !== undefined) requireClassic(['Button','TextField','CheckBox','ChoicePicker','Slider','DateTimeInput'].includes(name)
       && Array.isArray(checks) && checks.length <= 16 && checks.every(rule => record(rule) && allowedKeys(rule, ['condition','message'])
-        && record(rule.condition) && (Object.hasOwn(rule.condition, '@path') || isClassicValueFunction(rule.condition['@call']))
+        && record(rule.condition) && (Object.hasOwn(rule.condition, '@path') || isClassicFunctionName(rule.condition['@call']))
         && (rule.message === undefined || (typeof rule.message === 'string' && rule.message.length <= 1024))), 'invalid checks');
     requireClassic(!(Object.hasOwn(component, '@accessibility') && Object.hasOwn(component, 'accessibility')), 'conflicting accessibility descriptors');
     const a11y = component['@accessibility'] ?? component.accessibility;
@@ -131,9 +131,8 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
       if (key === 'metadata' || key === '@metadata') continue;
       const call = key === 'action' ? readClassicActionFunction(value) : undefined;
       const target = key === 'action' ? readA2uiLinkTarget(value) : undefined;
-      const dateBound = name==='DateTimeInput' && (key==='min' || key==='max');
       if (call) checkValueCalls(call.args,call.name!=='openUrl');
-      else checkValueCalls(target === undefined ? value : target,!dateBound && key!=='action' && key!=='@checks' && key!=='checks');
+      else checkValueCalls(target === undefined ? value : target,key!=='action' || (record(value) && record(value.event)));
     }
     ids.add(component.id);
     if (name === "Row" || name === "Column" || name === "List") {
@@ -164,8 +163,7 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
       requireClassic(record(action) && allowedKeys(action, ["event"]) && record(action.event)
         && allowedKeys(action.event, ["name", "context", "userMessage"]) && isId(action.event.name), "expected a server event");
       const { context } = action.event;
-      requireClassic(context === undefined || (record(context) && Object.entries(context).every(([key, entry]) =>
-        isId(key) && (!entry || typeof entry !== "object" || (record(entry) && (Object.hasOwn(entry, "@path") || isClassicValueFunction(entry['@call'])))))), "unsupported event context");
+      requireClassic(context === undefined || (record(context) && Object.keys(context).every(isId)), 'unsupported event context');
     }
   }
 }

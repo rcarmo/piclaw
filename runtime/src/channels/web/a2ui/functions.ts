@@ -4,6 +4,7 @@ import { isSignal, peekValue } from '@a2ui/web_core/reactivity';
 import type { DataContext } from '@a2ui/web_core/resolution';
 import { readA2uiPath, scopedA2uiPointer } from './data-path.js';
 import { CLASSIC_A2UI_CATALOG, type A2uiSnapshot } from './surface.js';
+import { readClassicFunctionCall } from './function-call.js';
 
 const pureFunctions = BASIC_FUNCTIONS.filter(fn => fn.name !== '@index' && fn.name !== 'openUrl' && !fn.requiresUserActivation);
 const pureNames = new Set(pureFunctions.map(fn => fn.name));
@@ -49,8 +50,19 @@ export function evaluateClassicLocalFunction(name: string, args: Record<string, 
   return isSignal(result) ? peekValue(result) : result;
 }
 
-/** Shared, bounded evaluation. Merely rendering a surface cannot invoke an effect or remote call. */
-export function readA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?: ReadonlyMap<string, unknown>, instancePath?: string, scope = '/'): unknown {
+export type A2uiRemoteValueResolver = (catalogId: string, name: string, args: Record<string, unknown>) => unknown;
+
+/** Detect RPC expressions in the admitted syntax, never in a resolved value. */
+export function hasA2uiAgentFunction(value: unknown): boolean {
+  const call=readClassicFunctionCall(value);
+  if (call) return call.name!=='openUrl' && (!isClassicValueFunction(call.name) || hasA2uiAgentFunction(call.args));
+  if (a2uiBindingPath(value)!==undefined) return false;
+  if (Array.isArray(value)) return value.some(hasA2uiAgentFunction);
+  return record(value) && Object.values(value).some(hasA2uiAgentFunction);
+}
+
+/** Shared, bounded evaluation. A resolver may only look up already settled results. */
+export function readA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?: ReadonlyMap<string, unknown>, instancePath?: string, scope = '/', resolveRemote?: A2uiRemoteValueResolver): unknown {
   let remaining = 256;
   function evaluate(input: unknown, depth: number, argument = false): unknown {
     if (--remaining < 0 || depth > 24) throw Error('A2UI expression limit exceeded');
@@ -61,10 +73,17 @@ export function readA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?: Re
       return edits?.has(absolute) ? edits.get(absolute) : readA2uiPath(snapshot.dataModel, absolute);
     }
     if (record(input) && Object.hasOwn(input, '@call')) {
-      const name = input['@call'];
-      if (!isClassicValueFunction(name) || (input.catalogId !== undefined && (name === '@index' || input.catalogId !== CLASSIC_A2UI_CATALOG))) return;
-      const args = record(input.args) ? Object.fromEntries(Object.entries(input.args).map(([key, arg]) => [key, evaluate(arg, depth + 1, true)])) : {};
-      return evaluateClassicLocalFunction(name,args,instancePath,part=>evaluate(part,depth+1,true));
+      // The SDK's internal formatString AST annotates local calls with returnType.
+      // That annotation is not a wire key and never enables a remote call.
+      const {returnType: _returnType,...localExpression}=input;
+      const call=readClassicFunctionCall(isClassicValueFunction(input['@call']) ? localExpression : input);
+      if (!call || call.name==='openUrl') throw Error('Invalid A2UI value function');
+      const args = Object.fromEntries(Object.entries(call.args ?? {}).map(([key,arg])=>[key,evaluate(arg,depth+1,true)]));
+      if (isClassicValueFunction(call.name)) return evaluateClassicLocalFunction(call.name,args,instancePath,part=>evaluate(part,depth+1,true));
+      const catalogId=call.catalogId ?? snapshot.catalogId;
+      const resolved=catalogId && resolveRemote ? resolveRemote(catalogId,call.name,args) : undefined;
+      if (resolved===undefined) throw Error('Unresolved A2UI agent function');
+      return resolved;
     }
     if (argument && Array.isArray(input)) return input.map(item => evaluate(item, depth + 1, true));
     if (argument && record(input)) return Object.fromEntries(Object.entries(input).map(([key, item]) => [key, evaluate(item, depth + 1, true)]));

@@ -1,5 +1,6 @@
 import type { Database } from 'bun:sqlite';
 import { takeA2uiRendererErrors } from './renderer-errors.js';
+import { A2UI_METADATA_HEADING, MAX_A2UI_METADATA_BYTES } from './transport-metadata.js';
 import { isA2uiSurfaceBlock, type A2uiSnapshot, type A2uiSurfaceBlock } from './surface.js';
 import { validateA2uiDraftEdits, type A2uiActionMessage } from './action.js';
 import { InvalidA2uiDraftError, type A2uiDraftPatch } from './drafts.js';
@@ -86,7 +87,7 @@ export function storeA2uiInputMetadata(database: Database, recipient: Recipient,
   const dataModel = model && Object.keys(model.surfaces).length ? model : undefined;
   const envelope={a2uiRendererDataModel:dataModel,a2uiRendererCapabilities:capabilities,a2uiRendererMessage:message};
   const base=JSON.stringify(envelope);
-  const room=256 * 1024 - Buffer.byteLength(base);
+  const room=MAX_A2UI_METADATA_BYTES - Buffer.byteLength(base);
   if (room<0) throw Error('A2UI input metadata exceeds its size limit');
   const errors=takeA2uiRendererErrors(database,recipient.chatJid,recipient.conversationId,room-32);
   if (base==='{}' && !errors.length) return;
@@ -120,5 +121,20 @@ export function readAcceptedRendererPeer(database: Database, recipient: Recipien
 /** The native SDK accepts text here. Serialize the canonical metadata envelope only in its input, never in the timeline. */
 export function projectA2uiAgentInput(database: Database, recipient: Omit<Recipient, 'conversationId'> & { conversationId?: number }, content: string): string {
   const metadata = readMetadata(database, recipient);
-  return metadata ? `${content}\n\nA2UI renderer metadata:\n${metadata}` : content;
+  return metadata ? `${content}\n\n${A2UI_METADATA_HEADING}${metadata}` : content;
+}
+
+/** Public SDK history must not expose the private suffix used for model input. */
+export function projectPublicA2uiInput(database: Database, recipient: Recipient, content: string): string {
+  if (!recipient.chatJid.startsWith('web:')) return content;
+  const marker=`\n\n${A2UI_METADATA_HEADING}`;
+  const split=content.lastIndexOf(marker);
+  if (split<0) return content;
+  const stored=readMetadata(database,recipient);
+  if (stored!==undefined && content.slice(split+marker.length)===stored) return content.slice(0,split);
+  // An ordinary visible message can contain the heading literally. Only use
+  // the fail-closed recovery projection when the authoritative source is gone.
+  const row=database.query('SELECT content FROM messages WHERE chat_jid=? AND id=? AND is_bot_message=0')
+    .get(recipient.chatJid,recipient.sourceId) as {content:string|null} | null;
+  return row ? row.content ?? '' : content.slice(0,split);
 }

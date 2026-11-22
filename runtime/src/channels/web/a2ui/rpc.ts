@@ -7,9 +7,9 @@ import { captureWebRequestAuthority } from '../auth/auth-gateway.js';
 import type { WebChannelLike } from '../core/web-channel-contracts.js';
 import { captureInputTarget } from '../messaging/input-request-authority.js';
 import { readA2uiCatalogueOffer } from './capabilities.js';
-import { parseA2uiDrafts } from './drafts.js';
+import { parseA2uiDrafts, type A2uiDraftPatch } from './drafts.js';
 import { prepareA2uiDraftProjection, readA2uiRendererDataModel, readA2uiSurfaceOwner, type AcceptedRendererPeer } from './input-metadata.js';
-import { boundedRpcJson, MAX_RPC_VALUE } from './rpc-json.js';
+import { a2uiActionEvaluationSite, boundedRpcJson, MAX_RPC_VALUE } from './rpc-json.js';
 import { A2UI_ERROR_TEXT, enqueueA2uiRendererError } from './renderer-errors.js';
 import { absoluteA2uiPointer } from './data-path.js';
 import { isA2uiSurfaceBlock } from './surface.js';
@@ -106,15 +106,24 @@ export async function handleA2uiRendererReply(channel: WebChannelLike, req: Requ
   catch { return json({error:'A2UI RPC is not authorised.'},403); }
   try {
     const body = await readRpcBody(req);
-    if (!record(body) || Object.keys(body).length !== 3 || !isWebChat(body.chat_jid) || typeof body.renderer_peer !== 'string')
+    if (!record(body) || Object.keys(body).some(key=>!['chat_jid','renderer_peer','message','a2ui_drafts'].includes(key))
+      || !isWebChat(body.chat_jid) || typeof body.renderer_peer !== 'string')
       throw Error('Malformed renderer response');
     const message = RendererFunctionResponseMessageSchema.parse(body.message);
     const reply = message.rendererFunctionResponse;
     if (!validCallId(reply.functionCallId) || Buffer.byteLength(JSON.stringify(boundedRpcJson(reply))) > MAX_RPC_VALUE)
       throw Error('Invalid renderer response');
+    const patches=parseA2uiDrafts(body.a2ui_drafts);
+    const draftSurface=patches?.length ? await prepareA2uiDraftProjection(patches) : undefined;
+    const chatJid=body.chat_jid;
     auth.assertCurrent();
-    const scope = channel.a2uiRpcScope?.(body.chat_jid);
-    if (!scope?.renderer?.reply(body.renderer_peer,{chatJid:body.chat_jid,conversationId:scope.conversationId,sessionId:auth.sessionId},message))
+    req.signal.throwIfAborted();
+    const scope = channel.a2uiRpcScope?.(chatJid);
+    if (!scope?.renderer?.reply(body.renderer_peer,{chatJid,conversationId:scope.conversationId,sessionId:auth.sessionId},message,()=>{
+      scope.assertCurrent();
+      const model=readA2uiRendererDataModel(getDb(),chatJid,scope.conversationId,{draftSurface});
+      return Object.keys(model.surfaces).length ? {a2uiRendererDataModel:model} : undefined;
+    }))
       return json({error:'The renderer call is no longer pending.'},409);
     return new Response(null,{status:204,headers:privateHeaders});
   } catch { return json({error:'Invalid A2UI renderer response.'},400); }
@@ -126,11 +135,11 @@ export async function handleA2uiRpc(channel: WebChannelLike, req: Request): Prom
   try { auth = rendererAuthority(channel,req); }
   catch { return json({error:'A2UI RPC is not authorised.'},403); }
   const { assertCurrent:authorise, sessionId:rendererSession } = auth;
-  let body: unknown, message: CallAgentFunctionMessage, offered: readonly string[];
+  let body: unknown, message: CallAgentFunctionMessage, offered: readonly string[], evaluationSite: string | undefined;
   let projectDraft: Awaited<ReturnType<typeof prepareA2uiDraftProjection>>;
   try {
     body = await readRpcBody(req);
-    if (!record(body) || Object.keys(body).some(key => !['chat_jid','post_id','thread_id','revision','message','metadata','a2ui_drafts'].includes(key))) throw Error('Invalid request');
+    if (!record(body) || Object.keys(body).some(key => !['chat_jid','post_id','thread_id','revision','message','metadata','a2ui_drafts','evaluation_site'].includes(key))) throw Error('Invalid request');
     if (typeof body.chat_jid !== 'string' || !body.chat_jid.startsWith('web:') || body.chat_jid.length > 240
       || !positiveId(body.post_id) || !positiveId(body.thread_id) || !positiveId(body.revision)) throw Error('Invalid source');
     message = CallAgentFunctionMessageSchema.parse(body.message);
@@ -138,6 +147,10 @@ export async function handleA2uiRpc(channel: WebChannelLike, req: Request): Prom
     if (!validCallId(functionCallId) || !validCallId(surfaceId) || !callFunction.catalogId || callFunction.catalogId.length > 512
       || !/^[_\p{XID_Start}][\p{XID_Continue}]*$/u.test(callFunction['@call']) || callFunction['@call'].length > 128
       || Buffer.byteLength(JSON.stringify(boundedRpcJson(callFunction.args ?? {}))) > MAX_RPC_VALUE) throw Error('Invalid function call');
+    if (body.evaluation_site!==undefined) {
+      if (typeof body.evaluation_site!=='string' || !body.evaluation_site || body.evaluation_site.length>512 || /[\x00-\x1f\x7f]/.test(body.evaluation_site)) throw Error('Invalid evaluation site');
+      evaluationSite=body.evaluation_site;
+    }
     offered = readA2uiCatalogueOffer(body.metadata) ?? [];
     const patches = parseA2uiDrafts(body.a2ui_drafts);
     if (patches?.length && !offered.length) throw Error('Drafts require a renderer offer');
@@ -149,10 +162,54 @@ export async function handleA2uiRpc(channel: WebChannelLike, req: Request): Prom
     const {database,scope,assertCurrent} = captureRpcSurface(channel,authorise,chatJid,postId,threadId,revision,surfaceId);
     const model = offered.length ? readA2uiRendererDataModel(database,chatJid,scope.conversationId,{draftSurface:projectDraft}) : undefined;
     const metadata = model && Object.keys(model.surfaces).length ? {a2uiRendererDataModel:model} : {};
-    const response = await scope.agent.invoke({chatJid,conversationId:scope.conversationId,rendererSession,revision,offered,
+    const response = await scope.agent.invoke({chatJid,conversationId:scope.conversationId,rendererSession,revision,offered,evaluationSite,
       metadata,signal:scope.signal ? AbortSignal.any([scope.signal,req.signal]) : req.signal,assertCurrent},message);
     return json(response,200);
   } catch { return changed(); }
+}
+
+export function readA2uiReceiptIds(input: unknown): string[] | undefined {
+  if (input===undefined) return;
+  if (!Array.isArray(input) || input.length<1 || input.length>64 || new Set(input).size!==input.length
+    || input.some(id=>typeof id!=='string' || !validCallId(id))) throw Error('Invalid A2UI call receipts');
+  return input;
+}
+
+export function readA2uiDerivedReceiptIds(input: unknown, checks?: readonly string[]): ReadonlyMap<string,string[]> | undefined {
+  if (input===undefined) return;
+  if (!record(input) || !Object.keys(input).length || Object.keys(input).length>64) throw Error('Invalid derived receipts');
+  const result=new Map<string,string[]>();
+  const used=new Set(checks);
+  for (const [site,value] of Object.entries(input)) {
+    if (site!=='userMessage' && !/^context:[\p{XID_Continue}_.-]{1,128}$/u.test(site)) throw Error('Invalid action evaluation field');
+    const ids=readA2uiReceiptIds(value);
+    if (!ids || ids.some(id=>used.has(id))) throw Error('Invalid derived receipt identities');
+    for (const id of ids) used.add(id);
+    if (used.size>64) throw Error('Too many action receipts');
+    result.set(site,ids);
+  }
+  return result;
+}
+
+/** Prepare a bounded, read-only receipt resolver for both validation and commit. */
+export async function prepareA2uiReceiptResolver(channel: WebChannelLike, req: Request, source: {
+  chatJid:string;postId:number;threadId:number;revision:number;surfaceId:string;componentId:string;instancePath?:string;
+}, receiptIds: readonly string[], metadata: unknown, patches?: A2uiDraftPatch[], sites?: ReadonlyMap<string,string[]>) {
+  const auth=rendererAuthority(channel,req);
+  const offered=readA2uiCatalogueOffer(metadata) ?? [];
+  const draftSurface=patches?.length ? await prepareA2uiDraftProjection(patches) : undefined;
+  const {chatJid,postId,threadId,revision,surfaceId}=source;
+  const {database,scope,assertCurrent}=captureRpcSurface(channel,auth.assertCurrent,chatJid,postId,threadId,revision,surfaceId);
+  return ()=>{
+    assertCurrent();
+    const model=offered.length ? readA2uiRendererDataModel(database,chatJid,scope.conversationId,{draftSurface}) : undefined;
+    const transportMetadata=model && Object.keys(model.surfaces).length ? {a2uiRendererDataModel:model} : {};
+    const identity={chatJid,conversationId:scope.conversationId,revision,offered,rendererSession:auth.sessionId,metadata:transportMetadata};
+    return {checks:scope.agent.resolveAcceptedValues(identity,surfaceId,receiptIds), derived(field:string) {
+      const ids=sites?.get(field);
+      if (ids) return scope.agent.resolveAcceptedValues({...identity,evaluationSite:a2uiActionEvaluationSite(source.componentId,source.instancePath,field)},surfaceId,ids,true);
+    }};
+  };
 }
 
 function captureRpcSurface(channel: WebChannelLike, authorise: () => void, chatJid: string, postId: number, threadId: number, revision: number, surfaceId: string) {

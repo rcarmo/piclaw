@@ -1,10 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { CallAgentFunctionMessage, AgentFunctionResponseMessage } from '@a2ui/web_core/v1_0';
-import { boundedRpcJson, MAX_RPC_VALUE } from './rpc-json.js';
+import { A2UI_RPC_RECEIPT_TTL_MS, a2uiRpcArgumentKey, boundedRpcJson, MAX_RPC_VALUE } from './rpc-json.js';
 import type { A2uiRendererDataModel } from './input-metadata.js';
 import type { RendererRpcBroker } from './renderer-rpc.js';
-
-const RECEIPT_TTL = 60_000;
+import type { A2uiRemoteValueResolver } from './functions.js';
 
 interface AgentFunctionContext {
   signal: AbortSignal;
@@ -47,11 +46,17 @@ type RpcIdentity = {conversationId:number;chatJid:string;rendererSession:string 
 const receiptKey = (scope: RpcIdentity, functionCallId: string) => JSON.stringify([scope.chatJid,scope.conversationId,scope.rendererSession,functionCallId]);
 
 type RpcCallScope = RpcIdentity & {
+  evaluationSite?: string;
   offered: readonly string[];
   metadata: AgentFunctionContext['metadata'];
   signal: AbortSignal;
   assertCurrent(): void;
 };
+
+export type AcceptedRpcValueScope = Pick<RpcCallScope,'chatJid'|'conversationId'|'rendererSession'|'revision'|'offered'|'metadata'|'evaluationSite'>;
+const rpcFingerprint = (scope: AcceptedRpcValueScope, surfaceId: string, key: string) => createHash('sha256').update(JSON.stringify([
+  surfaceId,scope.revision,scope.evaluationSite ?? null,key,[...scope.offered].sort(),scope.metadata,
+])).digest('hex');
 
 class RpcConflict extends Error {}
 
@@ -62,7 +67,7 @@ function rpcError(functionCallId: string, code: string, message: string): AgentF
 /** Process-owned RPC receipts are short lived. A payload cannot register an implementation or grant host permissions. */
 export class A2uiAgentRpc {
   private readonly functions = new Map<string, A2uiAgentFunction>();
-  private readonly receipts = new Map<string, { fingerprint: string; expires: number; surfaceId: string; revision: number; result: Promise<AgentFunctionResponseMessage> }>();
+  private readonly receipts = new Map<string, { fingerprint: string; expires: number; surfaceId: string; revision: number; result: Promise<AgentFunctionResponseMessage>; accepted?: {value:unknown} }>();
 
   constructor(functions: readonly A2uiAgentFunction[] = []) {
     for (const definition of functions) {
@@ -77,15 +82,30 @@ export class A2uiAgentRpc {
     return !!receipt && receipt.expires>Date.now() && receipt.surfaceId===surfaceId && receipt.revision===scope.revision;
   }
 
+  /** No function is executed here. Validate only receipts from this exact surface, draft projection and login. */
+  resolveAcceptedValues(scope: AcceptedRpcValueScope, surfaceId: string, callIds: readonly string[], ordered=false): A2uiRemoteValueResolver {
+    let cursor=0;
+    return (catalogId,name,args)=>{
+      const fingerprint=rpcFingerprint(scope,surfaceId,a2uiRpcArgumentKey(catalogId,name,args));
+      const now=Date.now();
+      const ids=ordered ? [callIds[cursor++]] : callIds;
+      for (const id of ids) {
+        if (id===undefined) continue;
+        const receipt=this.receipts.get(receiptKey(scope,id));
+        if (receipt?.fingerprint===fingerprint && receipt.expires>now && receipt.accepted)
+          return receipt.accepted.value;
+      }
+      return undefined;
+    };
+  }
+
   async invoke(scope: RpcCallScope, message: CallAgentFunctionMessage): Promise<AgentFunctionResponseMessage> {
     scope.assertCurrent();
     const { surfaceId, functionCallId, callFunction } = message.callAgentFunction;
     const catalogue = callFunction.catalogId!; // The transport requires explicit, already resolved catalogue IDs.
     const key = receiptKey(scope,functionCallId);
     const args = boundedRpcJson(callFunction.args ?? {}) as Record<string, unknown>;
-    const fingerprint = createHash('sha256').update(JSON.stringify([
-      surfaceId,scope.revision,catalogue,callFunction['@call'],args,[...scope.offered].sort(),scope.metadata,
-    ])).digest('hex');
+    const fingerprint=rpcFingerprint(scope,surfaceId,a2uiRpcArgumentKey(catalogue,callFunction['@call'],args));
     const now = Date.now();
     for (const [id, receipt] of this.receipts) if (receipt.expires <= now) this.receipts.delete(id);
     let receipt = this.receipts.get(key);
@@ -116,11 +136,12 @@ export class A2uiAgentRpc {
           return rpcError(functionCallId,deadline.aborted ? 'TIMEOUT' : signal.aborted ? 'CANCELLED' : 'EXECUTION_ERROR','The agent function did not complete.');
         }
       });
-      receipt = {fingerprint,expires:now+RECEIPT_TTL,surfaceId,revision:scope.revision,result};
+      receipt = {fingerprint,expires:now+A2UI_RPC_RECEIPT_TTL_MS,surfaceId,revision:scope.revision,result};
       this.receipts.set(key,receipt);
     }
     const response = await receipt.result;
     scope.assertCurrent();
+    if (!response.agentFunctionResponse.error) receipt.accepted={value:response.agentFunctionResponse.value ?? null};
     return response;
   }
 }

@@ -1,11 +1,12 @@
 /** Classic's subset of the v1.0 action message. Owning a post is a separate server check. */
-import { a2uiBindingPath, readA2uiValue } from "./functions.js";
+import { a2uiBindingPath, hasA2uiAgentFunction, readA2uiValue, type A2uiRemoteValueResolver } from "./functions.js";
 export { a2uiBindingPath, readA2uiValue } from "./functions.js";
 import { checkA2uiComponent } from "./checks.js";
 import { a2uiInstanceId, projectA2uiTemplates } from "./templates.js";
-import { a2uiDateTimeType, validA2uiDateTime, validA2uiEventTimestamp } from "./date-time.js";
+import { a2uiDateTimeDisplay, a2uiDateTimeType, validA2uiDateTime, validA2uiEventTimestamp } from "./date-time.js";
 import { a2uiSliderRange, type A2uiComponent, type A2uiMetadata, type A2uiSnapshot } from "./surface.js";
-import { readA2uiActionMetadata } from './rpc-json.js';
+import { boundedRpcJson, readA2uiActionMetadata } from './rpc-json.js';
+import type { CanonicalJsonValue } from '../../../service-effects/contracts/common.js';
 import { isA2uiActionValue, type A2uiActionValue as ActionValue, type A2uiDraftEdit, type A2uiDraftPatch } from './drafts.js';
 export { isA2uiActionValue } from './drafts.js';
 import type { ClassicA2uiRendererCapabilities } from './capabilities.js';
@@ -15,7 +16,7 @@ export interface A2uiAction {
   sourceComponentId: string;
   name: string;
   timestamp: string;
-  context: Record<string, ActionValue>;
+  context: Record<string, CanonicalJsonValue>;
   userMessage?: string;
   metadata?: A2uiMetadata;
 }
@@ -56,10 +57,12 @@ function controlForPath(snapshot: A2uiSnapshot, path: string): A2uiComponent | u
   return snapshot.components.find(component => isInput(component) && a2uiBindingPath(component.value) === path);
 }
 
-function validControlValue(snapshot: A2uiSnapshot, control: A2uiComponent, value: ActionValue): boolean {
+function validControlValue(control: A2uiComponent, value: ActionValue): boolean {
   if (control.component === "DateTimeInput") {
     const type = a2uiDateTimeType(control);
-    return !!type && validA2uiDateTime(type, value, readA2uiValue(snapshot, control.min), readA2uiValue(snapshot, control.max));
+    // Drafts can be incomplete or temporarily outside their reactive bounds.
+    // Bounds are checked against the full event edit overlay at admission.
+    return !!type && validA2uiDateTime(type,value,undefined,undefined);
   }
   if (control.component === "CheckBox") return typeof value === "boolean";
   if (control.component === "Slider") {
@@ -86,7 +89,7 @@ function resolveDraftEdits(projection: Projection, drafts: readonly A2uiDraftEdi
     const control = projection.snapshot.components.find(item => item.id === id);
     const path = control && isInput(control) ? a2uiBindingPath(control.value) : undefined;
     if (!control || !path || identity?.id !== draft.component_id || identity.instancePath !== draft.instance_path || values.has(path)
-      || !validControlValue(projection.snapshot, control, draft.value)) throw Error('Invalid draft control');
+      || !validControlValue(control,draft.value)) throw Error('Invalid draft control');
     values.set(path, draft.value);
   }
   return values;
@@ -103,16 +106,24 @@ function defaultControlValue(component: A2uiComponent | undefined): ActionValue 
   return component ? "" : null;
 }
 
-function resolveUserMessage(snapshot: A2uiSnapshot, descriptor: unknown, edits: ReadonlyMap<string, unknown>, instancePath: string | undefined, scope: string): string | undefined {
-  const value = readA2uiValue(snapshot, descriptor, edits, instancePath, scope);
+export type A2uiDerivedResolver = (site:string)=>A2uiRemoteValueResolver | undefined;
+
+function readActionValue(snapshot: A2uiSnapshot, descriptor: unknown, edits: ReadonlyMap<string,unknown>, instancePath: string | undefined,
+  scope: string, remote?: A2uiRemoteValueResolver): unknown {
+  const value=readA2uiValue(snapshot,descriptor,edits,instancePath,scope,remote);
+  if (value===undefined && hasA2uiAgentFunction(descriptor)) throw Error('The agent did not resolve an action value.');
+  return value;
+}
+
+function resolveUserMessage(snapshot: A2uiSnapshot, descriptor: unknown, edits: ReadonlyMap<string, unknown>, instancePath: string | undefined, scope: string, remote?: A2uiRemoteValueResolver): string | undefined {
+  const value = readActionValue(snapshot, descriptor, edits, instancePath, scope, remote);
   if (value === undefined || value === null) return;
   const text = typeof value === 'number' && Number.isFinite(value) ? String(value) : value;
   if (typeof text !== 'string' || text.length > 4096) throw new Error('Invalid action description');
   return text;
 }
 
-/** Send only context declared by this button. Neither edits nor snapshot leave the browser wholesale. */
-export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string, edits: ReadonlyMap<string, unknown>, timestamp: string, instancePath?: string, drafts: readonly A2uiDraftEdit[] = [], metadata?: A2uiMetadata): A2uiActionMessage {
+export function prepareA2uiActionEvaluation(source: A2uiSnapshot, sourceComponentId: string, edits: ReadonlyMap<string,unknown>, instancePath?: string, drafts: readonly A2uiDraftEdit[] = []) {
   const projection = projectA2uiTemplates(source);
   const { snapshot } = projection;
   const event = eventDescriptor(projection, sourceComponentId, instancePath);
@@ -123,20 +134,44 @@ export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string,
     const control = path ? controlForPath(snapshot, path) : undefined;
     if (path && control) declaredEdits.set(path, readA2uiValue(snapshot, binding, edits) ?? defaultControlValue(control));
   }
+  const derived = contextBindings.map(([key,value])=>({site:`context:${key}`,value}));
+  derived.push({site:'userMessage',value:event.userMessage});
+  return {projection,event,contextBindings,declaredEdits,derived};
+}
+
+export function actionValidationExpressions(evaluation: ReturnType<typeof prepareA2uiActionEvaluation>) {
+  const {projection,event,contextBindings,declaredEdits}=evaluation;
+  const paths=new Set(contextBindings.map(([,value])=>a2uiBindingPath(value)));
+  return projection.snapshot.components.flatMap(component=>{
+    const instance=projection.instances.get(component.id);
+    if (!instance) return [];
+    const path=isInput(component) ? a2uiBindingPath(component.value) : undefined;
+    const values: unknown[]=[];
+    if ((component===event.source || (path!==undefined && paths.has(path))) && Array.isArray(component['@checks']))
+      values.push(...component['@checks'].map(rule=>rule?.condition));
+    if (component.component==='DateTimeInput' && path && declaredEdits.has(path) && declaredEdits.get(path)!=='')
+      values.push(component.min,component.max);
+    return values.filter(hasA2uiAgentFunction).map(value=>({value,instance}));
+  });
+}
+
+/** Send only context declared by this button. Neither edits nor snapshot leave the browser wholesale. */
+export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string, edits: ReadonlyMap<string, unknown>, timestamp: string, instancePath?: string, drafts: readonly A2uiDraftEdit[] = [], metadata?: A2uiMetadata, resolveRemote?: A2uiRemoteValueResolver, resolveDerived?: A2uiDerivedResolver): A2uiActionMessage {
+  const {projection,event,contextBindings,declaredEdits}=prepareA2uiActionEvaluation(source,sourceComponentId,edits,instancePath,drafts);
+  const {snapshot}=projection;
   const context = Object.fromEntries(contextBindings.map(([key, binding]) => {
     const path = a2uiBindingPath(binding);
     const control = path ? controlForPath(snapshot, path) : undefined;
-    const value = readA2uiValue(snapshot, binding, declaredEdits, instancePath, event.scope) ?? defaultControlValue(control);
-    if (!isA2uiActionValue(value)) throw new Error("Invalid form value");
-    return [key, value];
+    const value = readActionValue(snapshot,binding,declaredEdits,instancePath,event.scope,resolveDerived?.(`context:${key}`)) ?? defaultControlValue(control);
+    return [key,boundedRpcJson(value)];
   }));
-  const userMessage = resolveUserMessage(snapshot, event.userMessage, declaredEdits, instancePath, event.scope);
+  const userMessage = resolveUserMessage(snapshot,event.userMessage,declaredEdits,instancePath,event.scope,resolveDerived?.('userMessage'));
   const message: A2uiActionMessage = { version: "1.0", action: {
     surfaceId: snapshot.surfaceId, sourceComponentId, name: event.name, timestamp, context,
     ...(userMessage === undefined ? {} : {userMessage}),
     ...(metadata === undefined ? {} : {metadata:readA2uiActionMetadata(metadata)}),
   } };
-  validateProjectedA2uiAction(projection, message, instancePath, drafts);
+  validateProjectedA2uiAction(projection,message,instancePath,drafts,resolveRemote,resolveDerived);
   return message;
 }
 
@@ -145,11 +180,11 @@ export function validateA2uiAction(source: A2uiSnapshot, payload: unknown, insta
   return validateA2uiActionWithEdits(source, payload, instancePath).action;
 }
 
-export function validateA2uiActionWithEdits(source: A2uiSnapshot, payload: unknown, instancePath?: string, drafts?: readonly A2uiDraftEdit[]) {
-  return validateProjectedA2uiAction(projectA2uiTemplates(source), payload, instancePath, drafts);
+export function validateA2uiActionWithEdits(source: A2uiSnapshot, payload: unknown, instancePath?: string, drafts?: readonly A2uiDraftEdit[], resolveRemote?: A2uiRemoteValueResolver, resolveDerived?: A2uiDerivedResolver) {
+  return validateProjectedA2uiAction(projectA2uiTemplates(source),payload,instancePath,drafts,resolveRemote,resolveDerived);
 }
 
-function validateProjectedA2uiAction(projection: Projection, payload: unknown, instancePath?: string, drafts: readonly A2uiDraftEdit[] = []): { action: A2uiAction; edits: ReadonlyMap<string, unknown> } {
+function validateProjectedA2uiAction(projection: Projection, payload: unknown, instancePath?: string, drafts: readonly A2uiDraftEdit[] = [], resolveRemote?: A2uiRemoteValueResolver, resolveDerived?: A2uiDerivedResolver): { action: A2uiAction; edits: ReadonlyMap<string, unknown> } {
   const { snapshot } = projection;
   if (!record(payload) || payload.version !== "1.0" || Object.keys(payload).length !== 2 || !record(payload.action)) {
     throw new Error("Invalid surface action");
@@ -166,34 +201,47 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
   }
   const boundValues = resolveDraftEdits(projection, drafts);
   const submittedPaths = new Set<string>();
-  const derived: [unknown, ActionValue][] = [];
+  const derived: [string,unknown,CanonicalJsonValue][]=[];
+  const context: Record<string,CanonicalJsonValue>={};
   for (const [key, binding] of Object.entries(event.context)) {
     const input = action.context[key];
     const path = a2uiBindingPath(binding);
     const control = path ? controlForPath(snapshot, path) : undefined;
-    if (!Object.hasOwn(action.context, key) || !isA2uiActionValue(input)) throw new Error('Invalid form value');
-    if (!path || !control) derived.push([binding, input]);
+    if (!Object.hasOwn(action.context,key)) throw Error('Invalid form value');
+    const canonical=boundedRpcJson(input);
+    Object.defineProperty(context,key,{value:canonical,enumerable:true});
+    if (!path || !control) derived.push([key,binding,canonical]);
     else {
-      if (!validControlValue(snapshot, control, input)) throw new Error('Invalid form value');
+      if (!isA2uiActionValue(input) || !validControlValue(control, input)) throw new Error('Invalid form value');
       if (boundValues.has(path) && !sameValue(boundValues.get(path), input)) throw new Error("Conflicting form values");
       boundValues.set(path, input);
       submittedPaths.add(path);
     }
   }
-  for (const [binding, input] of derived) {
-    if (!sameValue(input, readA2uiValue(snapshot, binding, boundValues, instancePath, event.scope) ?? null)) throw new Error('Invalid form value');
+  for (const [key,binding,input] of derived) {
+    const expected=boundedRpcJson(readActionValue(snapshot,binding,boundValues,instancePath,event.scope,resolveDerived?.(`context:${key}`)) ?? null);
+    if (JSON.stringify(input)!==JSON.stringify(expected)) throw Error('Invalid form value');
   }
   for (const component of snapshot.components) {
     const path = isInput(component) ? a2uiBindingPath(component.value) : undefined;
+    const instance=projection.instances.get(component.id);
+    if (component.component==='DateTimeInput' && path && boundValues.has(path) && boundValues.get(path)!=='') {
+      const type=a2uiDateTimeType(component);
+      const lower=readActionValue(snapshot,component.min,boundValues,instance?.instancePath,instance?.scope ?? '/',resolveRemote);
+      const upper=readActionValue(snapshot,component.max,boundValues,instance?.instancePath,instance?.scope ?? '/',resolveRemote);
+      if (!type || (lower!=null && hasA2uiAgentFunction(component.min) && !a2uiDateTimeDisplay(lower,type))
+        || (upper!=null && hasA2uiAgentFunction(component.max) && !a2uiDateTimeDisplay(upper,type))
+        || !validA2uiDateTime(type,boundValues.get(path),lower,upper)) throw Error('Invalid form value');
+    }
     if (component !== event.source && (path === undefined || !submittedPaths.has(path))) continue;
-    const error = checkA2uiComponent(snapshot, component, boundValues, projection.instances.get(component.id)).find(finding => finding.severity === 'error');
+    const error = checkA2uiComponent(snapshot,component,boundValues,instance,resolveRemote).find(finding => finding.severity === 'error');
     if (error) throw new Error(error.message);
   }
-  const userMessage = resolveUserMessage(snapshot, event.userMessage, boundValues, instancePath, event.scope);
+  const userMessage = resolveUserMessage(snapshot,event.userMessage,boundValues,instancePath,event.scope,resolveDerived?.('userMessage'));
   if (userMessage !== action.userMessage) throw new Error('Invalid action description');
   return { edits: boundValues, action: {
     surfaceId: snapshot.surfaceId, name: event.name, sourceComponentId: action.sourceComponentId, timestamp: action.timestamp,
-    ...(userMessage === undefined ? {} : {userMessage}), context: Object.fromEntries(Object.keys(event.context).map((key) => [key, (action.context as Record<string, ActionValue>)[key]])),
+    ...(userMessage === undefined ? {} : {userMessage}), context,
     ...(metadata === undefined ? {} : {metadata}),
   } };
 }
@@ -208,6 +256,8 @@ export interface A2uiActionRequest {
   message: A2uiActionMessage;
   instance_path?: string;
   a2ui_drafts?: A2uiDraftPatch[];
+  rpc_receipts?: string[];
+  rpc_derived_receipts?: Record<string,string[]>;
   renderer_peer?: string;
   metadata?: { a2uiRendererCapabilities: ClassicA2uiRendererCapabilities };
   private_code?: string;

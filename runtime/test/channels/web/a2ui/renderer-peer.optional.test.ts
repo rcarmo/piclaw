@@ -91,7 +91,7 @@ for (const engine of [chromium,webkit]) {
               : {'@call':'inspectLabel',catalogId:catalogue,args:{label:mode==='computed'
                 ? {'@call':'formatString',args:{value:'Current: ${/title}'}} : {'@path':'/title'}}},
           }},...(hasSurface ? {source:{post_id,thread_id,revision:mode==='stale'?revision-1:revision}} : {})};
-          return Response.json(await renderer.invoke(selection.hash,chatJid,17,packet,()=>{}));
+          return Response.json((await renderer.invoke(selection.hash,chatJid,17,packet,()=>{})).message);
         }
         return new Response('<!doctype html><html><body><script type="module" src="/fixture.js"></script></body></html>',
           {headers:{'Content-Type':'text/html','Content-Security-Policy':CLASSIC_CONTENT_SECURITY_POLICY}});

@@ -61,7 +61,7 @@ for (const engine of [chromium, webkit]) {
     let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
     let server: ReturnType<typeof Bun.serve> | undefined;
     const audioRequests: (string | null)[] = [];
-    const rpcRequests: {chat_jid:string;post_id:number;thread_id:number;revision:number;message:CallAgentFunctionMessage}[] = [];
+    const rpcRequests: {chat_jid:string;post_id:number;thread_id:number;revision:number;evaluation_site?:string;message:CallAgentFunctionMessage}[] = [];
     const reports: unknown[] = [];
     const delayedRpc = Promise.withResolvers<void>();
     const displayRpc = Promise.withResolvers<void>();
@@ -124,6 +124,10 @@ for (const engine of [chromium, webkit]) {
             await displayRpc.promise;
             return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,value:`Ready: ${callFunction.args?.label}`}});
           }
+          if (callFunction['@call']==='checkValue') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,
+            value:callFunction.args?.input==='ready' ? {valid:true} : {valid:false,message:'Awaiting verified value'},
+          }});
+          if (callFunction['@call']==='deriveValue') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,value:'Fresh summary'}});
           if (callFunction['@call']==='displayNumber') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,value:42}});
           if (callFunction['@call']==='displayFailure') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,error:{code:'UNKNOWN_FUNCTION',message:'Not registered'}}});
           if (callFunction['@call']==='broken') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId:'wrong',value:'cannot be accepted'}});
@@ -485,6 +489,31 @@ for (const engine of [chromium, webkit]) {
         surface_id:request.message.callAgentFunction.surfaceId,
         message:{version:'1.0',error:{code:'EXPRESSION_ERROR',functionCallId:request.message.callAgentFunction.functionCallId,message:'The agent function did not complete.'}},
       })));
+      const checkId='async-check-fixture';
+      const checkSurface=applyA2uiMessages(checkId,[{version:'1.0',createSurface:{surfaceId:checkId,catalogId:basicCatalogue,dataModel:{value:'unverified'},components:[
+        {id:'root',component:'Column',children:['edit','check']},
+        {id:'edit',component:'TextField',label:'Verification value',value:{'@path':'/value'}},
+        {id:'check',component:'Button',child:'checkLabel',action:{event:{name:'verified',context:{value:{'@path':'/value'},summary:{'@call':'deriveValue'}},
+          userMessage:{'@call':'deriveValue'}}},
+          '@checks':[{condition:{'@call':'checkValue',args:{input:{'@path':'/value'}}}}]},
+        {id:'checkLabel',component:'Text',text:'Confirm verified value'},
+      ]}}],undefined,true)!;
+      await page.evaluate(item=>(window as any).draw(item),{...block,owner:'agent',revision:16,surface:checkSurface});
+      await panel.getByText('Awaiting verified value').waitFor();
+      const checkedButton=panel.getByRole('button',{name:'Confirm verified value'});
+      expect(await checkedButton.getAttribute('aria-disabled')).toBe('true');
+      await panel.getByRole('textbox',{name:'Verification value'}).fill('ready');
+      await page.waitForFunction(()=>document.querySelector('.a2ui-surface button')?.getAttribute('aria-disabled')==='false');
+      expect(rpcRequests.filter(request=>request.evaluation_site)).toHaveLength(0);
+      await checkedButton.click();
+      await page.waitForFunction(()=>(window as any).events.at(-1)?.message.action.name==='verified');
+      const sites=rpcRequests.filter(request=>request.evaluation_site);
+      expect(sites.map(request=>JSON.parse(request.evaluation_site!).at(-1))).toEqual(['context:summary','userMessage']);
+      const proof=rpcRequests.findLast(request=>request.message.callAgentFunction.callFunction['@call']==='checkValue')!;
+      expect(await page.evaluate(()=>(window as any).events.at(-1))).toMatchObject({revision:16,rpc_receipts:[proof.message.callAgentFunction.functionCallId],
+        rpc_derived_receipts:{'context:summary':[sites[0].message.callAgentFunction.functionCallId],userMessage:[sites[1].message.callAgentFunction.functionCallId]},
+        message:{action:{name:'verified',userMessage:'Fresh summary',context:{value:'ready',summary:'Fresh summary'}}},
+      });
       const integrity = page.waitForResponse(response=>response.url().endsWith('/agent/a2ui-error') && response.status()===204);
       await page.evaluate((item)=>(window as any).draw(item),{...block,owner:'agent',revision:15,
         surface:{...display,components:[{id:'root',component:'Column',children:['root']}]},fallback_text:'Unable to reconstruct this form',

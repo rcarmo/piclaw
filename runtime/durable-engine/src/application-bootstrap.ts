@@ -31,7 +31,7 @@ import { createHostController, type HostControllerOptions } from "./host-control
 import { createHostDurableBindings, createInputHandoffCompletion } from "./host-bindings.js";
 import { prepareHostSchema } from "./host-schema.js";
 import { readApplicationMessagePayload } from "./accepted-payload-recovery.js";
-import { ownsA2uiModelSync, projectA2uiAgentInput, readA2uiRendererDataModel, readA2uiSurfaceOwner, storeA2uiInputMetadata } from '../../src/channels/web/a2ui/input-metadata.js';
+import { ownsA2uiModelSync, projectA2uiAgentInput, projectPublicA2uiInput, readA2uiRendererDataModel, readA2uiSurfaceOwner, storeA2uiInputMetadata } from '../../src/channels/web/a2ui/input-metadata.js';
 import { A2uiAgentRpc, type A2uiAgentFunction } from '../../src/channels/web/a2ui/agent-rpc.js';
 import type { RendererRpcBroker } from '../../src/channels/web/a2ui/renderer-rpc.js';
 import { value, effect, sealed } from "./host-effects.js";
@@ -257,6 +257,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
           sessionId: r.sessionId, bindings, work, assertCurrent(input) { assert(); config.assertAdmission?.(input); } }),
         assertAdmission: config.assertAdmission, materializeAnswer: config.materializeAnswer, prepareTerminalEffect: config.prepareTerminalEffect, onOperationSettled: config.onOperationSettled, onExecutionSettled: config.onExecutionSettled, putAnswer: config.answers.put.bind(config.answers),
         replyThreadFor(input) { assert(); return resolveAcceptedMessageThread(root, input); },
+        publicInputText(source, content) { assert(); return projectPublicA2uiInput(root,source,content); },
         async cancelOperationSource(input, expectedVersion, retryTaskId) {
           await admitSqliteWrite(root, () => {
             assert();

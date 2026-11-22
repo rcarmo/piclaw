@@ -1,7 +1,7 @@
 import { AgentFunctionResponseMessageSchema, type ErrorMessage } from '@a2ui/web_core/v1_0';
 import { readClassicFunctionCall } from '../../../src/channels/web/a2ui/function-call.js';
 import { a2uiBindingPath, evaluateClassicLocalFunction, isClassicValueFunction, readA2uiValue } from '../../../src/channels/web/a2ui/functions.js';
-import { boundedRpcJson, MAX_RPC_VALUE } from '../../../src/channels/web/a2ui/rpc-json.js';
+import { A2UI_RPC_RECEIPT_TTL_MS, a2uiRpcArgumentKey, boundedRpcJson, MAX_RPC_VALUE } from '../../../src/channels/web/a2ui/rpc-json.js';
 import type { A2uiSnapshot } from '../../../src/channels/web/a2ui/surface.js';
 import { postA2uiRendererError, requestA2uiAgentFunction } from '../api.js';
 
@@ -12,21 +12,15 @@ export interface A2uiFunctionContext {
     source: Parameters<typeof requestA2uiAgentFunction>[0];
     signal: AbortSignal;
     action?: true;
+    evaluationSite?: string;
+    orderedReceipts?: {id:string;key:string;value:unknown}[];
     /** Only reactive evaluations share results; every action click gets a new call ID. */
     memo?: Map<string,Promise<unknown>>;
+    receipts?: Map<string,{id:string;value:unknown;refreshAfter:number}>;
 }
 
 function record(value: unknown): value is Record<string,unknown> {
     return !!value && typeof value==='object' && !Array.isArray(value);
-}
-
-/** Whether an admitted expression needs the owning agent, looking only at its syntax. */
-export function hasA2uiAgentFunction(value: unknown): boolean {
-    const call=readClassicFunctionCall(value);
-    if (call) return call.name!=='openUrl' && (!isClassicValueFunction(call.name) || hasA2uiAgentFunction(call.args));
-    if (a2uiBindingPath(value)!==undefined) return false;
-    if (Array.isArray(value)) return value.some(hasA2uiAgentFunction);
-    return record(value) && Object.values(value).some(hasA2uiAgentFunction);
 }
 
 class AgentEvaluationError extends Error {}
@@ -38,18 +32,22 @@ export async function reportA2uiRendererError(context: Pick<A2uiFunctionContext,
     catch { return; } // A diagnostic cannot change the failed evaluation or be replayed later.
 }
 
-async function invokeAgent(context: A2uiFunctionContext, name: string, catalogId: string, args: Record<string, unknown>) {
+async function invokeAgent(context: A2uiFunctionContext, name: string, catalogId: string, args: Record<string, unknown>, key: string) {
     const {snapshot,source,signal}=context;
     const functionCallId=crypto.randomUUID();
+    const refreshAfter=Date.now()+A2UI_RPC_RECEIPT_TTL_MS-5_000;
     try {
         const response=await requestA2uiAgentFunction(source,{version:'1.0',callAgentFunction:{
             surfaceId:snapshot.surfaceId,functionCallId,callFunction:{'@call':name,catalogId,args},
-        }},signal);
+        }},signal,context.evaluationSite);
         signal.throwIfAborted();
         const parsed=AgentFunctionResponseMessageSchema.safeParse(response);
         if (!parsed.success || parsed.data.agentFunctionResponse.functionCallId!==functionCallId || parsed.data.agentFunctionResponse.error)
             throw Error('Unusable function response');
-        return boundedRpcJson(parsed.data.agentFunctionResponse.value ?? null);
+        const value=boundedRpcJson(parsed.data.agentFunctionResponse.value ?? null);
+        context.receipts?.set(key,{id:functionCallId,value,refreshAfter});
+        context.orderedReceipts?.push({id:functionCallId,key,value});
+        return value;
     } catch {
         signal.throwIfAborted();
         const message='The agent function did not complete.';
@@ -78,12 +76,12 @@ export async function evaluateA2uiFunction(value: unknown, context: A2uiFunction
                 return result;
             }
             const safeArgs=boundedRpcJson(args) as Record<string,unknown>;
-            const fingerprint=JSON.stringify([catalogId,call.name,safeArgs]);
+            const fingerprint=a2uiRpcArgumentKey(catalogId!,call.name,safeArgs);
             if (new TextEncoder().encode(fingerprint).length>MAX_RPC_VALUE) throw Error('The function arguments are too large.');
             signal.throwIfAborted();
             const existing=memo?.get(fingerprint);
             if (existing) return existing;
-            const pending=invokeAgent(context,call.name,catalogId!,safeArgs);
+            const pending=invokeAgent(context,call.name,catalogId!,safeArgs,fingerprint);
             memo?.set(fingerprint,pending);
             return pending;
         }

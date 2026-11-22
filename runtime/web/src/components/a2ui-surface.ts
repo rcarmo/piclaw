@@ -1,11 +1,12 @@
 /** Render the admitted A2UI catalog in Classic's Preact timeline. */
 import { html, useCallback, useLayoutEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
-import { a2uiBindingPath, buildA2uiAction, isA2uiActionValue, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
+import { a2uiBindingPath, actionValidationExpressions, buildA2uiAction, isA2uiActionValue, prepareA2uiActionEvaluation, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
 import { a2uiRendererContext } from '../ui/a2ui-renderer-peer.js';
 import { evaluateA2uiFunction, reportA2uiRendererError } from '../ui/a2ui-agent-function.js';
 import { useA2uiValueFunctions } from '../ui/use-a2ui-value-functions.js';
-import { readClassicActionFunction } from '../../../src/channels/web/a2ui/function-call.js';
-import { coerceA2uiBoolean } from '../../../src/channels/web/a2ui/functions.js';
+import { readClassicActionFunction, readClassicFunctionCall } from '../../../src/channels/web/a2ui/function-call.js';
+import { coerceA2uiBoolean, hasA2uiAgentFunction, type A2uiRemoteValueResolver } from '../../../src/channels/web/a2ui/functions.js';
+import { a2uiActionEvaluationSite, a2uiRpcArgumentKey } from '../../../src/channels/web/a2ui/rpc-json.js';
 import { checkA2uiComponent } from '../../../src/channels/web/a2ui/checks.js';
 import { a2uiDraftsFor, discardOldA2uiDraft, readA2uiDraft, rememberA2uiDraftEdit, subscribeA2uiDraft } from '../ui/a2ui-drafts.js';
 import { projectA2uiTemplates } from '../../../src/channels/web/a2ui/templates.js';
@@ -20,6 +21,8 @@ import { renderA2uiText } from './a2ui-text.js';
 import { A2uiTabs } from './a2ui-tabs.js';
 import { A2uiTotpDialog, readTotpPresentation, type TotpPresentation } from './a2ui-totp-dialog.js';
 import { a2uiSliderRange, readA2uiImageUrl, readA2uiLink, readA2uiLinkTarget, readA2uiPlaybackUrl, type A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
+
+const remoteField = (value: unknown) => !!readClassicFunctionCall(value) && hasA2uiAgentFunction(value);
 
 type Submit = (request: A2uiActionRequest, options?: { signal?: AbortSignal }) => Promise<unknown>;
 let nextCheckPrefix = 0;
@@ -57,6 +60,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
     const privateInput = useRef<HTMLInputElement | null>(null);
     const disabled = block.state !== 'active' || !onSubmit;
     const valueFunctions = useA2uiValueFunctions(projection,edits,{...source,revision:block.revision},!disabled && block.owner==='agent');
+    const resolveRemote: A2uiRemoteValueResolver = (catalogId,name,args)=>valueFunctions.receipts?.get(a2uiRpcArgumentKey(catalogId,name,args))?.value;
     const components = new Map((projection?.snapshot.components ?? []).map(item => [item.id, item]));
     const functionLifetime = useRef<AbortController | null>(null);
     const invalidProjection = !projection;
@@ -81,26 +85,73 @@ export function A2uiSurface({ block, source, onSubmit }: {
         event.stopPropagation();
         const instance = projection?.instances.get(componentId);
         if (disabled || !onSubmit || !instance || inFlight.current) return;
-        const action = components.get(componentId)?.action as {event?: {name?: string};functionCall?: unknown} | undefined;
+        const action = components.get(componentId)?.action as {event?: {name?:string;context?:Record<string,unknown>;userMessage?:unknown};functionCall?:unknown} | undefined;
         const functionCall = readClassicActionFunction(action);
-        const signal = functionCall ? functionLifetime.current?.signal : undefined;
-        if (functionCall && !signal) return;
+        const derivesRemotely=remoteField(action?.event?.userMessage) || Object.values(action?.event?.context ?? {}).some(remoteField);
+        const staleEvidence=[...(valueFunctions.receipts?.values() ?? [])].some(receipt=>receipt.refreshAfter<=Date.now());
+        const needsFunctionLifetime=!!functionCall || derivesRemotely || staleEvidence;
+        const signal=needsFunctionLifetime ? functionLifetime.current?.signal : undefined;
+        if (needsFunctionLifetime && !signal) return;
         inFlight.current = true;
         setPending(true);
         setError('');
         try {
-            if (signal) {
+            if (functionCall && signal) {
                 await evaluateA2uiFunction(action?.functionCall,{snapshot,edits,instance,source:{...source,revision:block.revision},signal,action:true});
                 return;
             }
             const drafts = block.owner === 'agent' && action?.event?.name !== 'cancel' ? a2uiDraftsFor(chat) : undefined;
             const selfDraft = syncDraft ? drafts?.find(draft => draft.surface_id === surfaceId && draft.revision === block.revision) : undefined;
             const currentDrafts = drafts?.filter(draft => draft.surface_id !== surfaceId || draft === selfDraft);
-            const message = buildA2uiAction(block.surface, instance.id, edits, new Date().toISOString(), instance.instancePath, selfDraft?.edits);
-            const key = JSON.stringify([componentId, message.action.context, message.action.userMessage, currentDrafts]);
+            const evaluation=derivesRemotely || staleEvidence ? prepareA2uiActionEvaluation(block.surface,instance.id,edits,instance.instancePath,selfDraft?.edits) : undefined;
+            const settledSites=new Map<string,{id:string;key:string;value:unknown}[]>();
+            if (derivesRemotely && signal && evaluation) {
+                for (const {site,value} of evaluation.derived) {
+                    if (!remoteField(value)) continue;
+                    const orderedReceipts: {id:string;key:string;value:unknown}[]=[];
+                    await evaluateA2uiFunction(value,{snapshot:evaluation.projection.snapshot,edits:evaluation.declaredEdits,
+                        instance,source:{...source,revision:block.revision},signal,action:true,orderedReceipts,
+                        evaluationSite:a2uiActionEvaluationSite(instance.id,instance.instancePath,site),
+                    });
+                    settledSites.set(site,orderedReceipts);
+                }
+                signal.throwIfAborted();
+            }
+            const resolveDerived=(site:string): A2uiRemoteValueResolver | undefined=>{
+                const resolved=settledSites.get(site);
+                if (!resolved) return;
+                let index=0;
+                return (catalogId,name,args)=>{
+                    const receipt=resolved[index++];
+                    if (receipt?.key===a2uiRpcArgumentKey(catalogId,name,args)) return receipt.value;
+                };
+            };
+            const currentReceipts=new Map<string,{id:string;value:unknown;refreshAfter:number}>(valueFunctions.receipts);
+            if (staleEvidence && signal && evaluation) {
+                const memo=new Map<string,Promise<unknown>>();
+                for (const candidate of actionValidationExpressions(evaluation)) {
+                    await evaluateA2uiFunction(candidate.value,{snapshot:evaluation.projection.snapshot,edits:evaluation.declaredEdits,
+                        instance:candidate.instance,source:{...source,revision:block.revision},signal,memo,receipts:currentReceipts,
+                    });
+                }
+                signal.throwIfAborted();
+            }
+            const used=new Set<string>();
+            const resolveForEvent: A2uiRemoteValueResolver = (catalogId,name,args)=>{
+                const receipt=currentReceipts.get(a2uiRpcArgumentKey(catalogId,name,args));
+                if (!receipt) return;
+                used.add(receipt.id);
+                return receipt.value;
+            };
+            const message = buildA2uiAction(block.surface,instance.id,edits,new Date().toISOString(),instance.instancePath,selfDraft?.edits,undefined,resolveForEvent,resolveDerived);
+            const rpc_receipts=[...used].sort();
+            const rpc_derived_receipts=Object.fromEntries([...settledSites].map(([site,items])=>[site,items.map(item=>item.id)]));
+            const key = JSON.stringify([componentId,message.action.context,message.action.userMessage,currentDrafts,rpc_receipts,rpc_derived_receipts]);
             if (!lastAttempt.current || lastAttempt.current.key !== key) {
                 lastAttempt.current = { key, request: { ...source, revision: block.revision, request_id: Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''), message,
                     ...(instance.instancePath ? { instance_path: instance.instancePath } : {}), ...(currentDrafts?.length ? { a2ui_drafts: currentDrafts } : {}),
+                    ...(rpc_receipts.length ? {rpc_receipts} : {}),
+                    ...(settledSites.size ? {rpc_derived_receipts} : {}),
                     ...(block.owner === 'agent' || block.owner === 'recovery' ? a2uiRendererContext(chat) : {}) } };
             }
             const request = lastAttempt.current.request;
@@ -135,7 +186,10 @@ export function A2uiSurface({ block, source, onSubmit }: {
         const locked = disabled || pending || !path;
         const child = (childId: unknown) => renderComponent(childId, depth + 1);
         const label = text(item.label);
-        const findings = checkA2uiComponent(snapshot, item, edits, instance);
+        const rules=Array.isArray(item['@checks']) ? item['@checks'] : [];
+        const settledRules=rules.filter(rule=>!rule?.condition || !valueFunctions.expressions.has(rule.condition) || valueFunctions.values?.has(rule.condition));
+        const checksPending=settledRules.length!==rules.length && !disabled;
+        const findings=checkA2uiComponent(snapshot,checksPending ? {...item,'@checks':settledRules} : item,edits,instance,resolveRemote);
         const invalid = findings.some(finding => finding.severity === 'error');
         const errorId = `${checkPrefix}-${encodeURIComponent(item.id)}`;
         const aria = { ...a2uiAria(item['@accessibility'], read), ...(invalid ? {'aria-invalid':'true', 'aria-errormessage':errorId} : {}) };
@@ -224,14 +278,14 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 const buttonLabel = buttonChild?.component !== 'Icon' ? undefined : typeof name === 'string' && Object.hasOwn(a2uiIconPaths, name)
                     ? name.replace(/([A-Z])/g, ' $1').replace(/^./, char => char.toUpperCase()) : link ? 'Open link' : 'Action';
                 const buttonClass = `a2ui-button a2ui-button-${item.variant || 'default'}`;
-                if (link && !disabled && !invalid) return checked(html`<a key=${id} class=${buttonClass} href=${link} aria-label=${buttonLabel} ...${aria}
+                if (link && !disabled && !invalid && !checksPending) return checked(html`<a key=${id} class=${buttonClass} href=${link} aria-label=${buttonLabel} ...${aria}
                     aria-haspopup=${openModal ? 'dialog' : undefined} onClick=${openModal}
                     target="_blank" rel="noopener noreferrer">${buttonContent()}</a>`);
                 if (block.owner === 'login' && (id === 'continue' || id === 'check')) return null;
                 return checked(html`<button key=${id} type="button" class=${buttonClass}
-                disabled=${disabled} aria-disabled=${pending || disabled || invalid || isLink || functionBlocked} aria-label=${buttonLabel} ...${aria} aria-haspopup=${openModal ? 'dialog' : undefined}
+                disabled=${disabled} aria-disabled=${pending || disabled || invalid || checksPending || isLink || functionBlocked} aria-label=${buttonLabel} ...${aria} aria-haspopup=${openModal ? 'dialog' : undefined}
                 onClick=${(event: Event) => {
-                    if (pending || disabled || invalid || isLink || functionBlocked) return;
+                    if (pending || disabled || invalid || checksPending || isLink || functionBlocked) return;
                     openModal?.(event);
                     void submit(event, item.id);
                 }}>${buttonContent()}</button>`);
@@ -252,8 +306,8 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 const type = a2uiDateTimeType(item);
                 if (!type) return null;
                 const value = a2uiDateTimeDisplay(read(item.value), type) ?? '';
-                const min = a2uiDateTimeDisplay(readA2uiValue(snapshot, item.min), type);
-                const max = a2uiDateTimeDisplay(readA2uiValue(snapshot, item.max), type);
+                const min = a2uiDateTimeDisplay(read(item.min), type);
+                const max = a2uiDateTimeDisplay(read(item.max), type);
                 return checked(html`<label key=${id} class="a2ui-field">${label}
                     <input type=${type} aria-label=${label || (type === 'datetime-local' ? 'Date and time' : type === 'date' ? 'Date' : 'Time')} ...${aria}
                         disabled=${locked} min=${min} max=${max} step=${type === 'date' ? undefined : 'any'} value=${value}
