@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { chromium, webkit } from "playwright";
 import { CLASSIC_CONTENT_SECURITY_POLICY } from '../../../../src/channels/web/http/security.js';
 import { applyA2uiMessages, compileA2uiExpress } from "../../../../src/channels/web/a2ui/express.js";
+import type { CallAgentFunctionMessage } from '@a2ui/web_core/v1_0';
 
 const browserTest = process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === "1" ? test : test.skip;
 const source = `
@@ -60,6 +61,8 @@ for (const engine of [chromium, webkit]) {
     let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
     let server: ReturnType<typeof Bun.serve> | undefined;
     const audioRequests: (string | null)[] = [];
+    const rpcRequests: {chat_jid:string;post_id:number;thread_id:number;revision:number;message:CallAgentFunctionMessage}[] = [];
+    const delayedRpc = Promise.withResolvers<void>();
     const audioOrigin = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(req) {
       audioRequests.push(req.headers.get('cookie'));
       const headers = new Headers({ 'Content-Type': 'audio/wav', 'Access-Control-Allow-Origin': '*', 'Accept-Ranges': 'bytes' });
@@ -103,6 +106,17 @@ for (const engine of [chromium, webkit]) {
       server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
         const { pathname } = new URL(req.url);
         if (pathname === '/agent/default/message') return Response.json(await req.json());
+        if (pathname === '/agent/a2ui-rpc') {
+          const input = await req.json() as typeof rpcRequests[number];
+          rpcRequests.push(input);
+          const {functionCallId,callFunction}=input.message.callAgentFunction;
+          if (callFunction['@call']==='waitForRevision') {
+            await delayedRpc.promise;
+            return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,error:{code:'INVALID_FUNCTION_CALL',message:'Obsolete response'}}});
+          }
+          if (callFunction['@call']==='broken') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId:'wrong',value:'cannot be accepted'}});
+          return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,value:null}});
+        }
         if (pathname === '/media/42') return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="green"/></svg>', {headers:{'Content-Type':'image/svg+xml'}});
         if (scripts.has(pathname.slice(1))) return new Response(Bun.file(join(scratch, pathname.slice(1))));
         if (pathname === '/marked.js') return new Response(Bun.file(join(web, 'static/common/js/marked.min.js')), {headers:{'Content-Type':'text/javascript'}});
@@ -388,6 +402,48 @@ for (const engine of [chromium, webkit]) {
       expect(await page.evaluate(() => (window as any).events.at(-1))).toMatchObject({revision:11,metadata:capabilities,
         a2ui_drafts:[{...expectedDraft, revision:11, edits:[{component_id:'memo',value:'Action draft'}]}],
         message:{action:{name:'syncDraft',context:{}}}});
+      const rpcId='agent-function-form';
+      const rpcSurface=applyA2uiMessages(rpcId,[{version:'1.0',createSurface:{surfaceId:rpcId,catalogId:basicCatalogue,dataModel:{rows:[{name:'One'},{name:'Two'}]},components:[
+        {id:'root',component:'Column',children:['rows','local','invalid','wait']},
+        {id:'rows',component:'List',children:{componentId:'row',path:'/rows'}},
+        {id:'row',component:'Row',children:['field','call']},
+        {id:'field',component:'TextField',label:'Item',value:{'@path':'name'}},
+        {id:'call',component:'Button',child:'callLabel',action:{functionCall:{'@call':'verifyItem',args:{label:{'@path':'name'},index:{'@call':'@index'}}}}},
+        {id:'callLabel',component:'Text',text:'Verify item'},
+        {id:'invalid',component:'Button',child:'invalidLabel',action:{functionCall:{'@call':'broken'}}},
+        {id:'invalidLabel',component:'Text',text:'Try invalid response'},
+        {id:'local',component:'Button',child:'localLabel',action:{functionCall:{'@call':'formatString',args:{value:'Pure local function'}}}},
+        {id:'localLabel',component:'Text',text:'Run local function'},
+        {id:'wait',component:'Button',child:'waitLabel',action:{functionCall:{'@call':'waitForRevision'}}},
+        {id:'waitLabel',component:'Text',text:'Wait for revision'},
+      ]}}],undefined,true)!;
+      const initialEventCount=await page.evaluate(()=>(window as any).events.length);
+      await page.evaluate((item)=>(window as any).draw(item),{...block,owner:'agent',revision:12,surface:rpcSurface});
+      const rows=panel.getByRole('listitem');
+      await rows.nth(1).getByRole('textbox',{name:'Item'}).fill('Second draft');
+      await panel.getByRole('button',{name:'Run local function'}).click();
+      expect(rpcRequests).toHaveLength(0);
+      const verify=rows.nth(1).getByRole('button',{name:'Verify item'});
+      await verify.click();
+      await page.locator('.a2ui-surface[aria-busy="true"]').waitFor({state:'detached'});
+      await verify.click();
+      await page.locator('.a2ui-surface[aria-busy="true"]').waitFor({state:'detached'});
+      expect(rpcRequests).toHaveLength(2);
+      for (const request of rpcRequests) expect(request).toMatchObject({post_id:19,thread_id:3,revision:12,chat_jid:'web:test',message:{version:'1.0',callAgentFunction:{surfaceId:rpcId,
+        callFunction:{'@call':'verifyItem',catalogId:basicCatalogue,args:{label:'Second draft',index:1}},
+      }}});
+      expect(rpcRequests[1].message.callAgentFunction.functionCallId).not.toBe(rpcRequests[0].message.callAgentFunction.functionCallId);
+      await panel.getByRole('button',{name:'Try invalid response'}).click();
+      await panel.getByRole('alert').getByText('The agent function did not complete.').waitFor();
+      const held = page.waitForRequest(request=>request.method()==='POST' && request.url().endsWith('/agent/a2ui-rpc') && request.postData()?.includes('waitForRevision')===true);
+      await panel.getByRole('button',{name:'Wait for revision'}).click();
+      await held;
+      await page.locator('.a2ui-surface[aria-busy="true"]').waitFor();
+      await page.evaluate((item)=>(window as any).draw(item),{...block,owner:'agent',revision:13,surface:rpcSurface});
+      await page.locator('.a2ui-surface[aria-busy="false"]').waitFor();
+      delayedRpc.resolve();
+      expect(await panel.getByRole('alert').count()).toBe(0);
+      expect(await page.evaluate(()=>(window as any).events.length)).toBe(initialEventCount);
       const legacyRequests: string[] = [];
       page.on('request', request => { if (request.url().includes('adaptivecards')) legacyRequests.push(request.url()); });
       await page.evaluate(() => (window as any).draw({
@@ -400,6 +456,7 @@ for (const engine of [chromium, webkit]) {
       expect(legacyRequests).toEqual([]);
       expect(errors).toEqual([]);
     } finally {
+      delayedRpc.resolve();
       await browser?.close();
       server?.stop(true);
       audioOrigin.stop(true);

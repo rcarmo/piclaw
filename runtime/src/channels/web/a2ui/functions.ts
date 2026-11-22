@@ -23,7 +23,7 @@ export function a2uiBindingPath(value: unknown): string | undefined {
 }
 
 /** Shared, bounded evaluation. Merely rendering a surface cannot invoke an effect or remote call. */
-export function readA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?: ReadonlyMap<string, unknown>, instancePath?: string, scope = '/'): unknown {
+export function readA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?: ReadonlyMap<string, unknown>, instancePath?: string, scope = '/', asArgument = false): unknown {
   let remaining = 256;
   function evaluate(input: unknown, depth: number, argument = false): unknown {
     if (--remaining < 0 || depth > 24) throw Error('A2UI expression limit exceeded');
@@ -58,6 +58,6 @@ export function readA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?: Re
     if (argument && record(input)) return Object.fromEntries(Object.entries(input).map(([key, item]) => [key, evaluate(item, depth + 1, true)]));
     return input;
   }
-  try { return evaluate(value, 0); }
+  try { return evaluate(value, 0, asArgument); }
   catch { return undefined; }
 }

@@ -1,14 +1,14 @@
 /** Server-side compiler and admission policy. Never bundle the parser into Classic. */
 import {
-  ComponentPruningTransformer,
   ExpressParser,
-  FunctionPruningTransformer,
   RendererState,
   type AgentToRendererMessage,
 } from "@a2ui/agent";
 import { basicCatalog } from "@a2ui/web_core/catalogs/basic/v1";
 import { DataModel } from '@a2ui/web_core/state';
+import { MessageProcessor } from '@a2ui/web_core/processing';
 import { CLASSIC_A2UI_FUNCTIONS, isClassicValueFunction } from "./functions.js";
+import { isClassicFunctionName, readClassicActionFunction } from './function-call.js';
 import { absoluteA2uiPointer, scopedA2uiPointer } from "./data-path.js";
 import { ClassicA2uiValidationError } from './protocol-errors.js';
 import { a2uiChildReferences, projectA2uiTemplates, readA2uiTemplate } from "./templates.js";
@@ -22,9 +22,17 @@ const MAX_DEPTH = 24;
 const ID = /^[\p{ID_Start}\p{ID_Continue}_-][\p{ID_Continue}_.-]{0,127}$/u;
 const FORBIDDEN_KEYS = new Set(["__proto__", "prototype", "constructor"]);
 const encoder = new TextEncoder();
-const catalog = new FunctionPruningTransformer(CLASSIC_A2UI_FUNCTIONS).transform(
-  new ComponentPruningTransformer(Object.keys(CLASSIC_A2UI_PROPERTIES)).transform(basicCatalog),
+const catalog = basicCatalog.withEntries(
+  [...basicCatalog.components.values()].filter(component=>Object.hasOwn(CLASSIC_A2UI_PROPERTIES,component.name)),
+  [...basicCatalog.functions.values()].filter(fn=>CLASSIC_A2UI_FUNCTIONS.includes(fn.name)),
 );
+
+/** Classic checks all component types itself. Undefined wire functions can route to the agent. */
+class ClassicWireProcessor extends MessageProcessor {
+  override processMessages(...[messages, context]: Parameters<MessageProcessor['processMessages']>): void {
+    super.processMessages(messages, {...context,validationConfig:{...context?.validationConfig,allowUnknownElements:true}});
+  }
+}
 
 function requireClassic(condition: unknown, reason: string, path?: string, code?: 'UNALLOWED_PARENT' | 'UNALLOWED_CHILD'): asserts condition {
   if (!condition) throw new ClassicA2uiValidationError(reason, path, code);
@@ -59,7 +67,7 @@ function checkJson(value: unknown, depth = 0, opaqueMetadata = false): void {
   const entries = Object.entries(value);
   requireClassic(entries.length <= MAX_COMPONENTS, "object too large");
   for (const [key, item] of entries) {
-    if (!opaqueMetadata) requireClassic(!FORBIDDEN_KEYS.has(key) && (key !== "@call" || item === "openUrl" || isClassicValueFunction(item)) && (key !== '@catalogId' || item === CLASSIC_A2UI_CATALOG), "unsupported key");
+    if (!opaqueMetadata) requireClassic(!FORBIDDEN_KEYS.has(key) && (key !== "@call" || isClassicFunctionName(item)) && (key !== '@catalogId' || item === CLASSIC_A2UI_CATALOG), "unsupported key");
     if (!opaqueMetadata && key === "@path") {
       requireClassic(entries.length === 1, "malformed path binding");
       requireClassic(scopedA2uiPointer(item) !== undefined, "unsupported data binding");
@@ -119,8 +127,10 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     requireClassic(component.weight === undefined || (typeof component.weight === 'number' && component.weight >= 0), "invalid layout weight");
     for (const [key, value] of Object.entries(component)) {
       if (key === 'metadata' || key === '@metadata') continue;
+      const call = key === 'action' ? readClassicActionFunction(value) : undefined;
       const target = key === 'action' ? readA2uiLinkTarget(value) : undefined;
-      checkValueCalls(target === undefined ? value : target);
+      if (call) checkValueCalls(call.args);
+      else checkValueCalls(target === undefined ? value : target);
     }
     ids.add(component.id);
     if (name === "Row" || name === "Column" || name === "List") {
@@ -141,6 +151,11 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
       if (target !== undefined) {
         requireClassic(typeof target === 'string' ? !!readA2uiLink(action) : record(target) &&
           (Object.hasOwn(target, '@path') || isClassicValueFunction(target['@call'])), 'unsafe or invalid link target');
+        continue;
+      }
+      const call = readClassicActionFunction(action);
+      if (call) {
+        requireClassic(call.name !== 'openUrl', 'unsafe or invalid link target');
         continue;
       }
       requireClassic(record(action) && allowedKeys(action, ["event"]) && record(action.event)
@@ -213,7 +228,7 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
   requireClassic(isId(surfaceId) && messages.length > 0 && messages.length <= MAX_MESSAGES, "invalid surface or batch size");
   checkJson(messages);
   requireClassic(encoder.encode(JSON.stringify(messages)).length <= MAX_SURFACE_BYTES, "batch too large");
-  const state = new RendererState([catalog]);
+  const state = progressive ? RendererState.of(new ClassicWireProcessor([catalog])) : new RendererState([catalog]);
   if (previous) {
     requireClassic(previous.surfaceId === surfaceId, "snapshot belongs to another surface");
     // Validate the rehydrated snapshot too and detach the SDK's mutable data model from it.

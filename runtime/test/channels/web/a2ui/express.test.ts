@@ -244,6 +244,24 @@ describe("Classic A2UI Express", () => {
   });
 });
 
+test('wire actions resolve their catalogue without relaxing the component or function envelope', () => {
+  const surfaceId='wire-invocation';
+  const catalogId='https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json';
+  const create=(functionCall: unknown, useDefault=true)=>applyA2uiMessages(surfaceId,[{version:'1.0',createSurface:{surfaceId,
+    ...(useDefault ? {catalogId} : {}),components:[
+      {id:'root',component:'Button','@catalogId':catalogId,child:'label',action:{functionCall}},
+      {id:'label',component:'Text','@catalogId':catalogId,text:'Verify'},
+    ],
+  }}],undefined,true);
+  expect(create({'@call':'lookup'})).toBeTruthy();
+  expect(create({'@call':'lookup',catalogId},false)).toBeTruthy();
+  expect(()=>create({'@call':'lookup'},false)).toThrow();
+  expect(()=>create({'@call':'lookup',catalogId:'https://example.invalid/catalog.json'})).toThrow();
+  expect(()=>create({'@call':'@unknown'})).toThrow();
+  expect(()=>create({'@call':'openUrl',args:{target:'https://example.invalid'}})).toThrow();
+  expect(()=>create({'@call':'lookup',unexpected:true})).toThrow();
+});
+
 test('accepts static and computed HTTP(S) link targets without running a remote call', () => {
   const link = 'root = Button(Text("Docs"), action=openUrl("https://example.com/docs"))';
   expect(applyA2uiMessages('docs', compileA2uiExpress(link,'docs'))?.components[0]).toMatchObject({

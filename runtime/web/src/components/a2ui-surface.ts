@@ -2,6 +2,8 @@
 import { html, useCallback, useLayoutEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import { a2uiBindingPath, buildA2uiAction, isA2uiActionValue, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
 import { a2uiRendererContext } from '../ui/a2ui-renderer-peer.js';
+import { evaluateA2uiFunction } from '../ui/a2ui-agent-function.js';
+import { readClassicActionFunction } from '../../../src/channels/web/a2ui/function-call.js';
 import { checkA2uiComponent } from '../../../src/channels/web/a2ui/checks.js';
 import { a2uiDraftsFor, discardOldA2uiDraft, readA2uiDraft, rememberA2uiDraftEdit, subscribeA2uiDraft } from '../ui/a2ui-drafts.js';
 import { projectA2uiTemplates } from '../../../src/channels/web/a2ui/templates.js';
@@ -53,6 +55,13 @@ export function A2uiSurface({ block, source, onSubmit }: {
     const privateInput = useRef<HTMLInputElement | null>(null);
     const disabled = block.state !== 'active' || !onSubmit;
     const components = new Map((projection?.snapshot.components ?? []).map(item => [item.id, item]));
+    const functionLifetime = useRef<AbortController | null>(null);
+    useLayoutEffect(() => {
+        if (disabled || block.owner !== 'agent') return;
+        const lifetime = new AbortController();
+        functionLifetime.current = lifetime;
+        return () => { functionLifetime.current=null; lifetime.abort(); };
+    }, [disabled, block.owner, chat, source.post_id, source.thread_id, surfaceId, block.revision]);
     function edit(id: string, path: string | undefined, value: unknown) {
         if (!path || disabled || inFlight.current) return;
         const instance = projection?.instances.get(id);
@@ -66,11 +75,18 @@ export function A2uiSurface({ block, source, onSubmit }: {
         event.stopPropagation();
         const instance = projection?.instances.get(componentId);
         if (disabled || !onSubmit || !instance || inFlight.current) return;
+        const action = components.get(componentId)?.action as {event?: {name?: string};functionCall?: unknown} | undefined;
+        const functionCall = readClassicActionFunction(action);
+        const signal = functionCall ? functionLifetime.current?.signal : undefined;
+        if (functionCall && !signal) return;
         inFlight.current = true;
         setPending(true);
         setError('');
         try {
-            const action = components.get(componentId)?.action as {event?: {name?: string}} | undefined;
+            if (signal) {
+                await evaluateA2uiFunction(action?.functionCall,{snapshot,edits,instance,source:{...source,revision:block.revision},signal});
+                return;
+            }
             const drafts = block.owner === 'agent' && action?.event?.name !== 'cancel' ? a2uiDraftsFor(chat) : undefined;
             const selfDraft = syncDraft ? drafts?.find(draft => draft.surface_id === surfaceId && draft.revision === block.revision) : undefined;
             const currentDrafts = drafts?.filter(draft => draft.surface_id !== surfaceId || draft === selfDraft);
@@ -92,7 +108,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 setTotp({ presentation, request });
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Unable to submit this form.');
+            if (!signal?.aborted) setError(err instanceof Error ? err.message : 'Unable to submit this form.');
         } finally {
             inFlight.current = false;
             setPending(false);
@@ -194,6 +210,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
             case 'Button': {
                 const buttonContent = () => renderComponent(item.child, depth + 1, undefined, true);
                 const isLink = readA2uiLinkTarget(item.action) !== undefined;
+                const functionBlocked = !isLink && !!readClassicActionFunction(item.action) && block.owner !== 'agent';
                 const link = readA2uiLink(item.action, read);
                 const buttonChild = typeof item.child === 'string' ? components.get(item.child) : undefined;
                 const name = buttonChild?.component === 'Icon' ? read(buttonChild.name) : undefined;
@@ -204,9 +221,9 @@ export function A2uiSurface({ block, source, onSubmit }: {
                     target="_blank" rel="noopener noreferrer">${buttonContent()}</a>`);
                 if (block.owner === 'login' && (id === 'continue' || id === 'check')) return null;
                 return checked(html`<button key=${id} type="button" class=${`a2ui-button a2ui-button-${item.variant || 'default'}`}
-                disabled=${disabled} aria-disabled=${pending || disabled || invalid || isLink} aria-label=${buttonLabel} ...${aria} aria-haspopup=${openModal ? 'dialog' : undefined}
+                disabled=${disabled} aria-disabled=${pending || disabled || invalid || isLink || functionBlocked} aria-label=${buttonLabel} ...${aria} aria-haspopup=${openModal ? 'dialog' : undefined}
                 onClick=${(event: Event) => {
-                    if (pending || disabled || invalid || isLink) return;
+                    if (pending || disabled || invalid || isLink || functionBlocked) return;
                     openModal?.(event);
                     void submit(event, item.id);
                 }}>${buttonContent()}</button>`);
