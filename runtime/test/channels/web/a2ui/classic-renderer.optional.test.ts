@@ -615,6 +615,17 @@ for (const engine of [chromium, webkit]) {
           {component_id:'choice',value:['North','South']},
         ]);
       }
+      const iconId='icon-model-data';
+      const icon=applyA2uiMessages(iconId,[{version:'1.0',createSurface:{surfaceId:iconId,catalogId:basicCatalogue,
+        dataModel:{shape:'M1 1 L10 10',record:{svgPath:{'@path':'/shape'}}},components:[
+          {id:'root',component:'Row',children:['literal','bound']},
+          {id:'literal',component:'Icon',name:{svgPath:{'@path':'/shape'}},'@accessibility':{label:'Authored shape'}},
+          {id:'bound',component:'Icon',name:{'@path':'/record'},'@accessibility':{label:'Inert model shape'}},
+        ],
+      }}],undefined,true)!;
+      await page.evaluate(item=>(window as any).draw(item),{...block,owner:'agent',revision:20,surface:icon});
+      expect(await panel.getByRole('img',{name:'Authored shape'}).locator('path').getAttribute('d')).toBe('M1 1 L10 10');
+      expect(await panel.getByRole('img',{name:'Inert model shape'}).count()).toBe(0);
       const legacyRequests: string[] = [];
       page.on('request', request => { if (request.url().includes('adaptivecards')) legacyRequests.push(request.url()); });
       await page.evaluate(() => (window as any).draw({

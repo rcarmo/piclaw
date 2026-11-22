@@ -8,6 +8,7 @@ import { MessageProcessor } from '@a2ui/web_core/processing';
 import { CLASSIC_A2UI_FUNCTIONS, isClassicValueFunction } from "./functions.js";
 import { isA2uiContextExpression, isClassicEntityName, isClassicFunctionName, mapA2uiActionExpressions, readClassicActionFunction } from './function-call.js';
 import { absoluteA2uiPointer, scopedA2uiPointer } from "./data-path.js";
+import { isA2uiEventString } from './rpc-json.js';
 import { ClassicA2uiValidationError } from './protocol-errors.js';
 import { a2uiChildReferences, overlayA2uiModel, projectA2uiTemplates, readA2uiTemplate } from "./templates.js";
 import { CLASSIC_A2UI_CATALOG, CLASSIC_A2UI_PROPERTIES, a2uiSliderRange, readA2uiLink, readA2uiLinkTarget, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
@@ -171,9 +172,9 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
         continue;
       }
       requireClassic(record(action) && allowedKeys(action, ["event"]) && record(action.event)
-        && allowedKeys(action.event, ["name", "context", "userMessage"]) && isId(action.event.name), "expected a server event");
+        && allowedKeys(action.event, ["name", "context", "userMessage"]) && isA2uiEventString(action.event.name), "expected a server event");
       const { context } = action.event;
-      requireClassic(context===undefined || (record(context) && Object.keys(context).every(isId)
+      requireClassic(context===undefined || (record(context) && Object.keys(context).every(isA2uiEventString)
         && Object.values(context).every(value=>!record(value) || isA2uiContextExpression(value)
           || Object.keys(value).every(key=>!/^@([^@]|$)/.test(key)))), 'unsupported event context');
     }

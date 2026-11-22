@@ -3,6 +3,7 @@ import { expect, test } from 'bun:test';
 import { applyA2uiMessages, bindA2uiDraftId, compileA2uiExpress } from '../../../../src/channels/web/a2ui/express.js';
 import { CLASSIC_A2UI_AGENT_CAPABILITIES, CLASSIC_A2UI_RENDERER_CAPABILITIES } from '../../../../src/channels/web/a2ui/capabilities.js';
 import { buildA2uiAction, validateA2uiAction } from '../../../../src/channels/web/a2ui/action.js';
+import { readA2uiDerivedReceiptIds } from '../../../../src/channels/web/a2ui/rpc.js';
 import type { A2uiSnapshot } from '../../../../src/channels/web/a2ui/surface.js';
 
 import { fixture, referenceValidator } from '../../../fixtures/a2ui-v1/schema.js';
@@ -156,6 +157,23 @@ test('shipped Classic authoring examples compile and the wire example submits th
   expect(validateA2uiAction(surface,action,'/1')).toMatchObject({name:'choose_region',userMessage:'Chose South',
     context:{region:'South',position:2,source:{section:'handoff',tags:['region']}},
   });
+});
+
+test('wire event names and context keys are bounded strings, not catalogue entities',()=>{
+  const surfaceId='opaque-event';
+  const descriptor={version:'1.0',createSurface:{surfaceId,catalogId:'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json',
+    components:[
+      {id:'root',component:'Button',child:'label',action:{event:{name:'review: approve',context:{'Region code':'south','1st choice':true}}}},
+      {id:'label',component:'Text',text:'Approve'},
+    ],
+  }};
+  expect(basic('agent_to_renderer.json')(descriptor)).toBe(true);
+  const surface=applyA2uiMessages(surfaceId,[descriptor],undefined,true)!;
+  const action=buildA2uiAction(surface,'root',new Map(),'2026-06-02T08:57:23Z');
+  expect(basic('renderer_to_agent.json')(action)).toBe(true);
+  expect(validateA2uiAction(surface,action)).toMatchObject({name:'review: approve',context:{'Region code':'south','1st choice':true}});
+  expect(readA2uiDerivedReceiptIds({'context:Region code':['abc']})?.get('context:Region code')).toEqual(['abc']);
+  expect(()=>readA2uiDerivedReceiptIds({'context:broken\nkey':['abc']})).toThrow();
 });
 
 test('Classic discovery and renderer offer match the pinned schemas', () => {

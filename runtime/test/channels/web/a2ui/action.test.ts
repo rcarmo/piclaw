@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { a2uiTopologyDrafts, buildA2uiAction, readA2uiValue, validateA2uiAction, validateA2uiActionWithEdits } from "../../../../src/channels/web/a2ui/action.js";
+import { actionValidationExpressions, a2uiTopologyDrafts, buildA2uiAction, prepareA2uiActionEvaluation, readA2uiValue, validateA2uiAction, validateA2uiActionWithEdits } from "../../../../src/channels/web/a2ui/action.js";
 import { applyA2uiMessages, compileA2uiExpress } from "../../../../src/channels/web/a2ui/express.js";
 import { CLASSIC_A2UI_CATALOG } from '../../../../src/channels/web/a2ui/surface.js';
 import { checkA2uiComponent } from '../../../../src/channels/web/a2ui/checks.js';
@@ -271,6 +271,27 @@ test('checks are enforced against accepted drafts and warnings do not veto an ac
   expect(() => validateA2uiAction(form,{...message,action:{...message.action,context:{email:'invalid'}}})).toThrow('Use a valid email');
   const blocked = applyA2uiMessages('checks',compileA2uiExpress(source.replace('$/enabled=true','$/enabled=false'),'checks'))!;
   expect(() => validateA2uiAction(blocked,message)).toThrow('Validation failed');
+});
+
+test('a synced action checks edited controls even when its event omits them',()=>{
+  const surfaceId='draft-check';
+  const form=applyA2uiMessages(surfaceId,compileA2uiExpress(`
+    surface("draft-check", sendDataModel=true);
+    $/note="Initial";
+    root=Column([field,send]);
+    field=TextField(label="Note",value=$/note,checks=[{condition:required($/note)}]);
+    send=Button(Text("Send"),action=Event("save"));
+  `,surfaceId))!;
+  const event=buildA2uiAction(form,'send',new Map(),timestamp);
+  expect(()=>validateA2uiActionWithEdits(form,event,undefined,[{component_id:'field',value:''}])).toThrow();
+  expect(validateA2uiActionWithEdits(form,event,undefined,[{component_id:'field',value:'Updated'}]).edits.get('/note')).toBe('Updated');
+  const remote={'@call':'checkNote',args:{value:{'@path':'/note'}}};
+  const checked={...form,components:form.components.map(component=>component.id==='field' ? {...component,'@checks':[{condition:remote}]} : component)};
+  const draft=[{component_id:'field',value:'Updated'}];
+  expect(actionValidationExpressions(prepareA2uiActionEvaluation(checked,'send',new Map(),undefined,draft)).map(x=>x.value)).toEqual([remote]);
+  expect(()=>validateA2uiActionWithEdits(checked,event,undefined,draft)).toThrow();
+  const verified=validateA2uiActionWithEdits(checked,event,undefined,draft,(_catalogue,name,args)=>name==='checkNote' && args.value==='Updated');
+  expect(verified.edits.get('/note')).toBe('Updated');
 });
 
 test("Classic does not accept authority, options, fixed values or undeclared inputs from the action", () => {

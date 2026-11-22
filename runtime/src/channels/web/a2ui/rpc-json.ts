@@ -33,6 +33,11 @@ export function boundedRpcJson(input: unknown): CanonicalJsonValue {
   return boundedJson(input,false);
 }
 
+/** Event names and context keys are wire strings; keep them safe in a timeline line. */
+export function isA2uiEventString(value:unknown): value is string {
+  return typeof value==='string' && value.length>0 && value.length<=128 && !/[\x00-\x1f\x7f\u2028\u2029]/.test(value);
+}
+
 export function a2uiActionEvaluationSite(componentId: string, instancePath: string | undefined, field: string): string {
   return JSON.stringify([componentId,instancePath ?? '',field]);
 }

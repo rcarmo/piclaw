@@ -163,14 +163,13 @@ export function prepareA2uiActionEvaluation(source: A2uiSnapshot, sourceComponen
 }
 
 export function actionValidationExpressions(evaluation: ReturnType<typeof prepareA2uiActionEvaluation>) {
-  const {projection,event,contextBindings,declaredEdits}=evaluation;
-  const paths=new Set(contextBindings.map(([,value])=>a2uiBindingPath(value)));
+  const {projection,event,declaredEdits}=evaluation;
   return projection.snapshot.components.flatMap(component=>{
     const instance=projection.instances.get(component.id);
     if (!instance) return [];
     const path=isInput(component) ? a2uiBindingPath(component.value) : undefined;
     const values: unknown[]=[];
-    if ((component===event.source || (path!==undefined && paths.has(path))) && Array.isArray(component['@checks']))
+    if ((component===event.source || (path!==undefined && declaredEdits.has(path))) && Array.isArray(component['@checks']))
       values.push(...component['@checks'].map(rule=>rule?.condition));
     if (component.component==='DateTimeInput' && path && declaredEdits.has(path) && declaredEdits.get(path)!=='')
       values.push(component.min,component.max);
@@ -261,7 +260,7 @@ function validateProjectedA2uiAction(projection: Projection,payload:unknown,inst
         || (upper!=null && hasA2uiAgentFunction(component.max) && !a2uiDateTimeDisplay(upper,type))
         || !validA2uiDateTime(type,boundValues.get(path),lower,upper)) throw Error('Invalid form value');
     }
-    if (component!==event.source && (path===undefined || !submitted.has(path))) continue;
+    if (component!==event.source && (path===undefined || !boundValues.has(path))) continue;
     const error=checkA2uiComponent(component,condition=>evaluateA2uiValue(resolved,condition,undefined,instance?.instancePath,instance?.scope,resolveRemote))
       .find(finding=>finding.severity==='error');
     if (error) throw new Error(error.message);

@@ -238,8 +238,10 @@ export function A2uiSurface({ block, source, onSubmit }: {
             }
             case 'Icon': {
                 const name = read(item.name);
+                // Nested expressions belong to an authored descriptor, never to the returned data.
+                const resolvePath=(part:unknown)=>name===item.name ? read(part) : part;
                 const path = typeof name === 'string' && Object.hasOwn(a2uiIconPaths, name) ? a2uiIconPaths[name]
-                    : name && typeof name === 'object' && Object.hasOwn(name, 'svgPath') ? read((name as { svgPath: unknown }).svgPath) : undefined;
+                    : name && typeof name === 'object' && Object.hasOwn(name, 'svgPath') ? resolvePath((name as { svgPath: unknown }).svgPath) : undefined;
                 if (typeof path !== 'string' || path.length > 4096 || !/^[Mm][MmZzLlHhVvCcSsQqTtAa0-9eE.,+\-\s]+$/.test(path)) return null;
                 return html`<svg key=${id} class="a2ui-icon" viewBox="0 0 24 24" aria-hidden=${aria['aria-label'] ? undefined : 'true'} role=${aria['aria-label'] ? 'img' : undefined} ...${aria} focusable="false"><path d=${path}></path></svg>`;
             }

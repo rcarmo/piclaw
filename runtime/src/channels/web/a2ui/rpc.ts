@@ -9,7 +9,7 @@ import { captureInputTarget } from '../messaging/input-request-authority.js';
 import { readA2uiCatalogueOffer } from './capabilities.js';
 import { parseA2uiDrafts, type A2uiDraftPatch } from './drafts.js';
 import { prepareA2uiDraftProjection, readA2uiRendererDataModel, readA2uiSurfaceOwner, type AcceptedRendererPeer } from './input-metadata.js';
-import { a2uiActionEvaluationSite, boundedRpcJson, malformedRendererInvocation, MAX_RPC_VALUE, type RendererReplyMessage } from './rpc-json.js';
+import { a2uiActionEvaluationSite, boundedRpcJson, isA2uiEventString, malformedRendererInvocation, MAX_RPC_VALUE, type RendererReplyMessage } from './rpc-json.js';
 import { A2UI_ERROR_TEXT, enqueueA2uiRendererError } from './renderer-errors.js';
 import { absoluteA2uiPointer } from './data-path.js';
 import { isA2uiSurfaceBlock } from './surface.js';
@@ -190,7 +190,7 @@ export function readA2uiDerivedReceiptIds(input: unknown, checks?: readonly stri
   const result=new Map<string,string[]>();
   const used=new Set(checks);
   for (const [site,value] of Object.entries(input)) {
-    if (site!=='userMessage' && !/^context:[\p{XID_Continue}_.-]{1,128}$/u.test(site)) throw Error('Invalid action evaluation field');
+    if (site!=='userMessage' && (!site.startsWith('context:') || !isA2uiEventString(site.slice(8)))) throw Error('Invalid action evaluation field');
     const ids=readA2uiReceiptIds(value);
     if (!ids || ids.some(id=>used.has(id))) throw Error('Invalid derived receipt identities');
     for (const id of ids) used.add(id);
