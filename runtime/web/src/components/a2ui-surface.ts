@@ -13,7 +13,7 @@ import { A2uiModal } from './a2ui-modal.js';
 import { renderA2uiText } from './a2ui-text.js';
 import { A2uiTabs } from './a2ui-tabs.js';
 import { A2uiTotpDialog, readTotpPresentation, type TotpPresentation } from './a2ui-totp-dialog.js';
-import { a2uiSliderRange, readA2uiImageUrl, readA2uiLink, readA2uiPlaybackUrl, type A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
+import { a2uiSliderRange, readA2uiImageUrl, readA2uiLink, readA2uiLinkTarget, readA2uiPlaybackUrl, type A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
 
 type Submit = (request: A2uiActionRequest, options?: { signal?: AbortSignal }) => Promise<unknown>;
 let nextCheckPrefix = 0;
@@ -169,7 +169,8 @@ export function A2uiSurface({ block, source, onSubmit }: {
             case 'Divider': return html`<hr key=${id} ...${aria} class=${item.axis === 'vertical' ? 'a2ui-divider-vertical' : ''} />`;
             case 'Button': {
                 const buttonContent = () => renderComponent(item.child, depth + 1, undefined, true);
-                const link = readA2uiLink(item.action);
+                const isLink = readA2uiLinkTarget(item.action) !== undefined;
+                const link = readA2uiLink(item.action, read);
                 const buttonChild = typeof item.child === 'string' ? components.get(item.child) : undefined;
                 const name = buttonChild?.component === 'Icon' ? read(buttonChild.name) : undefined;
                 const buttonLabel = buttonChild?.component !== 'Icon' ? undefined : typeof name === 'string' && Object.hasOwn(a2uiIconPaths, name)
@@ -179,9 +180,9 @@ export function A2uiSurface({ block, source, onSubmit }: {
                     target="_blank" rel="noopener noreferrer">${buttonContent()}</a>`);
                 if (block.owner === 'login' && (id === 'continue' || id === 'check')) return null;
                 return checked(html`<button key=${id} type="button" class=${`a2ui-button a2ui-button-${item.variant || 'default'}`}
-                disabled=${disabled} aria-disabled=${pending || disabled || invalid} aria-label=${buttonLabel} ...${aria} aria-haspopup=${openModal ? 'dialog' : undefined}
+                disabled=${disabled} aria-disabled=${pending || disabled || invalid || isLink} aria-label=${buttonLabel} ...${aria} aria-haspopup=${openModal ? 'dialog' : undefined}
                 onClick=${(event: Event) => {
-                    if (pending || disabled || invalid) return;
+                    if (pending || disabled || invalid || isLink) return;
                     openModal?.(event);
                     void submit(event, item.id);
                 }}>${buttonContent()}</button>`);

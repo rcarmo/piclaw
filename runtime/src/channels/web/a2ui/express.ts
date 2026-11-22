@@ -10,7 +10,7 @@ import { basicCatalog } from "@a2ui/web_core/catalogs/basic/v1";
 import { CLASSIC_A2UI_FUNCTIONS, isClassicValueFunction } from "./functions.js";
 import { absoluteA2uiPointer, scopedA2uiPointer } from "./data-path.js";
 import { projectA2uiTemplates, readA2uiTemplate } from "./templates.js";
-import { CLASSIC_A2UI_CATALOG, CLASSIC_A2UI_PROPERTIES, a2uiSliderRange, readA2uiLink, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
+import { CLASSIC_A2UI_CATALOG, CLASSIC_A2UI_PROPERTIES, a2uiSliderRange, readA2uiLink, readA2uiLinkTarget, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
 
 const MAX_SOURCE_BYTES = 16_384;
 const MAX_SURFACE_BYTES = 32_768;
@@ -115,7 +115,9 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     if (a11y !== undefined) requireClassic(record(a11y) && allowedKeys(a11y, ['label', 'description', 'hidden', 'live']), 'invalid accessibility descriptor');
     requireClassic(component.weight === undefined || (typeof component.weight === 'number' && component.weight >= 0), "invalid layout weight");
     for (const [key, value] of Object.entries(component)) {
-      if (key !== 'metadata' && key !== '@metadata' && (key !== 'action' || !readA2uiLink(value))) checkValueCalls(value);
+      if (key === 'metadata' || key === '@metadata') continue;
+      const target = key === 'action' ? readA2uiLinkTarget(value) : undefined;
+      checkValueCalls(target === undefined ? value : target);
     }
     ids.add(component.id);
     if (name === "Row" || name === "Column" || name === "List") {
@@ -134,7 +136,12 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     }
     if (name === "Button") {
       const { action } = component;
-      if (readA2uiLink(action)) continue;
+      const target = readA2uiLinkTarget(action);
+      if (target !== undefined) {
+        requireClassic(typeof target === 'string' ? !!readA2uiLink(action) : record(target) &&
+          (Object.hasOwn(target, '@path') || isClassicValueFunction(target['@call'])), 'unsafe or invalid link target');
+        continue;
+      }
       requireClassic(record(action) && allowedKeys(action, ["event"]) && record(action.event)
         && allowedKeys(action.event, ["name", "context", "userMessage"]) && isId(action.event.name), "expected a server event");
       const { context } = action.event;
@@ -270,7 +277,7 @@ function verifySnapshot(snapshot: A2uiSnapshot): void {
     requireClassic(item.weight === undefined || canWeight, "layout weight requires a Row or Column parent");
     const weightedChildren = item.component === "Row" || item.component === "Column";
     if (!inTemplate) for (const [key, value] of Object.entries(item)) {
-      if (key !== 'metadata' && key !== '@metadata' && (key !== 'action' || !readA2uiLink(value))) requireClassic(!containsCall(value, '@index'), '@index requires a template instance');
+      if (key !== 'metadata' && key !== '@metadata') requireClassic(!containsCall(value, '@index'), '@index requires a template instance');
     }
     const childAt = (child: string, weight = false) => walk(child, depth + 1, weight, inTemplate);
     if (Array.isArray(item.children)) for (const child of item.children) childAt(child, weightedChildren);

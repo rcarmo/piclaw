@@ -70,12 +70,20 @@ export function isA2uiSurfaceBlock(value: unknown): value is A2uiSurfaceBlock {
     && Array.isArray(block.surface.components) && block.surface.components.length <= 96;
 }
 
-/** One local catalog action: open a static HTTP(S) link in the viewer's browser. */
-export function readA2uiLink(action: unknown): string | undefined {
+/** Return the declared target of the local openUrl action, without evaluating it. */
+export function readA2uiLinkTarget(action: unknown): unknown {
   if (!action || typeof action !== 'object' || Array.isArray(action) || Object.keys(action).length !== 1) return;
-  const call = (action as { functionCall?: { '@call'?: unknown; args?: { url?: unknown } } }).functionCall;
-  if (!call || call['@call'] !== 'openUrl' || Object.keys(call).length !== 2 || !call.args || Object.keys(call.args).length !== 1) return;
-  return readA2uiHttpUrl(call.args.url)?.href;
+  const call = (action as { functionCall?: { '@call'?: unknown; args?: { url?: unknown }; catalogId?: unknown } }).functionCall;
+  if (!call || call['@call'] !== 'openUrl' || Object.keys(call).length !== (Object.hasOwn(call, 'catalogId') ? 3 : 2)
+    || (call.catalogId !== undefined && call.catalogId !== CLASSIC_A2UI_CATALOG)
+    || !call.args || Object.keys(call.args).length !== 1 || !Object.hasOwn(call.args, 'url')) return;
+  return call.args.url;
+}
+
+/** Navigation is available only as an approved browser link, never as generic RPC. */
+export function readA2uiLink(action: unknown, resolve: (value: unknown) => unknown = value => value): string | undefined {
+  const target = readA2uiLinkTarget(action);
+  return target === undefined ? undefined : readA2uiHttpUrl(resolve(target))?.href;
 }
 
 function readA2uiHttpUrl(target: unknown): URL | undefined {

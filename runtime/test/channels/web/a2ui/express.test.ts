@@ -3,7 +3,7 @@ import { applyA2uiMessages, compileA2uiExpress } from "../../../../src/channels/
 import { basicCatalog } from '@a2ui/web_core/catalogs/basic/v1';
 import { a2uiIconPaths } from '../../../../web/src/components/a2ui-icon-paths.js';
 import { readA2uiValue } from '../../../../src/channels/web/a2ui/action.js';
-import { CLASSIC_A2UI_PROPERTIES, readA2uiImageUrl } from "../../../../src/channels/web/a2ui/surface.js";
+import { CLASSIC_A2UI_PROPERTIES, readA2uiImageUrl, readA2uiLink } from "../../../../src/channels/web/a2ui/surface.js";
 
 const form = `
   # Standard upstream Express, not a Piclaw form parser.
@@ -236,13 +236,18 @@ describe("Classic A2UI Express", () => {
   });
 });
 
-test('allows a static HTTP(S) browser link, not a remote call or an expression URL', () => {
+test('accepts static and computed HTTP(S) link targets without running a remote call', () => {
   const link = 'root = Button(Text("Docs"), action=openUrl("https://example.com/docs"))';
   expect(applyA2uiMessages('docs', compileA2uiExpress(link,'docs'))?.components[0]).toMatchObject({
     action: { functionCall: { '@call': 'openUrl', args: { url: 'https://example.com/docs' } } },
   });
+  const source = '$/target = "https://example.com"; root = Button(Text("Docs"), action=openUrl($/target))';
+  for (const target of ['https://example.com', 'javascript:alert(1)', 'https://user:password@example.com']) {
+    const snapshot = applyA2uiMessages('docs',compileA2uiExpress(source.replace('https://example.com',target),'docs'))!;
+    const button = snapshot.components.find(component => component.component === 'Button');
+    expect(readA2uiLink(button?.action, value => readA2uiValue(snapshot,value))).toBe(target === 'https://example.com' ? 'https://example.com/' : undefined);
+  }
   for (const source of [
-    '$/target = "https://example.com"; root = Button(Text("Docs"), action=openUrl($/target))',
     'root = Button(Text("Docs"), action=openUrl("https://user:password@example.com"))',
     'root = Text(openUrl("https://example.com"))',
   ]) expect(() => applyA2uiMessages('docs', compileA2uiExpress(source,'docs'))).toThrow();

@@ -272,12 +272,21 @@ for (const engine of [chromium, webkit]) {
       expect(await page.getByText('PRIVATEDEVICE').count()).toBe(0);
       const authSubmit = await page.evaluate(() => (window as any).events.at(-1));
       expect(authSubmit).toMatchObject({ private_value: 'synthetic-only-key', revision: 6, message: { action: { context: {} } } });
-      const docs = { ...block, revision: 7, surface: applyA2uiMessages('docs-link',
-        compileA2uiExpress('root = Button(Text("Docs"), action=openUrl("https://example.test/docs"))', 'docs-link')) };
+      const docsId = 'docs-link';
+      const docs = { ...block, revision: 7, surface: applyA2uiMessages(docsId,
+        compileA2uiExpress('$/target="https://example.test/docs"; root = Button(Text("Docs"), action=openUrl(formatString("${/target}")))', docsId))! };
       await page.evaluate((block) => (window as any).draw(block), docs);
       const link = page.getByRole('link', { name: 'Docs' });
       expect(await link.getAttribute('href')).toBe('https://example.test/docs');
       expect(await link.getAttribute('rel')).toBe('noopener noreferrer');
+      const brokenLink = applyA2uiMessages(docsId, [{version:'1.0',updateDataModel:{surfaceId:docsId,path:'/target',value:'javascript:void(0)'}}], docs.surface);
+      const count = await page.evaluate(() => (window as any).events.length);
+      await page.evaluate((block) => (window as any).draw(block), {...docs, surface:brokenLink});
+      expect(await link.count()).toBe(0);
+      const disabledLink = page.getByRole('button', {name:'Docs'});
+      expect(await disabledLink.getAttribute('aria-disabled')).toBe('true');
+      await disabledLink.evaluate(element => element.click());
+      expect(await page.evaluate(() => (window as any).events.length)).toBe(count);
       const pointerId = 'pointer-browser';
       const binding = { '@path': '/a~1b/~0label text' };
       const pointerSurface = applyA2uiMessages(pointerId, [{ version:'1.0', createSurface:{
