@@ -36,7 +36,8 @@ export function projectA2uiTemplates(snapshot: A2uiSnapshot) {
     const instanceId = a2uiInstanceId(id, instancePath);
     if (!definition || depth > 24 || instances.size >= 384 || instances.has(instanceId)) throw Error('Invalid or oversized A2UI template tree');
     instances.set(instanceId, { id, scope, instancePath });
-    const component: A2uiComponent = { ...scopeBindings(definition, scope) as A2uiComponent, id: instanceId };
+    const { '@metadata': _opaqueMetadata, ...properties } = definition;
+    const component: A2uiComponent = { ...scopeBindings(properties, scope) as A2uiComponent, id: instanceId };
     projected.push(component);
     const child = (reference: string) => walk(reference, depth + 1, scope, instancePath);
     const template = readA2uiTemplate(definition.children);

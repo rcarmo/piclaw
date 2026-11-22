@@ -45,25 +45,32 @@ function checkPath(value: unknown, allowRoot = false): void {
   requireClassic(typeof value === 'string' && value.length <= 256 && absoluteA2uiPointer(value, allowRoot), "unsupported data path");
 }
 
-function checkJson(value: unknown, depth = 0): void {
+function checkJson(value: unknown, depth = 0, opaqueMetadata = false): void {
   requireClassic(depth <= MAX_DEPTH, "too deeply nested");
   if (value === null || typeof value === "boolean" || typeof value === "string" || (typeof value === "number" && Number.isFinite(value))) return;
   if (Array.isArray(value)) {
     requireClassic(value.length <= MAX_COMPONENTS, "array too large");
-    for (const item of value) checkJson(item, depth + 1);
+    for (const item of value) checkJson(item, depth + 1, opaqueMetadata);
     return;
   }
   requireClassic(record(value), "expected JSON values");
   const entries = Object.entries(value);
   requireClassic(entries.length <= MAX_COMPONENTS, "object too large");
   for (const [key, item] of entries) {
-    requireClassic(!FORBIDDEN_KEYS.has(key) && (key !== "@call" || item === "openUrl" || isClassicValueFunction(item)) && key !== "@catalogId", "unsupported key");
-    if (key === "@path") {
+    if (!opaqueMetadata) requireClassic(!FORBIDDEN_KEYS.has(key) && (key !== "@call" || item === "openUrl" || isClassicValueFunction(item)) && key !== "@catalogId", "unsupported key");
+    if (!opaqueMetadata && key === "@path") {
       requireClassic(entries.length === 1, "malformed path binding");
       requireClassic(scopedA2uiPointer(item) !== undefined, "unsupported data binding");
     }
-    checkJson(item, depth + 1);
+    checkJson(item, depth + 1, opaqueMetadata || key === 'metadata' || key === '@metadata');
   }
+}
+
+function checkMetadata(value: unknown): void {
+  if (value === undefined) return;
+  requireClassic(record(value) && allowedKeys(value, ['extensions']), 'invalid extension metadata');
+  requireClassic(value.extensions === undefined || (record(value.extensions) && Object.keys(value.extensions).every(key =>
+    /^[\p{XID_Start}_][\p{XID_Continue}]*$/u.test(key))), 'invalid extension identifier');
 }
 
 function containsCall(value: unknown, name?: string): boolean {
@@ -94,7 +101,9 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     requireClassic(record(component) && isId(component.id) && !ids.has(component.id), "invalid or duplicate component id");
     const name = component.component;
     requireClassic(typeof name === "string" && Object.hasOwn(CLASSIC_A2UI_PROPERTIES, name), "unsupported component");
-    requireClassic(allowedKeys(component, ["id", "component", "weight", "@accessibility", "accessibility", "@checks", "checks", ...CLASSIC_A2UI_PROPERTIES[name as A2uiComponent["component"]]]), "unsupported component property");
+    requireClassic(allowedKeys(component, ["id", "component", "weight", "@accessibility", "accessibility", "@checks", "checks", "@metadata", "metadata", ...CLASSIC_A2UI_PROPERTIES[name as A2uiComponent["component"]]]), "unsupported component property");
+    requireClassic(!(Object.hasOwn(component, '@metadata') && Object.hasOwn(component, 'metadata')), 'conflicting metadata');
+    checkMetadata(Object.hasOwn(component, '@metadata') ? component['@metadata'] : component.metadata);
     requireClassic(!(Object.hasOwn(component, '@checks') && Object.hasOwn(component, 'checks')), 'conflicting check descriptors');
     const checks = component['@checks'] ?? component.checks;
     if (checks !== undefined) requireClassic(['Button','TextField','CheckBox','ChoicePicker','Slider','DateTimeInput'].includes(name)
@@ -106,7 +115,7 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     if (a11y !== undefined) requireClassic(record(a11y) && allowedKeys(a11y, ['label', 'description', 'hidden', 'live']), 'invalid accessibility descriptor');
     requireClassic(component.weight === undefined || (typeof component.weight === 'number' && component.weight >= 0), "invalid layout weight");
     for (const [key, value] of Object.entries(component)) {
-      if (key !== "action" || !readA2uiLink(value)) checkValueCalls(value);
+      if (key !== 'metadata' && key !== '@metadata' && (key !== 'action' || !readA2uiLink(value))) checkValueCalls(value);
     }
     ids.add(component.id);
     if (name === "Row" || name === "Column" || name === "List") {
@@ -175,7 +184,7 @@ function forRendererState(messages: readonly unknown[]): unknown[] {
     const body = message.createSurface ?? message.updateComponents;
     if (record(body) && Array.isArray(body.components)) {
       for (const item of body.components) if (record(item)) {
-        for (const key of ['accessibility','checks'] as const) if (Object.hasOwn(item, `@${key}`)) {
+        for (const key of ['accessibility','checks','metadata'] as const) if (Object.hasOwn(item, `@${key}`)) {
           item[key] = item[`@${key}`];
           delete item[`@${key}`];
         }
@@ -207,8 +216,9 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
     requireClassic(record(body) && body.surfaceId === surfaceId, "batch targets a different surface");
     if (operation === "createSurface") {
       requireClassic(!exists && index === 0 && body.catalogId === CLASSIC_A2UI_CATALOG
-        && allowedKeys(body, ["surfaceId", "catalogId", "components", "dataModel", "sendDataModel"])
+        && allowedKeys(body, ["surfaceId", "catalogId", "components", "dataModel", "sendDataModel", "metadata"])
         && (body.sendDataModel === undefined || body.sendDataModel === false), "unsupported surface creation");
+      checkMetadata(body.metadata);
       if (body.components !== undefined) checkComponents(body.components);
       exists = true;
     } else {
@@ -231,10 +241,11 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
   const snapshot: A2uiSnapshot = {
     surfaceId,
     catalogId: CLASSIC_A2UI_CATALOG,
-    components: Array.from(result.componentsModel.values, ({ id, type, properties }) => {
+    ...(result.metadata === undefined ? {} : { metadata: result.metadata }),
+    components: Array.from(result.componentsModel.values, ({ id, type, properties, metadata }) => {
       const { accessibility, checks, ...rest } = properties;
       return { ...rest, id, component: type, ...(accessibility === undefined ? {} : { '@accessibility': accessibility }),
-        ...(checks === undefined ? {} : { '@checks': checks }) } as A2uiComponent;
+        ...(checks === undefined ? {} : { '@checks': checks }), ...(metadata === undefined ? {} : { '@metadata': metadata }) } as A2uiComponent;
     }),
     // SDK deletion leaves an empty array slot; persisted JSON represents it as null without shifting indices.
     dataModel: JSON.parse(JSON.stringify(result.dataModel.get("/"))),
@@ -247,6 +258,7 @@ function verifySnapshot(snapshot: A2uiSnapshot): void {
   checkJson(snapshot);
   requireClassic(snapshot.catalogId === CLASSIC_A2UI_CATALOG && record(snapshot.dataModel)
     && encoder.encode(JSON.stringify(snapshot)).length <= MAX_SURFACE_BYTES, "invalid snapshot or snapshot too large");
+  checkMetadata(snapshot.metadata);
   requireClassic(!containsCall(snapshot.dataModel), "functions are not supported in data models");
   checkComponents(snapshot.components);
   const components = new Map(snapshot.components.map((item) => [item.id, item]));
@@ -258,7 +270,7 @@ function verifySnapshot(snapshot: A2uiSnapshot): void {
     requireClassic(item.weight === undefined || canWeight, "layout weight requires a Row or Column parent");
     const weightedChildren = item.component === "Row" || item.component === "Column";
     if (!inTemplate) for (const [key, value] of Object.entries(item)) {
-      if (key !== 'action' || !readA2uiLink(value)) requireClassic(!containsCall(value, '@index'), '@index requires a template instance');
+      if (key !== 'metadata' && key !== '@metadata' && (key !== 'action' || !readA2uiLink(value))) requireClassic(!containsCall(value, '@index'), '@index requires a template instance');
     }
     const childAt = (child: string, weight = false) => walk(child, depth + 1, weight, inTemplate);
     if (Array.isArray(item.children)) for (const child of item.children) childAt(child, weightedChildren);

@@ -39,12 +39,15 @@ export function a2uiSliderRange(item: A2uiComponent) {
   return { min, max, step, steps };
 }
 
+export interface A2uiMetadata { extensions?: Record<string, unknown> }
+
 /** A canonical v1.0 createSurface body; no unbounded replay of update messages. */
 export interface A2uiSnapshot {
   surfaceId: string;
   catalogId: typeof CLASSIC_A2UI_CATALOG;
   components: A2uiComponent[];
   dataModel: Record<string, unknown>;
+  metadata?: A2uiMetadata;
 }
 
 export interface A2uiSurfaceBlock {

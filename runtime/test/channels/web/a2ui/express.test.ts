@@ -160,6 +160,28 @@ describe("Classic A2UI Express", () => {
     }
   });
 
+  test('keeps opaque surface and component extensions without evaluating unknown keys', () => {
+    const surfaceId = 'metadata';
+    const catalogId = 'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json';
+    const surfaceMeta = { extensions:{ org_example_audit:{ level:2 } } };
+    const componentMeta = { extensions:{ org_example_unknown:{ '@call':'not_a_catalogue_function', '@path':'literal', nested:[1,2] } } };
+    const creation = { version:'1.0',createSurface:{surfaceId,catalogId,metadata:surfaceMeta,
+      components:[{id:'root',component:'Text',text:'Example','@metadata':componentMeta}],
+    }};
+    const snapshot = applyA2uiMessages(surfaceId,[creation])!;
+    expect(snapshot.metadata).toEqual(surfaceMeta);
+    expect(snapshot.components[0]?.['@metadata']).toEqual(componentMeta);
+    const dataOnly = applyA2uiMessages(surfaceId,[{version:'1.0',updateDataModel:{surfaceId,value:{}}}], JSON.parse(JSON.stringify(snapshot)))!;
+    expect(dataOnly.components[0]?.['@metadata']).toEqual(componentMeta);
+    const cleared = applyA2uiMessages(surfaceId,[{version:'1.0',updateComponents:{surfaceId,
+      components:[{id:'root',component:'Text',text:'Updated'}],
+    }}], dataOnly)!;
+    expect(cleared.metadata).toEqual(surfaceMeta);
+    expect(cleared.components[0]).not.toHaveProperty('@metadata');
+    expect(() => applyA2uiMessages(surfaceId,[{...creation,createSurface:{...creation.createSurface,theme:{primaryColor:'red'}}}])).toThrow();
+    expect(() => applyA2uiMessages(surfaceId,[{...creation,createSurface:{...creation.createSurface,metadata:{extensions:{'invalid-key':1}}}}])).toThrow();
+  });
+
   test('bounds expansion across nested templates', () => {
     const surfaceId = 'nested';
     const spec = `
