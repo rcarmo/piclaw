@@ -15,7 +15,7 @@ export function createHostA2uiTool(options: {
 }) {
   return defineTool({
     name: 'send_a2ui',
-    description: 'Show an interactive A2UI Express form in the current Classic web thread. Use bare Express, e.g. root = Button(Text("Confirm"), action=Event("confirm")). For edits pass the returned post_id and current revision. Do not request secrets.',
+    description: 'Show an A2UI surface in the current Classic web thread. Use bare Express (e.g. root = Button(Text("Confirm"), action=Event("confirm"))) or one bounded batch of v1.0 JSON messages. For edits pass the returned post_id and current revision. Do not request secrets.',
     parameters: a2uiToolParameters, callers: ['model'], replay: 'unsafe',
     async execute(params, api, context) {
       const checkOwner = () => { options.assertOwner(); context.abortSignal?.throwIfAborted(); };

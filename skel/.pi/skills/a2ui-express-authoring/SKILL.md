@@ -7,7 +7,9 @@ description: Show a small interactive form, decision or set of links in the curr
 
 Use `send_a2ui` for small forms in the current Classic thread. Only use it when the tool is available and controls are clearer than prose. Otherwise, ask the same question in Markdown or in the channel's text format. Do not ask the model to emit raw content blocks.
 
-The tool accepts bare [A2UI Express](https://a2ui.org/) source, without JSON wrappers, Markdown fences or `<a2ui>` tags. Provide a short `fallback` that makes sense without the form.
+Prefer bare [A2UI Express](https://a2ui.org/) in `express`, without Markdown fences or `<a2ui>` tags. Provide a short `fallback` that makes sense without the form.
+
+For wire features the Express parser cannot express, pass `messages` instead of `express`. Start with a v1.0 `createSurface` using the [Basic Catalogue](https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json), and use the same draft `surfaceId` throughout the batch. Piclaw returns the ID to use on later updates. For example, the system index is `{"@call":"@index","args":{"offset":1}}` and is available inside repeated template items.
 
 ```express
 $/topic = "";

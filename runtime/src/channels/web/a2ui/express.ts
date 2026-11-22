@@ -136,6 +136,24 @@ export function compileA2uiExpress(source: string, surfaceId: string): AgentToRe
   return new ExpressParser(catalog, surfaceId, "1.0").compile(source);
 }
 
+const surfaceOperations = ["createSurface", "updateComponents", "updateDataModel", "deleteSurface"] as const;
+
+/** A new publication uses a host-assigned ID. Rebind only the protocol envelope of its single draft surface. */
+export function bindA2uiDraftId(messages: readonly unknown[], surfaceId: string): unknown[] {
+  requireClassic(messages.length > 0 && messages.length <= MAX_MESSAGES, 'invalid draft batch size');
+  const first = messages[0];
+  const source = record(first) && record(first.createSurface) ? first.createSurface.surfaceId : undefined;
+  requireClassic(isId(source), 'first draft message requires a surface ID');
+  return messages.map(message => {
+    requireClassic(record(message), 'invalid draft message');
+    const operation = surfaceOperations.find(name => Object.hasOwn(message, name));
+    requireClassic(operation, 'unsupported draft operation');
+    const body = message[operation];
+    requireClassic(record(body) && body.surfaceId === source, 'draft batch targets a different surface');
+    return { ...message, [operation]: { ...body, surfaceId } };
+  });
+}
+
 /** Apply exactly one owned surface's bounded batch to a detached snapshot. */
 export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[], previous?: A2uiSnapshot): A2uiSnapshot | null {
   requireClassic(isId(surfaceId) && messages.length > 0 && messages.length <= MAX_MESSAGES, "invalid surface or batch size");
@@ -150,10 +168,9 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
   }
 
   let exists = !!previous;
-  const operations = ["createSurface", "updateComponents", "updateDataModel", "deleteSurface"] as const;
   for (const [index, message] of messages.entries()) {
     requireClassic(record(message) && message.version === "1.0", "expected a v1.0 message");
-    const operation = operations.find((name) => Object.hasOwn(message, name));
+    const operation = surfaceOperations.find((name) => Object.hasOwn(message, name));
     requireClassic(operation && allowedKeys(message, ["version", operation]), "unsupported operation");
     const body = message[operation];
     requireClassic(record(body) && body.surfaceId === surfaceId, "batch targets a different surface");
