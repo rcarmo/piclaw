@@ -9,6 +9,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { statSync } from "node:fs";
 import { RuntimeStartupCleanupError } from "../../src/runtime/startup-cleanup-error.js";
 import type { SqliteDatabase, SqliteExecutor, SqliteValue } from "@earendil-works/pi-durable/storage/sqlite";
+import { boundOptimizerHistoryReads } from './optimizer-history-read.js';
 
 type SqliteWriteScope = { admission?: () => void; source?: { check(): void; persist(tx: SqliteExecutor): Promise<void> } };
 
@@ -133,7 +134,7 @@ export class BunSqliteDatabase implements SqliteDatabase {
   }
 
   private executor(valid: () => void): SqliteExecutor {
-    return {
+    return boundOptimizerHistoryReads({
       exec: async sql => { valid(); execSqliteMutation(this.db, sql); },
       run: async (sql, ...params) => { valid(); assertSqliteMutation(sql); this.db.query(sql).run(...params); },
       runCounted: async (sql, ...params) => { valid(); assertSqliteMutation(sql); return this.db.query(sql).run(...params).changes; },
@@ -143,7 +144,7 @@ export class BunSqliteDatabase implements SqliteDatabase {
       all: async <T extends object>(sql: string, ...params: SqliteValue[]) => {
         valid(); return prepareSqliteRead(this.db, sql).all(...params) as T[];
       },
-    };
+    });
   }
 
   exec(sql: string): Promise<void> {
