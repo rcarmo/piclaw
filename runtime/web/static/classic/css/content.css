@@ -1658,6 +1658,12 @@
 .a2ui-tabs > [role="tabpanel"] { padding-block: 8px; }
 .a2ui-checkbox { align-items: center; }
 .a2ui-caption { color: var(--text-secondary); font-size: var(--font-size-sm); }
+.a2ui-image { display: block; max-width: 100%; height: auto; }
+.a2ui-image-icon { width: 24px; height: 24px; }
+.a2ui-image-avatar { width: 40px; height: 40px; border-radius: 50%; }
+.a2ui-image-smallFeature { max-width: min(100%, 100px); }
+.a2ui-image-largeFeature { max-height: 400px; }
+.a2ui-image-header { width: 100%; height: 200px; }
 .a2ui-card { border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px; }
 .a2ui-surface hr { border: 0; border-block-start: 1px solid var(--border-color); }
 .a2ui-surface .a2ui-divider-vertical { border-block-start: 0; border-inline-start: 1px solid var(--border-color); margin: 0; }

@@ -6,7 +6,7 @@ import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
 import { A2uiModal } from './a2ui-modal.js';
 import { A2uiTabs } from './a2ui-tabs.js';
 import { A2uiTotpDialog, readTotpPresentation, type TotpPresentation } from './a2ui-totp-dialog.js';
-import { a2uiSliderRange, readA2uiLink, type A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
+import { a2uiSliderRange, readA2uiImageUrl, readA2uiLink, type A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
 
 type Submit = (request: A2uiActionRequest, options?: { signal?: AbortSignal }) => Promise<unknown>;
 
@@ -75,6 +75,16 @@ export function A2uiSurface({ block, source, onSubmit }: {
         const label = text(item.label);
         switch (item.component) {
             case 'Text': return html`<span key=${id} class=${item.variant === 'caption' ? 'a2ui-caption' : ''}>${text(item.text)}</span>`;
+            case 'Image': {
+                const src = readA2uiImageUrl(read(item.url), window.location.origin);
+                const alt = text(item.description);
+                if (!src) return alt || null;
+                const size = typeof item.variant === 'string' && ['icon', 'avatar', 'smallFeature', 'mediumFeature', 'largeFeature', 'header'].includes(item.variant)
+                    ? item.variant : 'mediumFeature';
+                const fit = item.fit === 'scaleDown' ? 'scale-down' : item.fit === 'cover' || item.fit === 'contain' || item.fit === 'none' ? item.fit : 'fill';
+                return html`<img key=${id} class=${`a2ui-image a2ui-image-${size}`} src=${src} alt=${alt}
+                    loading="lazy" decoding="async" referrerpolicy="no-referrer" style=${{ objectFit: fit }} />`;
+            }
             case 'Card': return html`<div key=${id} class="a2ui-card">${child(item.child)}</div>`;
             case 'Row':
             case 'Column': {

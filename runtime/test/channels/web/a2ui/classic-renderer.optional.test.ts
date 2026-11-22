@@ -12,10 +12,14 @@ const source = `
   $/choice = ["small"];
   $/level = 4;
   $/date = "2028-02-29";
+  $/preview = "/media/42";
+  $/unsafe = "javascript:void(0)";
   root = Column([Text("<img src=x onerror=alert(1)>"),
     List(children=[Text("First step"), Text("Second step")], direction="horizontal", align="center"),
     Tabs(tabs=[{title:"Summary",child:summary},{title:"Details",child:details}]),
     Modal(trigger=show, content=help),
+    Image(url=$/preview, description="Project preview", variant="avatar", fit="cover"),
+    Image(url=$/unsafe, description="Unavailable preview"),
     TextField(label="Note", value=$/note),
     CheckBox(label="Notify", value=$/notify),
     Slider(label="Level", min=0, max=10, steps=5, value=$/level),
@@ -64,6 +68,7 @@ for (const engine of [chromium, webkit]) {
       expect(build.success).toBe(true);
       server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(req) {
         const { pathname } = new URL(req.url);
+        if (pathname === '/media/42') return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="green"/></svg>', {headers:{'Content-Type':'image/svg+xml'}});
         if (pathname === "/fixture.js") return new Response(Bun.file(join(scratch, "fixture.js")));
         if (pathname === "/base.css" || pathname === "/content.css") return new Response(Bun.file(join(web, "static/classic/css", pathname.slice(1))));
         return new Response('<!doctype html><html lang="en" data-theme="dark"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/base.css"><link rel="stylesheet" href="/content.css"></head><body><script type="module" src="/fixture.js"></script></body></html>', { headers: { "Content-Type": "text/html" } });
@@ -106,7 +111,13 @@ for (const engine of [chromium, webkit]) {
       await page.evaluate((block) => (window as any).draw(block), block);
       expect(await field.inputValue()).toBe("Keep this draft");
       expect(await field.evaluate((el) => el === document.activeElement)).toBe(true);
-      expect(await page.locator(".a2ui-surface img").count()).toBe(0);
+      expect(await page.locator('.a2ui-surface img').count()).toBe(1);
+      const preview = page.getByRole('img', { name: 'Project preview' });
+      expect(await preview.getAttribute('src')).toBe('/media/42');
+      expect(await preview.getAttribute('referrerpolicy')).toBe('no-referrer');
+      expect(await preview.evaluate(element => getComputedStyle(element).objectFit)).toBe('cover');
+      await page.waitForFunction(() => (document.querySelector('img[alt="Project preview"]') as HTMLImageElement)?.naturalWidth === 8);
+      expect(await page.getByText('Unavailable preview').count()).toBe(1);
       await page.getByRole("checkbox", { name: "Notify" }).check();
       const slider = page.getByRole('slider', { name: 'Level' });
       expect(await slider.inputValue()).toBe('4');

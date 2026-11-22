@@ -3,6 +3,7 @@ export const CLASSIC_A2UI_CATALOG = "https://a2ui.org/specification/v1_0/catalog
 
 export const CLASSIC_A2UI_PROPERTIES = {
   Text: ["text", "variant"],
+  Image: ["url", "description", "fit", "variant"],
   Row: ["children", "align", "justify"],
   Column: ["children", "align", "justify"],
   List: ["children", "direction", "align"],
@@ -68,10 +69,23 @@ export function readA2uiLink(action: unknown): string | undefined {
   if (!action || typeof action !== 'object' || Array.isArray(action) || Object.keys(action).length !== 1) return;
   const call = (action as { functionCall?: { '@call'?: unknown; args?: { url?: unknown } } }).functionCall;
   if (!call || call['@call'] !== 'openUrl' || Object.keys(call).length !== 2 || !call.args || Object.keys(call.args).length !== 1) return;
-  const target = call.args.url;
+  return readA2uiHttpUrl(call.args.url)?.href;
+}
+
+function readA2uiHttpUrl(target: unknown): URL | undefined {
   if (typeof target !== 'string' || target.length > 4096 || !/^https?:\/\//i.test(target) || /[\x00-\x20\x7f]/.test(target)) return;
   try {
     const url = new URL(target);
-    if ((url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password) return url.href;
+    if ((url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password) return url;
   } catch { return undefined; }
+}
+
+/** A surface may show owned media, typed inline images or external HTTP(S) resources. */
+export function readA2uiImageUrl(value: unknown, origin: string): string | undefined {
+  if (typeof value !== 'string' || value.length > 32_768 || /[\\\x00-\x20\x7f]/.test(value)) return;
+  const ownedPath = /^\/media\/[1-9]\d*(?:\/thumbnail)?$/;
+  if (ownedPath.test(value) || /^data:image\/(?:png|jpeg|gif|webp|avif|svg\+xml);base64,[A-Za-z0-9+/]+=*$/i.test(value)) return value;
+  const url = readA2uiHttpUrl(value);
+  if (!url || (url.origin === origin && (!ownedPath.test(url.pathname) || url.search || url.hash))) return;
+  return url.href;
 }
