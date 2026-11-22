@@ -3,6 +3,7 @@ import { html, useCallback, useRef, useState } from '../vendor/preact-htm.js';
 import { a2uiBindingPath, buildA2uiAction, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
 import { a2uiDateTimeDisplay, a2uiDateTimeType } from '../../../src/channels/web/a2ui/date-time.js';
 import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
+import { A2uiTabs } from './a2ui-tabs.js';
 import { A2uiTotpDialog, readTotpPresentation, type TotpPresentation } from './a2ui-totp-dialog.js';
 import { a2uiSliderRange, readA2uiLink, type A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
 
@@ -81,6 +82,11 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 const justify = typeof item.justify === 'string' ? ({ center: 'center', start: 'start', end: 'end', stretch: 'stretch', spaceBetween: 'space-between', spaceAround: 'space-around', spaceEvenly: 'space-evenly' })[item.justify] : undefined;
                 return html`<div key=${id} class=${`a2ui-${direction}`} style=${{ alignItems: align, justifyContent: justify }}>
                     ${Array.isArray(item.children) ? item.children.map(child) : null}</div>`;
+            }
+            case 'Tabs': {
+                if (!Array.isArray(item.tabs)) return null;
+                const tabs = item.tabs.map(tab => ({ child: tab.child, title: text(tab.title) }));
+                return html`<${A2uiTabs} key=${id} tabs=${tabs} renderChild=${child} />`;
             }
             case 'List': {
                 const direction = item.direction === 'horizontal' ? 'a2ui-list-horizontal' : '';

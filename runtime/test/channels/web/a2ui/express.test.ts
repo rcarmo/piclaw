@@ -36,6 +36,19 @@ describe("Classic A2UI Express", () => {
     expect(() => applyA2uiMessages("list-1", [{ version: "1.0", updateDataModel: { surfaceId: "list-1", path: "/x", value: 1 } }], broken)).toThrow();
   });
 
+  test("resolves tab titles and validates their child graph", () => {
+    const surface = 'tabs-1';
+    const source = '$/title = "Details"; root = Tabs(tabs=[{title:"Overview",child:first},{title:$/title,child:second}]); first = Text("First panel"); second = Text("Second panel");';
+    const snapshot = applyA2uiMessages(surface, compileA2uiExpress(source, surface))!;
+    expect(snapshot.components.find(({id}) => id === 'root')).toEqual({ id:'root', component:'Tabs', tabs:[
+      {title:'Overview', child:'first'}, {title:{'@path':'/title'}, child:'second'},
+    ] });
+    for (const child of ['root','missing','first']) {
+      const invalid = source.replace('child:second', `child:${child}`);
+      expect(() => applyA2uiMessages(surface, compileA2uiExpress(invalid, surface))).toThrow();
+    }
+  });
+
   test("applies component and data updates atomically to a rehydrated snapshot, then deletes it", () => {
     const initial = applyA2uiMessages("form-1", compileA2uiExpress(form, "form-1"))!;
     const original = JSON.stringify(initial);

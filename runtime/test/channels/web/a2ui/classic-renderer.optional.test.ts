@@ -14,12 +14,15 @@ const source = `
   $/date = "2028-02-29";
   root = Column([Text("<img src=x onerror=alert(1)>"),
     List(children=[Text("First step"), Text("Second step")], direction="horizontal", align="center"),
+    Tabs(tabs=[{title:"Summary",child:summary},{title:"Details",child:details}]),
     TextField(label="Note", value=$/note),
     CheckBox(label="Notify", value=$/notify),
     Slider(label="Level", min=0, max=10, steps=5, value=$/level),
     DateTimeInput(label="Due date", enableDate=true, min="2028-02-28", max="2028-03-31", value=$/date),
     ChoicePicker(label="Size", options=[{label:"Small",value:"small"},{label:"Large",value:"large"}],value=$/choice),
     Button(Text("Submit"), variant="primary", action=Event("save", {note:$/note,notify:$/notify,size:$/choice,level:$/level,date:$/date}))]);
+  summary = Text("Summary panel");
+  details = Text("Details panel");
 `;
 
 for (const engine of [chromium, webkit]) {
@@ -76,6 +79,17 @@ for (const engine of [chromium, webkit]) {
       expect(await list.evaluate(el => getComputedStyle(el).flexDirection)).toBe('row');
       const field = page.getByRole("textbox", { name: "Note" });
       await field.fill("Keep this draft");
+      const summary = page.getByRole('tab', { name: 'Summary' });
+      const details = page.getByRole('tab', { name: 'Details' });
+      expect(await summary.getAttribute('aria-selected')).toBe('true');
+      await summary.focus();
+      await page.keyboard.press('ArrowRight');
+      expect(await details.getAttribute('aria-selected')).toBe('true');
+      expect(await details.evaluate(element => element === document.activeElement)).toBe(true);
+      expect(await page.getByRole('tabpanel', { name: 'Details' }).textContent()).toBe('Details panel');
+      expect(await page.getByRole('tabpanel', { name: 'Summary' }).count()).toBe(0);
+      expect(await page.evaluate(() => (window as any).events)).toHaveLength(0);
+      await field.focus();
       await page.evaluate((block) => (window as any).draw(block), block);
       expect(await field.inputValue()).toBe("Keep this draft");
       expect(await field.evaluate((el) => el === document.activeElement)).toBe(true);

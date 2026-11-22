@@ -1640,6 +1640,22 @@
 .a2ui-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .a2ui-list-horizontal { flex-direction: row; overflow-x: auto; }
 .a2ui-list-horizontal > [role="listitem"] { flex: 0 0 auto; max-width: 100%; }
+.a2ui-tabs { min-width: 0; }
+.a2ui-tab-list { display: flex; gap: 8px; overflow-x: auto; padding: 4px; border-block-end: 1px solid var(--border-color); }
+.a2ui-tab-list > button {
+    flex: 0 0 auto;
+    max-width: 100%;
+    min-height: 34px;
+    padding: 5px 8px;
+    border: 0;
+    border-block-end: 2px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    cursor: pointer;
+}
+.a2ui-tab-list > button[aria-selected="true"] { border-color: var(--accent-color); color: var(--text-primary); }
+.a2ui-tabs > [role="tabpanel"] { padding-block: 8px; }
 .a2ui-checkbox { align-items: center; }
 .a2ui-caption { color: var(--text-secondary); font-size: var(--font-size-sm); }
 .a2ui-card { border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px; }

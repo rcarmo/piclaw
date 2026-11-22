@@ -7,6 +7,7 @@ export const CLASSIC_A2UI_PROPERTIES = {
   Column: ["children", "align", "justify"],
   List: ["children", "direction", "align"],
   Card: ["child"],
+  Tabs: ["tabs"],
   Divider: ["axis"],
   Button: ["child", "variant", "action"],
   TextField: ["label", "value", "placeholder", "variant"],
