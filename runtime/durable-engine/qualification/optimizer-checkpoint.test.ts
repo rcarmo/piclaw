@@ -12,7 +12,8 @@ import {SqliteStorage} from '@earendil-works/pi-durable/storage/sqlite';
 import {CodemodeSandbox} from '@earendil-works/pi-codemode';
 import {Type} from 'typebox';
 import {SessionsDoc} from '#token-optimizer/pi-durable';
-import {sessionKey} from '#token-optimizer/core';
+import {defaultPolicy,sessionKey} from '#token-optimizer/core';
+import {createInferenceQueue} from '../vendor/token-economizer/src/pi-durable/sidecall.ts';
 import {BunSqliteDatabase} from '../src/bun-sqlite.ts';
 import {createOptimizerCodemodeTool} from '../src/optimizer-codemode.ts';
 import {createNativeTokenOptimizer,type CoreOptimizerAgent} from '../src/token-optimizer.ts';
@@ -142,6 +143,42 @@ test('checkpoint bounds derived evidence, keeps the newest results and marks mis
  expect(result.observations.at(-1)?.command).toBe('pytest case-39');
  expect(result.observations.some(row=>row.command==='pytest case-0')).toBe(false);
  expect((await c.entries({minEntryId:oldest as typeof last,maxEntryId:oldest as typeof last},1,undefined,context)).items).toHaveLength(1);
+},15_000);
+
+test('one durable backfill cap survives duplicate jobs, unknown outcomes, midnight and SQLite reopen',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'optimizer-backfill-budget-')),file=join(dir,'state.sqlite');
+ cleanups.push(async()=>{rmSync(dir,{recursive:true,force:true});});
+ const settings={registry:createRegistry(),models:createModels(),now:()=>now};
+ const policy=defaultPolicy();Object.assign(policy,{enabled:true,mode:'active',microSkills:'distiller'});
+ let now=Date.parse('2026-01-01T23:59:00Z'), harness:Harness|undefined;
+ const attempts:string[]=[],model={provider:'fixture',id:'fixture'};
+ const queue=createInferenceQueue({harness:()=>harness!,policy:()=>policy,now:()=>now,sideCall:async request=>{
+  attempts.push(request.id);
+  if(request.id==='fixture-0')throw Error('Synthetic uncertain provider outcome');
+  return {text:'{"facts":[],"extractors":[]}',model,usage:null,cost:0,durationMs:1,authUnavailable:false,error:null};
+ }});
+ settings.registry.install(queue.extension);
+ const open=async()=>{harness=await Harness.open(await SqliteStorage.open(new BunSqliteDatabase(file)),settings,context);return harness.root(context);};
+ cleanups.push(async()=>{await harness?.close(context);});
+ let root=await open();
+ const request=(id:string)=>({id,purpose:'proposer' as const,model,prompt:'Synthetic evidence',maxOutputTokens:32,deadlineMs:1000});
+ const origin=(sessionKey:string,backfillId='one-logical-backfill')=>({sessionKey,backfillId,account:'fixture',runId:null,revision:'1',digest:'fixture',estimatedMaximumCost:0});
+ for(let n=0;n<6;n++){
+  const accepted=await queue.enqueue(root.id,request(`fixture-${n}`),origin('first-session'));
+  expect(accepted.accepted).toBe(true);
+  await harness!.waitForTask(accepted.job!.taskId!,context);
+ }
+ expect((await queue.enqueue(root.id,request('fixture-0'),origin('first-session'))).reason).toBe('duplicate');
+ await harness!.close(context);harness=undefined;now=Date.parse('2026-01-02T00:01:00Z');root=await open();
+ for(let n=6;n<12;n++){
+  const accepted=await queue.enqueue(root.id,request(`fixture-${n}`),origin('second-session'));
+  expect(accepted.accepted).toBe(true);
+  await harness!.waitForTask(accepted.job!.taskId!,context);
+ }
+ expect((await queue.enqueue(root.id,request('fixture-12'),origin('second-session'))).reason).toBe('backfill_budget');
+ expect(attempts).toEqual(Array.from({length:12},(_,i)=>`fixture-${i}`));
+ policy.budget.callsPerSession=6;
+ expect((await queue.enqueue(root.id,request('stricter-limit'),origin('second-session','another-backfill'))).reason).toBe('call_budget');
 },15_000);
 
 test('a tool result without a matching call or durable task is still unreadable',async()=>{

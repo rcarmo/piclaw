@@ -47,6 +47,8 @@ export type InferenceJob = {
   id: string; sessionKey: string; account: string; runId: string | null; revision: string; digest: string;
   /** Original Agent, independent of the maintenance task owner. Older jobs lack this field. */
   conversationId?: ConversationId;
+  /** Present only when admission charged an existing logical backfill. */
+  backfillId?: string;
   request: InferenceRequest; created: number; deadline: number; taskId: TaskId | null;
   status: "queued" | "running" | "complete" | "failed" | "cancelled" | "unknown";
   result: InferenceResult | null; error: string | null;
