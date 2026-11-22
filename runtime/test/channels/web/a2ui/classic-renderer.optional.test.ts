@@ -327,7 +327,7 @@ for (const engine of [chromium, webkit]) {
       await disabledLink.evaluate(element => element.click());
       expect(await page.evaluate(() => (window as any).events.length)).toBe(count);
       const pointerId = 'pointer-browser';
-      const binding = { '@path': '/a~1b/~0label text' };
+      const binding={'@path':'/a~1b//0096/~0label text'};
       const pointerSurface = applyA2uiMessages(pointerId, [{ version:'1.0', createSurface:{
         surfaceId:pointerId, catalogId:'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json',
         components:[{id:'root',component:'Column',children:['field','send','status','checked'], '@accessibility':{label:'Wire form',live:'polite'}},
@@ -335,8 +335,8 @@ for (const engine of [chromium, webkit]) {
           {id:'status',component:'Text',text:'Visible but decorative', '@accessibility':{hidden:{'@path':'/hide'}}},
           {id:'field',component:'TextField',label:'Escaped field',value:binding, '@accessibility':{label:{'@path':'/accessibleName'},description:'Use ordinary text'}},
           {id:'send',component:'Button',child:'label',action:{event:{name:'send',context:{field:binding}}}}, {id:'label',component:'Text',text:'Send escaped value'}],
-        dataModel:{'a/b':{'~label text':'Stored value'},accessibleName:'Escaped value',hide:'TrUe'},
-      }}]);
+        dataModel:{'a/b':{'':{'0096':{'~label text':'Before update'}}},accessibleName:'Escaped value',hide:'TrUe'},
+      }},{version:'1.0',updateDataModel:{surfaceId:pointerId,path:binding['@path'],value:'Stored value'}}]);
       await page.evaluate((block) => (window as any).draw(block), {...block, revision: 8, surface:pointerSurface});
       const pointerFrame = page.getByRole('group', {name:'Wire form'});
       expect(await pointerFrame.getAttribute('aria-live')).toBe('polite');

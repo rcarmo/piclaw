@@ -1,5 +1,4 @@
-import { DataModel } from '@a2ui/web_core/state';
-import { absoluteA2uiPointer, readA2uiPath, scopedA2uiPointer } from './data-path.js';
+import { absoluteA2uiPointer, isA2uiArrayIndex, readA2uiPath, scopedA2uiPointer, writeA2uiPath } from './data-path.js';
 import { mapA2uiActionExpressions } from './function-call.js';
 import type { A2uiComponent, A2uiSnapshot } from './surface.js';
 
@@ -44,14 +43,8 @@ function scopeBindings(value: unknown, scope: string): unknown {
 }
 
 export function createA2uiModelOverlay(snapshot:A2uiSnapshot) {
-  const model=new DataModel(structuredClone(snapshot.dataModel));
-  return {
-    write(path:string,value:unknown) {
-      if (!absoluteA2uiPointer(path)) throw Error('Invalid A2UI control path');
-      model.set(path,structuredClone(value),true);
-    },
-    read:()=>({...snapshot,dataModel:model.get('/') as A2uiSnapshot['dataModel']}),
-  };
+  const dataModel=structuredClone(snapshot.dataModel);
+  return {write:(path:string,value:unknown)=>writeA2uiPath(dataModel,path,value),read:()=>({...snapshot,dataModel})};
 }
 
 export function overlayA2uiModel(snapshot:A2uiSnapshot,edits:ReadonlyMap<string,unknown>): A2uiSnapshot {
@@ -68,7 +61,7 @@ export function affectsA2uiCollection(path:string,collections:Iterable<string>,d
     // A child write affects membership only if it can create an array slot.
     // Regular edits to a visible row are not part of a topology proof.
     const index=path.slice(collection.length+1).split('/',1)[0]!;
-    if (!/^\d+$/.test(index)) continue;
+    if (!isA2uiArrayIndex(index)) continue;
     const rows=readA2uiPath(dataModel,collection);
     if (rows==null || (Array.isArray(rows) && !Object.hasOwn(rows,index))) return true;
   }
@@ -100,7 +93,7 @@ export function projectA2uiTemplates(snapshot: A2uiSnapshot) {
       const rows = readA2uiPath(snapshot.dataModel, path);
       component.children = Array.isArray(rows) ? rows.map((_, index) => {
         const rowScope = `${path === '/' ? '' : path}/${index}`;
-        if (!absoluteA2uiPointer(rowScope)) throw Error('Invalid A2UI template scope');
+        if (!isA2uiArrayIndex(String(index)) || !absoluteA2uiPointer(rowScope)) throw Error('Invalid A2UI template scope');
         return walk(template.componentId, depth + 1, rowScope, `${instancePath ?? ''}/${index}`);
       }).filter(id => id !== undefined) : [];
     } else if (Array.isArray(component.children)) component.children = component.children.map(child).filter(id => id !== undefined);

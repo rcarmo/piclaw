@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { applyA2uiMessages, compileA2uiExpress } from "../../../../src/channels/web/a2ui/express.js";
+import { applyA2uiControlEdits, applyA2uiMessages, compileA2uiExpress } from "../../../../src/channels/web/a2ui/express.js";
 import { basicCatalog } from '@a2ui/web_core/catalogs/basic/v1';
 import { a2uiIconPaths } from '../../../../web/src/components/a2ui-icon-paths.js';
 import { readA2uiValue } from '../../../../src/channels/web/a2ui/action.js';
@@ -232,11 +232,36 @@ describe("Classic A2UI Express", () => {
     expect(() => applyA2uiMessages(surfaceId, [update('/bad~2token','blocked')], original)).toThrow();
   });
 
+  test('distinguishes empty object members and numeric keys from array indexes',()=>{
+    const surfaceId='pointer-members';
+    const catalogId='https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json';
+    const path='/directory//0096';
+    const original=applyA2uiMessages(surfaceId,[{version:'1.0',createSurface:{surfaceId,catalogId,
+      dataModel:{directory:{'':{'0096':'first','9999999':'large'},'0096':'sibling'},values:['A','B']},
+      components:[{id:'root',component:'Text',text:{'@path':path}}],
+    }}],undefined,true)!;
+    const update=(path:string,value:unknown)=>({version:'1.0',updateDataModel:{surfaceId,path,value}});
+    expect(readA2uiValue(original,{'@path':path})).toBe('first');
+    const updated=applyA2uiMessages(surfaceId,[update(path,'second'),update('/directory//9999999','updated large')],original)!;
+    const rehydrated=JSON.parse(JSON.stringify(updated));
+    expect(rehydrated.dataModel.directory).toEqual({'':{'0096':'second','9999999':'updated large'},'0096':'sibling'});
+    const edited=applyA2uiControlEdits(rehydrated,new Map([[path,'draft'],['/directory/','tail']]));
+    expect(readA2uiValue(edited,{'@path':'/directory/'})).toBe('tail');
+    expect(readA2uiValue(updated,{'@path':path})).toBe('second');
+    const removed=applyA2uiMessages(surfaceId,[update('/directory//9999999',null),update('/values/0',null)],rehydrated)!;
+    expect(removed.dataModel.directory).toEqual({'':{'0096':'second'},'0096':'sibling'});
+    expect(removed.dataModel.values).toEqual([null,'B']);
+    for (const path of ['/values/01','/values/96','/values/','/values/-','/directory//__proto__','/directory//bad~2escape']) {
+      expect(()=>applyA2uiMessages(surfaceId,[update(path,'invalid')],original)).toThrow();
+    }
+    expect(original.dataModel.values).toEqual(['A','B']);
+  });
+
   test("bounds direct wire input before applying it", () => {
     const messages = compileA2uiExpress(form, "form-1");
     const initial = applyA2uiMessages("form-1", messages)!;
     expect(() => applyA2uiMessages("form-1", [...messages, ...messages])).toThrow();
-    for (const path of ["/form/__proto__", "/form/constructor", "/form/prototype", "/9999999"]) {
+    for (const path of ["/form/__proto__", "/form/constructor", "/form/prototype", "/form/values/9999999"]) {
       expect(() => applyA2uiMessages("form-1", [{ version: "1.0", updateDataModel: { surfaceId: "form-1", path, value: 1 } }], initial)).toThrow();
     }
     expect(() => applyA2uiMessages("form-1", [{ version: "1.0", callFunction: { surfaceId: "form-1" } }], initial)).toThrow();

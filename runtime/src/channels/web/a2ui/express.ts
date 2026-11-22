@@ -7,7 +7,7 @@ import { basicCatalog } from "@a2ui/web_core/catalogs/basic/v1";
 import { MessageProcessor } from '@a2ui/web_core/processing';
 import { CLASSIC_A2UI_FUNCTIONS, isClassicValueFunction } from "./functions.js";
 import { isA2uiContextExpression, isClassicEntityName, isClassicFunctionName, mapA2uiActionExpressions, readClassicActionFunction } from './function-call.js';
-import { absoluteA2uiPointer, scopedA2uiPointer } from "./data-path.js";
+import { absoluteA2uiPointer, scopedA2uiPointer, writeA2uiPath } from "./data-path.js";
 import { isA2uiEventString } from './rpc-json.js';
 import { ClassicA2uiValidationError } from './protocol-errors.js';
 import { a2uiChildReferences, overlayA2uiModel, projectA2uiTemplates, readA2uiTemplate } from "./templates.js";
@@ -270,8 +270,10 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
     if (!progressive) state.checkTopology(restored);
   }
 
-  let exists = !!previous;
-  for (const [index, message] of messages.entries()) {
+  let exists=!!previous;
+  let dataModel:Record<string,unknown>=previous ? structuredClone(previous.dataModel) : {};
+  const structureMessages:unknown[]=[];
+  for (const [index,message] of messages.entries()) {
     requireClassic(record(message) && message.version === "1.0", "expected a v1.0 message");
     const operation = surfaceOperations.find((name) => Object.hasOwn(message, name));
     requireClassic(operation && allowedKeys(message, ["version", operation]), "unsupported operation");
@@ -282,6 +284,8 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
         && allowedKeys(body, ["surfaceId", "catalogId", "components", "dataModel", "sendDataModel", "metadata"])
         && (body.sendDataModel === undefined || typeof body.sendDataModel === 'boolean'), "unsupported surface creation");
       checkMetadata(body.metadata);
+      requireClassic(body.dataModel===undefined || record(body.dataModel),'expected a data model object','/dataModel');
+      if (record(body.dataModel)) dataModel=structuredClone(body.dataModel);
       if (body.components !== undefined) checkComponents(body.components);
       exists = true;
     } else {
@@ -292,16 +296,28 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
       }
       if (operation === "updateDataModel") {
         requireClassic(allowedKeys(body, ["surfaceId", "path", "value"]) && Object.hasOwn(body, "value"), "invalid data update");
-        if (body.path !== undefined) checkPath(body.path, true);
+        if (body.path!==undefined) checkPath(body.path,true);
+        const path=body.path;
+        if (path===undefined || path==='' || path==='/') {
+          requireClassic(body.value===null || record(body.value),'expected a data model object','/value');
+          dataModel=structuredClone(body.value ?? {});
+        } else {
+          try { writeA2uiPath(dataModel,path as string,body.value,body.value===null); }
+          catch { throw new ClassicA2uiValidationError('Data update does not match the model path','/path'); }
+        }
+        // The SDK normalises empty path tokens. Apply wire updates with the
+        // same exact writer that handles browser drafts and action validation.
+        continue;
       }
       if (operation === "deleteSurface") {
         requireClassic(previous && index === messages.length - 1 && allowedKeys(body,['surfaceId']), "delete must finish an existing surface's batch");
         exists = false;
       }
     }
+    structureMessages.push(message);
   }
-  const touched = state.apply(projectComponentEnvelope(messages,eventLiterals));
-  if (!progressive) state.checkTopology(touched);
+  if (structureMessages.length) state.apply(projectComponentEnvelope(structureMessages,eventLiterals));
+  if (!progressive) state.checkTopology([surfaceId]);
   if (!exists) return null;
 
   const result = state.getSurface(surfaceId)!;
@@ -322,8 +338,8 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
       return { ...rest, id, component: type, ...(result.defaultCatalog ? {} : { '@catalogId': CLASSIC_A2UI_CATALOG }), ...(accessibility === undefined ? {} : { '@accessibility': accessibility }),
         ...(checks === undefined ? {} : { '@checks': checks }), ...(metadata === undefined ? {} : { '@metadata': metadata }) } as A2uiComponent;
     }),
-    // SDK deletion leaves an empty array slot; persisted JSON represents it as null without shifting indices.
-    dataModel: JSON.parse(JSON.stringify(result.dataModel.get("/"))),
+    // Persist sparse array slots as null, without shifting existing indexes.
+    dataModel: JSON.parse(JSON.stringify(dataModel)),
   };
   verifySnapshot(snapshot);
   return snapshot;
