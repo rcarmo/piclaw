@@ -9,6 +9,21 @@ export function readA2uiTemplate(value: unknown): { componentId: string; path: s
   }
 }
 
+export function a2uiChildReferences(component: A2uiComponent): { id: string; template?: true; canWeight?: boolean }[] {
+  const refs: { id: string; template?: true; canWeight?: boolean }[] = [];
+  const canWeight = component.component === 'Row' || component.component === 'Column';
+  if (Array.isArray(component.children)) for (const id of component.children) refs.push({ id, canWeight });
+  const template = readA2uiTemplate(component.children);
+  if (template) refs.push({ id:template.componentId, template:true, canWeight });
+  if (typeof component.child === 'string') refs.push({ id:component.child });
+  if (component.component === 'Tabs' && Array.isArray(component.tabs)) for (const tab of component.tabs) refs.push({ id:tab.child });
+  if (component.component === 'Modal') {
+    if (typeof component.trigger === 'string') refs.push({id:component.trigger});
+    if (typeof component.content === 'string') refs.push({id:component.content});
+  }
+  return refs;
+}
+
 /** Instance paths belong to Piclaw's transport, never to the v1.0 component identifier. */
 export function a2uiInstanceId(id: string, instancePath?: string): string {
   return instancePath ? `:${id}:${instancePath}` : id;
@@ -31,8 +46,9 @@ export function projectA2uiTemplates(snapshot: A2uiSnapshot) {
   const definitions = new Map(snapshot.components.map(component => [component.id, component]));
   const instances = new Map<string, { id: string; scope: string; instancePath?: string }>();
   const projected: A2uiComponent[] = [];
-  function walk(id: string, depth: number, scope: string, instancePath?: string): string {
+  function walk(id: string, depth: number, scope: string, instancePath?: string): string | undefined {
     const definition = definitions.get(id);
+    if (snapshot.progressive && (!definition || (definition.component === 'Button' && !definitions.has(String(definition.child))))) return;
     const instanceId = a2uiInstanceId(id, instancePath);
     if (!definition || depth > 24 || instances.size >= 384 || instances.has(instanceId)) throw Error('Invalid or oversized A2UI template tree');
     instances.set(instanceId, { id, scope, instancePath });
@@ -49,10 +65,12 @@ export function projectA2uiTemplates(snapshot: A2uiSnapshot) {
         const rowScope = `${path === '/' ? '' : path}/${index}`;
         if (!absoluteA2uiPointer(rowScope)) throw Error('Invalid A2UI template scope');
         return walk(template.componentId, depth + 1, rowScope, `${instancePath ?? ''}/${index}`);
-      }) : [];
-    } else if (Array.isArray(component.children)) component.children = component.children.map(child);
+      }).filter(id => id !== undefined) : [];
+    } else if (Array.isArray(component.children)) component.children = component.children.map(child).filter(id => id !== undefined);
     if (typeof component.child === 'string') component.child = child(component.child);
-    if (component.component === 'Tabs' && Array.isArray(component.tabs)) component.tabs = component.tabs.map(tab => ({ ...tab, child: child(tab.child) }));
+    if (component.component === 'Tabs' && Array.isArray(component.tabs)) {
+      component.tabs = component.tabs.map(tab => ({ ...tab, child: child(tab.child) })).filter(tab => tab.child !== undefined);
+    }
     if (component.component === 'Modal') {
       if (typeof component.trigger === 'string') component.trigger = child(component.trigger);
       if (typeof component.content === 'string') component.content = child(component.content);

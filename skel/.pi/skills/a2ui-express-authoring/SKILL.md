@@ -9,7 +9,9 @@ Use `send_a2ui` for small forms in the current Classic thread. Only use it when 
 
 Prefer bare [A2UI Express](https://a2ui.org/) in `express`, without Markdown fences or `<a2ui>` tags. Provide a short `fallback` that makes sense without the form.
 
-For wire features the Express parser cannot express, pass `messages` instead of `express`. Start with a v1.0 `createSurface` using the [Basic Catalogue](https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json), and use the same draft `surfaceId` throughout the batch. Piclaw returns the ID to use on later updates. For example, the system index is `{"@call":"@index","args":{"offset":1}}` and is available inside repeated template items.
+For wire features the Express parser cannot express, pass `messages` instead of `express`. Start with a v1.0 `createSurface` using the [Basic Catalogue](https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json), and use the same draft `surfaceId` throughout the batch. You can send the model and components in later updates. Classic shows the fallback until `root` arrives, then fills in child components as their definitions arrive. Use the returned surface ID, post ID and current revision to update or delete the surface.
+
+If `createSurface` omits `catalogId`, each component must name the Basic Catalogue in `@catalogId`, and each non-system function call must name it in `catalogId`. The system index (`{"@call":"@index","args":{"offset":1}}`) needs no catalogue and is available inside repeated template items.
 
 ```express
 $/topic = "";

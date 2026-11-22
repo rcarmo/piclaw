@@ -52,7 +52,7 @@ export async function publishAgentA2ui(options: {
   check();
   const messages = params.express !== undefined ? compileA2uiExpress(params.express, surfaceId)
     : editing ? params.messages! : bindA2uiDraftId(params.messages!, surfaceId);
-  const surface = applyA2uiMessages(surfaceId, messages, prior?.surface.surface);
+  const surface = applyA2uiMessages(surfaceId, messages, prior?.surface.surface, params.messages !== undefined);
   const revision = (prior?.surface.revision ?? 0) + 1;
   const rowId = await admitSqliteWrite(root, () => {
     if (options.thread() !== threadId) throw new Error('Surface thread changed');

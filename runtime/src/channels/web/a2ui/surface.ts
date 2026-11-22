@@ -41,13 +41,15 @@ export function a2uiSliderRange(item: A2uiComponent) {
 
 export interface A2uiMetadata { extensions?: Record<string, unknown> }
 
-/** A canonical v1.0 createSurface body; no unbounded replay of update messages. */
+/** Committed v1.0 surface state; no unbounded replay of update messages. */
 export interface A2uiSnapshot {
   surfaceId: string;
-  catalogId: typeof CLASSIC_A2UI_CATALOG;
+  catalogId?: typeof CLASSIC_A2UI_CATALOG;
   components: A2uiComponent[];
   dataModel: Record<string, unknown>;
   metadata?: A2uiMetadata;
+  /** Host-owned flag for raw wire publication, not an A2UI message field. */
+  progressive?: true;
 }
 
 export interface A2uiSurfaceBlock {
@@ -65,7 +67,8 @@ export function isA2uiSurfaceBlock(value: unknown): value is A2uiSurfaceBlock {
   if (!value || typeof value !== "object") return false;
   const block = value as Partial<A2uiSurfaceBlock>;
   return block.type === "a2ui_surface" && Number.isSafeInteger(block.revision) && typeof block.fallback_text === "string"
-    && block.surface?.catalogId === CLASSIC_A2UI_CATALOG && typeof block.surface.surfaceId === "string"
+    && !!block.surface && (block.surface.catalogId === undefined || block.surface.catalogId === CLASSIC_A2UI_CATALOG)
+    && typeof block.surface.surfaceId === "string"
     && !!block.surface.dataModel && typeof block.surface.dataModel === "object"
     && Array.isArray(block.surface.components) && block.surface.components.length <= 96;
 }

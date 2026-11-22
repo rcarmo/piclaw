@@ -332,6 +332,32 @@ for (const engine of [chromium, webkit]) {
       await secondRow.getByRole('button', {name:'Apply row'}).click();
       expect(await page.evaluate(() => (window as any).events.at(-1))).toMatchObject({instance_path:'/1/0',
         message:{action:{sourceComponentId:'submit', context:{label:'Second',note:'second draft'}}}});
+      const stagedId = 'progressive-browser';
+      const basicCatalogue = 'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json';
+      const drawStage = (surface: unknown, revision: number) => page.evaluate((block) => (window as any).draw(block),
+        {...block, surface, revision, fallback_text:'Preparing steps'});
+      const empty = applyA2uiMessages(stagedId, [{version:'1.0',createSurface:{surfaceId:stagedId,
+        dataModel:{greeting:'Stored before root'},
+      }}], undefined, true)!;
+      const updateStage = (surface: typeof empty, components: Record<string, unknown>[]) =>
+        applyA2uiMessages(stagedId, [{version:'1.0',updateComponents:{surfaceId:stagedId,
+          components:components.map(component => ({ ...component, '@catalogId':basicCatalogue })),
+        }}], surface)!;
+      await drawStage(empty, 1);
+      await panel.getByText('Preparing steps').waitFor();
+      const head = updateStage(empty, [{id:'title',component:'Text',text:{'@call':'formatString',catalogId:basicCatalogue,args:{value:'${/greeting}'}}}]);
+      await drawStage(head, 2);
+      expect(await panel.getByText('Stored before root').count()).toBe(0);
+      const partial = updateStage(head, [{id:'root',component:'Column',children:['title','send']},
+        {id:'send',component:'Button',child:'label',action:{event:{name:'confirmStage'}}}]);
+      await drawStage(partial, 3);
+      await panel.getByText('Stored before root').waitFor();
+      expect(await panel.getByRole('button').count()).toBe(0);
+      const ready = updateStage(partial, [{id:'label',component:'Text',text:'Confirm stage'}]);
+      await drawStage(ready, 4);
+      await panel.getByRole('button',{name:'Confirm stage'}).click();
+      expect(await page.evaluate(() => (window as any).events.at(-1))).toMatchObject({revision:4,
+        message:{action:{surfaceId:stagedId,sourceComponentId:'send',name:'confirmStage'}}});
       const legacyRequests: string[] = [];
       page.on('request', request => { if (request.url().includes('adaptivecards')) legacyRequests.push(request.url()); });
       await page.evaluate(() => (window as any).draw({
