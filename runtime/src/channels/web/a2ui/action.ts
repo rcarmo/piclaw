@@ -202,6 +202,7 @@ export interface A2uiActionRequest {
   message: A2uiActionMessage;
   instance_path?: string;
   a2ui_drafts?: A2uiDraftPatch[];
+  renderer_peer?: string;
   metadata?: { a2uiRendererCapabilities: ClassicA2uiRendererCapabilities };
   private_code?: string;
   private_value?: string;

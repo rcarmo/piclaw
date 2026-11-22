@@ -198,6 +198,7 @@ function createSchema(database: Database): void {
       message_id TEXT NOT NULL,
       conversation_id INTEGER NOT NULL,
       metadata TEXT NOT NULL,
+      renderer_peer TEXT,
       PRIMARY KEY (chat_jid, message_id),
       FOREIGN KEY (message_id, chat_jid) REFERENCES messages(id, chat_jid) ON DELETE CASCADE
     );

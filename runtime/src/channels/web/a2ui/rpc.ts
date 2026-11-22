@@ -1,4 +1,4 @@
-import { CallAgentFunctionMessageSchema, type CallAgentFunctionMessage } from '@a2ui/web_core/v1_0';
+import { CallAgentFunctionMessageSchema, RendererFunctionResponseMessageSchema, type CallAgentFunctionMessage } from '@a2ui/web_core/v1_0';
 import { isSingleUserAccess } from '../../../core/config-access.js';
 import { captureHostDatabaseBinding, getDb } from '../../../db/connection.js';
 import { getMessageByRowIdFromDatabase } from '../../../db/messages.js';
@@ -7,7 +7,7 @@ import type { WebChannelLike } from '../core/web-channel-contracts.js';
 import { captureInputTarget } from '../messaging/input-request-authority.js';
 import { readA2uiCatalogueOffer } from './capabilities.js';
 import { parseA2uiDrafts } from './drafts.js';
-import { prepareA2uiDraftProjection, readA2uiRendererDataModel, readA2uiSurfaceOwner } from './input-metadata.js';
+import { prepareA2uiDraftProjection, readA2uiRendererDataModel, readA2uiSurfaceOwner, type AcceptedRendererPeer } from './input-metadata.js';
 import { boundedRpcJson, MAX_RPC_VALUE } from './agent-rpc.js';
 import { isA2uiSurfaceBlock } from './surface.js';
 
@@ -35,19 +35,94 @@ async function readRpcBody(req: Request): Promise<unknown> {
 const positiveId = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 const validCallId = (id: string) => id.length > 0 && id.length <= 128 && !/[\x00-\x1f\x7f]/.test(id);
 
-export async function handleA2uiRpc(channel: WebChannelLike, req: Request): Promise<Response> {
-  const json = (body: unknown, status: number) => Response.json(body,{status,headers:{'Cache-Control':'private, no-store',Vary:'Cookie'}});
-  const changed = () => json({error:'The A2UI RPC surface or call identity changed.'},409);
-  if (!isSingleUserAccess()) return json({error:'A2UI RPC requires single-user access.'},403);
+const privateHeaders = { 'Cache-Control':'private, no-store',Vary:'Cookie' };
+const json = (body: unknown, status: number) => Response.json(body,{status,headers:privateHeaders});
+
+function rendererAuthority(channel: WebChannelLike, req: Request) {
+  if (!isSingleUserAccess()) throw Error('A2UI RPC requires single-user access');
   const gateway = channel.authGateway;
-  let authorise: () => void, rendererSession: string | null;
+  const principal = gateway?.getPrincipal?.(req);
+  if (!principal || (principal.kind !== 'local' && !principal.authentication.sessionId)) throw Error('A renderer session is required');
+  const verify = captureWebRequestAuthority(gateway,req);
+  return { sessionId:principal.authentication.sessionId, assertCurrent() {
+    verify(); if (channel.authGateway !== gateway) throw Error('A2UI RPC authentication changed');
+  } };
+}
+
+const isWebChat = (value: unknown): value is string => typeof value === 'string' && value.startsWith('web:') && value.length <= 240;
+
+/** Only the holder of the live stream and its original login can attach the peer to a turn. */
+export function bindRendererOffer(channel: WebChannelLike, req: Request, chatJid: string, lease: unknown, metadata: unknown): AcceptedRendererPeer | undefined {
+  if (lease === undefined) return;
+  const { sessionId } = rendererAuthority(channel,req);
+  const scope = channel.a2uiRpcScope?.(chatJid);
+  const catalogues = readA2uiCatalogueOffer(metadata);
+  if (!scope || !catalogues?.length) return;
+  const hash = scope.renderer?.bind(lease,{chatJid,conversationId:scope.conversationId,sessionId});
+  return hash ? {hash,catalogues:[...catalogues]} : undefined;
+}
+
+export function handleA2uiRendererPeer(channel: WebChannelLike, req: Request): Response {
+  const chatJid = new URL(req.url).searchParams.get('chat_jid');
+  if (!isWebChat(chatJid)) return json({error:'Invalid renderer peer chat.'},400);
   try {
-    const principal = gateway.getPrincipal?.(req);
-    if (!principal || (principal.kind !== 'local' && !principal.authentication.sessionId)) throw Error('A renderer session is required');
-    rendererSession = principal.authentication.sessionId;
-    const verify = captureWebRequestAuthority(gateway,req);
-    authorise = () => { verify(); if (channel.authGateway !== gateway) throw Error('A2UI RPC authentication changed'); };
-  } catch { return json({error:'A2UI RPC is not authorised.'},403); }
+    const auth = rendererAuthority(channel,req);
+    const scope = channel.a2uiRpcScope?.(chatJid);
+    if (!scope?.renderer) return json({error:'Renderer RPC is unavailable for this chat.'},404);
+    const assertDatabase = captureHostDatabaseBinding();
+    const target = captureInputTarget(chatJid);
+    const assertCurrent = () => { auth.assertCurrent(); assertDatabase(); target(); scope.assertCurrent(); };
+    const encoder = new TextEncoder();
+    let disconnect: (() => void) | undefined;
+    const abort = () => disconnect?.();
+    const stream = new ReadableStream<Uint8Array>({start(controller) {
+      const emit = (event: string, data: unknown) => controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      const peer = scope.renderer!.register({chatJid,conversationId:scope.conversationId,sessionId:auth.sessionId},assertCurrent,
+        packet => emit('a2ui_call',packet),() => {
+          clearInterval(heartbeat);
+          req.signal.removeEventListener('abort',abort);
+          scope.signal?.removeEventListener('abort',abort);
+          try { controller.close(); } catch { return; } // Reader may already have cancelled the stream.
+        });
+      const heartbeat = setInterval(() => {
+        try { assertCurrent(); controller.enqueue(encoder.encode(': heartbeat\n\n')); }
+        catch { peer.disconnect(); }
+      },15_000);
+      disconnect = peer.disconnect;
+      req.signal.addEventListener('abort',abort,{once:true});
+      scope.signal?.addEventListener('abort',abort,{once:true});
+      emit('a2ui_peer',{renderer_peer:peer.lease});
+    },cancel:abort});
+    return new Response(stream,{headers:{...privateHeaders,'Content-Type':'text/event-stream','X-Accel-Buffering':'no'}});
+  } catch { return json({error:'Renderer peer is not available.'},403); }
+}
+
+export async function handleA2uiRendererReply(channel: WebChannelLike, req: Request): Promise<Response> {
+  let auth: ReturnType<typeof rendererAuthority>;
+  try { auth = rendererAuthority(channel,req); }
+  catch { return json({error:'A2UI RPC is not authorised.'},403); }
+  try {
+    const body = await readRpcBody(req);
+    if (!record(body) || Object.keys(body).length !== 3 || !isWebChat(body.chat_jid) || typeof body.renderer_peer !== 'string')
+      throw Error('Malformed renderer response');
+    const message = RendererFunctionResponseMessageSchema.parse(body.message);
+    const reply = message.rendererFunctionResponse;
+    if (!validCallId(reply.functionCallId) || Buffer.byteLength(JSON.stringify(boundedRpcJson(reply))) > MAX_RPC_VALUE)
+      throw Error('Invalid renderer response');
+    auth.assertCurrent();
+    const scope = channel.a2uiRpcScope?.(body.chat_jid);
+    if (!scope?.renderer?.reply(body.renderer_peer,{chatJid:body.chat_jid,conversationId:scope.conversationId,sessionId:auth.sessionId},message))
+      return json({error:'The renderer call is no longer pending.'},409);
+    return new Response(null,{status:204,headers:privateHeaders});
+  } catch { return json({error:'Invalid A2UI renderer response.'},400); }
+}
+
+export async function handleA2uiRpc(channel: WebChannelLike, req: Request): Promise<Response> {
+  const changed = () => json({error:'The A2UI RPC surface or call identity changed.'},409);
+  let auth: ReturnType<typeof rendererAuthority>;
+  try { auth = rendererAuthority(channel,req); }
+  catch { return json({error:'A2UI RPC is not authorised.'},403); }
+  const { assertCurrent:authorise, sessionId:rendererSession } = auth;
   let body: unknown, message: CallAgentFunctionMessage, offered: readonly string[];
   let projectDraft: Awaited<ReturnType<typeof prepareA2uiDraftProjection>>;
   try {

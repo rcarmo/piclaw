@@ -33,6 +33,7 @@ import { prepareHostSchema } from "./host-schema.js";
 import { readApplicationMessagePayload } from "./accepted-payload-recovery.js";
 import { ownsA2uiModelSync, projectA2uiAgentInput, readA2uiRendererDataModel, storeA2uiInputMetadata } from '../../src/channels/web/a2ui/input-metadata.js';
 import { A2uiAgentRpc, type A2uiAgentFunction } from '../../src/channels/web/a2ui/agent-rpc.js';
+import type { RendererRpcBroker } from '../../src/channels/web/a2ui/renderer-rpc.js';
 import { value, effect, sealed } from "./host-effects.js";
 import { hashScheduledLeaseToken } from "../../src/service-effects/current-piclaw/scheduled-run-values.js";
 import type { ScheduledRunLease } from "../../src/service-effects/contracts/scheduled-run-store.js";
@@ -119,6 +120,7 @@ export interface ApplicationBootstrapOptions {
   onConversationReady?: (id:ConversationId)=>Promise<void>;
   preparePrompt?: (id:ConversationId,text:string)=>Promise<void>;
   a2uiAgentFunctions?: readonly A2uiAgentFunction[];
+  a2uiRendererRpc?: RendererRpcBroker;
   assertConversationAvailable?: () => void;
   assertAdmission?: RuntimeOptions["assertAdmission"];
   /** Host-owned physical catalog approval; no credentials or provider execution. */
@@ -446,7 +448,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       assertLive();
       const route = routeIndex.get(chat);
       if (!route || lookup(chat, route.branchId)?.conversationId !== route.conversationId) return;
-      return { conversationId:route.conversationId, agent:a2uiAgentRpc, signal:shutdown.signal, assertCurrent() {
+      return { conversationId:route.conversationId, agent:a2uiAgentRpc, renderer:config.a2uiRendererRpc, signal:shutdown.signal, assertCurrent() {
         assertLive();
         if (routeIndex.get(chat) !== route || lookup(chat, route.branchId)?.conversationId !== route.conversationId)
           throw Error('A2UI RPC conversation changed');
@@ -484,7 +486,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
             throw Error('Surface renderer belongs to another conversation');
           if (renderer.capabilities) {
             const data = readA2uiRendererDataModel(root, chat, conversationId, renderer);
-            storeA2uiInputMetadata(root, { chatJid: chat, sourceId: message.id, conversationId }, data, renderer.capabilities);
+            storeA2uiInputMetadata(root, { chatJid: chat, sourceId: message.id, conversationId }, data, renderer.capabilities, renderer.peer);
           }
         }
         checkInput();

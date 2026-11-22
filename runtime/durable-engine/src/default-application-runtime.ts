@@ -63,6 +63,8 @@ import { createOptimizerCodemodeTool } from "./optimizer-codemode.js";
 import { createHostFetch } from "./host-fetch.js";
 import { taskModelRequestScope, taskModelHookScope, taskModelToolScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
 import { createHostA2uiTool } from "./host-a2ui-tool.js";
+import { createHostA2uiRendererTool } from './host-a2ui-renderer-tool.js';
+import { RendererRpcBroker } from '../../src/channels/web/a2ui/renderer-rpc.js';
 import { createHostAutoresearch, type AutoresearchNativeExports } from "./host-autoresearch-tool.js";
 import { createHostBuiltinTools } from "./host-builtins.js";
 import { createHostModelTools, nativeToolInstructions } from "./host-model-controls.js";
@@ -1007,13 +1009,15 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     if (readAccessConfig().mode !== "single-user") throw Error("Host tool permission denied");
   } }, signal: lifetime.signal, shellPath: () => settings.getShellPath(), names: defaultToolNames });
   const builtins = [...tools];
-  tools.push(createHostA2uiTool({ root, runtime,
-    assertOwner() {
-      assert(); lifetime.signal.throwIfAborted();
-      if (readAccessConfig().mode !== 'single-user' || !terminalBroadcast) throw Error('Native A2UI publication unavailable');
-    },
+  const a2uiRendererRpc = new RendererRpcBroker();
+  const assertA2uiOwner = () => {
+    assert(); lifetime.signal.throwIfAborted();
+    if (readAccessConfig().mode !== 'single-user' || !terminalBroadcast) throw Error('Native A2UI is unavailable');
+  };
+  tools.push(createHostA2uiTool({ root, runtime, assertOwner:assertA2uiOwner,
     broadcast(event, post) { terminalBroadcast?.(event, post); },
   }));
+  tools.push(createHostA2uiRendererTool({ root, runtime, assertOwner:assertA2uiOwner, renderer:a2uiRendererRpc }));
   processControls = createHostProcessControls({ root, runtime,
     assertOwner() { assert(); if (readAccessConfig().mode !== "single-user") throw Error("Native process control requires single-user policy"); },
     assertHostIdle(input) {
@@ -1313,7 +1317,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       }}:undefined;
       const goalSettlement=goal&&goalProjectionOptions?createHostGoalSettlement(goal.addon,{root,runtime,assertOwner:assertGoal}):undefined;
       const nativeGoalProjection=goal&&goalProjectionOptions?createNativeGoalProjection(goal.addon,goalProjectionOptions):undefined;
-      bundle = await createApplicationBootstrapBundle({ root, path, ownership, offlineInitialize: true, answers, contentionSignal: lifetime.signal,
+      bundle = await createApplicationBootstrapBundle({ root, path, ownership, offlineInitialize: true, answers, a2uiRendererRpc, contentionSignal: lifetime.signal,
         background:{contexts:backgroundContexts,payloads:backgroundPayloads,
           assertCurrent(payload){check({provider:payload.policy.model.provider,id:payload.policy.model.modelId},lifetime.signal);assertBackgroundCurrent(payload);
             const model=host.modelRuntime.getPhysicalModel(payload.policy.model.provider,payload.policy.model.modelId)!;assertNativeBackgroundModel(payload.policy,model);},

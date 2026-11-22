@@ -17,6 +17,7 @@ export interface AgentMessagePayload {
   persist_steer?: boolean;
   content_blocks?: unknown[];
   a2ui_drafts?: unknown;
+  renderer_peer?: unknown;
   metadata?: unknown;
   link_previews?: unknown[];
   screen_hint?: string;

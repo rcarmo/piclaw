@@ -19,7 +19,7 @@ import { createRuntimeBaseServices } from '../../runtime/src/runtime/composition
 import { WebChannel } from '../../runtime/src/channels/web.ts';
 import { createDefaultApplicationRuntime } from '../../runtime/durable-engine/src/default-application-runtime.ts';
 import { ModelRuntime } from '../../node_modules/@earendil-works/pi-coding-agent/dist/index.js';
-import { createAssistantMessageEventStream } from '../../node_modules/@earendil-works/pi-ai';
+import { createAssistantMessageEventStream, type JsonObject } from '../../node_modules/@earendil-works/pi-ai';
 import { buildA2uiAction } from '../../runtime/src/channels/web/a2ui/action.ts';
 import { CLASSIC_A2UI_CATALOG, isA2uiSurfaceBlock } from '../../runtime/src/channels/web/a2ui/surface.ts';
 
@@ -70,6 +70,11 @@ applicationTest('packed Autoresearch binds the native tool and consumes a later 
   const models=await ModelRuntime.create({credentials,modelsPath:null,modelsStore:{read:async()=>undefined,write:async()=>{},delete:async()=>{}},allowModelNetwork:false,refreshOnCreate:false});
   const results=new Map<string,string>();
   let expectedTool='start_autoresearch';
+  const rpcCatalogue = 'urn:fixture:renderer-rpc:1';
+  const rendererCall = {version:'1.0',callRendererFunction:{functionCallId:'native-renderer-1',
+    callFunction:{'@call':'inspectLabel',catalogId:rpcCatalogue,args:{label:'Classic'}},
+  }};
+  let rendererToolArgs: {message:JsonObject;post_id?:number;revision?:number} = {message:rendererCall};
   let latestUserInput = '';
   let invalidForm = false, latestToolError = false;
   const invalidDraft = {fallback:'Rejected A2UI draft',messages:[{version:'1.0',createSurface:{surfaceId:'invalid-fixture',
@@ -98,7 +103,8 @@ applicationTest('packed Autoresearch binds the native tool and consumes a later 
    const stop = tool || name === 'none';
    const body:AssistantMessage["content"]=stop?[{type:'text',text:`Fixture returned ${name}`}]:[{type:'toolCall',id:`fixture-${name}`,name,
      arguments:name==='start_autoresearch'?{project_dir:project,prompt:'Synthetic trial',max_iterations:2}:
-       name==='stop_autoresearch'?{generate_report:false}:name==='send_a2ui'?(invalidForm?invalidDraft:syncedForm):{}}];
+       name==='stop_autoresearch'?{generate_report:false}:name==='send_a2ui'?(invalidForm?invalidDraft:syncedForm):
+       name==='call_a2ui_renderer'?rendererToolArgs:{}}];
    const reason = stop ? 'stop' : 'toolUse';
    const message:AssistantMessage={role:'assistant',api:physical.api,provider:physical.provider,model:physical.id,timestamp:Date.now(),content:body,stopReason:reason,usage:{input:5,output:2,cacheRead:0,cacheWrite:0,totalTokens:7,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}};
    const out=createAssistantMessageEventStream();out.push({type:'done',reason,message});out.end(message);return out;
@@ -207,6 +213,68 @@ applicationTest('packed Autoresearch binds the native tool and consumes a later 
    await waitFor(() => settled(withdrawn.thread_id).total || undefined, 'withdrawn offer turn did not settle');
    assert.equal(latestUserInput,spoof);
    assert.equal(db.query<{total:number},[string]>('SELECT count(*) AS total FROM messages WHERE content=?').get(syncedForm.fallback)?.total,1);
+   // SDK-free renderer frames on the real request router; native qualification remains network-free.
+   const openPeer = async () => {
+     const response = await channel!.handleRequest(new Request(`https://fixture/agent/a2ui-peer?chat_jid=${encodeURIComponent(chat)}`,{headers:{cookie}}));
+     assert.equal(response.status,200);
+     assert.equal(response.headers.get('cache-control'),'private, no-store');
+     const reader = response.body!.getReader();
+     const decoder = new TextDecoder();
+     let pending = '';
+     return {cancel: () => reader.cancel(), async frame(event:string) {
+       for (;;) {
+         const boundary = pending.indexOf('\n\n');
+         if (boundary >= 0) {
+           const raw = pending.slice(0,boundary);
+           pending = pending.slice(boundary+2);
+           if (raw.startsWith(':')) continue;
+           assert(raw.startsWith(`event: ${event}\n`));
+           return JSON.parse(raw.split('\ndata: ')[1]!);
+         }
+         const result = await reader.read();
+         assert(!result.done);
+         pending += decoder.decode(result.value,{stream:true});
+       }
+     } };
+   };
+   let activePeer: Awaited<ReturnType<typeof openPeer>> | undefined, secondaryPeer: Awaited<ReturnType<typeof openPeer>> | undefined;
+   try {
+     const peer = activePeer = await openPeer();
+     const other = secondaryPeer = await openPeer();
+     const {renderer_peer:lease} = await peer.frame('a2ui_peer');
+     const {renderer_peer:otherLease} = await other.frame('a2ui_peer');
+     assert(typeof lease === 'string' && typeof otherLease === 'string' && lease !== otherLease);
+     expectedTool='call_a2ui_renderer';
+     const peerOffer = {renderer_peer:lease,metadata:{a2uiRendererCapabilities:{'1.0':{
+       supportedCatalogIds:[CLASSIC_A2UI_CATALOG,rpcCatalogue],
+     }}}};
+     const invoked = await issue('Invoke the accepted renderer',peerOffer);
+     assert.deepEqual(await peer.frame('a2ui_call'),{message:rendererCall});
+     assert(!latestUserInput.includes(lease));
+     const message={version:'1.0',rendererFunctionResponse:{functionCallId:'native-renderer-1',value:'CLASSIC'}};
+     const reply = (renderer_peer: string) => request('/agent/a2ui-renderer-reply',{chat_jid:chat,renderer_peer,message});
+     assert.equal((await reply(otherLease)).status,409);
+     assert.equal((await reply(lease)).status,204);
+     assert.equal((await reply(lease)).status,409);
+     await waitFor(() => settled(invoked.thread_id).total || undefined,'renderer RPC turn did not settle');
+     assert.equal(latestToolError,false);
+     const toolReply = () => JSON.parse(JSON.parse(results.get('call_a2ui_renderer')!)[0].text);
+     assert.deepEqual(toolReply(),message);
+     const boundCall = {version:'1.0',callRendererFunction:{surfaceId:syncBlock.surface.surfaceId,functionCallId:'native-renderer-bound',
+       callFunction:{'@call':'inspectLabel',catalogId:rpcCatalogue,args:{label:{'@path':'/name'}}},
+     }};
+     rendererToolArgs={message:boundCall,post_id:syncPost.rowid,revision:2};
+     await issue('Invoke the current surface',{...peerOffer,thread_id:form.thread_id});
+     assert.deepEqual(await peer.frame('a2ui_call'),{message:boundCall,source:{post_id:syncPost.rowid,thread_id:form.thread_id,revision:2}});
+     const boundReply={version:'1.0',rendererFunctionResponse:{functionCallId:'native-renderer-bound',value:'Edited'}};
+     assert.equal((await request('/agent/a2ui-renderer-reply',{chat_jid:chat,renderer_peer:lease,message:boundReply})).status,204);
+     await waitFor(() => settled(form.thread_id).total===3 || undefined,'bound renderer RPC did not settle');
+     assert.deepEqual(toolReply(),boundReply);
+     rendererToolArgs={...rendererToolArgs,revision:1};
+     await issue('Try an obsolete surface revision',{...peerOffer,thread_id:form.thread_id});
+     await waitFor(() => settled(form.thread_id).total===4 || undefined,'obsolete renderer RPC did not settle');
+     assert.equal(toolReply().rendererFunctionResponse.error.code,'INVALID_FUNCTION_CALL');
+   } finally { await Promise.allSettled([activePeer?.cancel(),secondaryPeer?.cancel()]); }
    console.log('Packed Autoresearch starts in the default SDK host; authenticated action starts the synthetic process once after the model turn, with bound status and stop.');
   } finally {await backend?.close();await channel?.stop();await base.queue.shutdown();await pool?.shutdown();await closeDatabase();lock.release();}
 

@@ -10,10 +10,12 @@ export interface A2uiRendererDataModel {
 }
 
 type Recipient = { chatJid: string; sourceId: string; conversationId: number };
+export interface AcceptedRendererPeer { hash: string; catalogues: readonly string[] }
 
 /** Internal acceptance context. Browser-written data must be validated against stored controls first. */
 export interface A2uiRendererInput {
   capabilities?: ClassicA2uiRendererCapabilities;
+  peer?: AcceptedRendererPeer;
   submittedSurfaceId?: string;
   editedSurface?: A2uiSnapshot;
   draftSurface?: (block: A2uiSurfaceBlock) => A2uiSnapshot | undefined;
@@ -77,15 +79,15 @@ export function readA2uiRendererDataModel(database: Database, chatJid: string, c
 }
 
 /** Native input metadata is separate from the user-visible message and its content blocks. */
-export function storeA2uiInputMetadata(database: Database, recipient: Recipient, model?: A2uiRendererDataModel, capabilities?: ClassicA2uiRendererCapabilities): void {
+export function storeA2uiInputMetadata(database: Database, recipient: Recipient, model?: A2uiRendererDataModel, capabilities?: ClassicA2uiRendererCapabilities, peer?: AcceptedRendererPeer): void {
   if (!database.inTransaction) throw Error('A2UI input metadata requires the source admission transaction');
   const dataModel = model && Object.keys(model.surfaces).length ? model : undefined;
   if (!dataModel && !capabilities) return;
   const metadata = JSON.stringify({ a2uiRendererDataModel: dataModel, a2uiRendererCapabilities: capabilities });
   if (Buffer.byteLength(metadata) > 256 * 1024) throw Error('A2UI input metadata exceeds its size limit');
-  const result = database.query(`INSERT INTO a2ui_input_metadata (chat_jid, message_id, conversation_id, metadata)
-    SELECT chat_jid, id, ?, ? FROM messages WHERE chat_jid=? AND id=? AND is_bot_message=0`)
-    .run(recipient.conversationId, metadata, recipient.chatJid, recipient.sourceId);
+  const result = database.query(`INSERT INTO a2ui_input_metadata (chat_jid, message_id, conversation_id, metadata, renderer_peer)
+    SELECT chat_jid, id, ?, ?, ? FROM messages WHERE chat_jid=? AND id=? AND is_bot_message=0`)
+    .run(recipient.conversationId, metadata, peer ? JSON.stringify(peer) : null, recipient.chatJid, recipient.sourceId);
   if (result.changes !== 1) throw Error('A2UI metadata source disappeared');
 }
 
@@ -101,6 +103,12 @@ export function hasA2uiRendererOffer(database: Database, recipient: Recipient): 
   const metadata = readMetadata(database, recipient);
   try { return metadata !== undefined && !!negotiateClassicA2ui(JSON.parse(metadata)); }
   catch { return false; }
+}
+
+export function readAcceptedRendererPeer(database: Database, recipient: Recipient): AcceptedRendererPeer | undefined {
+  const row = database.query('SELECT renderer_peer FROM a2ui_input_metadata WHERE chat_jid=? AND message_id=? AND conversation_id=?')
+    .get(recipient.chatJid,recipient.sourceId,recipient.conversationId) as {renderer_peer: string | null} | null;
+  return row?.renderer_peer ? JSON.parse(row.renderer_peer) as AcceptedRendererPeer : undefined;
 }
 
 /** The native SDK accepts text here. Serialize the canonical metadata envelope only in its input, never in the timeline. */

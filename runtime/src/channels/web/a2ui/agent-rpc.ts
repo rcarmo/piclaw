@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { CallAgentFunctionMessage, AgentFunctionResponseMessage } from '@a2ui/web_core/v1_0';
 import type { CanonicalJsonValue } from '../../../service-effects/contracts/common.js';
 import type { A2uiRendererDataModel } from './input-metadata.js';
+import type { RendererRpcBroker } from './renderer-rpc.js';
 
 export const MAX_RPC_VALUE = 16 * 1024;
 const RECEIPT_TTL = 60_000;
@@ -38,6 +39,7 @@ export function defineA2uiAgentFunction<T>(definition: FunctionDeclaration & {
 export interface A2uiRpcRuntimeScope {
   conversationId: number;
   agent: A2uiAgentRpc;
+  renderer?: RendererRpcBroker;
   signal?: AbortSignal;
   assertCurrent(): void;
 }

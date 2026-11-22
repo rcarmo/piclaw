@@ -108,6 +108,7 @@ export function getDataRateLimitRule(method: string, pathname: string): DataRate
     pathname === "/agent/respond" ||
     pathname === "/agent/a2ui-action" ||
     pathname === '/agent/a2ui-rpc' ||
+    pathname === '/agent/a2ui-renderer-reply' ||
     pathname === "/agent/tool-abort"
   )) {
     return {

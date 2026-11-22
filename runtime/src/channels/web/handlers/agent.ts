@@ -16,6 +16,7 @@ import { getAddonLocalDispatchBlock } from "../../../addons/local-dispatch.js";
 import type { StoreWebMessageOptions } from "../messaging/message-store.js";
 import { prepareA2uiDraftProjection, type A2uiRendererInput } from '../a2ui/input-metadata.js';
 import { InvalidA2uiDraftError, parseA2uiDrafts } from '../a2ui/drafts.js';
+import { bindRendererOffer } from '../a2ui/rpc.js';
 import { InvalidA2uiCapabilitiesError, negotiateClassicA2ui } from '../a2ui/capabilities.js';
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
 import { isSingleUserAccess } from "../../../core/config-access.js";
@@ -112,7 +113,7 @@ export async function handleAgentMessage(
   chatJid: string,
   defaultAgentId: string,
   post?: { requireReplyThread: boolean; authorise: ValidateInputAuthority; onAccepted?: StoreWebMessageOptions["acceptSource"];
-    a2uiSubmission?: Pick<A2uiRendererInput, 'submittedSurfaceId' | 'editedSurface'> },
+    a2uiSubmission?: Pick<A2uiRendererInput, 'submittedSurfaceId' | 'editedSurface' | 'peer'> },
 ): Promise<Response> {
   if (!isSingleUserAccess()) return channel.json({ error: "Single-user message admission is required." }, 403);
   let internalAuthority: ReturnType<typeof readInputRequestAuthority>;
@@ -266,7 +267,9 @@ export async function handleAgentMessage(
       interaction = await admitUserInput(chatJid,content,false,normalized.mediaIds,{
         contentBlocks:normalized.contentBlocks,linkPreviews:normalized.linkPreviews,threadId:normalized.threadId??undefined,
         screenHint:normalized.screenHint,acceptSource: stored => {
-          const result = acceptSource!(stored, { ...post?.a2uiSubmission, capabilities, draftSurface });
+          const result = acceptSource!(stored, { ...post?.a2uiSubmission, capabilities, draftSurface,
+            peer: post?.a2uiSubmission?.peer ?? (capabilities ? bindRendererOffer(channel,req,chatJid,parsed.payload!.renderer_peer,parsed.payload!.metadata) : undefined),
+          });
           if (result !== undefined) return result;
           return post?.onAccepted?.(stored);
         },isSteeringMessage:requestMode==="steer",
