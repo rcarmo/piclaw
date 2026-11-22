@@ -62,6 +62,7 @@ for (const engine of [chromium, webkit]) {
     let server: ReturnType<typeof Bun.serve> | undefined;
     const audioRequests: (string | null)[] = [];
     const rpcRequests: {chat_jid:string;post_id:number;thread_id:number;revision:number;message:CallAgentFunctionMessage}[] = [];
+    const reports: unknown[] = [];
     const delayedRpc = Promise.withResolvers<void>();
     const displayRpc = Promise.withResolvers<void>();
     const audioOrigin = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(req) {
@@ -107,6 +108,10 @@ for (const engine of [chromium, webkit]) {
       server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
         const { pathname } = new URL(req.url);
         if (pathname === '/agent/default/message') return Response.json(await req.json());
+        if (pathname === '/agent/a2ui-error') {
+          reports.push(await req.json());
+          return new Response(null,{status:204});
+        }
         if (pathname === '/agent/a2ui-rpc') {
           const input = await req.json() as typeof rpcRequests[number];
           rpcRequests.push(input);
@@ -474,7 +479,19 @@ for (const engine of [chromium, webkit]) {
       expect(await panel.getByText('42',{exact:true}).count()).toBe(1);
       expect(await panel.getByText('Not registered').count()).toBe(0);
       expect(rpcRequests.filter(request=>request.message.callAgentFunction.callFunction['@call']==='displayStatus')).toHaveLength(1);
-      expect(rpcRequests.filter(request=>request.message.callAgentFunction.callFunction['@call']==='displayFailure')).toHaveLength(1);
+      const failures=rpcRequests.filter(request=>['broken','displayFailure'].includes(request.message.callAgentFunction.callFunction['@call']));
+      expect(failures).toHaveLength(2);
+      expect(reports).toEqual(failures.map(request=>({chat_jid:request.chat_jid,post_id:request.post_id,thread_id:request.thread_id,revision:request.revision,
+        surface_id:request.message.callAgentFunction.surfaceId,
+        message:{version:'1.0',error:{code:'EXPRESSION_ERROR',functionCallId:request.message.callAgentFunction.functionCallId,message:'The agent function did not complete.'}},
+      })));
+      const integrity = page.waitForResponse(response=>response.url().endsWith('/agent/a2ui-error') && response.status()===204);
+      await page.evaluate((item)=>(window as any).draw(item),{...block,owner:'agent',revision:15,
+        surface:{...display,components:[{id:'root',component:'Column',children:['root']}]},fallback_text:'Unable to reconstruct this form',
+      });
+      await panel.getByText('Unable to reconstruct this form').waitFor();
+      await integrity;
+      expect(reports.at(-1)).toMatchObject({surface_id:displayId,revision:15,message:{version:'1.0',error:{code:'INTEGRITY_ERROR',surfaceId:displayId}}});
       const legacyRequests: string[] = [];
       page.on('request', request => { if (request.url().includes('adaptivecards')) legacyRequests.push(request.url()); });
       await page.evaluate(() => (window as any).draw({

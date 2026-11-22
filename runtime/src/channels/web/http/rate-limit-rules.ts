@@ -103,6 +103,9 @@ export function getDataRateLimitRule(method: string, pathname: string): DataRate
       message: "Too many scheduled-task actions. Slow down.",
     };
   }
+  if (method === 'POST' && pathname === '/agent/a2ui-error') {
+    return {bucket:'data/a2ui_error',limit:DATA_AGENT_UI_LIMIT,message:'Too many A2UI renderer reports. Slow down.'};
+  }
   if (method === "POST" && (
     pathname === "/agent/thought/visibility" ||
     pathname === "/agent/respond" ||

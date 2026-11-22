@@ -208,6 +208,21 @@ applicationTest('packed Autoresearch binds the native tool and consumes a later 
    const after=await issue('Read latest model',{metadata:{...offer.metadata,a2uiRendererMessage:changedExtension.message},a2ui_drafts:drafts(1)});
    await waitFor(() => settled(after.thread_id).total || undefined, 'model query did not settle');
    assert.equal(latestUserInput,`Read latest model\n\nA2UI renderer metadata:\n${modelFor('Edited','Action-only model edit')}`);
+   const diagnostic={chat_jid:chat,post_id:syncPost.rowid,thread_id:form.thread_id,revision:2,surface_id:syncBlock.surface.surfaceId,
+     message:{version:'1.0',error:{code:'EXECUTION_ERROR',surfaceId:syncBlock.surface.surfaceId,message:'Raw browser diagnostic'}},
+   };
+   const countMessages = () => db.query<{total:number},[string]>('SELECT count(*) AS total FROM messages WHERE chat_jid=?').get(chat)!.total;
+   const beforeReport=countMessages();
+   assert.equal((await request('/agent/a2ui-error',diagnostic,{cookie:''})).status,401);
+   assert.equal((await request('/agent/a2ui-error',{...diagnostic,revision:1})).status,409);
+   for (let attempt=0;attempt<2;attempt++) assert.equal((await request('/agent/a2ui-error',diagnostic)).status,204);
+   assert.equal(countMessages(),beforeReport,'reports never start a model turn or create a timeline post');
+   const feedback=await issue('Read renderer diagnostic');
+   await waitFor(() => settled(feedback.thread_id).total || undefined, 'feedback turn did not settle');
+   assert.equal(latestUserInput,`Read renderer diagnostic\n\nA2UI renderer metadata:\n${JSON.stringify({a2uiRendererErrors:[{version:'1.0',error:{code:'EXECUTION_ERROR',message:'The renderer could not execute the action.',surfaceId:syncBlock.surface.surfaceId}}]})}`);
+   const next=await issue('Read diagnostics again');
+   await waitFor(() => settled(next.thread_id).total || undefined, 'follow-up feedback turn did not settle');
+   assert.equal(latestUserInput,'Read diagnostics again');
    expectedTool='send_a2ui';
    invalidForm = true;
    const invalid=await issue('Send an invalid UI draft',offer);

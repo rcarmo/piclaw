@@ -1,6 +1,7 @@
-import { CallAgentFunctionMessageSchema, RendererFunctionResponseMessageSchema, type CallAgentFunctionMessage } from '@a2ui/web_core/v1_0';
+import { CallAgentFunctionMessageSchema, ErrorMessageSchema, RendererFunctionResponseMessageSchema, type CallAgentFunctionMessage } from '@a2ui/web_core/v1_0';
 import { isSingleUserAccess } from '../../../core/config-access.js';
 import { captureHostDatabaseBinding, getDb } from '../../../db/connection.js';
+import { admitSqliteWrite } from '../../../db/sqlite-async-admission.js';
 import { getMessageByRowIdFromDatabase } from '../../../db/messages.js';
 import { captureWebRequestAuthority } from '../auth/auth-gateway.js';
 import type { WebChannelLike } from '../core/web-channel-contracts.js';
@@ -9,6 +10,8 @@ import { readA2uiCatalogueOffer } from './capabilities.js';
 import { parseA2uiDrafts } from './drafts.js';
 import { prepareA2uiDraftProjection, readA2uiRendererDataModel, readA2uiSurfaceOwner, type AcceptedRendererPeer } from './input-metadata.js';
 import { boundedRpcJson, MAX_RPC_VALUE } from './rpc-json.js';
+import { A2UI_ERROR_TEXT, enqueueA2uiRendererError } from './renderer-errors.js';
+import { absoluteA2uiPointer } from './data-path.js';
 import { isA2uiSurfaceBlock } from './surface.js';
 
 const MAX_BODY = 96 * 1024;
@@ -17,7 +20,7 @@ function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-async function readRpcBody(req: Request): Promise<unknown> {
+async function readRpcBody(req: Request, maxBytes = MAX_BODY): Promise<unknown> {
   const reader = req.body?.getReader();
   if (!reader) throw Error('Missing RPC body');
   const decoder = new TextDecoder('utf-8',{fatal:true});
@@ -26,7 +29,7 @@ async function readRpcBody(req: Request): Promise<unknown> {
     for (;;) {
       const {value,done} = await reader.read();
       if (done) return JSON.parse(json+decoder.decode());
-      if ((bytes+=value.length)>MAX_BODY) throw Error('RPC body too large');
+      if ((bytes+=value.length)>maxBytes) throw Error('RPC body too large');
       json+=decoder.decode(value,{stream:true});
     }
   } finally { await reader.cancel(); reader.releaseLock(); }
@@ -143,27 +146,72 @@ export async function handleA2uiRpc(channel: WebChannelLike, req: Request): Prom
   const {chat_jid:chatJid,post_id:postId,thread_id:threadId,revision} = body;
   const {surfaceId} = message.callAgentFunction;
   try {
-    authorise();
-    const database=getDb(), assertDatabase=captureHostDatabaseBinding(database);
-    const target=captureInputTarget(chatJid);
-    const scope=channel.a2uiRpcScope?.(chatJid);
-    if (!scope) return changed();
-    const assertCurrent = () => {
-      authorise(); assertDatabase(); target(); scope.assertCurrent();
-      const source=getMessageByRowIdFromDatabase(database,chatJid,postId);
-      const root=getMessageByRowIdFromDatabase(database,chatJid,threadId);
-      const block=source?.data?.content_blocks?.find(isA2uiSurfaceBlock);
-      const owner=readA2uiSurfaceOwner(database,chatJid,`a2ui:${surfaceId}`);
-      if (!root || (root.data?.thread_id != null && root.data.thread_id !== threadId)
-        || source?.data?.type !== 'agent_response' || source.data.thread_id !== threadId
-        || block?.state !== 'active' || block.owner !== 'agent' || block.revision !== revision || block.surface.surfaceId !== surfaceId
-        || owner?.post_id !== postId || owner.conversation_id !== scope.conversationId) throw Error('A2UI RPC surface changed');
-    };
-    assertCurrent();
+    const {database,scope,assertCurrent} = captureRpcSurface(channel,authorise,chatJid,postId,threadId,revision,surfaceId);
     const model = offered.length ? readA2uiRendererDataModel(database,chatJid,scope.conversationId,{draftSurface:projectDraft}) : undefined;
     const metadata = model && Object.keys(model.surfaces).length ? {a2uiRendererDataModel:model} : {};
     const response = await scope.agent.invoke({chatJid,conversationId:scope.conversationId,rendererSession,revision,offered,
       metadata,signal:scope.signal ? AbortSignal.any([scope.signal,req.signal]) : req.signal,assertCurrent},message);
     return json(response,200);
   } catch { return changed(); }
+}
+
+function captureRpcSurface(channel: WebChannelLike, authorise: () => void, chatJid: string, postId: number, threadId: number, revision: number, surfaceId: string) {
+  authorise();
+  const database=getDb(), assertDatabase=captureHostDatabaseBinding(database);
+  const target=captureInputTarget(chatJid);
+  const scope=channel.a2uiRpcScope?.(chatJid);
+  if (!scope) throw Error('A2UI RPC route changed');
+  const assertCurrent = () => {
+    authorise(); assertDatabase(); target(); scope.assertCurrent();
+    const source=getMessageByRowIdFromDatabase(database,chatJid,postId);
+    const root=getMessageByRowIdFromDatabase(database,chatJid,threadId);
+    const block=source?.data?.content_blocks?.find(isA2uiSurfaceBlock);
+    const owner=readA2uiSurfaceOwner(database,chatJid,`a2ui:${surfaceId}`);
+    if (!root || (root.data?.thread_id != null && root.data.thread_id !== threadId)
+      || source?.data?.type !== 'agent_response' || source.data.thread_id !== threadId
+      || block?.state !== 'active' || block.owner !== 'agent' || block.revision !== revision || block.surface.surfaceId !== surfaceId
+      || owner?.post_id !== postId || owner.conversation_id !== scope.conversationId) throw Error('A2UI RPC surface changed');
+  };
+  assertCurrent();
+  return {database,scope,assertCurrent,assertDatabase};
+}
+
+/** Renderer diagnostics travel out of band; they never start an agent turn. */
+export async function handleA2uiRendererError(channel: WebChannelLike, req: Request): Promise<Response> {
+  let auth: ReturnType<typeof rendererAuthority>;
+  try { auth=rendererAuthority(channel,req); }
+  catch { return json({error:'A2UI RPC is not authorised.'},403); }
+  let body: unknown;
+  try { body=await readRpcBody(req,4096); }
+  catch { return json({error:'Invalid A2UI renderer error.'},400); }
+  if (!record(body) || Object.keys(body).length!==6 || !isWebChat(body.chat_jid) || !positiveId(body.post_id)
+    || !positiveId(body.thread_id) || !positiveId(body.revision) || typeof body.surface_id!=='string' || !validCallId(body.surface_id))
+    return json({error:'Invalid A2UI renderer error.'},400);
+  const parsed=ErrorMessageSchema.safeParse(body.message);
+  if (!parsed.success) return json({error:'Invalid A2UI renderer error.'},400);
+  const {error}=parsed.data;
+  const {code}=error;
+  const {chat_jid:chatJid,post_id:postId,thread_id:threadId,revision,surface_id:surfaceId}=body;
+  const path='path' in error ? error.path : undefined;
+  const validation=code==='VALIDATION_FAILED' || code==='UNALLOWED_PARENT' || code==='UNALLOWED_CHILD';
+  const callId='functionCallId' in error ? error.functionCallId : undefined;
+  if (typeof code!=='string' || !Object.hasOwn(A2UI_ERROR_TEXT,code) || !error.message || error.message.length>1024
+    || Object.keys(error).length!==(validation ? 4 : 3) || validation!==(path!==undefined)
+    || (callId===undefined ? error.surfaceId!==surfaceId : typeof callId!=='string' || !validCallId(callId) || code!=='EXPRESSION_ERROR')
+    || (path!==undefined && (typeof path!=='string' || path.length>128 || !absoluteA2uiPointer(path,true))))
+    return json({error:'Invalid A2UI renderer error.'},400);
+  const message=ErrorMessageSchema.parse({version:'1.0',error:{code,message:A2UI_ERROR_TEXT[code as keyof typeof A2UI_ERROR_TEXT],
+    ...(callId===undefined ? {surfaceId} : {functionCallId:callId}),...(path===undefined ? {} : {path}),
+  }});
+  try {
+    const {database,scope,assertCurrent,assertDatabase}=captureRpcSurface(channel,auth.assertCurrent,chatJid,postId,threadId,revision,surfaceId);
+    const assertReport=()=>{
+      assertCurrent();
+      if (typeof callId==='string' && !scope.agent.correlatesRendererError({chatJid,conversationId:scope.conversationId,rendererSession:auth.sessionId,revision},surfaceId,callId))
+        throw Error('A2UI function receipt changed');
+    };
+    const signal=scope.signal ? AbortSignal.any([scope.signal,req.signal]) : req.signal;
+    const accepted=await admitSqliteWrite(database,()=>enqueueA2uiRendererError(database,chatJid,scope.conversationId,`a2ui:${surfaceId}`,revision,message),assertReport,signal,undefined,assertDatabase);
+    return accepted ? new Response(null,{status:204,headers:privateHeaders}) : json({error:'Too many renderer reports.'},429);
+  } catch { return json({error:'The A2UI error source changed.'},409); }
 }

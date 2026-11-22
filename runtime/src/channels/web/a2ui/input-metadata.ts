@@ -1,4 +1,5 @@
 import type { Database } from 'bun:sqlite';
+import { takeA2uiRendererErrors } from './renderer-errors.js';
 import { isA2uiSurfaceBlock, type A2uiSnapshot, type A2uiSurfaceBlock } from './surface.js';
 import { validateA2uiDraftEdits, type A2uiActionMessage } from './action.js';
 import { InvalidA2uiDraftError, type A2uiDraftPatch } from './drafts.js';
@@ -83,9 +84,13 @@ export function readA2uiRendererDataModel(database: Database, chatJid: string, c
 export function storeA2uiInputMetadata(database: Database, recipient: Recipient, model?: A2uiRendererDataModel, capabilities?: ClassicA2uiRendererCapabilities, peer?: AcceptedRendererPeer, message?: A2uiActionMessage): void {
   if (!database.inTransaction) throw Error('A2UI input metadata requires the source admission transaction');
   const dataModel = model && Object.keys(model.surfaces).length ? model : undefined;
-  if (!dataModel && !capabilities && !message) return;
-  const metadata = JSON.stringify({ a2uiRendererDataModel: dataModel, a2uiRendererCapabilities: capabilities, a2uiRendererMessage: message });
-  if (Buffer.byteLength(metadata) > 256 * 1024) throw Error('A2UI input metadata exceeds its size limit');
+  const envelope={a2uiRendererDataModel:dataModel,a2uiRendererCapabilities:capabilities,a2uiRendererMessage:message};
+  const base=JSON.stringify(envelope);
+  const room=256 * 1024 - Buffer.byteLength(base);
+  if (room<0) throw Error('A2UI input metadata exceeds its size limit');
+  const errors=takeA2uiRendererErrors(database,recipient.chatJid,recipient.conversationId,room-32);
+  if (base==='{}' && !errors.length) return;
+  const metadata=errors.length ? JSON.stringify({...envelope,a2uiRendererErrors:errors}) : base;
   const result = database.query(`INSERT INTO a2ui_input_metadata (chat_jid, message_id, conversation_id, metadata, renderer_peer)
     SELECT chat_jid, id, ?, ?, ? FROM messages WHERE chat_jid=? AND id=? AND is_bot_message=0`)
     .run(recipient.conversationId, metadata, peer ? JSON.stringify(peer) : null, recipient.chatJid, recipient.sourceId);

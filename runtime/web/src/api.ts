@@ -8,7 +8,7 @@ import { isCommittedComposeInput } from './ui/compose-submission.js';
 import { a2uiDraftsFor } from './ui/a2ui-drafts.js';
 import { a2uiRendererContext, openA2uiRendererPeer } from './ui/a2ui-renderer-peer.js';
 import { getAgentUiSnapshot, currentUiChatJid } from './ui/agent-ui-snapshot.js';
-import type { CallAgentFunctionMessage } from '@a2ui/web_core/v1_0';
+import type { CallAgentFunctionMessage, ErrorMessage } from '@a2ui/web_core/v1_0';
 
 export { uploadMedia, uploadWorkspaceFile } from './ui/upload-transfers.js';
 
@@ -1243,7 +1243,13 @@ export async function savePostAnnotations(postId: number, annotations: unknown[]
     });
 }
 
-export function requestA2uiAgentFunction(source: {chat_jid:string;post_id:number;thread_id:number;revision:number}, message: CallAgentFunctionMessage, signal: AbortSignal): Promise<unknown> {
+type A2uiSource = {chat_jid:string;post_id:number;thread_id:number;revision:number};
+
+export function postA2uiRendererError(source: A2uiSource, surfaceId: string, message: ErrorMessage, signal: AbortSignal): Promise<unknown> {
+    return request('/agent/a2ui-error',{method:'POST',signal,body:JSON.stringify({...source,surface_id:surfaceId,message})});
+}
+
+export function requestA2uiAgentFunction(source: A2uiSource, message: CallAgentFunctionMessage, signal: AbortSignal): Promise<unknown> {
     const {metadata}=a2uiRendererContext(source.chat_jid);
     return request('/agent/a2ui-rpc',{method:'POST',signal,body:JSON.stringify({ ...source,message,metadata,
         a2ui_drafts:a2uiDraftsFor(source.chat_jid),

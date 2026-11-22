@@ -202,6 +202,17 @@ function createSchema(database: Database): void {
       PRIMARY KEY (chat_jid, message_id),
       FOREIGN KEY (message_id, chat_jid) REFERENCES messages(id, chat_jid) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS a2ui_renderer_errors (
+      chat_jid TEXT NOT NULL,
+      message_id TEXT NOT NULL,
+      conversation_id INTEGER NOT NULL,
+      revision INTEGER NOT NULL,
+      envelope TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      delivered INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (chat_jid, message_id, conversation_id, revision, envelope),
+      FOREIGN KEY (chat_jid, message_id) REFERENCES a2ui_surface_owners(chat_jid, message_id) ON DELETE CASCADE
+    );
     -- The chat-only index implicitly orders each chat by rowid for timeline pagination.
     -- Timestamp and bot/timestamp indexes serve time-ordered and agent/user queries.
     CREATE INDEX IF NOT EXISTS idx_messages_chat_jid ON messages(chat_jid);

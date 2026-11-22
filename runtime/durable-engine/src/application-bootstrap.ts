@@ -429,8 +429,9 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       assertLive();const scope=routeIndex.get(chat);if(!scope||!lookup(chat,scope.branchId))throw Error("Unbound native queue");
       const items=await runtime.readMessageInbox({incarnation:r.incarnation,...scope});assertLive();
       return items.map(item=>{
-        const row=root.query("SELECT timestamp,thread_id FROM messages WHERE chat_jid=? AND id=?").get(chat,item.input.sourceId) as {timestamp:string;thread_id:number|null}|null;
-        return {row_id:item.submissionId,mode:item.mode,content:item.content,timestamp:row?.timestamp??r.now(),thread_id:row?.thread_id??null,source:"native_sdk"};
+        const row=root.query("SELECT content,timestamp,thread_id FROM messages WHERE chat_jid=? AND id=?").get(chat,item.input.sourceId) as {content:string|null;timestamp:string;thread_id:number|null}|null;
+        // The SDK inbox has the model input, including private A2UI metadata. The queue shows only its public source.
+        return {row_id:item.submissionId,mode:item.mode,content:row?.content??'',timestamp:row?.timestamp??r.now(),thread_id:row?.thread_id??null,source:"native_sdk"};
       });
     };
     const controlNativeQueue:NonNullable<WebChannelOpts["controlNativeQueue"]>=async(chat,id,action,authorise)=>{

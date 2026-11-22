@@ -84,7 +84,7 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     // Fault ONLY the secondary Root correlation ACK, after real SDK admission.
     // It must not turn accepted input into an HTTP failure, timeline item or lost reply.
     database.exec("CREATE TEMP TRIGGER native_ack_fault BEFORE UPDATE OF submission_id ON piclaw_durable_bindings_v1 WHEN NEW.source_id IN (SELECT id FROM messages WHERE content='follow-up instruction') BEGIN SELECT RAISE(ABORT,'synthetic native ACK fault'); END");
-    const followup=await send("follow-up instruction","queue"),steer=await send("steering instruction","steer");
+    const followup=await send("follow-up instruction","queue",true),steer=await send("steering instruction","steer");
     database.exec("DROP TRIGGER native_ack_fault");
     const lostBinding=()=>database.query("SELECT b.submission_id FROM piclaw_durable_bindings_v1 b JOIN messages m ON m.id=b.source_id AND m.chat_jid=b.chat_jid WHERE m.rowid=?").get(followup.thread_id);
     expect(lostBinding()).toEqual({submission_id:null});
@@ -95,6 +95,7 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     const queueRequest=()=>new Request("https://fixture/agent/queue-state?chat_jid=web:default");
     const queue=await (await channel.handleAgentQueueState(queueRequest())).json() as any;
     expect(queue.count).toBe(2);expect(queue.items.map((item:any)=>item.row_id)).toEqual([followup.submission_id,steer.submission_id]);
+    expect(queue.items.map((item:any)=>item.content)).toEqual(['follow-up instruction','steering instruction']);
     const action=(path:string,id:number)=>new Request(`https://fixture/agent/${path}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({chat_jid:"web:default",row_id:id})});
     const modeBefore=database.query("SELECT record FROM submissions WHERE id=?").get(steer.submission_id);
     expect((await channel.handleAgentQueueSteer(action("queue-steer",steer.submission_id))).status).toBe(201);

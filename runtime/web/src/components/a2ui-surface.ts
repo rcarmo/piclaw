@@ -2,7 +2,7 @@
 import { html, useCallback, useLayoutEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import { a2uiBindingPath, buildA2uiAction, isA2uiActionValue, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
 import { a2uiRendererContext } from '../ui/a2ui-renderer-peer.js';
-import { evaluateA2uiFunction } from '../ui/a2ui-agent-function.js';
+import { evaluateA2uiFunction, reportA2uiRendererError } from '../ui/a2ui-agent-function.js';
 import { useA2uiValueFunctions } from '../ui/use-a2ui-value-functions.js';
 import { readClassicActionFunction } from '../../../src/channels/web/a2ui/function-call.js';
 import { coerceA2uiBoolean } from '../../../src/channels/web/a2ui/functions.js';
@@ -59,12 +59,15 @@ export function A2uiSurface({ block, source, onSubmit }: {
     const valueFunctions = useA2uiValueFunctions(projection,edits,{...source,revision:block.revision},!disabled && block.owner==='agent');
     const components = new Map((projection?.snapshot.components ?? []).map(item => [item.id, item]));
     const functionLifetime = useRef<AbortController | null>(null);
+    const invalidProjection = !projection;
     useLayoutEffect(() => {
         if (disabled || block.owner !== 'agent') return;
         const lifetime = new AbortController();
         functionLifetime.current = lifetime;
+        if (invalidProjection) void reportA2uiRendererError({source:{...source,revision:block.revision},snapshot:block.surface,signal:lifetime.signal},
+            {code:'INTEGRITY_ERROR',surfaceId,message:'The renderer could not reconstruct the surface.'});
         return () => { functionLifetime.current=null; lifetime.abort(); };
-    }, [disabled, block.owner, chat, source.post_id, source.thread_id, surfaceId, block.revision]);
+    }, [disabled, block.owner, chat, source.post_id, source.thread_id, surfaceId, block.revision, invalidProjection]);
     function edit(id: string, path: string | undefined, value: unknown) {
         if (!path || disabled || inFlight.current) return;
         const instance = projection?.instances.get(id);
@@ -87,7 +90,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
         setError('');
         try {
             if (signal) {
-                await evaluateA2uiFunction(action?.functionCall,{snapshot,edits,instance,source:{...source,revision:block.revision},signal});
+                await evaluateA2uiFunction(action?.functionCall,{snapshot,edits,instance,source:{...source,revision:block.revision},signal,action:true});
                 return;
             }
             const drafts = block.owner === 'agent' && action?.event?.name !== 'cancel' ? a2uiDraftsFor(chat) : undefined;

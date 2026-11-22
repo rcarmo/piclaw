@@ -3,7 +3,8 @@ import { expect, test } from 'bun:test';
 import { getDb, initDatabase, storeMessage } from '../../../../src/db.js';
 import { publishAgentA2ui } from '../../../../src/channels/web/a2ui/publish.js';
 import { A2uiAgentRpc, defineA2uiAgentFunction } from '../../../../src/channels/web/a2ui/agent-rpc.js';
-import { handleA2uiRpc } from '../../../../src/channels/web/a2ui/rpc.js';
+import { handleA2uiRendererError, handleA2uiRpc } from '../../../../src/channels/web/a2ui/rpc.js';
+import { takeA2uiRendererErrors } from '../../../../src/channels/web/a2ui/renderer-errors.js';
 import { CLASSIC_A2UI_CATALOG } from '../../../../src/channels/web/a2ui/surface.js';
 import type { WebChannelLike } from '../../../../src/channels/web/core/web-channel-contracts.js';
 
@@ -32,7 +33,9 @@ async function fixture() {
   });
   const send = (body: unknown, session = 'session-one') => handleA2uiRpc(channel, new Request('http://fixture/agent/a2ui-rpc', {method:'POST',
     headers:{'x-test-session':session},body:JSON.stringify(body)}));
-  return {root,publish,post,make,send,calls:() => calls, swapConversation(id: number) { conversationId=id; }, pause(promise: Promise<void>) { hold=promise; }};
+  const report = (body: unknown, session = 'session-one') => handleA2uiRendererError(channel,new Request('http://fixture/agent/a2ui-error',{method:'POST',
+    headers:{'x-test-session':session},body:JSON.stringify(body)}));
+  return {root,publish,post,make,send,report,calls:() => calls, swapConversation(id: number) { conversationId=id; }, pause(promise: Promise<void>) { hold=promise; }};
 }
 
 test('a registered agent function returns v1.0 output and exact retries execute once', async () => {
@@ -68,6 +71,30 @@ test('unregistered, malformed and disallowed function calls cannot execute', asy
   f.swapConversation(12);
   expect((await f.send(request)).status).toBe(409);
   expect(f.calls()).toBe(0);
+});
+
+test('private renderer diagnostics are correlated, scrubbed and delivered once with committed input', async () => {
+  const f=await fixture();
+  const {metadata:_offer,message,...source}=f.make('fail','diagnostic');
+  const {functionCallId,surfaceId}=message.callAgentFunction;
+  const packet={...source,surface_id:surfaceId,message:{version:'1.0',error:{code:'EXPRESSION_ERROR',functionCallId,message:'Untrusted diagnostic text'}}};
+  expect((await f.report(packet)).status).toBe(409);
+  expect((await f.send({...source,message,metadata:_offer})).status).toBe(200);
+  expect((await f.report(packet,'session-two')).status).toBe(409);
+  expect((await f.report({...packet,revision:2})).status).toBe(409);
+  expect((await f.report({...packet,message:{version:'1.0',error:{...packet.message.error,surfaceId}}})).status).toBe(400);
+  const accepted=await f.report(packet);
+  expect(accepted.status).toBe(204);
+  expect(accepted.headers.get('cache-control')).toContain('no-store');
+  expect((await f.report(packet)).status).toBe(204);
+  const take=(conversation:number)=>takeA2uiRendererErrors(f.root,source.chat_jid,conversation);
+  expect(f.root.transaction(()=>take(12))()).toEqual([]);
+  expect(f.root.transaction(()=>takeA2uiRendererErrors(f.root,source.chat_jid,11,0))()).toEqual([]);
+  const expected=[{version:'1.0',error:{code:'EXPRESSION_ERROR',functionCallId,message:'The agent function did not complete.'}}];
+  expect(()=>f.root.transaction(()=>{expect(take(11)).toEqual(expected);throw Error('rollback');})()).toThrow('rollback');
+  expect(f.root.transaction(()=>take(11))()).toEqual(expected);
+  expect((await f.report(packet)).status).toBe(204);
+  expect(f.root.transaction(()=>take(11))()).toEqual([]);
 });
 
 test('a revision change suppresses the result of an asynchronous function', async () => {

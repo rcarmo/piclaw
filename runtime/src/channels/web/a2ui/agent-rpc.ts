@@ -43,11 +43,10 @@ export interface A2uiRpcRuntimeScope {
   assertCurrent(): void;
 }
 
-type RpcCallScope = {
-  conversationId: number;
-  chatJid: string;
-  rendererSession: string | null;
-  revision: number;
+type RpcIdentity = {conversationId:number;chatJid:string;rendererSession:string | null;revision:number};
+const receiptKey = (scope: RpcIdentity, functionCallId: string) => JSON.stringify([scope.chatJid,scope.conversationId,scope.rendererSession,functionCallId]);
+
+type RpcCallScope = RpcIdentity & {
   offered: readonly string[];
   metadata: AgentFunctionContext['metadata'];
   signal: AbortSignal;
@@ -63,7 +62,7 @@ function rpcError(functionCallId: string, code: string, message: string): AgentF
 /** Process-owned RPC receipts are short lived. A payload cannot register an implementation or grant host permissions. */
 export class A2uiAgentRpc {
   private readonly functions = new Map<string, A2uiAgentFunction>();
-  private readonly receipts = new Map<string, { fingerprint: string; expires: number; result: Promise<AgentFunctionResponseMessage> }>();
+  private readonly receipts = new Map<string, { fingerprint: string; expires: number; surfaceId: string; revision: number; result: Promise<AgentFunctionResponseMessage> }>();
 
   constructor(functions: readonly A2uiAgentFunction[] = []) {
     for (const definition of functions) {
@@ -73,11 +72,16 @@ export class A2uiAgentRpc {
     }
   }
 
+  correlatesRendererError(scope: RpcIdentity, surfaceId: string, functionCallId: string): boolean {
+    const receipt=this.receipts.get(receiptKey(scope,functionCallId));
+    return !!receipt && receipt.expires>Date.now() && receipt.surfaceId===surfaceId && receipt.revision===scope.revision;
+  }
+
   async invoke(scope: RpcCallScope, message: CallAgentFunctionMessage): Promise<AgentFunctionResponseMessage> {
     scope.assertCurrent();
     const { surfaceId, functionCallId, callFunction } = message.callAgentFunction;
     const catalogue = callFunction.catalogId!; // The transport requires explicit, already resolved catalogue IDs.
-    const key = JSON.stringify([scope.chatJid,scope.conversationId,scope.rendererSession,functionCallId]);
+    const key = receiptKey(scope,functionCallId);
     const args = boundedRpcJson(callFunction.args ?? {}) as Record<string, unknown>;
     const fingerprint = createHash('sha256').update(JSON.stringify([
       surfaceId,scope.revision,catalogue,callFunction['@call'],args,[...scope.offered].sort(),scope.metadata,
@@ -112,7 +116,7 @@ export class A2uiAgentRpc {
           return rpcError(functionCallId,deadline.aborted ? 'TIMEOUT' : signal.aborted ? 'CANCELLED' : 'EXECUTION_ERROR','The agent function did not complete.');
         }
       });
-      receipt = {fingerprint,expires:now+RECEIPT_TTL,result};
+      receipt = {fingerprint,expires:now+RECEIPT_TTL,surfaceId,revision:scope.revision,result};
       this.receipts.set(key,receipt);
     }
     const response = await receipt.result;

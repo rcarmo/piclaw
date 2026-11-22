@@ -1,9 +1,9 @@
-import { AgentFunctionResponseMessageSchema } from '@a2ui/web_core/v1_0';
+import { AgentFunctionResponseMessageSchema, type ErrorMessage } from '@a2ui/web_core/v1_0';
 import { readClassicFunctionCall } from '../../../src/channels/web/a2ui/function-call.js';
 import { a2uiBindingPath, evaluateClassicLocalFunction, isClassicValueFunction, readA2uiValue } from '../../../src/channels/web/a2ui/functions.js';
 import { boundedRpcJson, MAX_RPC_VALUE } from '../../../src/channels/web/a2ui/rpc-json.js';
 import type { A2uiSnapshot } from '../../../src/channels/web/a2ui/surface.js';
-import { requestA2uiAgentFunction } from '../api.js';
+import { postA2uiRendererError, requestA2uiAgentFunction } from '../api.js';
 
 export interface A2uiFunctionContext {
     snapshot: A2uiSnapshot;
@@ -11,6 +11,7 @@ export interface A2uiFunctionContext {
     instance: {scope:string;instancePath?:string};
     source: Parameters<typeof requestA2uiAgentFunction>[0];
     signal: AbortSignal;
+    action?: true;
     /** Only reactive evaluations share results; every action click gets a new call ID. */
     memo?: Map<string,Promise<unknown>>;
 }
@@ -28,18 +29,33 @@ export function hasA2uiAgentFunction(value: unknown): boolean {
     return record(value) && Object.values(value).some(hasA2uiAgentFunction);
 }
 
+class AgentEvaluationError extends Error {}
+
+export async function reportA2uiRendererError(context: Pick<A2uiFunctionContext,'source'|'snapshot'|'signal'>, error: ErrorMessage['error']) {
+    if (context.signal.aborted) return;
+    const signal=AbortSignal.any([context.signal,AbortSignal.timeout(2000)]);
+    try { await postA2uiRendererError(context.source,context.snapshot.surfaceId,{version:'1.0',error},signal); }
+    catch { return; } // A diagnostic cannot change the failed evaluation or be replayed later.
+}
+
 async function invokeAgent(context: A2uiFunctionContext, name: string, catalogId: string, args: Record<string, unknown>) {
     const {snapshot,source,signal}=context;
     const functionCallId=crypto.randomUUID();
-    const response=await requestA2uiAgentFunction(source,{version:'1.0',callAgentFunction:{
-        surfaceId:snapshot.surfaceId,functionCallId,callFunction:{'@call':name,catalogId,args},
-    }},signal);
-    signal.throwIfAborted();
-    const parsed=AgentFunctionResponseMessageSchema.safeParse(response);
-    if (!parsed.success || parsed.data.agentFunctionResponse.functionCallId!==functionCallId || parsed.data.agentFunctionResponse.error) {
-        throw Error('The agent function did not complete.');
+    try {
+        const response=await requestA2uiAgentFunction(source,{version:'1.0',callAgentFunction:{
+            surfaceId:snapshot.surfaceId,functionCallId,callFunction:{'@call':name,catalogId,args},
+        }},signal);
+        signal.throwIfAborted();
+        const parsed=AgentFunctionResponseMessageSchema.safeParse(response);
+        if (!parsed.success || parsed.data.agentFunctionResponse.functionCallId!==functionCallId || parsed.data.agentFunctionResponse.error)
+            throw Error('Unusable function response');
+        return boundedRpcJson(parsed.data.agentFunctionResponse.value ?? null);
+    } catch {
+        signal.throwIfAborted();
+        const message='The agent function did not complete.';
+        await reportA2uiRendererError(context,{code:'EXPRESSION_ERROR',functionCallId,message});
+        throw new AgentEvaluationError(message);
     }
-    return boundedRpcJson(parsed.data.agentFunctionResponse.value ?? null);
 }
 
 /** Resolve arguments in order and invoke the correct owner. Returned JSON is never executed. */
@@ -83,5 +99,10 @@ export async function evaluateA2uiFunction(value: unknown, context: A2uiFunction
         }
         return input;
     }
-    return resolve(value,0);
+    try { return await resolve(value,0); }
+    catch (error) {
+        if (!(error instanceof AgentEvaluationError) && !signal.aborted)
+            await reportA2uiRendererError(context,{code:context.action ? 'EXECUTION_ERROR' : 'EXPRESSION_ERROR',surfaceId:snapshot.surfaceId,message:'The renderer could not evaluate the function.'});
+        throw error;
+    }
 }
