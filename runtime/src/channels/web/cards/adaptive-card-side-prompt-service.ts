@@ -26,7 +26,6 @@ import { handleAgentMessage as handleAgentMessageRequest } from "../handlers/age
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
 import { runAddonAdaptiveCardIntent } from "../../../addons/runtime-contributions.js";
 import type { AgentControlResult } from "../../../agent-control/agent-control-types.js";
-import { withPrivateProviderAuthResponse, commitPrivateProviderAuthResponse } from "../../../agent-control/handlers/login.js";
 
 const log = createLogger("web");
 const SIDE_PROMPT_STREAM_HEARTBEAT_MS = 30000;
@@ -187,12 +186,9 @@ export class WebAdaptiveCardSidePromptService {
     const requestedChatJid = normalized.chatJid ?? null;
     const rawAction = normalized.actionData && typeof normalized.actionData === "object" && !Array.isArray(normalized.actionData)
       ? normalized.actionData as Record<string, unknown> : null;
-    const isAuthAction = typeof rawAction?.intent === "string" && rawAction.intent.startsWith("login-step");
-    const isPrivateAuth = rawAction?.intent === "login-step2" && typeof rawAction.method === "string" && rawAction.method.startsWith("runtime_");
-    if (isPrivateAuth && rawAction && Object.keys(rawAction).some(key => !["intent", "provider", "method", "auth_type", "flow_id", "action_id", "auth_value"].includes(key))) {
-      return this.options.json({ error: "Unexpected authentication action field" }, 409);
+    if (typeof rawAction?.intent === "string" && rawAction.intent.startsWith("login-step")) {
+      return this.options.json({ error: "Start again with /login to open the current authentication surface." }, 409);
     }
-    if (isAuthAction && !requestedChatJid) return this.options.json({ error: "Authentication requires its initiating chat" }, 409);
     if (!normalized.postId || normalized.postId <= 0) {
       return this.options.json({ error: "Missing or invalid post_id" }, 400);
     }
@@ -213,7 +209,7 @@ export class WebAdaptiveCardSidePromptService {
     }
 
     const sourceInteraction = (requestedChatJid ? getMessageByRowId(requestedChatJid, sourcePostId) : undefined)
-      ?? (isAuthAction ? undefined : getMessageByAnyRowId(sourcePostId));
+      ?? getMessageByAnyRowId(sourcePostId);
     if (!sourceInteraction) {
       return this.options.json({ error: "Source post not found" }, 404);
     }
@@ -228,58 +224,8 @@ export class WebAdaptiveCardSidePromptService {
 
     const submittedAt = new Date().toISOString();
     const sanitizedSubmissionData = sanitizeAdaptiveCardSubmissionData(normalized.actionData);
-    const loginIntents = new Set(["login-step1", "login-step1-method", "login-step2", "login-step3"]);
-    const loginData = sanitizedSubmissionData && typeof sanitizedSubmissionData === "object" && !Array.isArray(sanitizedSubmissionData)
-      ? sanitizedSubmissionData as Record<string, unknown> : null;
-    const isLoginFlow = loginData && typeof loginData.intent === "string" && loginIntents.has(loginData.intent);
-    const blocks = sourceInteraction.data?.content_blocks;
-    const card = Array.isArray(blocks) ? blocks.find((block: any) => block?.type === "adaptive_card" && block.card_id === normalized.cardId && block.state === "active") as any : null;
-    const actions = card?.payload?.actions;
-    const isLoginCard = Array.isArray(actions) && actions.some((action: any) => loginIntents.has(action?.data?.intent));
-    if (isLoginCard || isLoginFlow) {
-      if (!isLoginFlow || !loginData) return this.options.json({ error: "Authentication card requires its original login action" }, 409);
-      const matchingAction = Array.isArray(actions) && actions.some((action: any) => {
-        const data = action?.data;
-        return action.type === "Action.Submit" && data?.intent === loginData.intent
-          && Object.keys(data).every(key => data[key] === loginData[key]);
-      });
-      if (!matchingAction) return this.options.json({ error: "Stale or mismatched authentication card action" }, 409);
-    }
-    if (isPrivateAuth && loginData) {
-      try {
-        return await withPrivateProviderAuthResponse(async () => {
-          const result = await this.options.agentPool.applyControlCommand?.(chatJid, {
-            type: "login", provider: `__step2 ${JSON.stringify(loginData)}`, raw: "/login __step2",
-          }) ?? failMissingDependency("agentPool.applyControlCommand");
-          if (result.status !== "success") {
-            return this.options.json({ error: "Authentication flow unavailable. Start again with /login." }, 409);
-          }
-          const nextCard = result.authPresentation ? result.contentBlocks?.[0] as Record<string, unknown> : null;
-          const nextBlocks = nextCard ? (blocks ?? []).map((block: any) => block === card ? nextCard : block)
-            : markAdaptiveCardState(blocks, normalized.cardId, "completed", submittedAt, { title: "Authentication action" });
-          if (!nextBlocks) throw new Error("Authentication card unavailable");
-          const updated = await admitSqliteWrite(getDb(), () => replaceMessageContent(chatJid, sourcePostId, sourceInteraction.data?.content || "", { contentBlocks: nextBlocks }), authorise, req.signal);
-          if (!updated) throw new Error("Authentication card unavailable");
-          commitPrivateProviderAuthResponse();
-          // Only the safe opaque card is persisted/broadcast. Sensitive presentation
-          // leaves solely in this authenticated HTTP response.
-          this.options.interactionBroadcaster.broadcastInteractionUpdated(updated);
-          if (!result.authPresentation) await this.options.sendMessage(chatJid, result.message, { threadId: sourceInteraction.id, contentBlocks: result.contentBlocks as Array<Record<string, unknown>> | undefined });
-          return new Response(JSON.stringify({
-            status: "ok", auth_presentation: result.authPresentation, source_post_id: sourcePostId,
-            card_id: nextCard?.card_id ?? normalized.cardId, chat_jid: chatJid,
-          }), { headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store", Vary: "Cookie", "Referrer-Policy": "no-referrer" } });
-        });
-      } catch {
-        return this.options.json({ error: "Authentication presentation unavailable. Retry or start again with /login." }, 409);
-      }
-    }
-    // Auth inputs travel only through the in-memory control call. Never retain
-    // password/key/redirect values in card state, submission text or the DB.
-    const persistedSubmissionData = isLoginFlow
-      ? Object.fromEntries(Object.entries(loginData).filter(([key]) => ["intent", "provider", "method", "auth_type", "flow_id", "action_id", "activation_id", "confirmation_id"].includes(key)))
-      : sanitizedSubmissionData;
-    const persistedTitle = isLoginFlow ? "Authentication action" : normalized.actionTitle;
+    const persistedSubmissionData = sanitizedSubmissionData;
+    const persistedTitle = normalized.actionTitle;
     const submissionMeta = {
       action_type: normalized.actionType,
       title: persistedTitle || undefined,
@@ -333,61 +279,6 @@ export class WebAdaptiveCardSidePromptService {
       if (interaction) this.options.interactionBroadcaster.broadcastInteractionUpdated(interaction);
       return interaction;
     };
-
-    if (isLoginFlow && loginData) {
-      const updatedCardInteraction = submitBehavior === "keep_active"
-        ? null
-        : await updateSourceCard(updatedCardBlocks);
-
-      const routePrefix = loginData.intent === "login-step1" ? "__step1 "
-        : loginData.intent === "login-step1-method" ? "__step1method "
-        : loginData.intent === "login-step2" ? "__step2 "
-        : "__step3 ";
-      const authResult = await this.options.agentPool.applyControlCommand?.(chatJid, {
-        type: "login",
-        provider: `${routePrefix}${JSON.stringify(submissionData)}`,
-        raw: `/login ${routePrefix}`,
-      }) ?? failMissingDependency("agentPool.applyControlCommand");
-
-      const sendOpts: SendMessageOptions = { threadId };
-      if (authResult.contentBlocks?.length) {
-        sendOpts.contentBlocks = authResult.contentBlocks as Array<Record<string, unknown>>;
-      }
-      await this.options.sendMessage(chatJid, authResult.message, sendOpts);
-
-      if (authResult.status === "success" && authResult.model_label) {
-        let nextModel: string | null = authResult.model_label ?? null;
-        let thinkingLevel: string | null = authResult.thinking_level ?? null;
-        let supportsThinking: boolean | undefined = undefined;
-        try {
-          const modelState = await this.options.agentPool.getAvailableModels?.(chatJid)
-            ?? failMissingDependency("agentPool.getAvailableModels");
-          if (!nextModel) nextModel = modelState.current ?? null;
-          if (thinkingLevel == null) thinkingLevel = modelState.thinking_level ?? null;
-          supportsThinking = modelState.supports_thinking;
-        } catch {
-          if (typeof this.options.agentPool.getCurrentModelLabel === "function") {
-            nextModel = await this.options.agentPool.getCurrentModelLabel(chatJid).catch(() => null);
-          }
-        }
-
-        this.options.broadcastEvent("model_changed", {
-          chat_jid: chatJid,
-          model: nextModel ?? null,
-          thinking_level: thinkingLevel ?? null,
-          supports_thinking: supportsThinking,
-        });
-      }
-
-      return this.options.json({
-        status: "ok",
-        card_updated: Boolean(updatedCardInteraction),
-        source_post_id: sourcePostId,
-        card_id: normalized.cardId,
-        submitted_at: submittedAt,
-        auth_result: authResult.status,
-      }, 200);
-    }
 
     const isRecoveryContinue = rawSubmissionData && rawSubmissionData.intent === "recovery-continue";
     if (isRecoveryContinue) {

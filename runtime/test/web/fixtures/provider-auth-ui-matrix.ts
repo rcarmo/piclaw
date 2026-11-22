@@ -1,69 +1,36 @@
-import { renderAdaptiveCard, type AdaptiveCardBlock } from "../../../web/src/ui/adaptive-card-renderer.js";
-import { presentProviderAuth } from "../../../web/src/ui/provider-auth-presentation.js";
+import { html, render } from "../../../web/src/vendor/preact-htm.js";
+import { A2uiSurface } from "../../../web/src/components/a2ui-surface.js";
+import type { A2uiSurfaceBlock } from "../../../src/channels/web/a2ui/surface.js";
+import type { A2uiActionRequest } from "../../../src/channels/web/a2ui/action.js";
 
-type FixtureState = {
-  blocks: AdaptiveCardBlock[];
-  message: string;
-  model: string;
-  postId: number;
-  chatJid: string;
-};
-type SubmitOptions = { signal?: AbortSignal };
-
+type FixtureState = { blocks: A2uiSurfaceBlock[]; message: string; model: string; postId: number; chatJid: string };
 const card = document.querySelector<HTMLElement>("#card")!;
 const status = document.querySelector<HTMLElement>("#status")!;
-const model = document.querySelector<HTMLElement>("#model")!;
-const start = document.querySelector<HTMLButtonElement>("#start")!;
+const model = document.querySelector<HTMLElement>("#model");
+const start = document.querySelector<HTMLButtonElement>("#start");
 
 async function request(url: string, init?: RequestInit): Promise<any> {
-  try {
-    const response = await fetch(url, init);
-    if (!response.ok) throw new Error();
-    return await response.json();
-  } catch {
-    throw new Error("Request failed. Please try again.");
-  }
+  const response = await fetch(url, init);
+  if (!response.ok) throw new Error("Request failed. Please try again.");
+  return response.json();
 }
 
-async function submitAction(payload: unknown, options: SubmitOptions = {}): Promise<any> {
-  const response = await request("/agent/card-action", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    signal: options.signal,
+async function submitAction(payload: A2uiActionRequest, options: { signal?: AbortSignal } = {}): Promise<any> {
+  const response = await request("/agent/a2ui-action", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: options.signal,
   });
   await refreshState();
   return response;
 }
 
-async function showState(state: FixtureState): Promise<void> {
-  status.textContent = state.message;
-  model.textContent = state.model;
-  card.replaceChildren();
-  for (const block of state.blocks) {
-    const host = document.createElement("div");
-    card.appendChild(host);
-    await renderAdaptiveCard(host, block, { onAction: async action => {
-      if (action.type !== "Action.Submit") return;
-      const response = await submitAction({
-        post_id: state.postId,
-        chat_jid: state.chatJid,
-        card_id: block.card_id,
-        action: { type: action.type, title: action.title, data: action.data },
-      });
-      await refreshState();
-      if (response.auth_presentation) presentProviderAuth(response, submitAction);
-    } });
-  }
+function showState(state: FixtureState): void {
+  status.textContent = state.blocks[0]?.fallback_text || state.message;
+  if (model) model.textContent = state.model;
+  const source = { post_id: state.postId, thread_id: state.postId, chat_jid: state.chatJid };
+  render(state.blocks.map(block => html`<${A2uiSurface} key=${block.revision} block=${block} source=${source} onSubmit=${submitAction} />`), card);
 }
 
-async function refreshState(): Promise<void> {
-  await showState(await request("/fixture/state"));
-}
-
+async function refreshState(): Promise<void> { showState(await request("/fixture/state")); }
 (window as any).fixtureReload = refreshState;
-start.addEventListener("click", async () => {
-  await request("/fixture/start", { method: "POST" });
-  await refreshState();
-});
+start?.addEventListener("click", async () => { await request("/fixture/start", { method: "POST" }); await refreshState(); });
 void refreshState();

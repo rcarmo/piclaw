@@ -183,6 +183,9 @@ export async function handleAgentMessage(
   }
 
   let command = parseControlCommand(content, getRoutingConfig().triggerPattern);
+  if (command?.type === 'login' && command.provider?.startsWith('__step')) {
+    return channel.json({ error: 'Open provider actions from /login.' }, 400);
+  }
   // Operator process controls precede session/queue/Goal inspection. A wedged
   // harness or missing conversation must not prevent the host from stopping.
   if ((command?.type === "exit" || command?.type === "restart") && !hasAttachments) {

@@ -1,3 +1,4 @@
+import { loginSubmission, loginSurfaceData } from "./login-surface-fixture.js";
 import { afterEach, expect, test } from "bun:test";
 import { handleLogin, handleLogout, withPrivateProviderAuthResponse } from "../../src/agent-control/handlers/login.js";
 import { withChatContext } from "../../src/core/chat-context.js";
@@ -18,16 +19,14 @@ function fixture(login?: (provider: string, type: string, interaction: any) => P
   const session = new TestAgentControlSession(getTestWorkspace().workspace, registry);
   const native = createNativeAuthFixture(session, registry, 'web:auth-owner');
   sessions.push(native);
-  const run = (step: string, data: object, chat = "web:auth-owner") => withChatContext(chat, "web", () => handleLogin(native.context, registry, {
-    type: "login", provider: `__${step} ${JSON.stringify(data)}`, raw: `/login __${step}`,
+  const run = (step: Parameters<typeof loginSubmission>[0], data: Record<string, unknown>, chat = "web:auth-owner") => withChatContext(chat, "web", () => handleLogin(native.context, registry, {
+    ...loginSubmission(step, data)
   }));
   return { session, registry, run, context: native.context, dispose: native.dispose };
 }
 
 function action(result: any, method = "runtime_continue") {
-  const data = result.contentBlocks?.[0]?.payload?.actions?.find((item: any) => item.data?.method === method)?.data;
-  if (!data) throw new Error(`Missing action ${method}`);
-  return data;
+  return loginSurfaceData('web:auth-owner', result, method.replace(/^runtime_/, ''));
 }
 
 test("provider events and prompt metadata stay out of persisted cards and reveal is owner-bound and one-use", async () => {
@@ -51,9 +50,9 @@ test("provider events and prompt metadata stay out of persisted cards and reveal
   expect(shown.authPresentation?.prompt.signal).toBeUndefined();
   expect(JSON.stringify({ message: shown.message, cards: shown.contentBlocks })).not.toContain(sentinel);
   expect((await f.run("step2", reveal)).status).toBe("error");
-  const cancelled = await f.run("step2", { ...shown.authPresentation.action_data, method: "runtime_cancel" });
+  const cancelled = await f.run("step2", action(shown, "runtime_cancel"));
   expect(cancelled.status).toBe("success");
-  expect((await f.run("step2", { ...shown.authPresentation.action_data, method: "runtime_present" })).status).toBe("error");
+  expect((await f.run("step2", action(shown, "runtime_present"))).status).toBe("error");
 });
 
 test("provider code deadline fences private reveal before its expiry timer fires", async () => {
@@ -62,9 +61,10 @@ test("provider code deadline fences private reveal before its expiry timer fires
     await input.prompt({ type: "manual_code", message: "Enter code" });
   });
   const start = await f.run("step1", { provider: "openai" });
+  const ready = action(start, "runtime_present");
   const previous = Date.now;
   Date.now = () => previous() + 1_001;
-  try { expect((await f.run("step2", action(start, "runtime_present"))).message).toContain("expired"); }
+  try { expect((await f.run("step2", ready)).message).toContain("expired"); }
   finally { Date.now = previous; }
   expect(f.registry.authStorage.get("openai")).toBeUndefined();
 });
@@ -92,7 +92,7 @@ test("failed private reveal delivery restores the prior action while failed cont
   })).rejects.toThrow("Synthetic delivery failure");
   const shown = await withPrivateProviderAuthResponse(() => f.run("step2", reveal));
   expect(shown.authPresentation?.prompt.type).toBe("secret");
-  const continuation = { ...shown.authPresentation.action_data, method: "runtime_continue", auth_value: "owned-value" };
+  const continuation = { ...action(shown), auth_value: "owned-value" };
   await expect(withPrivateProviderAuthResponse(async () => {
     const next = await f.run("step2", continuation);
     expect(next.authPresentation?.prompt).toMatchObject({ type: "text", message: "Next field" });
@@ -173,9 +173,10 @@ test("session-generation and runtime replacement reject prior cards", async () =
 test("expired flow rejects input even before its timer callback runs", async () => {
   const f = fixture();
   const start = await f.run("step1", { provider: "openai" });
+  const ready = action(start);
   const previous = Date.now;
   Date.now = () => previous() + 300_001;
-  try { expect((await f.run("step2", { ...action(start), auth_value: "expired" })).message).toContain("expired"); }
+  try { expect((await f.run("step2", { ...ready, auth_value: "expired" })).message).toContain("expired"); }
   finally { Date.now = previous; }
   expect(f.registry.authStorage.get("openai")).toBeUndefined();
 });
@@ -198,9 +199,7 @@ test("single-model login refreshes availability but requires owner-bound one-tim
   const { createNativeControlFixture } = await import('./native-control-fixture.js');
   const control = createNativeControlFixture(f.session, f.registry, 'web:auth-owner');
   const previous = f.run;
-  f.run = (step, data, chat = 'web:auth-owner') => control.facade.applyControlCommand(chat, {
-    type: 'login', provider: '__' + step + ' ' + JSON.stringify(data), raw: '/login',
-  });
+  f.run = (step, data, chat = 'web:auth-owner') => control.facade.applyControlCommand(chat, loginSubmission(step, data));
   try {
   let refreshes = 0;
   f.registry.refresh = async () => { refreshes++; };
@@ -209,7 +208,7 @@ test("single-model login refreshes availability but requires owner-bound one-tim
   expect(done.model_label).toBeUndefined();
   expect(f.session.model.id).toBe("gpt-test");
   expect(refreshes).toBe(1);
-  const data = (done.contentBlocks?.[0] as any).payload.actions[0].data;
+  const data = action(done, "activate");
   const foreign = fixture();
   expect((await foreign.run("step3", { ...data, model: "one" })).status).toBe("error");
   expect((await f.run("step3", { ...data, model: "one" })).model_label).toBe("openai/one");
@@ -231,7 +230,7 @@ test("activation permit is provider-specific and expires without changing model"
   const f = fixture();
   const start = await f.run("step1", { provider: "openai" });
   const done = await f.run("step2", { ...action(start), auth_value: "key" });
-  const data = (done.contentBlocks?.[0] as any).payload.actions[0].data;
+  const data = action(done, "activate");
   expect((await f.run("step3", { ...data, provider: "anthropic", model: "one" })).status).toBe("error");
   const previous = Date.now;
   Date.now = () => previous() + 300_001;
@@ -244,7 +243,7 @@ test("logout cancels pending provider prompt and invalidates existing activation
   const f = fixture();
   const start = await f.run("step1", { provider: "openai" });
   const done = await f.run("step2", { ...action(start), auth_value: "stored" });
-  const activation = (done.contentBlocks?.[0] as any).payload.actions[0].data;
+  const activation = action(done, "activate");
   const pending = await f.run("step1method", { provider: "openai", action: "api_key" });
   const logout = await withChatContext("web:auth-owner", "web", () => handleLogout(f.context, f.registry, { type: "logout", provider: "openai", raw: "/logout openai" }));
   expect(logout.status).toBe("success");
@@ -332,7 +331,7 @@ test("logout confirmation cannot replay after reauthentication or cross to anoth
   const f = fixture();
   f.registry.authStorage.set("openai", { type: "api_key", key: "old" });
   const confirmation = await f.run("step1method", { provider: "openai", action: "logout" });
-  const data = (confirmation.contentBlocks?.[0] as any).payload.actions[0].data;
+  const data = action(confirmation, "remove");
   const foreign = fixture();
   expect((await foreign.run("step2", data)).status).toBe("error");
   const start = await f.run("step1method", { provider: "openai", action: "api_key" });
@@ -340,7 +339,7 @@ test("logout confirmation cannot replay after reauthentication or cross to anoth
   expect((await f.run("step2", data)).status).toBe("error");
   expect(f.registry.authStorage.get("openai").key).toBe("new");
   const latest = await f.run("step1method", { provider: "openai", action: "logout" });
-  const latestData = (latest.contentBlocks?.[0] as any).payload.actions[0].data;
+  const latestData = action(latest, "remove");
   expect((await f.run("step2", latestData)).status).toBe("success");
   expect((await f.run("step2", latestData)).status).toBe("error");
 });
@@ -366,9 +365,10 @@ test("custom-provider configuration never prefills its stored API key into a car
     const session = new TestAgentControlSession(workspace.workspace, registry);
     const native = createNativeAuthFixture(session, registry, 'web:auth-custom');
     try {
-      const result = await withChatContext('web:auth-custom', 'web', () => handleLogin(native.context, registry, { type: "login", provider: `__step1method ${JSON.stringify({ provider: "openai-compatible", action: "configure" })}`, raw: "/login __step1method" }));
+      const result = await withChatContext('web:auth-custom', 'web', () => handleLogin(native.context, registry, { ...loginSubmission("step1method", { provider: "openai-compatible", action: "configure" }) }));
       expect(JSON.stringify(result)).not.toContain(sentinel);
-      expect((result.contentBlocks?.[0] as any).payload.body.find((item: any) => item.id === "apiKey")).toMatchObject({ value: "", style: "password" });
+      expect((result.contentBlocks?.[0] as any).surface.components.find((item: any) => item.id === "field_apiKey")).toMatchObject({ variant: "obscured" })
+      expect((result.contentBlocks?.[0] as any).surface.dataModel.apiKey).toBeUndefined();
     } finally {
       native.dispose();
       if (restore === undefined) delete process.env.PICLAW_PI_AGENT_DIR;

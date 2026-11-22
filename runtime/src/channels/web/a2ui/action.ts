@@ -134,4 +134,5 @@ export interface A2uiActionRequest {
   request_id: string;
   message: A2uiActionMessage;
   private_code?: string;
+  private_value?: string;
 }

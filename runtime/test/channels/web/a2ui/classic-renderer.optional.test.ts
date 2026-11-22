@@ -31,6 +31,13 @@ for (const engine of [chromium, webkit]) {
         window.events = [];
         const submit = async (payload) => {
           window.events.push(payload);
+          if (payload.message.action.name === 'login-present') {
+            return { status: 'ok', auth_presentation: { expires_at: Date.now()+60000,
+              events: [{type:'device_code',userCode:'PRIVATEDEVICE',verificationUri:'https://example.test/device'}, {type:'auth_url',url:'javascript:void(0)'}],
+              prompt: {type:'secret',message:'API credential'},
+              actions: { continue: {...payload,revision:payload.revision+1,message:{version:'1.0',action:{...payload.message.action,name:'login-continue',sourceComponentId:'continue'}}} } } };
+          }
+          if (payload.message.action.name === 'login-continue') return { status: 'ok' };
           if (payload.message.action.name === 'totp-open') {
             if (payload.private_code) return { status: 'ok', totp_result: 'success' };
             return { status: 'ok', totp_presentation: { manual_code: 'FAKEAUTHCODE', expires_at: Date.now()+60000,
@@ -99,6 +106,22 @@ for (const engine of [chromium, webkit]) {
       await dialog.waitFor({state:'detached'});
       const confirmation = await page.evaluate(() => (window as any).events.at(-1));
       expect(confirmation).toMatchObject({ private_code: '123456', message: { action: { context: {} } } });
+      const provider = { ...block, owner: 'login', revision: 5,
+        surface: applyA2uiMessages('provider-form', compileA2uiExpress('present = Button(Text("Open private authentication"), action=Event("login-present")); root = Column([present])', 'provider-form')) };
+      await page.evaluate((block) => (window as any).draw(block), provider);
+      await page.getByRole('button', {name:'Open private authentication'}).click();
+      const providerDialog = page.getByRole('dialog', { name: 'Provider authentication' });
+      await providerDialog.getByText('PRIVATEDEVICE').waitFor();
+      expect(await page.locator('.post').getByText('PRIVATEDEVICE').count()).toBe(0);
+      expect(await providerDialog.locator('a').count()).toBe(1);
+      // A committed server revision may arrive before the user submits the dialog.
+      await page.evaluate((block) => (window as any).draw(block), {...provider, revision: 6});
+      await providerDialog.getByLabel('API credential').fill('synthetic-only-key');
+      await providerDialog.getByRole('button', {name:'Continue'}).click();
+      await providerDialog.waitFor({state:'detached'});
+      expect(await page.getByText('PRIVATEDEVICE').count()).toBe(0);
+      const authSubmit = await page.evaluate(() => (window as any).events.at(-1));
+      expect(authSubmit).toMatchObject({ private_value: 'synthetic-only-key', revision: 6, message: { action: { context: {} } } });
       expect(errors).toEqual([]);
     } finally {
       await browser?.close();

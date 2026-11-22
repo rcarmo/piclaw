@@ -1,10 +1,11 @@
 /** Render the admitted A2UI catalog in Classic's Preact timeline. */
 import { html, useCallback, useRef, useState } from '../vendor/preact-htm.js';
 import { a2uiBindingPath, buildA2uiAction, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
+import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
 import { A2uiTotpDialog, readTotpPresentation, type TotpPresentation } from './a2ui-totp-dialog.js';
 import type { A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
 
-type Submit = (request: A2uiActionRequest) => Promise<unknown>;
+type Submit = (request: A2uiActionRequest, options?: { signal?: AbortSignal }) => Promise<unknown>;
 
 export function A2uiSurface({ block, source, onSubmit }: {
     block: A2uiSurfaceBlock;
@@ -19,6 +20,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
     const dismissTotp = useCallback(() => setTotp(null), []);
     const lastAttempt = useRef<{ key: string; request: A2uiActionRequest } | null>(null);
     const inFlight = useRef(false);
+    const privateInput = useRef<HTMLInputElement | null>(null);
     const disabled = block.state !== 'active' || !onSubmit;
     const components = new Map(snapshot.components.map(item => [item.id, item]));
     const read = (value: unknown) => readA2uiValue(snapshot, value, edits);
@@ -44,7 +46,10 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 lastAttempt.current = { key, request: { ...source, revision: block.revision, request_id: Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''), message } };
             }
             const request = lastAttempt.current.request;
-            const response = await onSubmit(request);
+            const value = block.owner === 'login' && componentId === 'save' ? privateInput.current?.value : undefined;
+            if (privateInput.current) privateInput.current.value = '';
+            const response = await onSubmit(value !== undefined ? { ...request, private_value: value } : request);
+            if (block.owner === 'login') presentProviderAuth(response, onSubmit);
             if (block.owner === 'totp') {
                 const presentation = readTotpPresentation(response);
                 if (!presentation) throw new Error('TOTP setup is unavailable. Run /totp again.');
@@ -77,9 +82,14 @@ export function A2uiSurface({ block, source, onSubmit }: {
                     ${Array.isArray(item.children) ? item.children.map(child) : null}</div>`;
             }
             case 'Divider': return html`<hr key=${id} class=${item.axis === 'vertical' ? 'a2ui-divider-vertical' : ''} />`;
-            case 'Button': return html`<button key=${id} type="button" class=${`a2ui-button a2ui-button-${item.variant || 'default'}`}
+            case 'Button':
+                if (block.owner === 'login' && (id === 'continue' || id === 'check')) return null;
+                return html`<button key=${id} type="button" class=${`a2ui-button a2ui-button-${item.variant || 'default'}`}
                 disabled=${disabled} aria-disabled=${pending || disabled} onClick=${(event: Event) => submit(event, item.id)}>${child(item.child)}</button>`;
             case 'TextField': {
+                if (block.owner === 'login' && item.variant === 'obscured') return html`<label key=${id} class="a2ui-field">${label}
+                    <input ref=${privateInput} disabled=${disabled || pending} type="password" autocomplete="off" maxlength="4096" placeholder=${text(item.placeholder)} />
+                </label>`;
                 const value = text(item.value);
                 const placeholder = text(item.placeholder);
                 const onInput = (event: Event) => edit(path, (event.currentTarget as HTMLInputElement).value);
