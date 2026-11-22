@@ -2,11 +2,11 @@
 const isDurableUserEntry=(entry:import("@earendil-works/pi-durable").EntryRecord)=>entry.kind==="pi.user"||entry.kind==="host.accepted";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { ownedSlice } from "@earendil-works/chord/delta";
-import { contentText, type JsonObject, type Message } from "@earendil-works/pi-ai";
+import { contentText, type JsonObject } from "@earendil-works/pi-ai";
 import { AssistantEntry, LiveDoc, ToolResultEntry, ToolTask, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type Harness } from "@earendil-works/pi-durable";
 import { ContextSnapshotEntry, FactContextEntry } from "#token-optimizer/pi-durable";
 const isJsonObject=(value:unknown):value is import("@earendil-works/pi-durable").JsonObject=>value!==null&&typeof value==="object"&&!Array.isArray(value);
-import { makeObservation, workEvidence, type ToolMapping } from "#token-optimizer/core";
+import { contextSection, makeObservation, workEvidence, type ToolMapping } from "#token-optimizer/core";
 import { decodeArguments, decodeResult } from "#token-optimizer/pi-durable";
 import { runnerVerdict, statusOfTests } from "#token-optimizer/core";
 import type { HostSession, Trajectory, ToolResultData } from "#token-optimizer/pi-durable";
@@ -58,9 +58,10 @@ export async function latestOptimizerEntry(conversation:Conversation):Promise<nu
 export async function lastAssistantEntry(conversation:Conversation):Promise<EntryRecord|undefined> {
   let cursor:Cursor|undefined;
   do {
-    const page = await conversation.entries({},200,cursor,context), found = page.items.find(entry => AssistantEntry.is(entry));
+    const page = await conversation.entries({},32,cursor,context), found = page.items.find(entry => AssistantEntry.is(entry));
     if (found) return found;
     cursor = page.next;
+    if (cursor) await new Promise<void>(resolve => setImmediate(resolve));
   } while (cursor);
   return undefined;
 }
@@ -68,19 +69,49 @@ export async function lastAssistantEntry(conversation:Conversation):Promise<Entr
 export async function carriedSnapshotIds(conversation:Conversation,section:string):Promise<string[]> {
   let cursor:Cursor|undefined;
   do {
-    const page = await conversation.entries({},200,cursor,context);
+    const page = await conversation.entries({},32,cursor,context);
     for (const entry of page.items) if ((ContextSnapshotEntry.is(entry) || FactContextEntry.is(entry)) && entry.data.section === section) return entry.data.injectedIds;
     cursor = page.next;
+    if (cursor) await new Promise<void>(resolve => setImmediate(resolve));
   } while (cursor);
   return [];
 }
-export function optimizerMessageSections(messages:readonly Message[]) {
-  const sections:Record<string,string> = {};
-  for (const message of messages) if (message.role === "system") for (const [key,value] of Object.entries(message.sections ?? {})) {if (value === null) delete sections[key];else sections[key] = value;}
-  return sections;
+
+function updateOptimizerSection(sections:Record<string,string>,entry:EntryRecord) {
+  if (FactContextEntry.is(entry)) {sections[contextSection] = entry.data.section;return;}
+  for (const message of entry.model ?? []) if (message.role === "system" && message.sections) {
+    const value = message.sections[contextSection];
+    if (value === null) delete sections[contextSection];else if (value !== undefined) sections[contextSection] = value;
+  }
 }
 export function optimizerSections(entries:readonly EntryRecord[]) {
-  return optimizerMessageSections(entries.flatMap(entry => FactContextEntry.is(entry) ? [{role:"system" as const,content:"",sections:{"token-economizer":entry.data.section},timestamp:0}] : [...entry.model ?? []]));
+  const sections:Record<string,string> = {};
+  for (const entry of entries) updateOptimizerSection(sections,entry);
+  return sections;
+}
+export function optimizerModelFree(entry:EntryRecord|undefined):boolean {
+  return entry?.model?.some(message => message.role === "assistant" && message.provider === "piclaw" && message.model === "codemode-template") ?? false;
+}
+
+/** Metadata from the SDK's immutable active-entry range. Do not instantiate a
+ * model context or retain its transcript. The head contributes first; older
+ * head markers do not contribute, just as in the public ContextView. */
+export async function readOptimizerContext(conversation:Conversation) {
+  const {head,tail} = await conversation.commit(async tx => ({
+    head:await tx.latestHeadMarker(conversation.id), tail:await tx.latestEntryId(conversation.id),
+  }),context);
+  const sections:Record<string,string> = {};
+  let visibleHistory = false, modelFree = false;
+  const observe = (entry:EntryRecord) => {
+    updateOptimizerSection(sections,entry);
+    if (entry.model?.length) visibleHistory = true;
+    if (AssistantEntry.is(entry)) modelFree = optimizerModelFree(entry);
+  };
+  if (head) observe(head);
+  if (tail !== undefined) for await (const entry of optimizerEntries(conversation,{after:head ? head.head-1 : 0,upTo:tail})) {
+    if (!head || entry.head === undefined) observe(entry);
+  }
+  return {sections,visibleHistory,modelFree,tail};
 }
 const modelCallOrigin = Type.Object({kind:Type.Literal("model"),callId:Type.String(),assistant:Type.Integer({minimum:1,maximum:Number.MAX_SAFE_INTEGER})});
 /** Verify a boundary-straddling result by task ID without reading pre-checkpoint arguments. */

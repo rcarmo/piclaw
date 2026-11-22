@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {BACKGROUND_CONTEXT as context} from '@earendil-works/chord/context';
 import {createModels,fauxProvider,fauxAssistantMessage,fauxToolCall} from '@earendil-works/pi-ai';
-import {AssistantEntry,ToolResultEntry,createRegistry,defineEntry,defineExtension,defineTool,Harness,MemoryStorage} from '@earendil-works/pi-durable';
+import {AssistantEntry,CompactionEntry,ResetEntry,ToolResultEntry,createRegistry,defineEntry,defineExtension,defineTool,Harness,MemoryStorage} from '@earendil-works/pi-durable';
 import {SqliteStorage} from '@earendil-works/pi-durable/storage/sqlite';
 import {CodemodeSandbox} from '@earendil-works/pi-codemode';
 import {Type} from 'typebox';
@@ -17,7 +17,7 @@ import {BunSqliteDatabase} from '../src/bun-sqlite.ts';
 import {createOptimizerCodemodeTool} from '../src/optimizer-codemode.ts';
 import {createNativeTokenOptimizer,type CoreOptimizerAgent} from '../src/token-optimizer.ts';
 import {TokenOptimizerConfiguration} from '../src/token-optimizer-config.ts';
-import {optimizerEntries} from '../src/token-optimizer-source.ts';
+import {optimizerEntries,optimizerModelFree,optimizerSections,readOptimizerContext} from '../src/token-optimizer-source.ts';
 import {applicationRetainedDatabase} from '../src/mcp/retained-database.ts';
 const cleanups:(()=>Promise<void>)[]=[];afterEach(async()=>{for(const close of cleanups.splice(0).reverse())await close();});
 async function settleLearning(harness:Harness){
@@ -67,6 +67,58 @@ test('a checkpoint consumes bounded pages and joins a call to its result across 
   expect((await c.entries({minEntryId:result.id,maxEntryId:result.id},1,undefined,context)).items[0]).toEqual(result);
   expect(call.id).toBeLessThan(result.id);
  }finally{lookup.mockRestore();page.mockRestore();}
+},15_000);
+
+test('native optimiser starts an existing history without materialising its model context', async () => {
+ const f = await setup('sqlite');
+ const config = f.configuration.snapshot(); config.policy.enabled = true; config.policy.mode = 'active';
+ await f.configuration.configure(config);
+ const historical = await f.harness.createConversation({ownership:{kind:'ownerless'}},context);
+ const padding = defineEntry<{text:string}>('fixture.startup-history');
+ for (let n=0;n<66;n++) await historical.commit(tx=>tx.appendEntry(padding,historical.id,{data:{text:`${n}:`+'saved text '.repeat(1024)}}),context);
+ const read = historical.entries.bind(historical), limits:number[]=[];
+ const paged = spyOn(historical,'entries').mockImplementation((query,limit,cursor,ctx)=>{limits.push(limit);return read(query,limit,cursor,ctx);});
+ const materialised = spyOn(historical,'context').mockImplementation(async()=>{throw Error('Optimiser tried to read the entire model context');});
+ try {
+  const host = await f.native.start(historical,{agentId:'historical'},'resume');
+  expect(host?.conversationId).toBe(historical.id);
+  expect(materialised).not.toHaveBeenCalled();
+  expect(limits.filter(limit=>limit>1).length).toBeGreaterThan(1);
+  expect(Math.max(...limits)).toBeLessThanOrEqual(32);
+  expect((await historical.entries({},100,undefined,context)).items.filter(padding.is)).toHaveLength(66);
+ }finally{materialised.mockRestore();paged.mockRestore();}
+},15_000);
+
+test('the bounded metadata read follows SDK compaction, fork and reset visibility',async()=>{
+ const f=await setup('sqlite'), c=f.conversation;
+ const section=(value:string|null)=>({role:'system' as const,content:'',timestamp:0,sections:{'token-economizer':value,unrelated:'not optimizer metadata'}});
+ const noise=defineEntry<{text:string}>('fixture.startup-range');
+ const usage={input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}};
+ const {head,at}=await c.commit(async tx=>{
+  await tx.appendEntry(noise,c.id,{data:{text:'initial'},model:[section('not in the retained range')]});
+  const head=(await tx.appendEntry(noise,c.id,{data:{text:'kept'},model:[section('carried later patch')]})).id;
+  await tx.appendEntry(AssistantEntry,c.id,{model:[{role:'assistant',api:'openai-completions',provider:'piclaw',model:'codemode-template',stopReason:'stop',timestamp:1,usage,content:[{type:'text',text:'Run complete'}]}]});
+  const at=(await tx.appendEntry(CompactionEntry,c.id,{head,data:{reason:'manual'},model:[section('head contribution')]})).id;
+  for(let n=0;n<34;n++)await tx.appendEntry(noise,c.id,{data:{text:`after-head-${n}`}});
+  return {head,at};
+ },context);
+ const compare=async (conversation:typeof c)=>{
+  const view=await conversation.context(context);
+  expect(await readOptimizerContext(conversation)).toEqual({sections:optimizerSections(view.entries),
+   visibleHistory:view.entries.some(row=>Boolean(row.model?.length)),modelFree:optimizerModelFree(view.entries.findLast(AssistantEntry.is)),
+   tail:(await conversation.entries({},1,undefined,context)).items[0]?.id});
+ };
+ await compare(c);
+ expect(await readOptimizerContext(c)).toMatchObject({sections:{'token-economizer':'carried later patch'},modelFree:true});
+ const child=await c.fork(at,{ownership:{kind:'ownerless'}},context);
+ await child.commit(tx=>tx.appendEntry(noise,child.id,{data:{text:'own correction'},model:[section(null)]}),context);
+ await compare(child);
+ expect((await readOptimizerContext(child)).sections).toEqual({});
+ expect((await readOptimizerContext(c)).sections['token-economizer']).toBe('carried later patch');
+ await c.commit(tx=>tx.appendEntry(ResetEntry,c.id,{head:'self'}),context);
+ await compare(c);
+ expect(await readOptimizerContext(c)).toMatchObject({sections:{},modelFree:false,visibleHistory:false});
+ expect(head).toBeLessThan(at);
 },15_000);
 
 test('a tool result without a matching call or durable task is still unreadable',async()=>{
