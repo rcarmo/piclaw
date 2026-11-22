@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "sourceParent": "39f0cc16266c26ee09cead5b54e9d19459bf8f53",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlay": "docs/development/receipts/kintsugi-cutover-retention-overlay.json",
+  "previousOverlaySha256": "a04e95874b586e7817d18f24e0dfdbbdbbe48260a162670ce2fcf64d17b8e9ba",
+  "scope": "A2UI v1.0 source transformations only. Original receipt, 105 rows, 37 deletions and financial accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/application-bootstrap.ts",
+      "beforeSha256": "113745355947f32b25459b9fe7390d1c24f2cfdfbb53187eb5e36979b969cfc1",
+      "afterSha256": "21a4428fddd266f44a2d285ad0adc0537efe36235afb88ea80e71d6e7b838039",
+      "purpose": "Capture capability offers, owned renderer leases, canonical actions, private model snapshots and diagnostics at accepted-input admission."
+    },
+    {
+      "path": "runtime/durable-engine/src/default-application-runtime.ts",
+      "beforeSha256": "9b2f9895ba6c07bf5994398763586c95215d199def16e5d361d8b7dee948fe73",
+      "afterSha256": "91387c988b507eb29e2dd98565ad7173f948fff45b79a833e91f2ff0b86004b7",
+      "purpose": "Register the native renderer tool and bind reverse RPC to the current web-capable application owner."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-models.ts",
+      "beforeSha256": "18dedafe77507b1018189b3e7f1646e87c6512eafec0bd08e6011ba35cf8f16e",
+      "afterSha256": "5cdfc20fd58218d0f83061a6e62c2be97494b16e11e304c73a5a0fdd1d6b5103",
+      "purpose": "Project bounded private A2UI reply metadata into only the current native model request."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-runtime.ts",
+      "beforeSha256": "a07dbbaccb749db1da1cc4c2ccda55a3c04d1f8a080f4e1584ee9fa84ef99246",
+      "afterSha256": "8737737da910345c52a2d27b9edaf20a26aa45b67d151e6fde8eee2189d28efa",
+      "purpose": "Keep private A2UI input and reply metadata out of public activity and session-history views."
+    },
+    {
+      "path": "runtime/src/channels/web/core/web-channel-contracts.ts",
+      "beforeSha256": "266c7a514f9c51e23f9e7444e0b4b9f9a409f8cc2ab46c9cc2f0c99b9c4d5b86",
+      "afterSha256": "a4fa7f6da4cc0bf630c47a7ab240dd8c88bea535add2392463a9682694c53b49",
+      "purpose": "Declare typed A2UI conversation scope and renderer admission metadata for the web channel."
+    },
+    {
+      "path": "runtime/src/channels/web/http/dispatch-agent.ts",
+      "beforeSha256": "99f37967b1e9fe7141dfa90d84d46fae587bd27a8f6ae48f403fdb32e2516314",
+      "afterSha256": "476fec17faf288cbe5155479975be7e48f911e76a4a7798e81651f776df25b37",
+      "purpose": "Register authenticated A2UI negotiation, bidirectional RPC, private peer and renderer error routes."
+    },
+    {
+      "path": "runtime/src/db/connection.ts",
+      "beforeSha256": "83cb3b3225feee950088a607e1d94a66053dd7bebe80ea61cdb87b74205ad91b",
+      "afterSha256": "b7642a16971962c1d34e0c43b728091c59b3615ce8f4afb10999250edf4a89b7",
+      "purpose": "Create message-owned A2UI surface bindings, accepted-input metadata and renderer diagnostic sidecars."
+    },
+    {
+      "path": "runtime/web/src/api.ts",
+      "beforeSha256": "d36b516ffcd9ef60d5939a62d64b69ac4d79a5e736f61e1477dc7c57bc35db25",
+      "afterSha256": "88839faa6665d646ce153c5b071a52d44a86b479fd84664d7d1e2f09446fdfaf",
+      "purpose": "Send turn-scoped offers and drafts, attach the private renderer peer, and route correlated RPC replies."
+    },
+    {
+      "path": "runtime/web/src/components/settings-dialog.ts",
+      "beforeSha256": "5738bc967b82c3b56c6e5edde63e3c35140726a0e01d5a7543bcbe7ea33803da",
+      "afterSha256": "e078bdf77ef5770e33675795bd15861b6bdf3aeed18cc59d831d6e373830bc39",
+      "purpose": "Keep the stamped Classic cache version on the separate Delegate pane after app code splitting."
+    },
+    {
+      "path": "runtime/scripts/schema-ownership.json",
+      "beforeSha256": "01f8b9ecb1b274995209edb16a58ce390719b5c70418031b13055a4892e5fedf",
+      "afterSha256": "78a5a676e648874d27a3c189e245a5ab78710d4d5d32d389fd5d3b61be4b176e",
+      "purpose": "Record exact owners and fingerprints for the A2UI sidecars and their indexes in each active schema profile."
+    },
+    {
+      "path": "docs/runtime-flows.md",
+      "beforeSha256": "81d767a9bdf18da6b91e352ccf48fb11ee470473932e2deeca440e8c5da2d574",
+      "afterSha256": "4d8a5ef2d46ce6d35aa63f82429285f785722bd63346d8ef059d73f6a4a968ee",
+      "purpose": "Describe Classic v1.0 rendering, negotiation, private metadata and reactive template action admission."
+    }
+  ]
+}
