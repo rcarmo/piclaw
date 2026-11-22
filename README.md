@@ -57,7 +57,7 @@ Both `./home` and `./workspace` are persistent data. Keep them when replacing th
 | Work on files | Workspace browser, uploads, CodeMirror editor, shell tools and a detachable xterm.js terminal |
 | Inspect results | CSV/TSV tables, PDF, image, video and code viewers; VNC remote-display panes |
 | Continue work between visits | Scheduled tasks, searchable chat history and file-based [Dream memory](docs/dream-memory.md) |
-| Extend workflows | Skills, [MCP servers](docs/mcp.md), browser automation, image processing, Adaptive Cards and interactive visual artefacts |
+| Extend workflows | Skills, [MCP servers](docs/mcp.md), browser automation, image processing, A2UI surfaces and interactive visual artefacts |
 
 The [web UI guide](docs/web-ui.md#chat-and-status-surfaces) and [tools and skills reference](docs/tools-and-skills.md) cover the controls and commands. Local model setup is documented in [llama.cpp](docs/llama-cpp.md); Azure image generation requires [Azure OpenAI/Foundry configuration](docs/azure/azure-openai-extension.md).
 

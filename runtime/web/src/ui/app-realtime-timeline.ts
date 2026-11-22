@@ -45,13 +45,23 @@ export function appendUniqueTimelinePost<T extends TimelinePostLike>(
   return [...posts, nextPost];
 }
 
+function surfaceRevision(post: TimelinePostLike): number {
+  const blocks = (post.data as { content_blocks?: unknown } | undefined)?.content_blocks;
+  if (!Array.isArray(blocks)) return 0;
+  return blocks.reduce((latest, block) => (
+    (block?.type === 'a2ui_surface' || block?.type === 'a2ui_surface_removed') && Number.isSafeInteger(block.revision)
+      ? Math.max(latest, block.revision) : latest
+  ), 0);
+}
+
 export function replaceTimelinePostById<T extends TimelinePostLike>(
   posts: T[] | null | undefined,
   nextPost: T,
 ): T[] | null | undefined {
   if (!Array.isArray(posts)) return posts;
-  if (!posts.some((post) => post?.id === nextPost?.id)) return posts;
-  return posts.map((post) => (post?.id === nextPost?.id ? nextPost : post));
+  const index = posts.findIndex((post) => post?.id === nextPost?.id);
+  if (index < 0 || surfaceRevision(posts[index]) > surfaceRevision(nextPost)) return posts;
+  return posts.map((post, i) => i === index ? nextPost : post);
 }
 
 export function removeTimelinePostsByIds<T extends TimelinePostLike>(

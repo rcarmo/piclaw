@@ -118,7 +118,6 @@ describe("core config", () => {
         assistant: { assistantName: "Config Assistant", assistantAvatar: "https://config.example/avatar.png" },
         user: { userName: "Config User", userAvatar: "https://config.example/user.png", userAvatarBackground: "#123456" },
         web: { passkeyMode: "passkey-only", sessionTtl: 99, totpWindow: 3, internalSecret: "cfg-secret", terminalEnabled: true, vncAllowDirect: false, trustProxy: true },
-        debugCardSubmissions: true,
         tools: { additionalDefaultTools: ["search_workspace", "introspect_sql"], workspaceSearchRoots: ["notes", ".pi/skills", "docs"] },
       });
       writeFileSync(join(workspace.workspace, ".env"), [
@@ -147,7 +146,7 @@ describe("core config", () => {
       expect(snapshot.DATA_DIR).toBe(workspace.data);
       expect(snapshot["call:getIdentityConfig"]).toEqual({ assistantName: "Env Assistant", assistantAvatar: "https://env-file.example/avatar.png", userName: "Config User", userAvatar: "https://config.example/user.png", userAvatarBackground: "#123456" });
       expect(snapshot["call:getLoggingConfig"]).toEqual({ level: "debug" });
-      expect(snapshot["call:getWebRuntimeConfig"]).toMatchObject({ passkeyMode: "totp-only", sessionTtl: 99, totpWindow: 3, internalSecret: "cfg-secret", terminalEnabled: false, vncAllowDirect: false, vncTargetsRaw: "", debugCardSubmissions: true, trustProxy: false, composeUploadLimitMb: 256, workspaceUploadLimitMb: 256 });
+      expect(snapshot["call:getWebRuntimeConfig"]).toMatchObject({ passkeyMode: "totp-only", sessionTtl: 99, totpWindow: 3, internalSecret: "cfg-secret", terminalEnabled: false, vncAllowDirect: false, vncTargetsRaw: "", trustProxy: false, composeUploadLimitMb: 256, workspaceUploadLimitMb: 256 });
       expect(snapshot["call:getWorkspaceSearchConfig"]).toEqual({ roots: ["notes", ".pi/skills", "docs"], extraExtensions: [] });
     } finally {
       workspace.cleanup();
@@ -1111,7 +1110,6 @@ describe("core config", () => {
             notificationDebugLabels: true,
             vncAllowDirect: false,
             vncTargets: '[{"label":"persisted"}]',
-            debugCardSubmissions: true,
             trustProxy: true,
           },
         },
@@ -1147,7 +1145,6 @@ describe("core config", () => {
           PICLAW_VNC_ALLOW_DIRECT: undefined,
           PICLAW_WEB_VNC_TARGETS: undefined,
           PICLAW_VNC_TARGETS: undefined,
-          PICLAW_DEBUG_CARD_SUBMISSIONS: undefined,
           PICLAW_TRUST_PROXY: undefined,
         },
       });
@@ -1172,7 +1169,6 @@ describe("core config", () => {
         notificationDebugLabels: true,
         vncAllowDirect: false,
         vncTargetsRaw: '[{"label":"persisted"}]',
-        debugCardSubmissions: true,
         trustProxy: true,
       });
       expect(snapshot["call:isPersistThinkingEnabled"]).toBe(true);

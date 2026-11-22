@@ -1,3 +1,4 @@
+import { isRetiredContentBlock } from "../../../core/retired-content-blocks.js";
 /** Internal timeline metadata that public callers must not be allowed to forge. */
 const INTERNAL_CONTENT_BLOCK_TYPES = new Set([
   "addon_local_dispatch",
@@ -7,6 +8,8 @@ const INTERNAL_CONTENT_BLOCK_TYPES = new Set([
   "turn_outcome_marker",
   "agent_turn_marker",
   "agent_message_role",
+  "a2ui_surface",
+  "a2ui_surface_removed",
 ]);
 
 const MODEL_FORBIDDEN_CONTENT_BLOCK_TYPES = new Set([
@@ -15,6 +18,8 @@ const MODEL_FORBIDDEN_CONTENT_BLOCK_TYPES = new Set([
   "turn_outcome_marker",
   "agent_turn_marker",
   "agent_message_role",
+  "a2ui_surface",
+  "a2ui_surface_removed",
 ]);
 
 /** Strip agent-owned metadata from public user-controlled content blocks. */
@@ -25,7 +30,7 @@ export function sanitizePublicInboundContentBlocks(value: unknown): unknown[] | 
     const type = typeof (block as { type?: unknown }).type === "string"
       ? (block as { type: string }).type
       : "";
-    return !INTERNAL_CONTENT_BLOCK_TYPES.has(type);
+    return !isRetiredContentBlock(block) && !INTERNAL_CONTENT_BLOCK_TYPES.has(type);
   });
 }
 
@@ -36,7 +41,7 @@ export function sanitizeModelPostedContentBlocks(value: unknown): unknown[] | un
     !block
     || typeof block !== "object"
     || Array.isArray(block)
-    || !MODEL_FORBIDDEN_CONTENT_BLOCK_TYPES.has(String((block as { type?: unknown }).type ?? ""))
+    || (!isRetiredContentBlock(block) && !MODEL_FORBIDDEN_CONTENT_BLOCK_TYPES.has(String((block as { type?: unknown }).type ?? "")))
   ));
 }
 

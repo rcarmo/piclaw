@@ -1,3 +1,4 @@
+import { createNativeControlFixture } from "../agent-control/native-control-fixture.js";
 import { beforeAll, expect, test } from "bun:test";
 import { resolve, join } from "node:path";
 import { readFileSync, readlinkSync } from "node:fs";
@@ -9,7 +10,9 @@ import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { FileCredentialStore } from "../../src/agent-pool/credential-store.js";
 import { handleLogin, cancelProviderAuthFlows } from "../../src/agent-control/handlers/login.js";
 import { withChatContext } from "../../src/core/chat-context.js";
-import { WebAdaptiveCardSidePromptService } from "../../src/channels/web/cards/adaptive-card-side-prompt-service.js";
+import { handleA2uiAction } from "../../src/channels/web/a2ui/admission.js";
+import { buildA2uiAction } from "../../src/channels/web/a2ui/action.js";
+import type { WebChannelLike } from "../../src/channels/web/core/web-channel-contracts.js";
 import { initDatabase, getDb, getMessageByRowId, deleteMessageByRowId } from "../../src/db.js";
 import { WebSessionBroadcastService } from "../../src/channels/web/sse/session-broadcast-service.js";
 import { createInteractionBroadcaster } from "../../src/channels/web/interaction-broadcaster.js";
@@ -55,6 +58,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
       const logs: LogRecord[] = [];
       const sink = (record: LogRecord) => logs.push(record);
       addLogSink(sink);
+      let closeControl: (() => void) | undefined;
       let cleanupSession: TestAgentControlSession | undefined;
       let cleanupBrowser: (() => Promise<void>) | undefined;
       let cleanupServer: (() => void) | undefined;
@@ -110,27 +114,25 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
         latestPost = row.id;
         broadcaster.broadcastAgentResponse(row);
       };
-      const run = (command: any) => withChatContext(chat, "web", () => handleLogin(session as any, registry, command));
+      const control = createNativeControlFixture(session, registry, chat);
+      closeControl = control.dispose;
+      const run = (command: any) => withChatContext(chat, "web", () => control.facade.applyControlCommand(chat, command));
       const start = async () => { const result = await run({ type: "login", raw: "/login" }); await write(result.message, result.contentBlocks); };
-      const service = new WebAdaptiveCardSidePromptService({
-        defaultChatJid: chat, defaultAgentId: "default", json: (value, status = 200) => Response.json(value, { status }), webRuntimeConfig: {},
-        agentPool: { applyControlCommand: async (_chat, command) => run(command) },
-        authGateway: { setTotpSecret: () => {}, createTotpContext: () => ({ buildSessionCookie: () => "fixture" }) },
-        interactionBroadcaster: broadcaster,
-        sendMessage: async (_chat, text, options) => write(text, options && typeof options === "object" ? options.contentBlocks : undefined),
-        broadcastEvent: (type, data) => broadcast.broadcastEvent(type, data), skipFailedOnModelSwitch: () => {},
-        forwardAgentMessage: async () => Response.json({ error: "Unexpected forwarded input" }, { status: 400 }),
-      });
+      const channel = {
+        json: (value: unknown, status = 200) => Response.json(value, { status }),
+        agentPool: { applyControlCommand: async (_chat: string, command: any) => run(command),
+          getAvailableModels: async () => ({ current: session.model.id }) },
+        interactionBroadcaster: broadcaster, broadcastEvent: (type: string, data: unknown) => broadcast.broadcastEvent(type, data),
+      } as unknown as WebChannelLike;
       await start();
       const state = () => { return { blocks: getMessageByRowId(chat, latestPost)?.data.content_blocks ?? [], message: latestMessage, model: session.model.id, postId: latestPost, chatJid: chat, providerAborted: transportAborted }; };
       const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
         const path = new URL(request.url).pathname;
         if (path === "/fixture.js") return new Response(script, { headers: { "Content-Type": "text/javascript" } });
-        if (path === "/static/common/js/vendor/adaptivecards.min.js") return new Response(Bun.file(resolve(import.meta.dir, "../../web/static/common/js/vendor/adaptivecards.min.js")), { headers: { "Content-Type": "text/javascript" } });
         if (path === "/fixture/state") return Response.json(state());
         if (path === "/fixture/start" && request.method === "POST") { mode = scenario === "denial-retry" ? "success" : scenario; await start(); return Response.json(state()); }
-        if (path === "/agent/card-action" && request.method === "POST") {
-          const response = await service.handleAdaptiveCardAction(request);
+        if (path === "/agent/a2ui-action" && request.method === "POST") {
+          const response = await handleA2uiAction(channel, request);
           const body = await response.clone().json() as { auth_presentation?: unknown };
           if (body.auth_presentation) {
             privateResponses++;
@@ -153,7 +155,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
       const choose = async () => {
         await page.locator("#card select").selectOption(id);
         await page.getByRole("button", { name: "Next →", exact: true }).click();
-        await page.getByRole("radio", { name: "Login with OAuth", exact: true }).check();
+        await page.getByLabel("Authentication method").selectOption("oauth");
         await page.getByRole("button", { name: "Next →", exact: true }).click();
         await page.getByRole("button", { name: "Open private authentication", exact: true }).click();
         await page.locator("dialog select").selectOption("copy_code");
@@ -178,9 +180,9 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
         }
         const currentPost = getMessageByRowId(chat, latestPost);
         const currentCard = currentPost?.data.content_blocks?.[0] as any;
-        const currentAction = currentCard.payload.actions.find((action: any) => action.data.method === "runtime_present").data;
+        const currentAction = buildA2uiAction(currentCard.surface, "present", new Map(), new Date().toISOString());
         if (scenario === "cancel-prompt") {
-          await page.getByRole("button", { name: "Cancel authentication", exact: true }).click();
+          await page.getByRole("dialog").getByRole("button", { name: "Cancel authentication", exact: true }).click();
           await page.locator("dialog").waitFor({ state: "detached" });
           expect(await credentials.read(id)).toBeUndefined(); expect(tokenRequests).toBe(0);
         } else {
@@ -192,7 +194,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
           };
           await submitCode(scenario === "bad-state");
           if (scenario === "cancel-exchange") {
-            await page.getByRole("button", { name: "Cancel authentication", exact: true }).click({ timeout: 15000 });
+            await page.getByRole("dialog").getByRole("button", { name: "Cancel authentication", exact: true }).click({ timeout: 15000 });
             await page.locator("dialog").waitFor({ state: "detached" });
             expect(transportAborted).toBe(true); expect(await credentials.read(id)).toBeUndefined();
           } else if (scenario === "bad-state" || scenario === "denial-retry") {
@@ -223,7 +225,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
         expect(tokenRequests).toBe(scenario === "denial-retry" ? 2 : ["success", "cancel-exchange"].includes(scenario) ? 1 : 0);
         expect(unexpectedNetwork).toBe(0); expect(guard!.unexpectedRequests).toBe(0); assertNoCallbackListener();
         if (scenario.startsWith("cancel")) {
-          const stale = await service.handleAdaptiveCardAction(new Request(server.url + "agent/card-action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ post_id: latestPost, card_id: currentCard.card_id, chat_jid: chat, action: { type: "Action.Submit", data: currentAction } }) }));
+          const stale = await handleA2uiAction(channel, new Request(server.url + "agent/a2ui-action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ post_id: latestPost, thread_id: latestPost, revision: currentCard.revision, request_id: crypto.randomUUID(), chat_jid: chat, message: currentAction }) }));
           expect(stale.status).toBe(409);
         }
         expect(privateResponses).toBeGreaterThanOrEqual(2);
@@ -246,6 +248,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
           for (const secret of sensitive) expect(JSON.stringify(logs)).not.toContain(secret);
         } finally {
           removeLogSink(sink);
+        closeControl?.();
           globalThis.fetch = originalFetch;
           try {
             if (cleanupChat) {

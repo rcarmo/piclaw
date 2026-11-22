@@ -56,7 +56,7 @@ export function ChatSurface(props: ChatSurfaceProps) {
     onOpenWidget,
     onOpenAttachmentPreview,
     onSaveAnnotations,
-    onSubmitCardAction,
+    onSubmitA2uiAction,
     renderPostAccessory,
     postCapabilities,
     emptyMessage,
@@ -142,7 +142,7 @@ export function ChatSurface(props: ChatSurfaceProps) {
       onOpenWidget=${onOpenWidget}
       onOpenAttachmentPreview=${onOpenAttachmentPreview}
       onSaveAnnotations=${onSaveAnnotations}
-      onSubmitCardAction=${onSubmitCardAction}
+      onSubmitA2uiAction=${onSubmitA2uiAction}
       renderPostAccessory=${renderPostAccessory}
       postCapabilities=${postCapabilities}
       emptyMessage=${emptyMessage}

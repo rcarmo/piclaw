@@ -30,6 +30,7 @@ build/
 # Pinned offline qualification fixtures (attested separately by the native gate)
 /.qualification-native-addons/
 /.qualification-addons/
+/.qualification-autoresearch/
 
 # Session/test artifacts
 *.jsonl

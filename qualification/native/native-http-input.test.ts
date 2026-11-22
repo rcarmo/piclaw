@@ -14,6 +14,9 @@ import { WebChannel } from "../../runtime/src/channels/web.js";
 import { handleAgentMessage } from "../../runtime/src/channels/web/handlers/agent.js";
 import { createDefaultApplicationRuntime } from "../../runtime/durable-engine/src/default-application-runtime.js";
 import { ModelRuntime } from "../../node_modules/@earendil-works/pi-coding-agent/dist/index.js";
+import { buildA2uiAction } from "../../runtime/src/channels/web/a2ui/action.js";
+import { isA2uiSurfaceBlock } from "../../runtime/src/channels/web/a2ui/surface.js";
+import { getMessageByRowId } from "../../runtime/src/db/messages.js";
 import { createAssistantMessageEventStream } from "../../node_modules/@earendil-works/pi-ai";
 
 const applicationTest=isolatedApplicationTest(import.meta.url);
@@ -40,10 +43,15 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
       options?.signal?.throwIfAborted();
       const users=transcript.messages.filter((message:any)=>message.role==="user");
       const text=JSON.stringify(users.at(-1)?.content);
+      if (text?.includes("Native recovery proof")) throw Error("HTTP 503 unavailable");
       const tool=transcript.messages.findLast((message:any)=>message.role==="toolResult"&&message.toolName==="read");
       if(tool){expect(JSON.stringify(tool)).toContain("SDK tool source proof");toolSeen=true;}
-      const content=attempt===1?[{type:"toolCall",id:"native-read",name:"read",arguments:{path:join(workspace,"native-read-proof.txt")}}]:[{type:"text",text:`SDK answer ${text}`}];
-      const message:any={role:"assistant",api:physical.api,provider:physical.provider,model:physical.id,timestamp:Date.now(),content,stopReason:attempt===1?"toolUse":"stop",
+      const formTool=transcript.messages.findLast((message:any)=>message.role==="toolResult"&&message.toolName==="send_a2ui");
+      const showForm=text?.includes("Native surface proof")&&!formTool;
+      const content=attempt===1 ? [{type:"toolCall",id:"native-read",name:"read",arguments:{path:join(workspace,"native-read-proof.txt")}}]
+        : showForm ? [{type:"toolCall",id:"native-a2ui",name:"send_a2ui",arguments:{fallback:"Native form",express:'root = Button(Text("Confirm"),action=Event("confirm"))'}}]
+        : [{type:"text",text:`SDK answer ${text}`}];
+      const message:any={role:"assistant",api:physical.api,provider:physical.provider,model:physical.id,timestamp:Date.now(),content,stopReason:attempt===1||showForm?"toolUse":"stop",
         usage:{input:5,output:2,cacheRead:0,cacheWrite:0,totalTokens:7,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}};
       out.push({type:"done",reason:message.stopReason,message});out.end(message);
     })().catch(cause=>{
@@ -126,6 +134,47 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     expect(database.query("SELECT count(*) n FROM messages WHERE is_bot_message=1").get()).toEqual({n:3});
     expect(database.query("SELECT * FROM service_effect_s01_operations").all()).toEqual([]);
     expect(database.query("SELECT * FROM service_effect_s02_commits").all()).toEqual([]);
+    const formRoot = await send("Native surface proof");
+    const readForm = () => database.query("SELECT rowid,thread_id FROM messages WHERE content = 'Native form' AND is_bot_message=1").get() as { rowid:number;thread_id:number } | null;
+    const formDeadline = Date.now()+5000;
+    while (!readForm() && Date.now()<formDeadline) await Bun.sleep(10);
+    const form = readForm()!;
+    expect(form.thread_id).toBe(formRoot.thread_id);
+    const block = getMessageByRowId("web:default",form.rowid)?.data?.content_blocks?.find(isA2uiSurfaceBlock)!;
+    expect(block).toMatchObject({ owner:"agent",revision:1,state:"active" });
+    const message = buildA2uiAction(block.surface,"root",new Map(),new Date().toISOString());
+    const body = JSON.stringify({ chat_jid:"web:default",post_id:form.rowid,thread_id:form.thread_id,revision:1,request_id:crypto.randomUUID(),message });
+    const submit = (origin = "https://fixture") => channel!.handleRequest(new Request("https://fixture/agent/a2ui-action",{
+      method:"POST",headers:{"content-type":"application/json",origin},body,
+    }));
+    expect((await submit("https://other.invalid")).status).toBe(403);
+    expect((await submit()).status).toBe(201);
+    expect((await submit()).status).toBe(200);
+    const reload = await channel.handleRequest(new Request(`https://fixture/thread/${form.rowid}?chat_jid=web:default`));
+    expect(reload.status).toBe(200);
+    const { thread } = await reload.json() as {thread: { data: {content_blocks: unknown[]} }[]};
+    expect(thread[0]?.data.content_blocks.find(isA2uiSurfaceBlock)).toMatchObject({state:"completed",revision:2});
+    expect(database.query("SELECT count(*) n FROM messages WHERE content='Submitted confirm' AND thread_id=?").get(form.thread_id)).toEqual({n:1});
+
+    await control.setExecutionPolicy!("autoRetry",false);
+    const failedRoot = await send("Native recovery proof");
+    const terminal = database.query("SELECT rowid FROM messages WHERE is_terminal_agent_reply=1 AND thread_id=?");
+    const readReply = (thread: number) => (terminal.get(thread) as {rowid:number} | null)?.rowid;
+    const failureDeadline = Date.now()+5000;
+    while (!readReply(failedRoot.thread_id) && Date.now()<failureDeadline) await Bun.sleep(10);
+    const failedPost = readReply(failedRoot.thread_id)!;
+    const recovery = getMessageByRowId("web:default",failedPost)?.data?.content_blocks?.find(isA2uiSurfaceBlock)!;
+    expect(recovery).toMatchObject({owner:"recovery",state:"active",revision:1});
+    const recoverBody = {chat_jid:"web:default",post_id:failedPost,thread_id:failedRoot.thread_id,revision:1,request_id:crypto.randomUUID(),
+      message:buildA2uiAction(recovery.surface,"continue",new Map(),new Date().toISOString())};
+    const recover = (threadId: number) => channel!.handleRequest(new Request("https://fixture/agent/a2ui-action",{method:"POST",
+      headers:{"content-type":"application/json"},body:JSON.stringify({...recoverBody,thread_id:threadId})}));
+    expect((await recover(form.thread_id)).status).toBe(409);
+    const recovered = await recover(failedRoot.thread_id);
+    expect(recovered.status).toBe(201);
+    expect((await recover(failedRoot.thread_id)).status).toBe(200);
+    expect(database.query("SELECT count(*) n FROM messages WHERE is_bot_message=0 AND thread_id=? AND content LIKE 'Continue the previous answer%'").get(failedRoot.thread_id)).toEqual({n:1});
+    expect(getMessageByRowId("web:default",failedPost)?.data?.content_blocks?.find(isA2uiSurfaceBlock)).toMatchObject({state:"completed",revision:2});
   }finally{release.release();await backend?.close();await channel?.stop();await base.queue.shutdown();await pool?.shutdown();await closeDatabase();lock.release();}
 },30000);
 

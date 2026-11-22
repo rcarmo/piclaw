@@ -112,7 +112,7 @@ piclaw/
 │   │   ├── dream.ts                 # Dream / AutoDream orchestration
 │   │   ├── extensions/              # Built-in inline extension factories
 │   │   ├── channels/                # WhatsApp + web channels
-│   │   │   └── web/                 # HTTP handlers, SSE, adaptive cards, workspace, auth, extension routes
+│   │   │   └── web/                 # HTTP handlers, SSE, A2UI surfaces, workspace, auth, extension routes
 │   │   ├── tools/                   # Bash tracking + context wrappers
 │   │   ├── db/                      # SQLite schema + accessors
 │   │   ├── db.ts                    # DB facade re-export
@@ -165,7 +165,6 @@ These are compiled into the package and registered via `extensionFactories` on t
 | `dreamMaintenance` | `/dream` memory-consolidation slash command |
 | `uiThemeExtension` | `/theme`, `/tint` web UI theme controls |
 | `smartCompaction` | Smart compaction via `session_before_compact` hook (DB-driven file lists, junk-path filtering, working-indicator UI); see [Pipelined smart compaction](pipelined-compaction.md) for the exact-once discarded-source ledger method and its auxiliary prompt sections |
-| `sendAdaptiveCard` | `send_adaptive_card` for agent-owned Adaptive Card posting |
 | `sendDashboardWidget` | `send_dashboard_widget` |
 | `openWorkspaceFile` | `open_workspace_file` |
 | `exitProcess` | `exit_process` |
@@ -367,7 +366,7 @@ There is no longer a supported path where an empty terminal turn both:
 - Workspace tree responses are cached briefly (1s) and rate-limited to prevent bursty UI reloads (HTTP 429 when exceeded).
 - The **workspace explorer** is a responsive sidebar (visible on desktop/tablet ≥1024px landscape) that shows a file tree of `/workspace`, supports file previews, drag-and-drop upload with progress reporting, a shared configurable per-file upload limit (default 256 MiB, maximum 1 GiB), inline file creation, inline rename, drag-and-drop move, file reference pills for prompts, and a live workspace-index status chip with one-click reindex.
 - The **code editor** is a standalone pane extension (`runtime/extensions/viewers/editor/`) using CodeMirror 6 directly (no Preact wrapper). It opens in the tabbed content area when a file is clicked in the explorer. Supports syntax highlighting for 12 languages, search/replace, line wrapping, dirty tracking, Cmd+S save, vim mode, whitespace toggle, and accent-aware theming. The editor bundle is lazy-loaded on first file open. Backend endpoints: `GET /workspace/file?mode=edit` (full content up to 256 KB) and `PUT /workspace/file` (save).
-- **Adaptive Cards** are rendered in the web timeline from `content_blocks` using the vendored Microsoft `adaptivecards` SDK. Action handling routes through `POST /agent/card-action`; submissions are also persisted as `adaptive_card_submission` blocks so the timeline can render compact receipts instead of raw text fallbacks. Finished cards are re-rendered with their submitted values populated, inputs locked read-only, and a concise state banner. Agent-owned cards should be posted through the internal `send_adaptive_card` tool (or equivalent agent-response message path) rather than a local slash command.
+- **A2UI Express** compiles on the server and renders in the Classic Preact timeline. The native `send_a2ui` tool binds publication to an accepted web thread. Actions use [`POST /agent/a2ui-action`](runtime-flows.md#a2ui-express-surfaces); authentication challenges appear only in a private browser response.
 - The **tab strip** provides multi-file editing with dirty indicators, pin support, MRU-based tab switching, context menus (Close / Close Others / Close All / Pin / Preview), and keyboard shortcuts (Ctrl+Tab, Ctrl+W).
 - Operational remote surfaces:
   - `piclaw://terminal` opens the terminal tab (`TERMINAL_TAB_PATH`) via `GET /terminal/session` and `GET /terminal/ws`/`WebSocket` upgrades. The backend is enabled by default on Linux/macOS and can be controlled via `PICLAW_WEB_TERMINAL_ENABLED` / `web.terminalEnabled`. Windows remains disabled by default but, when explicitly enabled, uses Bun's native PTY with PowerShell or `cmd.exe` discovery.

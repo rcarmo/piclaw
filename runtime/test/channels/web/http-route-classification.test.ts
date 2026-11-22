@@ -19,7 +19,7 @@ const MUTATING_ROUTE_COVERAGE = [
   { method: "POST", pathname: "/agent/branch-restore", coverage: "data/agent_branch" },
   { method: "POST", pathname: "/agent/peer-message", coverage: "data/agent_peer" },
   { method: "POST", pathname: "/agent/respond", coverage: "data/agent_ui" },
-  { method: "POST", pathname: "/agent/card-action", coverage: "data/agent_ui" },
+  { method: "POST", pathname: "/agent/a2ui-action", coverage: "data/agent_ui" },
   { method: "POST", pathname: "/agent/tool-abort", coverage: "data/agent_ui" },
   { method: "POST", pathname: "/agent/side-prompt", coverage: "data/agent_side_prompt" },
   { method: "POST", pathname: "/agent/side-prompt/stream", coverage: "data/agent_side_prompt" },
@@ -85,7 +85,7 @@ describe("web http route classification", () => {
     expect(getDataRateLimitRule("POST", "/agent/peer-message")?.bucket).toBe("data/agent_peer");
     expect(getDataRateLimitRule("POST", "/agent/thought/visibility")?.bucket).toBe("data/agent_ui");
     expect(getDataRateLimitRule("POST", "/agent/respond")?.bucket).toBe("data/agent_ui");
-    expect(getDataRateLimitRule("POST", "/agent/card-action")?.bucket).toBe("data/agent_ui");
+    expect(getDataRateLimitRule("POST", "/agent/a2ui-action")?.bucket).toBe("data/agent_ui");
     expect(getDataRateLimitRule("POST", "/agent/tool-abort")?.bucket).toBe("data/agent_ui");
     expect(getDataRateLimitRule("POST", "/agent/side-prompt")?.bucket).toBe("data/agent_side_prompt");
     expect(getDataRateLimitRule("POST", "/agent/side-prompt/stream")?.bucket).toBe("data/agent_side_prompt");

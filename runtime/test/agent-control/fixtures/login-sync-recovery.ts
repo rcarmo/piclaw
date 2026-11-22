@@ -1,3 +1,4 @@
+import { loginSubmission, loginSurfaceData } from "../login-surface-fixture.js";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { CredentialSynchronizationError, ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
@@ -98,11 +99,11 @@ runtime.refresh = async options => {
   if (scenario === "aborted") return { ...result, aborted: true };
   return result;
 };
-const command = (step: string, data: Record<string, unknown>) => withChatContext("web:sync-fixture", "web", () => handleLogin(nativeContext, registry, { type: "login", provider: `__${step} ${JSON.stringify(data)}`, raw: "/login" })).catch(error => {
+const command = (step: Parameters<typeof loginSubmission>[0], data: Record<string, unknown>) => withChatContext("web:sync-fixture", "web", () => handleLogin(nativeContext, registry, { ...loginSubmission(step, data) })).catch(error => {
   assert.ok(!nativeCurrent || lifetime.signal.aborted, "Unexpected native authentication rejection");
   return { status: "error" as const, message: "Native authentication owner ended", contentBlocks: undefined };
 });
-const action = (result: any, method: string) => result.contentBlocks[0].payload.actions.find((a: any) => a.data.method === method).data;
+const action = (result: any, method: string) => loginSurfaceData("web:sync-fixture", result, method.replace(/^runtime_/, ""));
 try {
   const started = await command("step1method", { provider: id, action: "oauth" });
   assert.equal(started.status, "success");
@@ -149,7 +150,7 @@ try {
   assert.equal(rotations, 0);
   assert.equal(network, 0);
   if (confirm) {
-    const selection = (result.contentBlocks![0] as any).payload.actions.find((item: any) => item.data?.intent === "login-step3").data;
+    const selection = loginSurfaceData("web:sync-fixture", result, "activate");
     assert.ok(typeof selection.activation_id === "string");
     for (const forged of [{ model: "forged-model" }, { provider: "foreign-provider", model: "synthetic-model" }]) {
       assert.equal((await command("step3", { ...selection, ...forged })).status, "error");

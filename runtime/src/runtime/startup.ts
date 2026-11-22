@@ -10,6 +10,7 @@ import type { AgentPool } from "../agent-pool.js";
 import { WebChannel, type WebChannelOpts } from "../channels/web.js";
 import { RuntimeStartupCleanupError } from "./shutdown.js";
 import { PushoverChannel } from "../channels/pushover.js";
+import { setAddonA2uiPostAdmission } from "../channels/web/a2ui/addon.js";
 import { setMessagesPostFn } from "../extensions/messages-crud.js";
 import { setChatToolRelayFn } from "../extensions/chat-tool.js";
 import { createDirectChatToolRelayHandler } from "../extensions/chat-tool-runtime.js";
@@ -460,6 +461,14 @@ export async function startWebChannel(
     if (!interaction) return null;
     try { web.broadcastEvent(isBot ? "agent_response" : "new_post", interaction); }
     catch (error) { log.warn("Committed message post publication failed", { operation: "messages.post.publish", err: error }); }
+    return interaction.id;
+  });
+
+  setAddonA2uiPostAdmission(async (chatJid, content, block, authorise, signal) => {
+    const interaction = await web.admitMessage(chatJid, content, true, [], { contentBlocks: [block] }, authorise, signal);
+    if (!interaction) throw Error("Failed to commit the add-on surface");
+    try { web.broadcastEvent("agent_response", interaction); }
+    catch (error) { log.warn("Committed add-on surface publication failed", { operation: "a2ui.addon.publish", err: error }); }
     return interaction.id;
   });
 

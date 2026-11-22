@@ -2,7 +2,7 @@ import { goalInputDisplayText } from "../ui/goal-input-display.ts";
 import { bindSvgImageThemes } from '../utils/svg-images.js';
 import { html, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import { useTranslation } from '../utils/i18n.js';
-import { getMediaInfo, getMediaUrl, getThumbnailUrl, submitAdaptiveCardAction } from '../api.js';
+import { getMediaInfo, getMediaUrl, getThumbnailUrl, submitA2uiAction } from '../api.js';
 import { renderMarkdown, renderMermaidDiagrams, renderThinkingMarkdown, sanitizeUrl } from '../markdown.js';
 import { useChatProjectRepository } from '../ui/use-chat-project.js';
 import { decodeSvgSource } from '../utils/svg-images.js';
@@ -10,13 +10,12 @@ import { formatCount, formatFileSize, formatTime, formatTimestamp } from '../uti
 import { buildPostMarkdownCopyPayload } from '../utils/post-copy-markdown.js';
 import { DEFAULT_AGENT_NAME, getAvatarInfo } from '../ui/agent-utils.js';
 import { getAttachmentPreviewKind, getAttachmentPreviewLabel } from '../ui/attachment-preview.js';
-import { extractCardBlocks, renderAdaptiveCard } from '../ui/adaptive-card-renderer.js';
-import { buildAdaptiveCardSubmissionFallbackText, describeAdaptiveCardSubmission, extractAdaptiveCardSubmissionBlocks } from '../ui/adaptive-card-submission.js';
+import { A2uiSurface } from './a2ui-surface.js';
+import { isA2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
 import { buildGeneratedWidgetPayload, canRenderGeneratedWidget } from '../ui/generated-widget.js';
 import { disclosureTriangleSvgString, renderDisclosureTriangle } from '../ui/disclosure-triangle.js';
 import { isIOSDevice } from '../ui/app-helpers.js';
 import { attachHeaderAnchor } from '../ui/scroll-anchor.js';
-import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
 import { ImageModal } from './image-modal.js';
 import { TurnActivity, hasTurnActivity } from './turn-activity.js';
 import { ImageAnnotator, canAnnotate } from './image-annotator.js';
@@ -1429,16 +1428,16 @@ function highlightHtml(html, query) {
 /**
  * Single post component
  */
-export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMessage, agentName, agentAvatarUrl, userName, userAvatarUrl, userAvatarBackground, onDelete, isThreadReply, isThreadPrev, isThreadNext, isRemoving, highlightQuery, onFileRef, onOpenWidget, onOpenAttachmentPreview, onSaveAnnotations, onSubmitCardAction, accessory, capabilities = null }) {
+export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMessage, agentName, agentAvatarUrl, userName, userAvatarUrl, userAvatarBackground, onDelete, isThreadReply, isThreadPrev, isThreadNext, isRemoving, highlightQuery, onFileRef, onOpenWidget, onOpenAttachmentPreview, onSaveAnnotations, onSubmitA2uiAction, accessory, capabilities = null }) {
     const { t } = useTranslation();
     const postCapabilities = capabilities && typeof capabilities === 'object' ? capabilities : {};
     const allowMedia = postCapabilities.media !== false;
     const allowMediaActions = allowMedia && postCapabilities.mediaActions !== false;
-    const allowCards = postCapabilities.cards !== false;
+    const allowSurfaces = postCapabilities.surfaces !== false;
     const allowWidgets = postCapabilities.widgets !== false;
     const allowAnnotations = postCapabilities.annotations !== false;
     const allowAnnotationActions = allowAnnotations && postCapabilities.annotationActions !== false;
-    const allowCardActions = allowCards && postCapabilities.cardActions !== false;
+    const allowSurfaceActions = allowSurfaces && postCapabilities.surfaceActions !== false;
     const allowWidgetActions = allowWidgets && postCapabilities.widgetActions !== false;
     const allowResourceActions = postCapabilities.resourceActions !== false;
     const allowThinking = postCapabilities.thinking !== false;
@@ -1549,8 +1548,7 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
     };
     const { content: cleanedWithAttachments, attachments } = extractAttachmentRefs(cleanedWithMsgRefs);
     displayContent = cleanedWithAttachments;
-    const directCardBlocks = allowCards ? extractCardBlocks(blocks) : [];
-    const submissionBlocks = allowCards ? extractAdaptiveCardSubmissionBlocks(blocks) : [];
+    const a2uiBlocks = allowSurfaces ? blocks.filter(isA2uiSurfaceBlock) : [];
     const recoveryMarkerBlocks = extractRecoveryMarkerBlocks(blocks);
     const recoveryMarker = recoveryMarkerBlocks[0] || null;
     const timeoutMarkerBlocks = extractTimeoutMarkerBlocks(blocks);
@@ -1560,17 +1558,8 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
     const agentTimingBlock = extractAgentTimingBlock(blocks);
     const postTimeTooltip = buildPostTimeTooltip(post, agentTimingBlock);
     const thinkingRef = allowThinking ? blocks.find(b => b?.type === 'thinking_ref') : undefined;
-    const singleCardFallback = directCardBlocks.length === 1 && typeof directCardBlocks[0]?.fallback_text === 'string'
-        ? directCardBlocks[0].fallback_text.trim()
-        : '';
-    const singleSubmissionFallback = submissionBlocks.length === 1
-        ? buildAdaptiveCardSubmissionFallbackText(submissionBlocks[0]).trim()
-        : '';
-    const hideRenderedFallback = (
-        Boolean(singleCardFallback) && displayContent?.trim() === singleCardFallback
-    ) || (
-        Boolean(singleSubmissionFallback) && displayContent?.trim() === singleSubmissionFallback
-    );
+    const a2uiFallback = a2uiBlocks.length === 1 ? a2uiBlocks[0].fallback_text.trim() : '';
+    const hideRenderedFallback = Boolean(a2uiFallback) && displayContent?.trim() === a2uiFallback;
     const shouldRenderContent = Boolean(displayContent) && !isHardTruncated && !hideRenderedFallback;
     const highlightQueryText = typeof highlightQuery === 'string' ? highlightQuery.trim() : '';
     const projectRepository = useChatProjectRepository(post.chat_jid, post.project_repository);
@@ -1802,19 +1791,6 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
             label: entry.name || `attachment-${idx + 1}`,
         }));
 
-    // Extract adaptive card blocks from content_blocks
-    const cardBlocks = useMemo(() => allowCards ? extractCardBlocks(blocks) : [], [allowCards, blocks]);
-    const cardSubmissionBlocks = useMemo(() => allowCards ? extractAdaptiveCardSubmissionBlocks(blocks) : [], [allowCards, blocks]);
-
-    // Stable identity key for card blocks so the render effect only fires when
-    // a card's identity or lifecycle state actually changes — not on every
-    // parent re-render caused by unrelated SSE events.  This prevents the
-    // card DOM (and all user input state) from being torn down and rebuilt
-    // while the user is filling in a form.
-    const cardBlocksKey = useMemo(() => {
-        return cardBlocks.map((b) => `${b.card_id}:${b.state}`).join('|');
-    }, [cardBlocks]);
-
     // Render mermaid diagrams and enhance code blocks after content is mounted
     useEffect(() => {
         if (!contentRef.current) return undefined;
@@ -1944,65 +1920,13 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
         if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
     }, []);
 
-    // Render adaptive cards into their containers.
-    // The effect depends on cardBlocksKey (card_id + state) rather than the
-    // full cardBlocks array, so unrelated parent re-renders won't destroy
-    // the card DOM and reset user inputs.
-    const cardContainerRef = useRef(null);
-    useEffect(() => {
-        if (!cardContainerRef.current || cardBlocks.length === 0) return;
-        const container = cardContainerRef.current;
-        container.innerHTML = '';
-        for (const block of cardBlocks) {
-            const cardEl = document.createElement('div');
-            container.appendChild(cardEl);
-            renderAdaptiveCard(cardEl, block, {
-                readOnly: !allowCardActions,
-                rewriteResourceUrl: rewriteImageSrc,
-                onAction: allowCardActions ? async (action) => {
-                    if (action.type === 'Action.OpenUrl') {
-                        const safeUrl = sanitizeUrl(action.url || '');
-                        if (!safeUrl) throw new Error('Invalid URL');
-                        window.open(safeUrl, '_blank', 'noopener,noreferrer');
-                        return;
-                    }
-
-                    if (action.type === 'Action.Submit') {
-                        const submit = onSubmitCardAction ?? submitAdaptiveCardAction;
-                        const response = await submit({
-                            post_id: post.id,
-                            thread_id: data.thread_id || post.id,
-                            chat_jid: post.chat_jid || null,
-                            card_id: block.card_id,
-                            action: {
-                                type: action.type,
-                                title: action.title || '',
-                                data: action.data,
-                            },
-                        });
-                        presentProviderAuth(response, submit);
-                        return;
-                    }
-
-                    console.warn('[post] unsupported adaptive card action:', action.type, action);
-                } : undefined,
-            }).then((rendered) => {
-                if (!rendered) cardEl.textContent = block.fallback_text || 'Card failed to render.';
-            }).catch((err) => {
-                console.error('[post] adaptive card render error:', err);
-                cardEl.textContent = block.fallback_text || 'Card failed to render.';
-            });
-        }
-    }, [allowCardActions, cardBlocksKey, post.id, rewriteImageSrc]);
-
     const silentRecoveryPlaceholder = Boolean(
         isAgent
         && outcomeMarker?.kind === 'recovery'
         && outcomeMarker?.severity === 'info'
         && !shouldRenderContent
         && mediaIds.length === 0
-        && directCardBlocks.length === 0
-        && submissionBlocks.length === 0
+        && a2uiBlocks.length === 0
     );
     if (protectedRecoveryControl || silentRecoveryPlaceholder) return null;
 
@@ -2213,42 +2137,11 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
                         }}
                     />
                 `}
-                ${cardBlocks.length > 0 && html`
-                    <div ref=${cardContainerRef} class="post-adaptive-cards" />
-                `}
-                ${cardSubmissionBlocks.length > 0 && html`
-                    <div class="post-adaptive-card-submissions">
-                        ${cardSubmissionBlocks.map((block, idx) => {
-                            const meta = describeAdaptiveCardSubmission(block);
-                            const submissionKey = `${block.card_id}-${idx}`;
-                            return html`
-                                <div key=${submissionKey} class="adaptive-card-submission-receipt">
-                                    <div class="adaptive-card-submission-header">
-                                        <span class="adaptive-card-submission-icon" aria-hidden="true">✓</span>
-                                        <div class="adaptive-card-submission-title-wrap">
-                                            <span class="adaptive-card-submission-title">${t('post.submitted')}</span>
-                                            <span class="adaptive-card-submission-title-action">${meta.title}</span>
-                                        </div>
-                                    </div>
-                                    ${meta.fields.length > 0 && html`
-                                        <div class="adaptive-card-submission-fields">
-                                            ${meta.fields.map((field) => html`
-                                                <span class="adaptive-card-submission-field" title=${`${field.key}: ${field.value}`}>
-                                                    <span class="adaptive-card-submission-field-key">${field.key}</span>
-                                                    <span class="adaptive-card-submission-field-sep">:</span>
-                                                    <span class="adaptive-card-submission-field-value">${field.value}</span>
-                                                </span>
-                                            `)}
-                                        </div>
-                                    `}
-                                    <div class="adaptive-card-submission-meta">
-                                        Submitted ${formatTimestamp(meta.submittedAt)}
-                                    </div>
-                                </div>
-                            `;
-                        })}
-                    </div>
-                `}
+                ${a2uiBlocks.map(block => html`<${A2uiSurface}
+                    key=${`${block.surface.surfaceId}:${block.revision}`}
+                    block=${block}
+                    source=${{ post_id: post.id, thread_id: data.thread_id || post.id, chat_jid: post.chat_jid }}
+                    onSubmit=${allowSurfaceActions ? onSubmitA2uiAction ?? submitA2uiAction : undefined} />`)}
                 ${generatedWidgets.length > 0 && html`
                     <div class="generated-widget-launches">
                         ${generatedWidgets.map((block, idx) => html`

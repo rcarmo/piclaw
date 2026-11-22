@@ -51,7 +51,7 @@
   },
   "current": {
     "production": {
-      "referencedNames": 131,
+      "referencedNames": 130,
       "directReaderNames": 7,
       "directReaderOccurrences": 11,
       "helperReaderNames": 10,
@@ -60,7 +60,7 @@
       "semanticReaderOccurrences": 21
     },
     "runtimeSrc": {
-      "referencedNames": 130,
+      "referencedNames": 129,
       "directReaderNames": 7,
       "directReaderOccurrences": 11,
       "helperReaderNames": 10,
@@ -1053,6 +1053,7 @@
           "helperReaders": 0,
           "semanticReaders": 2,
           "files": [
+            ".github/workflows/ci.yml",
             ".github/workflows/integration-gate.yml",
             "Makefile",
             "docs/archive/legacy-compaction-models-and-deadlines.md",
@@ -1135,33 +1136,6 @@
             "runtime/src/db/connection.ts",
             "runtime/src/runtime/progress-watchdog-supervisor.ts"
           ]
-        }
-      }
-    },
-    {
-      "name": "PICLAW_DEBUG_CARD_SUBMISSIONS",
-      "scopes": {
-        "production": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/core/config-sources.ts",
-            "runtime/src/core/config-web.ts"
-          ],
-          "readerFiles": []
-        },
-        "runtimeSrc": {
-          "referenced": true,
-          "directReaders": 0,
-          "helperReaders": 0,
-          "semanticReaders": 0,
-          "files": [
-            "runtime/src/core/config-sources.ts",
-            "runtime/src/core/config-web.ts"
-          ],
-          "readerFiles": []
         }
       }
     },

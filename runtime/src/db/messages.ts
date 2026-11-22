@@ -1,3 +1,4 @@
+import { isRetiredContentBlock } from "../core/retired-content-blocks.js";
 /**
  * db/messages.ts – CRUD operations for the `messages` and `chats` tables.
  *
@@ -96,6 +97,11 @@ function parseJsonArray(value: string | null | undefined): unknown[] | undefined
   }
 }
 
+/** Structured history for readers. Retired payloads stay only in storage. */
+export function parseVisibleContentBlocks(value: string | null | undefined): unknown[] | undefined {
+  return parseJsonArray(value)?.filter(block => !isRetiredContentBlock(block));
+}
+
 /**
  * Convert a raw StoredMessageRow into the InteractionRow shape expected by
  * the web timeline and other consumers. Clamps overly-long content and
@@ -103,7 +109,7 @@ function parseJsonArray(value: string | null | undefined): unknown[] | undefined
  */
 function buildInteraction(row: StoredMessageRow, mediaIds: number[] = []): InteractionRow {
   const { content, meta } = clampWebContent(row.content);
-  const contentBlocks = parseJsonArray(row.content_blocks);
+  const contentBlocks = parseVisibleContentBlocks(row.content_blocks);
   const linkPreviews = parseJsonArray(row.link_previews);
   const data: InteractionRow["data"] = {
     type: row.is_bot_message ? "agent_response" : "user_message",
@@ -821,6 +827,6 @@ export function getMessagesSince(
   const rows = db.prepare(sql).all(chatJid, sinceTimestamp, `${botPrefix}:%`) as Array<Omit<NewMessage, "content_blocks"> & { content_blocks?: string | null }>;
   return rows.map((row) => ({
     ...row,
-    content_blocks: parseJsonArray(row.content_blocks),
+    content_blocks: parseVisibleContentBlocks(row.content_blocks),
   }));
 }

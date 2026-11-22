@@ -1,13 +1,8 @@
 /**
- * agent-control/handlers/login.ts – Card-driven provider authentication.
+ * agent-control/handlers/login.ts – Provider authentication in Classic A2UI.
  *
- * Three-card flow:
- *   Card 1: Pick a provider (Layout F column table)
- *   Card 2: Auth form (only applicable methods for that provider)
- *   Card 3: Activate — pick a model from that provider
- *
- * Logout: Card 1 → confirmation card → done (no Card 3).
- * Custom providers: Card 2 saves config → "restart + /model" (no Card 3).
+ * Pick a provider and authentication method, then explicitly activate a model.
+ * Removal and external configuration do not automatically change the model.
  *
  * Credentials are owned by ModelRuntime login/logout. Piclaw writes only
  * custom-provider models.json configuration, with backups and awaited reload.
@@ -23,6 +18,7 @@ import { getPiclawAgentDir } from "../../core/agent-dir.js";
 import { getChatJid } from "../../core/chat-context.js";
 import { isSingleUserAccess } from "../../core/config-access.js";
 import { createLogger } from "../../utils/logger.js";
+import { buildLoginSurface } from "../../channels/web/a2ui/login-surface.js";
 import { getProviderDefs, type ProviderDef } from "../provider-defs.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { NativeProviderAuthContext } from "../provider-auth-context.js";
@@ -182,190 +178,69 @@ function methodsLabel(def: ProviderDef): string {
   return parts.join(" · ") || "—";
 }
 
-// ── Card 1: Provider Picker ─────────────────────────────────────
+// ── Provider forms ────────────────────────────────────────────
 
-function buildCard1(statuses: ProviderStatus[]): Record<string, unknown> {
-  const choices = statuses.map((s) => ({ title: s.def.name, value: s.def.id }));
-
-  const headerRow = {
-    type: "ColumnSet", spacing: "medium",
-    columns: [
-      { type: "Column", width: "stretch", items: [{ type: "TextBlock", text: "Provider", weight: "Bolder", size: "Small" }] },
-      { type: "Column", width: "80px", items: [{ type: "TextBlock", text: "Status", weight: "Bolder", size: "Small" }] },
-      { type: "Column", width: "100px", items: [{ type: "TextBlock", text: "Methods", weight: "Bolder", size: "Small" }] },
-    ],
-  };
-
-  const dataRows = statuses.map((s) => ({
-    type: "ColumnSet",
-    columns: [
-      { type: "Column", width: "stretch", items: [{ type: "TextBlock", text: s.def.name }] },
-      { type: "Column", width: "80px", items: [{ type: "TextBlock", text: s.authType !== "none" ? statusLabel(s) : "—", color: s.authType !== "none" ? "Good" : "Attention" }] },
-      { type: "Column", width: "100px", items: [{ type: "TextBlock", text: methodsLabel(s.def), size: "Small", isSubtle: true }] },
-    ],
-  }));
-
-  return {
-    type: "adaptive_card",
-    card_id: `login-1-pick-${Date.now()}`,
-    schema_version: "1.5",
-    state: "active",
-    fallback_text: "Provider authentication — select a provider.",
-    payload: {
-      type: "AdaptiveCard", version: "1.5",
-      body: [
-        { type: "TextBlock", text: "Provider Authentication", weight: "Bolder", size: "Medium" },
-        headerRow,
-        ...dataRows,
-        { type: "TextBlock", text: "Select a provider", weight: "Bolder", separator: true, spacing: "medium" },
-        { type: "Input.ChoiceSet", id: "provider", style: "compact", choices, value: choices[0]?.value || "" },
-      ],
-      actions: [
-        { type: "Action.Submit", title: "Next →", data: { intent: "login-step1" } },
-      ],
-    },
-  };
+function buildProviderPicker(statuses: ProviderStatus[]) {
+  return buildLoginSurface("Provider authentication — select a provider.", ["Provider authentication"], [{
+    key: "provider", label: "Provider",
+    options: statuses.map(s => ({ value: s.def.id, label: `${s.def.name} — ${s.authType === "none" ? "not configured" : statusLabel(s)}; ${methodsLabel(s.def)}` })),
+  }], [{ id: "next", label: "Next →", step: "step1" }]);
 }
 
-// ── Card 2: Auth Form ───────────────────────────────────────────
-
-function buildCard2Config(def: ProviderDef): Record<string, unknown> {
+function buildProviderConfiguration(def: ProviderDef) {
   const models = readJsonFile(getModelsJsonPath()) as { providers?: Record<string, Record<string, unknown>> };
   const existing = models.providers?.[def.id] || {};
-
-  const body: unknown[] = [
-    { type: "TextBlock", text: `${def.name} — Configuration`, weight: "Bolder", size: "Medium" },
-    { type: "TextBlock", text: "Model configuration is applied immediately. Keys are saved through provider authentication, not in models.json or its new backups. Leave the key blank to retain a stored credential.", wrap: true, isSubtle: true },
-  ];
-
-  for (const field of def.customFields || []) {
-    let currentValue = ""; // eslint-disable-line no-useless-assignment
-    if (field.key === "modelId") {
-      const m = existing.models as Array<{ id: string }> | undefined;
-      currentValue = m?.[0]?.id || "";
-    } else if (field.key === "modelIds") {
-      const m = existing.models as Array<{ id: string }> | undefined;
-      currentValue = m?.map((x) => x.id).join(", ") || "";
-    } else {
-      currentValue = String(existing[field.key] || "");
+  const fields = (def.customFields || []).map(field => {
+    const base = { key: field.key, label: `${field.label}${field.required && field.key !== "apiKey" ? " *" : ""}`, placeholder: field.placeholder };
+    if (field.key === "apiKey") return { ...base, private: true };
+    const modelList = existing.models as Array<{ id: string }> | undefined;
+    let value = field.key === "modelId" ? modelList?.[0]?.id || ""
+      : field.key === "modelIds" ? modelList?.map(model => model.id).join(", ") || ""
+      : String(existing[field.key] || "");
+    if (field.key === "baseUrl" && value) {
+      try {
+        const url = new URL(value);
+        if (url.username || url.password || url.search || url.hash) value = "";
+      } catch { value = ""; }
     }
-    if (field.key === "apiKey") currentValue = "";
-    body.push({
-      type: "Input.Text", id: field.key,
-      label: `${field.label}${field.required && field.key !== "apiKey" ? " *" : ""}`,
-      placeholder: field.placeholder, value: currentValue,
-      ...(field.key === "apiKey" ? { style: "password" } : {}),
-    });
-  }
-
-  return {
-    type: "adaptive_card",
-    card_id: `login-2-config-${def.id}-${Date.now()}`,
-    schema_version: "1.5", state: "active",
-    fallback_text: `Configure ${def.name}.`,
-    payload: {
-      type: "AdaptiveCard", version: "1.5", body,
-      actions: [
-        { type: "Action.Submit", title: "Save Configuration", data: { intent: "login-step2", provider: def.id, method: "configure" } },
-      ],
-    },
-  };
+    return { ...base, value };
+  });
+  return buildLoginSurface(`Configure ${def.name}.`, [
+    `${def.name} — Configuration`,
+    "Model configuration takes effect immediately. Leave the API key blank to retain a stored credential.",
+  ], fields, [{ id: "save", label: "Save Configuration", step: "step2", privateField: "apiKey", data: { provider: def.id, method: "configure" } }]);
 }
 
-function buildCard2Logout(def: ProviderDef, currentAuth: string, confirmationId: string): Record<string, unknown> {
-  return {
-    type: "adaptive_card",
-    card_id: `login-2-logout-${def.id}-${Date.now()}`,
-    schema_version: "1.5", state: "active",
-    fallback_text: `Confirm removal of ${def.name}.`,
-    payload: {
-      type: "AdaptiveCard", version: "1.5",
-      body: [
-        { type: "TextBlock", text: `${def.name} — Remove`, weight: "Bolder", size: "Medium" },
-        { type: "TextBlock", text: `Currently: **${currentAuth}**`, wrap: true },
-        { type: "TextBlock", text: "Removes credentials from config files. Backup created first.", wrap: true, isSubtle: true },
-      ],
-      actions: [
-        { type: "Action.Submit", title: "Confirm Remove", data: { intent: "login-step2", provider: def.id, method: "logout", confirmation_id: confirmationId } },
-      ],
-    },
-  };
+function buildProviderRemoval(def: ProviderDef, currentAuth: string, confirmationId: string) {
+  return buildLoginSurface(`Confirm removal of ${def.name}.`, [`${def.name} — Remove`, `Currently: ${currentAuth}`, "This removes your stored credentials for this provider."], [], [
+    { id: "remove", label: "Confirm Remove", step: "step2", data: { provider: def.id, method: "logout", confirmation_id: confirmationId } },
+  ]);
 }
 
-function buildCard2ExternalInfo(def: ProviderDef): Record<string, unknown> {
-  return {
-    type: "adaptive_card",
-    card_id: `login-2-external-${def.id}-${Date.now()}`,
-    schema_version: "1.5", state: "active",
-    fallback_text: `${def.name} uses external authentication.`,
-    payload: {
-      type: "AdaptiveCard", version: "1.5",
-      body: [
-        { type: "TextBlock", text: `${def.name} — External Authentication`, weight: "Bolder", size: "Medium" },
-        {
-          type: "TextBlock",
-          text: def.authNote || "Configure this provider outside Piclaw, then return to /model once credentials are available.",
-          wrap: true,
-        },
-      ],
-    },
-  };
+function buildExternalAuthInfo(def: ProviderDef) {
+  return buildLoginSurface(`${def.name} uses external authentication.`, [
+    `${def.name} — External Authentication`, def.authNote || "Configure this provider outside Piclaw, then return to /model once credentials are available.",
+  ], [], []);
 }
 
-function buildCard2AuthPicker(def: ProviderDef): Record<string, unknown> {
-  const methods: Array<{ title: string; value: string }> = [];
-  if (def.hasOAuth) methods.push({ title: "Login with OAuth", value: "oauth" });
-  if (def.hasApiKey) methods.push({ title: "Enter API key", value: "api_key" });
-  if (def.isCustom) methods.push({ title: "Configure provider", value: "configure" });
-  if (def.hasExternalAuth) methods.push({ title: "External credential setup", value: "external" });
-  methods.push({ title: "Logout / Remove", value: "logout" });
-
-  return {
-    type: "adaptive_card",
-    card_id: `login-2-pick-${def.id}-${Date.now()}`,
-    schema_version: "1.5", state: "active",
-    fallback_text: `Choose auth method for ${def.name}.`,
-    payload: {
-      type: "AdaptiveCard", version: "1.5",
-      body: [
-        { type: "TextBlock", text: `${def.name} — Choose Action`, weight: "Bolder", size: "Medium" },
-        {
-          type: "Input.ChoiceSet", id: "action", style: "expanded",
-          choices: methods, value: methods[0]?.value || "",
-        },
-      ],
-      actions: [
-        { type: "Action.Submit", title: "Next →", data: { intent: "login-step1-method", provider: def.id } },
-      ],
-    },
-  };
+function buildAuthMethodPicker(def: ProviderDef) {
+  const options: Array<{ label: string; value: string }> = [];
+  if (def.hasOAuth) options.push({ label: "Login with OAuth", value: "oauth" });
+  if (def.hasApiKey) options.push({ label: "Enter API key", value: "api_key" });
+  if (def.isCustom) options.push({ label: "Configure provider", value: "configure" });
+  if (def.hasExternalAuth) options.push({ label: "External credential setup", value: "external" });
+  options.push({ label: "Logout / Remove", value: "logout" });
+  return buildLoginSurface(`Choose auth method for ${def.name}.`, [`${def.name} — Choose Action`], [{ key: "action", label: "Authentication method", options }], [
+    { id: "next", label: "Next →", step: "step1method", data: { provider: def.id } },
+  ]);
 }
 
-// ── Card 3: Activate / Model Picker ─────────────────────────────
-
-function buildCard3(def: ProviderDef, models: Array<{ id: string; name: string }>, activationId: string): Record<string, unknown> {
-  const choices = models.map((m) => ({ title: m.name || m.id, value: m.id }));
-
-  return {
-    type: "adaptive_card",
-    card_id: `login-3-activate-${def.id}-${Date.now()}`,
-    schema_version: "1.5", state: "active",
-    fallback_text: `Select a model from ${def.name}.`,
-    payload: {
-      type: "AdaptiveCard", version: "1.5",
-      body: [
-        { type: "TextBlock", text: `${def.name} — Select Model`, weight: "Bolder", size: "Medium" },
-        { type: "TextBlock", text: `✓ Authentication successful. ${models.length} model${models.length !== 1 ? "s" : ""} available.`, wrap: true, color: "Good" },
-        {
-          type: "Input.ChoiceSet", id: "model", style: "compact",
-          choices, value: choices[0]?.value || "",
-        },
-      ],
-      actions: [
-        { type: "Action.Submit", title: "Activate Model", data: { intent: "login-step3", provider: def.id, activation_id: activationId } },
-      ],
-    },
-  };
+function buildModelActivation(def: ProviderDef, models: Array<{ id: string; name: string }>, activationId: string) {
+  return buildLoginSurface(`Select a model from ${def.name}.`, [
+    `${def.name} — Select Model`, `✓ Authentication successful. ${models.length} model${models.length !== 1 ? "s" : ""} available.`,
+  ], [{ key: "model", label: "Model", options: models.map(model => ({ label: model.name || model.id, value: model.id })) }], [
+    { id: "activate", label: "Activate Model", step: "step3", data: { provider: def.id, activation_id: activationId } },
+  ]);
 }
 
 // ── Provider-owned auth interaction ─────────────────────────────
@@ -634,36 +509,19 @@ function deleteRuntimeAuthFlow(flow: RuntimeAuthFlow): void {
   flow.events.length = 0;
 }
 
-function buildRuntimeAuthCard(def: ProviderDef, flow: RuntimeAuthFlow): Record<string, unknown> {
+function buildRuntimeAuthSurface(def: ProviderDef, flow: RuntimeAuthFlow) {
   flow.actionId = randomUUID();
-  const actionData = { intent: "login-step2", provider: def.id, auth_type: flow.authType, flow_id: flow.id, action_id: flow.actionId };
-  const body: Record<string, unknown>[] = [
-    { type: "TextBlock", text: `${def.name} — ${flow.authType === "oauth" ? "OAuth" : "API Key"} Login`, weight: "Bolder", size: "Medium" },
+  const data = { provider: def.id, auth_type: flow.authType, flow_id: flow.id, action_id: flow.actionId };
+  const actions: Parameters<typeof buildLoginSurface>[3] = [
+    { id: "present", label: "Open private authentication", step: "step2", data: { ...data, method: "runtime_present" } },
   ];
-  const actions: Record<string, unknown>[] = [];
-  // Provider text, URLs, codes and choice values may contain credentials. Keep
-  // them in the flow and reveal only through the authenticated direct response.
-  body.push({ type: "TextBlock", text: "Open the private authentication dialog to view provider instructions and enter credentials.", wrap: true });
-  const prompt = flow.pending?.prompt;
-  actions.push({ type: "Action.Submit", title: "Open private authentication", data: { ...actionData, method: "runtime_present" } });
-  if (prompt) {
-    actions.push({ type: "Action.Submit", title: "Continue →", data: { ...actionData, method: "runtime_continue" } });
-  } else if (flow.status === "running") {
-    actions.push({ type: "Action.Submit", title: "Check & Continue →", data: { ...actionData, method: "runtime_check" } });
-  }
-  if (flow.status === "running") {
-    actions.push({ type: "Action.Submit", title: "Cancel", data: { ...actionData, method: "runtime_cancel" } });
-  }
-
-  return {
-    type: "adaptive_card",
-    card_id: `login-runtime-${flow.id}-${flow.actionId}`,
-    schema_version: "1.5",
-    state: "active",
-    expires_at: flow.expiresAt,
-    fallback_text: `Authentication for ${def.name}.`,
-    payload: { type: "AdaptiveCard", version: "1.5", body, actions },
-  };
+  if (flow.pending?.prompt) actions.push({ id: "continue", label: "Continue", step: "step2", privateField: "auth_value", data: { ...data, method: "runtime_continue" } });
+  else if (flow.status === "running") actions.push({ id: "check", label: "Check & Continue", step: "step2", data: { ...data, method: "runtime_check" } });
+  if (flow.status === "running") actions.push({ id: "cancel", label: "Cancel authentication", step: "step2", data: { ...data, method: "runtime_cancel" } });
+  return buildLoginSurface(`Authentication for ${def.name}.`, [
+    `${def.name} — ${flow.authType === "oauth" ? "OAuth" : "API Key"} Login`,
+    "Open the private authentication dialog to view provider instructions and enter credentials.",
+  ], [], actions, flow.expiresAt);
 }
 
 async function startRuntimeAuth(
@@ -685,12 +543,12 @@ async function startRuntimeAuth(
     deleteRuntimeAuthFlow(flow);
     return { status: "error", message: flow.error! };
   }
-  return { status: "success", message: `Authentication for ${def.name}`, contentBlocks: [buildRuntimeAuthCard(def, flow)] };
+  return { status: "success", message: `Authentication for ${def.name}`, contentBlocks: [buildRuntimeAuthSurface(def, flow)] };
 }
 
 // ── Step handlers ───────────────────────────────────────────────
 
-/** Card 1 submitted → show Card 2 (auth method picker or direct form). */
+/** Provider selected → choose an authentication method or open its form. */
 async function handleStep1(
   session: NativeProviderAuthContext,
   modelRuntime: ModelRuntime,
@@ -708,18 +566,18 @@ async function handleStep1(
   // If only one auth method (+ optional logout), go straight to the form
   if (methods === 1 && !hasLogoutOption) {
     if (def.hasOAuth) {
-      return await startRuntimeAuth(session, modelRuntime, def, "oauth", recovered => showCard3OrComplete(session, def, providerId, def.name, registry, undefined, recovered));
+      return await startRuntimeAuth(session, modelRuntime, def, "oauth", recovered => offerModelActivation(session, def, providerId, def.name, registry, undefined, recovered));
     }
-    if (def.hasApiKey) return await startRuntimeAuth(session, modelRuntime, def, "api_key", recovered => showCard3OrComplete(session, def, providerId, def.name, registry, undefined, recovered));
-    if (def.isCustom) return { status: "success", message: `Configure ${def.name}`, contentBlocks: [buildCard2Config(def)] };
-    if (def.hasExternalAuth) return { status: "success", message: `${def.name} uses external authentication`, contentBlocks: [buildCard2ExternalInfo(def)] };
+    if (def.hasApiKey) return await startRuntimeAuth(session, modelRuntime, def, "api_key", recovered => offerModelActivation(session, def, providerId, def.name, registry, undefined, recovered));
+    if (def.isCustom) return { status: "success", message: `Configure ${def.name}`, contentBlocks: [buildProviderConfiguration(def)] };
+    if (def.hasExternalAuth) return { status: "success", message: `${def.name} uses external authentication`, contentBlocks: [buildExternalAuthInfo(def)] };
   }
 
   // Multiple methods → show method picker
-  return { status: "success", message: `Choose action for ${def.name}`, contentBlocks: [buildCard2AuthPicker(def)] };
+  return { status: "success", message: `Choose action for ${def.name}`, contentBlocks: [buildAuthMethodPicker(def)] };
 }
 
-/** Card 2 method picker submitted → show the actual auth form. */
+/** Authentication method selected → start its owned flow. */
 async function handleStep1Method(
   session: NativeProviderAuthContext,
   modelRuntime: ModelRuntime,
@@ -733,19 +591,19 @@ async function handleStep1Method(
 
   if (action === "oauth") {
     if (!def.hasOAuth) return { status: "error", message: `**${def.name}** doesn't support OAuth.` };
-    return await startRuntimeAuth(session, modelRuntime, def, "oauth", recovered => showCard3OrComplete(session, def, providerId, def.name, registry, undefined, recovered));
+    return await startRuntimeAuth(session, modelRuntime, def, "oauth", recovered => offerModelActivation(session, def, providerId, def.name, registry, undefined, recovered));
   }
   if (action === "api_key") {
     if (!def.hasApiKey) return { status: "error", message: `**${def.name}** doesn't support API key auth.` };
-    return await startRuntimeAuth(session, modelRuntime, def, "api_key", recovered => showCard3OrComplete(session, def, providerId, def.name, registry, undefined, recovered));
+    return await startRuntimeAuth(session, modelRuntime, def, "api_key", recovered => offerModelActivation(session, def, providerId, def.name, registry, undefined, recovered));
   }
   if (action === "configure") {
     if (!def.isCustom) return { status: "error", message: `**${def.name}** doesn't need configuration.` };
-    return { status: "success", message: `Configure ${def.name}`, contentBlocks: [buildCard2Config(def)] };
+    return { status: "success", message: `Configure ${def.name}`, contentBlocks: [buildProviderConfiguration(def)] };
   }
   if (action === "external") {
     if (!def.hasExternalAuth) return { status: "error", message: `**${def.name}** does not require external setup.` };
-    return { status: "success", message: `${def.name} uses external authentication`, contentBlocks: [buildCard2ExternalInfo(def)] };
+    return { status: "success", message: `${def.name} uses external authentication`, contentBlocks: [buildExternalAuthInfo(def)] };
   }
   if (action === "logout") {
     const status = (await getProviderStatuses(modelRuntime, registry, session)).find((s) => s.def.id === providerId);
@@ -753,13 +611,13 @@ async function handleStep1Method(
     const owner = getRuntimeAuthOwner(session), confirmationId = randomUUID();
     owner.logouts.clear();
     owner.logouts.set(confirmationId, { provider: providerId, expiresAt: Date.now() + 300_000, providerRevision: providerAuthState(modelRuntime, providerId).revision });
-    return { status: "success", message: `Confirm removal for ${def.name}`, contentBlocks: [buildCard2Logout(def, statusLabel(status), confirmationId)] };
+    return { status: "success", message: `Confirm removal for ${def.name}`, contentBlocks: [buildProviderRemoval(def, statusLabel(status), confirmationId)] };
   }
 
   return { status: "error", message: `Unknown action: ${action}` };
 }
 
-/** Card 2 auth/config form submitted → continue the provider-owned flow. */
+/** Continue the provider-owned flow or apply confirmed configuration. */
 async function handleStep2(
   session: NativeProviderAuthContext,
   modelRuntime: ModelRuntime,
@@ -783,12 +641,12 @@ async function handleStep2(
       deleteRuntimeAuthFlow(flow);
       return { status: "error", message: "Authentication flow expired. Start again with /login." };
     }
-    if (data.flow_id !== flow.id || data.action_id !== flow.actionId) return { status: "error", message: "Stale or foreign authentication submission. Use the latest card in the initiating session." };
+    if (data.flow_id !== flow.id || data.action_id !== flow.actionId) return { status: "error", message: "Stale or foreign authentication submission. Use the latest authentication surface in the initiating session." };
     if (method === "runtime_present") {
       if (!privateAuthResponse.getStore()) return { status: "error", message: "Open authentication from its private web dialog." };
       if (flow.status !== "running") return { status: "error", message: "Authentication flow ended. Start again with /login." };
       const oldActionId = flow.actionId;
-      const card = buildRuntimeAuthCard(def!, flow); // Consume reveal and rotate continuation before returning.
+      const card = buildRuntimeAuthSurface(def!, flow); // Consume reveal and rotate continuation before returning.
       const nextActionId = flow.actionId;
       privateAuthResponse.getStore()!.rollback = () => {
         if (flow.actionId === nextActionId && owner.flows.get(flowKey(providerId, authType)) === flow) flow.actionId = oldActionId;
@@ -799,7 +657,6 @@ async function handleStep2(
         status: "success", message: "Private authentication instructions.", contentBlocks: [card],
         authPresentation: {
           expires_at: flow.expiresAt, events: structuredClone(flow.events), prompt,
-          action_data: { intent: "login-step2", provider: providerId, auth_type: authType, flow_id: flow.id, action_id: flow.actionId },
         },
       };
     }
@@ -834,19 +691,18 @@ async function handleStep2(
 
     if (flow.status === "completed") {
       deleteRuntimeAuthFlow(flow);
-      return await showCard3OrComplete(session, def, providerId, name, registry, undefined, flow.locallyRecovered);
+      return await offerModelActivation(session, def, providerId, name, registry, undefined, flow.locallyRecovered);
     }
     if (flow.status === "failed") {
       deleteRuntimeAuthFlow(flow);
       return { status: "error", message: flow.error || "Authentication failed." };
     }
-    const card = buildRuntimeAuthCard(def!, flow);
+    const card = buildRuntimeAuthSurface(def!, flow);
     const pending = flow.pending?.prompt;
     const prompt = pending ? (({ signal: _signal, ...safe }) => safe)(pending) : null;
     return { status: "success", message: `Authentication for ${name}`, contentBlocks: [card],
       ...(privateAuthResponse.getStore() ? { authPresentation: {
         expires_at: flow.expiresAt, events: structuredClone(flow.events), prompt,
-        action_data: { intent: "login-step2", provider: providerId, auth_type: authType, flow_id: flow.id, action_id: flow.actionId },
       } } : {}),
     };
   }
@@ -927,7 +783,7 @@ async function handleStep2(
         ? "The credential was saved, but model availability could not be refreshed. Retry model refresh; do not restore an older credential."
         : "Custom authentication configuration failed. Supply a required key or review legacy model configuration, then retry. The prior configuration and stored credential are retained." };
     }
-    return await showCard3OrComplete(session, def, providerId, name, registry, revision);
+    return await offerModelActivation(session, def, providerId, name, registry, revision);
   }
 
   if (method === "logout") {
@@ -982,7 +838,7 @@ async function removeCustomModelConfig(modelRuntime: ModelRuntime, providerId: s
 }
 
 /** Authentication never changes the active model; even one model needs confirmation. */
-async function showCard3OrComplete(
+async function offerModelActivation(
   session: NativeProviderAuthContext,
   def: ProviderDef | undefined,
   providerId: string,
@@ -1006,11 +862,11 @@ async function showCard3OrComplete(
   return {
     status: "success",
     message: `${name} — select a model`,
-    contentBlocks: [buildCard3(def!, models, activationId)],
+    contentBlocks: [buildModelActivation(def!, models, activationId)],
   };
 }
 
-/** Card 3 submitted → activate model. */
+/** Activate only the explicitly selected model. */
 async function handleStep3(
   session: NativeProviderAuthContext,
   data: Record<string, unknown>,
@@ -1044,37 +900,19 @@ async function handleLoginOwned(
   if (disposedAuthSessions.has(session) || (existingOwner && existingOwner.chatJid !== getChatJid())) return { status: "error", message: "Provider authentication belongs to its initiating session and chat." };
   const modelRuntime = session.runtime;
 
-  // Internal routing from card submissions. Authentication failure text is
-  // deliberately generic because provider diagnostics can contain credentials.
-  const parseCardData = (json: string): Record<string, unknown> | null => {
-    try {
-      const parsed = JSON.parse(json) as unknown;
-      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
-    } catch {
-      return null;
-    }
-  };
-  if (command.provider?.startsWith("__step1 ")) {
-    const data = parseCardData(command.provider.slice(8));
-    return data ? handleStep1(session, modelRuntime, modelRegistry, data) : { status: "error", message: "Invalid card data." };
-  }
-  if (command.provider?.startsWith("__step1method ")) {
-    const data = parseCardData(command.provider.slice(14));
-    return data ? handleStep1Method(session, modelRuntime, modelRegistry, data) : { status: "error", message: "Invalid card data." };
-  }
-  if (command.provider?.startsWith("__step2 ")) {
-    const data = parseCardData(command.provider.slice(8));
-    return data ? handleStep2(session, modelRuntime, modelRegistry, data) : { status: "error", message: "Invalid card data." };
-  }
-  if (command.provider?.startsWith("__step3 ")) {
-    const data = parseCardData(command.provider.slice(8));
-    return data ? handleStep3(session, data) : { status: "error", message: "Invalid card data." };
+  const interaction = command.interaction;
+  if (interaction) {
+    const { step, data } = interaction;
+    if (step === "step1") return handleStep1(session, modelRuntime, modelRegistry, data);
+    if (step === "step1method") return handleStep1Method(session, modelRuntime, modelRegistry, data);
+    if (step === "step2") return handleStep2(session, modelRuntime, modelRegistry, data);
+    return handleStep3(session, data);
   }
 
-  // No args → show Card 1
+  // Start with the provider picker.
   const statuses = await getProviderStatuses(modelRuntime, modelRegistry, session);
   assertNativeAuthCurrent(session);
-  return { status: "success", message: "Provider authentication", contentBlocks: [buildCard1(statuses)] };
+  return { status: "success", message: "Provider authentication", contentBlocks: [buildProviderPicker(statuses)] };
 }
 
 export function handleLogout(session: NativeProviderAuthContext, modelRegistry: ModelRegistry, command: LogoutCommand): Promise<AgentControlResult> {
@@ -1111,5 +949,5 @@ async function handleLogoutOwned(
 
   const statuses = await getProviderStatuses(modelRuntime, modelRegistry, session);
   assertNativeAuthCurrent(session);
-  return { status: "success", message: "Provider authentication", contentBlocks: [buildCard1(statuses)] };
+  return { status: "success", message: "Provider authentication", contentBlocks: [buildProviderPicker(statuses)] };
 }

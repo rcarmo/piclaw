@@ -72,12 +72,20 @@ test("owned application Root dashboard projects native routes, timeline and usag
       pendingId = await tx.createTask(pending, null, { conversationId: conversation.id, ownership: { kind: "conversation" } });
     }, context); } finally { await writer.close(); }
     root.query(`INSERT INTO messages(id,chat_jid,sender,content,timestamp,is_bot_message) VALUES (?,?,?,?,?,?)`).run("dashboard-user", chat, "user", "Question", "2026-10-19T01:00:00Z", 0);
-    root.query(`INSERT INTO messages(id,chat_jid,sender,content,timestamp,is_bot_message,content_blocks) VALUES (?,?,?,?,?,?,?)`).run("dashboard-answer", chat, "assistant", "", "2026-10-19T01:01:00Z", 1, JSON.stringify([{ type: "TextBlock", text: "Actual Root output" }]));
+    const write = root.query(`INSERT INTO messages(id,chat_jid,sender,content,timestamp,is_bot_message,content_blocks) VALUES (?,?,?,?,?,?,?)`);
+    const retired = { type: "adaptive_card", payload: { title: "Legacy private fixture" } };
+    const readable = { type: "TextBlock", text: "Actual Root output" };
+    write.run("dashboard-answer", chat, "assistant", "", "2026-10-19T01:01:00Z", 1, JSON.stringify([readable, retired]));
+    write.run("dashboard-legacy-only", chat, "assistant", "", "2026-10-19T01:02:00Z", 1, JSON.stringify([retired]));
     const reader = createRootDashboardReader({ root, scope, isCurrent: () => { lock.assertCurrentOwner(); return current; },
       sessionTargets: () => bundle.sessionTargets, canReadTarget: () => visible });
     await expect(reader.read({ ...scope, ownerId: "wrong", limit: 8 })).rejects.toThrow();
     await expect(reader.read({ ...scope, limit: 13 })).rejects.toThrow();
     const before = root.query("SELECT total_changes() AS n").get();
+    const projected = (await reader.read({ ...scope, limit: 8 })).find(row => row.chatJid === chat);
+    expect(projected?.latestBlocks).toBe(JSON.stringify([readable]));
+    const original = root.query("SELECT content_blocks FROM messages WHERE id=?").get("dashboard-legacy-only");
+    expect(original).toEqual({ content_blocks: JSON.stringify([retired]) });
     const source = await qualifyNativeResourceSource("session-dashboard", new URL(`file://${addons}/session-dashboard/native-resources.ts`));
     let get: any;
     const binding = { scope, reader, isCurrent: () => current,
@@ -93,8 +101,8 @@ test("owned application Root dashboard projects native routes, timeline and usag
     const result = await get({}, req);
     expect(result.sessions).toHaveLength(2);
     expect(result.sessions[0]).toMatchObject({ summary: "Actual Root output", chat_jid: chat,
-      branch_id: branchId, session_id: "real-session", conversation_id: String(conversation.id), message_count: 2,
-      last_active_at: "2026-10-19T01:01:00Z", tasks: [{ id: pendingId!, status: "pending" }] });
+      branch_id: branchId, session_id: "real-session", conversation_id: String(conversation.id), message_count: 3,
+      last_active_at: "2026-10-19T01:02:00Z", tasks: [{ id: pendingId!, status: "pending" }] });
     expect(result.sessions[0].usage.models["qualification/synthetic"].totalTokens).toBe(10);
     expect(root.query("SELECT total_changes() AS n").get()).toEqual(before);
     // Missing telemetry is null, never a fabricated zero ledger.

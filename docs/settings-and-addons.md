@@ -4,7 +4,7 @@
 
 The settings dialog provides a centralized UI for configuring piclaw — identity, providers, models, appearance, tools, editor, and add-ons. Extensions can register their own settings panes.
 
-For when to use pane extensions, timeline-native UI, settings panes, or the low-level `extension_ui_*` bridge, see [Extension UI contract](extension-ui-contract.md). Use pane extensions for substantial UI, timeline messages or Adaptive Cards for persisted conversation UI, settings panes backed by the direct add-on config API for configuration, and `extension_ui_*` for lightweight browser events.
+For when to use pane extensions, timeline-native UI, settings panes, or the low-level `extension_ui_*` bridge, see [Extension UI contract](extension-ui-contract.md). Use pane extensions for substantial UI, timeline messages or A2UI surfaces for persisted conversation UI, settings panes backed by the direct add-on config API for configuration, and `extension_ui_*` for lightweight browser events.
 
 ## Opening Settings
 

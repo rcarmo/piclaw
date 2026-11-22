@@ -1,7 +1,10 @@
 import { beforeAll, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { chromium, webkit } from "playwright";
-import { withPrivateProviderAuthResponse } from "../../src/agent-control/handlers/login.js";
+import { handleA2uiAction } from "../../src/channels/web/a2ui/admission.js";
+import type { WebChannelLike } from "../../src/channels/web/core/web-channel-contracts.js";
+import { getMessageByRowId, initDatabase, storeMessage } from "../../src/db.js";
+import { loginSubmission } from "../agent-control/login-surface-fixture.js";
 import { withChatContext } from "../../src/core/chat-context.js";
 import { createTestModelRegistry, TestAgentControlSession } from "../agent-control/session-fixture.js";
 import { getTestWorkspace } from "../helpers.js";
@@ -20,22 +23,26 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) browserTest(`
   const registry = createTestModelRegistry([{ provider: "openai", id: "fixture-one", name: "Fixture One" }]);
   const session = new TestAgentControlSession(getTestWorkspace().workspace, registry);
   const control = createNativeControlFixture(session, registry, "web:provider-browser-fixture");
+  initDatabase();
+  const chatJid = "web:provider-browser-fixture";
+  const run = (command: any) => withChatContext(chatJid, "web", () => control.facade.applyControlCommand(chatJid, command));
+  const initial = await run(loginSubmission("step1", { provider: "openai" }));
+  const postId = storeMessage({ id: crypto.randomUUID(), chat_jid: chatJid, sender:"assistant", content: initial.message, is_from_me:true,
+    is_bot_message: true, content_blocks: initial.contentBlocks, timestamp: new Date().toISOString() });
   const controls: any[] = [];
-  const run = (step: string, data: object) => withChatContext("web:provider-browser-fixture", "web", () => control.facade.applyControlCommand("web:provider-browser-fixture", { type: "login", provider: `__${step} ${JSON.stringify(data)}`, raw: `/login __${step}` }));
+  const channel = { json: (payload: unknown, status = 200) => Response.json(payload, { status }),
+    agentPool: { applyControlCommand: async (_chat: string, command: any) => {
+      const { data, step } = command.interaction;
+      controls.push({ step, method: data.method, flow_id: data.flow_id, action_id: data.action_id, activation_id: data.activation_id });
+      return run(command);
+    }, getAvailableModels: async () => ({ current: session.model.id }) },
+    interactionBroadcaster: { broadcastInteractionUpdated() {} }, broadcastEvent() {},
+  } as unknown as WebChannelLike;
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
     const path = new URL(request.url).pathname;
     if (path === "/fixture.js") return new Response(script, { headers: { "Content-Type": "text/javascript" } });
-    if (path === "/static/common/js/vendor/adaptivecards.min.js") return new Response(Bun.file(resolve(import.meta.dir, "../../web/static/common/js/vendor/adaptivecards.min.js")), { headers: { "Content-Type": "text/javascript" } });
-    if (path === "/fixture/start") return Response.json(await run("step1", { provider: "openai" }));
-    if (path === "/fixture/action" && request.method === "POST") {
-      const data = await request.json() as any;
-      controls.push({ intent: data.intent, method: data.method, flow_id: data.flow_id, action_id: data.action_id, activation_id: data.activation_id });
-      const result = data.method === "runtime_present"
-        ? await withPrivateProviderAuthResponse(() => run("step2", data))
-        : await run(data.intent === "login-step3" ? "step3" : "step2", data);
-      if (result.authPresentation) return Response.json({ status: "ok", auth_presentation: result.authPresentation, source_post_id: 1, card_id: (result.contentBlocks?.[0] as any).card_id, chat_jid: "web:provider-browser-fixture" });
-      return Response.json(result);
-    }
+    if (path === "/fixture/state") return Response.json({ blocks: getMessageByRowId(chatJid, postId)?.data.content_blocks, message: initial.message, model: session.model.id, postId, chatJid });
+    if (path === "/agent/a2ui-action" && request.method === "POST") return handleA2uiAction(channel, request);
     if (path === "/") return new Response('<!doctype html><meta name="viewport" content="width=device-width"><style>body{font-family:system-ui;padding:12px}</style><div id="status"></div><div id="card"></div><script type="module" src="/fixture.js"></script>', { headers: { "Content-Type": "text/html" } });
     return new Response(null, { status: 404 });
   } });
@@ -54,17 +61,17 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) browserTest(`
     await page.getByRole("button", { name: "Activate Model", exact: true }).waitFor();
     expect(session.model.id).toBe("gpt-test");
     expect(registry.authStorage.get("openai").key).toBe("SYNTHETIC-browser-key");
-    expect(controls[0]).toMatchObject({ intent: "login-step2", method: "runtime_present", flow_id: expect.any(String), action_id: expect.any(String) });
+    expect(controls[0]).toMatchObject({ step: "step2", method: "runtime_present", flow_id: expect.any(String), action_id: expect.any(String) });
     expect(await page.locator("dialog").count()).toBe(0);
     expect(await page.locator("body").textContent()).not.toContain("SYNTHETIC-browser-key");
     await page.getByRole("button", { name: "Activate Model", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("#status")?.textContent?.includes("Model set"));
     expect(session.model.id).toBe("fixture-one");
-    expect(controls[2]).toMatchObject({ intent: "login-step3", activation_id: expect.any(String) });
+    expect(controls[2]).toMatchObject({ step: "step3", activation_id: expect.any(String) });
     await page.evaluate(() => (window as any).showPrivateAuthFixture({
       status: "ok", source_post_id: 1, card_id: "expired-private", chat_jid: "web:provider-browser-fixture",
       auth_presentation: { expires_at: Date.now() + 750,
-        action_data: { intent: "login-step2", provider: "openai", flow_id: "owned", action_id: "expires" },
+        actions: { continue: {} },
         events: [{ type: "device_code", userCode: "PRIVATE-expiry-code", verificationUri: "javascript:alert(1)" }],
         prompt: { type: "secret", message: "<img src=x onerror=alert(1)>" },
       },
@@ -79,7 +86,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) browserTest(`
     await page.evaluate(() => (window as any).showPrivateAuthStalled({
       status: "ok", source_post_id: 1, card_id: "stalled-private", chat_jid: "web:provider-browser-fixture",
       auth_presentation: { expires_at: Date.now() + 60_000, events: [], prompt: { type: "secret", message: "Secret" },
-        action_data: { intent: "login-step2", provider: "openai", flow_id: "owned", action_id: "stalled" } },
+        actions: { continue: {} } },
     }));
     await page.locator("dialog input").fill("PRIVATE-stalled-secret");
     await page.getByRole("button", { name: "Continue", exact: true }).click();

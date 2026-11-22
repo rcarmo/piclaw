@@ -226,7 +226,7 @@ export const groupDefinitions: GroupDefinition[] = [
         "agents-service.test.ts",
         "message-processing-storage-service.test.ts",
         "message-store-atomic-followup.test.ts",
-        "adaptive-card-side-prompt-service.test.ts",
+        "side-prompt-service.test.ts",
         "agent-control-plane-service.test.ts",
         "agent-message-entry-service.test.ts",
         "agent-peer-message-relay-service.test.ts",
@@ -256,7 +256,7 @@ export const groupDefinitions: GroupDefinition[] = [
         "web-push-service.test.ts",
         "web-push-store.test.ts",
         "web-agent-streaming.test.ts",
-        "web-channel-adaptive-card-side-prompt-delegation.test.ts",
+        "web-channel-side-prompt-delegation.test.ts",
         "web-channel-agent-control-plane-delegation.test.ts",
         "web-channel-agent-message-entry-delegation.test.ts",
         "web-channel-message-processing-storage-delegation.test.ts",
@@ -395,7 +395,7 @@ export const groupDefinitions: GroupDefinition[] = [
   {
     id: "channels-web-media-workspace-remote",
     label: "channels web media, workspace, and remote surfaces",
-    notes: "Media handling, previews, workspace services, adaptive cards/widgets, and remote terminal/VNC services.",
+    notes: "Media handling, previews, workspace services, A2UI surfaces/widgets, and remote terminal/VNC services.",
     match: (relativePath) =>
       relativePath.startsWith("channels/web/") &&
       basenameIsOneOf(relativePath, [
@@ -407,7 +407,6 @@ export const groupDefinitions: GroupDefinition[] = [
           "workspace-attachment-upload.test.ts",
           "workspace-file-bridge.test.ts",
           "workspace-indexing-settings.test.ts",
-        "adaptive-card-actions.test.ts",
         "avatar-service.test.ts",
         "dashboard-widget.test.ts",
         "link-previews.test.ts",
@@ -480,7 +479,7 @@ export const groupDefinitions: GroupDefinition[] = [
   {
     id: "extensions",
     label: "extensions",
-    notes: "Built-in tools, skills, adaptive cards, workspace search, and compaction helpers.",
+    notes: "Built-in tools, skills, A2UI, workspace search, and compaction helpers.",
     match: (relativePath) => relativePath.startsWith("extensions/") || relativePath.startsWith("addons/"),
   },
   {
@@ -646,11 +645,8 @@ export const groupDefinitions: GroupDefinition[] = [
           "turn-activity-images.test.ts",
           "turn-activity.test.ts",
           "visible-interval.test.ts",
-          "adaptive-card-input-lock.test.ts",
-          "adaptive-card-renderer.test.ts",
           "addons-core-bookmark.test.ts",
           "agent-thinking-panel-display.test.ts",
-          "adaptive-card-submission.test.ts",
           "attachment-preview.test.ts",
           "body-portal.test.ts",
           "btw-panel-layout.test.ts",

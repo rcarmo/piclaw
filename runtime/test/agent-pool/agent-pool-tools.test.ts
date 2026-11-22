@@ -81,7 +81,7 @@ describe("builtin extension factories", () => {
     expect(fake.tools.has("activate_tools")).toBe(false);
     expect(fake.tools.has("reset_active_tools")).toBe(false);
     expect(fake.tools.has("introspect_sql")).toBe(false); // Retired legacy SQL execution.
-    expect(fake.tools.has("send_adaptive_card")).toBe(true);
+    expect(fake.tools.has("send_adaptive_card")).toBe(false);
     expect(fake.tools.has("send_dashboard_widget")).toBe(true);
     expect(fake.tools.has("exit_process")).toBe(false); // Native process controls own exit; the legacy extension is retired.
     expect(fake.tools.has("scheduled_tasks")).toBe(true);

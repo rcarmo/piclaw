@@ -67,9 +67,9 @@ Ask up to 20 questions in sequence, one-at-a-time, unless already answered.
 
 Keep answers in a feature-scoped notes/work-item file or `notes/preferences/feature-refinement.md` if the process becomes reusable.
 
-## Web UI / Adaptive Card note
+## Web UI / A2UI form note
 
-When the user is in the PiClaw **web UI**, you may use a compact **Adaptive Card** for refinement questions when it is clearer than markdown — especially for:
+In a Classic web thread with `send_a2ui` available, use a small A2UI Express form when controls make the question easier to answer — especially for:
 
 - single-choice follow-up questions
 - short structured confirmations
@@ -78,10 +78,10 @@ When the user is in the PiClaw **web UI**, you may use a compact **Adaptive Card
 Rules:
 
 - still ask **one question at a time** unless the user has already answered later items
-- prefer markdown if it is clearer or less heavy-weight
-- use the current `adaptive-cards-authoring` skill/runtime constraints
-- keep cards compact, with concise fallback text and supported actions only
-- do not turn the whole 20-question flow into a giant form; cards are for selective structured steps, not bulk interrogation
+- ask in Markdown or the channel's text format if the tool is unavailable or text is clearer
+- follow `a2ui-express-authoring`: send bare Express with a useful plain-text fallback
+- keep each form small; ask for only the values needed to answer the current question
+- do not use a form for all 20 questions or ask for credentials
 
 ## Start narrow
 

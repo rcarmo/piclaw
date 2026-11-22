@@ -5,7 +5,9 @@ import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { Model, Provider } from "@earendil-works/pi-ai";
 import { FileCredentialStore } from "../../src/agent-pool/credential-store.js";
 import { withChatContext } from "../../src/core/chat-context.js";
-import { WebAdaptiveCardSidePromptService } from "../../src/channels/web/cards/adaptive-card-side-prompt-service.js";
+import { handleA2uiAction } from "../../src/channels/web/a2ui/admission.js";
+import { buildA2uiAction } from "../../src/channels/web/a2ui/action.js";
+import type { WebChannelLike } from "../../src/channels/web/core/web-channel-contracts.js";
 import { initDatabase, getDb, getMessageByRowId, deleteMessageByRowId } from "../../src/db.js";
 import { WebSessionBroadcastService } from "../../src/channels/web/sse/session-broadcast-service.js";
 import { createInteractionBroadcaster } from "../../src/channels/web/interaction-broadcaster.js";
@@ -97,24 +99,20 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
       };
       const run = (command: any) => withChatContext(chat, "web", () => control.facade.applyControlCommand(chat, command));
       const start = async () => { const result = await run({ type: "login", raw: "/login" }); await write(result.message, result.contentBlocks); };
-      const service = new WebAdaptiveCardSidePromptService({
-        defaultChatJid: chat, defaultAgentId: "default", json: (value, status = 200) => Response.json(value, { status }), webRuntimeConfig: {},
-        agentPool: { applyControlCommand: async (_chat, command) => run(command) },
-        authGateway: { setTotpSecret: () => {}, createTotpContext: () => ({ buildSessionCookie: () => "fixture" }) },
-        interactionBroadcaster: broadcaster,
-        sendMessage: async (_chat, text, options) => write(text, options && typeof options === "object" ? options.contentBlocks : undefined),
-        broadcastEvent: (type, data) => broadcast.broadcastEvent(type, data), skipFailedOnModelSwitch: () => {},
-        forwardAgentMessage: async () => Response.json({ error: "Unexpected forwarded input" }, { status: 400 }),
-      });
+      const channel = {
+        json: (value: unknown, status = 200) => Response.json(value, { status }),
+        agentPool: { applyControlCommand: async (_chat: string, command: any) => run(command),
+          getAvailableModels: async () => ({ current: session.model.id }) },
+        interactionBroadcaster: broadcaster, broadcastEvent: (type: string, data: unknown) => broadcast.broadcastEvent(type, data),
+      } as unknown as WebChannelLike;
       await start();
       const state = () => { return { blocks: getMessageByRowId(chat, latestPost)?.data.content_blocks ?? [], message: latestMessage, model: session.model.id, postId: latestPost, chatJid: chat, providerAborted: flowSignals.at(-1)?.aborted ?? false }; };
       const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
         const path = new URL(request.url).pathname;
         if (path === "/fixture.js") return new Response(script, { headers: { "Content-Type": "text/javascript" } });
-        if (path === "/static/common/js/vendor/adaptivecards.min.js") return new Response(Bun.file(resolve(import.meta.dir, "../../web/static/common/js/vendor/adaptivecards.min.js")), { headers: { "Content-Type": "text/javascript" } });
         if (path === "/fixture/state") return Response.json(state());
         if (path === "/fixture/start" && request.method === "POST") { mode = scenario === "denial-retry" ? "success" : scenario; await start(); return Response.json(state()); }
-        if (path === "/agent/card-action" && request.method === "POST") return service.handleAdaptiveCardAction(request);
+        if (path === "/agent/a2ui-action" && request.method === "POST") return handleA2uiAction(channel, request);
         if (path === "/") return new Response('<!doctype html><meta name="viewport" content="width=device-width"><button id="start">Restart login</button><div id="model"></div><div id="status"></div><div id="card"></div><script type="module" src="/fixture.js"></script>', { headers: { "Content-Type": "text/html" } });
         return new Response(null, { status: 404 });
       } });
@@ -128,7 +126,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
       const choose = async () => {
         await page.locator("#card select").selectOption(id);
         await page.getByRole("button", { name: "Next →", exact: true }).click();
-        await page.getByRole("radio", { name: "Login with OAuth", exact: true }).check();
+        await page.getByLabel("Authentication method").selectOption("oauth");
         await page.getByRole("button", { name: "Next →", exact: true }).click();
         await page.getByRole("button", { name: "Open private authentication", exact: true }).click();
         await page.locator("dialog select").selectOption("device");
@@ -149,9 +147,9 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
         }
         const currentPost = getMessageByRowId(chat, latestPost);
         const currentCard = currentPost?.data.content_blocks?.[0] as any;
-        const currentAction = currentCard.payload.actions.find((action: any) => action.data.method === "runtime_present").data;
+        const currentAction = buildA2uiAction(currentCard.surface, "present", new Map(), new Date().toISOString());
         if (scenario === "cancel") {
-          await page.getByRole("button", { name: "Cancel authentication", exact: true }).click();
+          await page.getByRole("dialog").getByRole("button", { name: "Cancel authentication", exact: true }).click();
           await page.locator("dialog").waitFor({ state: "detached" });
           expect(await credentials.read(id)).toBeUndefined();
         } else if (scenario === "expiry") {
@@ -181,7 +179,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
         if (scenario === "cancel" || scenario === "expiry") {
           await page.waitForFunction(async () => (await (await fetch("/fixture/state")).json()).providerAborted === true);
           expect(flowSignals.at(-1)?.aborted).toBe(true);
-          const stale = await service.handleAdaptiveCardAction(new Request(`${server.url}agent/card-action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ post_id: latestPost, card_id: currentCard.card_id, chat_jid: chat, action: { type: "Action.Submit", data: currentAction } }) }));
+          const stale = await handleA2uiAction(channel, new Request(`${server.url}agent/a2ui-action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ post_id: latestPost, thread_id: latestPost, revision: currentCard.revision, request_id: crypto.randomUUID(), chat_jid: chat, message: currentAction }) }));
           expect(stale.status).toBe(409);
         }
         expect(JSON.stringify({ rows: [...new Set(savedRows)].map(row => getMessageByRowId(chat, row)), broadcasts })).not.toContain(sentinel);

@@ -29,7 +29,7 @@ import type { InteractionBroadcaster } from "./web/interaction-broadcaster.js";
 import type { WebAuthGateway } from "./web/auth/auth-gateway.js";
 import type { WebServerLifecycleGatewayService, WebSocketSessionData } from "./web/server-lifecycle-gateway-service.js";
 import type { WebTerminalVncHttpServiceSurface } from "./web/terminal-vnc-http-service.js";
-import type { WebAdaptiveCardSidePromptService } from "./web/cards/adaptive-card-side-prompt-service.js";
+import type { WebSidePromptService } from "./web/agent/side-prompt-service.js";
 import type { WebAgentPeerMessageRelayService } from "./web/agent/agent-peer-message-relay-service.js";
 import {
   WebChannelRuntimePublicSurfaceService,
@@ -197,16 +197,12 @@ export class WebChannel implements WebChannelLike {
     return await this.peerMessageRelayService.handleAgentPeerMessage(req);
   }
 
-  async handleAdaptiveCardAction(req: Request): Promise<Response> {
-    return await this.adaptiveCardSidePromptService.handleAdaptiveCardAction(req);
-  }
-
   async handleAgentSidePrompt(req: Request): Promise<Response> {
-    return await this.adaptiveCardSidePromptService.handleAgentSidePrompt(req);
+    return await this.sidePromptService.handleAgentSidePrompt(req);
   }
 
   async handleAgentSidePromptStream(req: Request): Promise<Response> {
-    return await this.adaptiveCardSidePromptService.handleAgentSidePromptStream(req);
+    return await this.sidePromptService.handleAgentSidePromptStream(req);
   }
 
   handleAgentMessage(req: Request, pathname: string): Promise<Response> {
@@ -543,7 +539,7 @@ export class WebChannel implements WebChannelLike {
   private readonly runtimeState!: WebChannelRuntimeStateService;
   private readonly serverLifecycleGateway!: WebServerLifecycleGatewayService;
   private readonly terminalVncHttpService!: WebTerminalVncHttpServiceSurface;
-  private readonly adaptiveCardSidePromptService!: WebAdaptiveCardSidePromptService;
+  private readonly sidePromptService!: WebSidePromptService;
   private readonly peerMessageRelayService!: WebAgentPeerMessageRelayService;
   private readonly runtimePublicSurfaceService!: WebChannelRuntimePublicSurfaceService;
   private readonly messageWriteService!: WebMessageWriteService;

@@ -1,9 +1,10 @@
+import { handleA2uiAction } from "../../../src/channels/web/a2ui/admission.js";
 import { describe, expect, test } from "bun:test";
 
 import "../../helpers.ts";
 import { WebChannel } from "../../../src/channels/web.ts";
 import { WebAgentControlPlaneService } from "../../../src/channels/web/agent/agent-control-plane-service.js";
-import { createWebAdaptiveCardSidePromptService } from "../../../src/channels/web/cards/adaptive-card-side-prompt-service.js";
+import { WebSidePromptService } from "../../../src/channels/web/agent/side-prompt-service.js";
 import { createWebAgentPeerMessageRelayService } from "../../../src/channels/web/agent/agent-peer-message-relay-service.js";
 
 function jsonResponse(payload: unknown, status = 200): Response {
@@ -165,46 +166,15 @@ describe("web control-plane payload guards", () => {
     expect((await restoreResponse.json()).error).toBe("Missing chat_jid");
   });
 
-  test("adaptive-card and side-prompt handlers reject non-object JSON payloads", async () => {
+  test("A2UI and side-prompt handlers reject invalid JSON payloads", async () => {
     const channel = { json: jsonResponse } as any;
-    channel.adaptiveCardSidePromptService = createWebAdaptiveCardSidePromptService(channel, { defaultChatJid: "web:default", defaultAgentId: "default" });
+    channel.sidePromptService = new WebSidePromptService({ defaultChatJid: "web:default", json: jsonResponse, agentPool: {} });
     channel.peerMessageRelayService = createWebAgentPeerMessageRelayService(channel, { defaultAgentId: "default" });
 
-    const cardReq = new Request("https://example.com/agent/card-action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(null),
-    });
-    const cardResponse = await WebChannel.prototype.handleAdaptiveCardAction.call(channel, cardReq);
-    expect(cardResponse.status).toBe(400);
-    expect((await cardResponse.json()).error).toBe("JSON body must be an object");
-
-    const missingCardIdReq = new Request("https://example.com/agent/card-action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ post_id: 1, action: { type: "Action.Submit" } }),
-    });
-    const missingCardIdResponse = await WebChannel.prototype.handleAdaptiveCardAction.call(channel, missingCardIdReq);
-    expect(missingCardIdResponse.status).toBe(400);
-    expect((await missingCardIdResponse.json()).error).toBe("Missing or invalid card_id");
-
-    const invalidPostIdReq = new Request("https://example.com/agent/card-action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ post_id: "nan", card_id: "card-1", action: { type: "Action.Submit" } }),
-    });
-    const invalidPostIdResponse = await WebChannel.prototype.handleAdaptiveCardAction.call(channel, invalidPostIdReq);
-    expect(invalidPostIdResponse.status).toBe(400);
-    expect((await invalidPostIdResponse.json()).error).toBe("Missing or invalid post_id");
-
-    const unsupportedActionReq = new Request("https://example.com/agent/card-action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ post_id: 1, card_id: "card-1", action: { type: "Action.Fly" } }),
-    });
-    const unsupportedActionResponse = await WebChannel.prototype.handleAdaptiveCardAction.call(channel, unsupportedActionReq);
-    expect(unsupportedActionResponse.status).toBe(400);
-    expect((await unsupportedActionResponse.json()).error).toBe("Unsupported action type: Action.Fly");
+    for (const payload of ['{', 'null', '[]', JSON.stringify({ post_id: 'nan' })]) {
+      const actionResponse = await handleA2uiAction(channel, new Request("https://example.com/agent/a2ui-action", { method: "POST", body: payload }));
+      expect(actionResponse.status).toBe(400);
+    }
 
     const peerReq = new Request("https://example.com/agent/peer-message", {
       method: "POST",

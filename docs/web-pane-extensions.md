@@ -36,7 +36,7 @@ Use a pane extension when you need:
 
 Prefer other surfaces when:
 
-- the interaction belongs in conversation history → use timeline messages or Adaptive Cards
+- the interaction belongs in conversation history → use timeline messages or A2UI surfaces
 - the interaction is only a lightweight browser-session signal → use the `extension_ui_*` browser-event bridge
 
 ## Terminal and VNC tabs

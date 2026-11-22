@@ -113,6 +113,17 @@ jobs:
           bun run test:local --cwd runtime -- bun test --timeout=30000 test/web/pele-renderer.playwright.optional.test.ts
           PICLAW_OPTIONAL_BROWSER=webkit bun run test:local --cwd runtime -- bun test --timeout=30000 test/web/pele-renderer.playwright.optional.test.ts
 
+      - name: Verify Classic A2UI and private authentication surfaces
+        env:
+          PICLAW_RUN_OPTIONAL_BROWSER_TESTS: '1'
+          PICLAW_E2E_DISPOSABLE: '1'
+          PLAYWRIGHT_BROWSERS_PATH: /home/runner/.cache/ms-playwright
+        run: |
+          bun run test:local --cwd runtime --env PICLAW_DB_IN_MEMORY=1 -- bun test --isolate --max-concurrency=1 --timeout=60000 \
+            test/channels/web/a2ui/classic-renderer.optional.test.ts \
+            test/web/provider-auth-ui-matrix.playwright.optional.test.ts \
+            test/web/provider-auth-surfaces.playwright.optional.test.ts
+
       - name: Verify CDP pane Chromium and Safari-engine clients
         env:
           PICLAW_TEST_CDP_CLIENTS: '1'

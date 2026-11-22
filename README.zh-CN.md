@@ -57,7 +57,7 @@ docker run -d \
 | 处理文件 | 工作区文件浏览器、上传、CodeMirror 编辑器、shell 工具和可分离的 xterm.js 终端 |
 | 查看结果 | CSV/TSV 表格、PDF、图片、视频和代码查看器，以及 VNC 远程显示面板 |
 | 下次访问时继续工作 | 计划任务、可搜索的聊天历史和基于文件的 [Dream 记忆](docs/dream-memory.md) |
-| 扩展工作流 | 技能、[MCP 服务器](docs/mcp.md)、浏览器自动化、图像处理、Adaptive Cards 和交互式可视化内容 |
+| 扩展工作流 | 技能、[MCP 服务器](docs/mcp.md)、浏览器自动化、图像处理、A2UI surfaces 和交互式可视化内容 |
 
 [Web UI 指南](docs/web-ui.md#chat-and-status-surfaces)和[工具与技能参考](docs/tools-and-skills.md)介绍界面操作和命令。本地模型配置见 [llama.cpp](docs/llama-cpp.md)；Azure 图像生成需要[配置 Azure OpenAI/Foundry](docs/azure/azure-openai-extension.md)。
 

@@ -18,11 +18,8 @@ describe("web channel lifecycle/special surface delegation", () => {
         },
         handleRequest: async (_req: Request, dispatch: () => Promise<Response>) => dispatch(),
       },
-      adaptiveCardSidePromptService: {
-        handleAdaptiveCardAction: async (_req: Request) => {
-          calls.push("card");
-          return new Response("card", { status: 205 });
-        },
+      sidePromptService: {
+
         handleAgentSidePrompt: async (_req: Request) => {
           calls.push("side");
           return new Response("side", { status: 206 });
@@ -50,8 +47,7 @@ describe("web channel lifecycle/special surface delegation", () => {
 
     await WebChannel.prototype.start.call(stub);
     await WebChannel.prototype.stop.call(stub);
-    expect((await WebChannel.prototype.handleAdaptiveCardAction.call(stub, new Request("https://example.com/agent/card-action", { method: "POST" }))).status)
-      .toBe(205);
+
     expect((await WebChannel.prototype.handleAgentSidePrompt.call(stub, new Request("https://example.com/agent/side-prompt", { method: "POST" }))).status)
       .toBe(206);
     expect((await WebChannel.prototype.handleAgentSidePromptStream.call(stub, new Request("https://example.com/agent/side-prompt/stream", { method: "POST" }))).status)
@@ -64,7 +60,6 @@ describe("web channel lifecycle/special surface delegation", () => {
     expect(calls).toEqual([
       "start",
       "stop",
-      "card",
       "side",
       "stream",
       "peer",

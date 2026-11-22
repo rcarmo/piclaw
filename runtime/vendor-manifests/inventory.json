@@ -308,22 +308,6 @@
       "provenance": "manifest-linked"
     },
     {
-      "path": "runtime/web/static/common/js/vendor/adaptivecards.meta.json",
-      "bytes": 1208,
-      "sha256": "8da31c1effc0079e8357bacb90222612e566320eb81633547baca1f594158326",
-      "manifests": [],
-      "provenance": "unrecorded"
-    },
-    {
-      "path": "runtime/web/static/common/js/vendor/adaptivecards.min.js",
-      "bytes": 338474,
-      "sha256": "c3404b6cba966546c03ab9f81b133a2b8d9185da29806457d0adb92c107f799c",
-      "manifests": [
-        "runtime/vendor-manifests/adaptivecards.json"
-      ],
-      "provenance": "manifest-linked"
-    },
-    {
       "path": "runtime/web/static/common/js/vendor/babylon/babylon.js",
       "bytes": 8162496,
       "sha256": "742d47e203869b80704657d5bdb8e3824e085eb21059c6c6746d769d65bc8670",
@@ -941,7 +925,6 @@
     "runtime/web/static/common/fonts/vendor/jetbrains-mono-latin-ext-700-italic.woff2",
     "runtime/web/static/common/fonts/vendor/jetbrains-mono-latin-ext-700-normal.woff2",
     "runtime/web/static/common/fonts/vendor/jetbrains-mono.meta.json",
-    "runtime/web/static/common/js/vendor/adaptivecards.meta.json",
     "runtime/web/static/common/js/vendor/babylon/babylon.js",
     "runtime/web/static/common/js/vendor/babylon/babylon.meta.json",
     "runtime/web/static/common/js/vendor/beautiful-mermaid.meta.json",

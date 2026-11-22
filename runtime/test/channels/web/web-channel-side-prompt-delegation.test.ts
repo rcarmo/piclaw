@@ -9,25 +9,21 @@ afterEach(() => {
   cleanup = null;
 });
 
-type AdaptiveCardSidePromptServiceStub = {
-  handleAdaptiveCardAction(req: Request): Promise<Response>;
+type SidePromptServiceStub = {
+
   handleAgentSidePrompt(req: Request): Promise<Response>;
   handleAgentSidePromptStream(req: Request): Promise<Response>;
 };
 
-describe("WebChannel adaptive-card/side-prompt delegation", () => {
-  test("delegates adaptive-card and side-prompt wrappers to the extracted service", async () => {
+describe("WebChannel side-prompt delegation", () => {
+  test("delegates side-prompt wrappers to the extracted service", async () => {
     const fixture = await createWebChannelTestFixture({ workspace: "temp" });
     cleanup = fixture.cleanup;
 
     const calls: string[] = [];
     const response = (label: string, status = 200) => new Response(label, { status });
-    const service: AdaptiveCardSidePromptServiceStub = {
-      handleAdaptiveCardAction: async (req) => {
-        const url = new URL(req.url);
-        calls.push(`card:${req.method}:${url.pathname}`);
-        return response("card-action", 205);
-      },
+    const service: SidePromptServiceStub = {
+
       handleAgentSidePrompt: async (req) => {
         const url = new URL(req.url);
         calls.push(`side-prompt:${req.method}:${url.pathname}`);
@@ -40,17 +36,14 @@ describe("WebChannel adaptive-card/side-prompt delegation", () => {
       },
     };
 
-    (fixture.channel as unknown as { adaptiveCardSidePromptService: AdaptiveCardSidePromptServiceStub }).adaptiveCardSidePromptService = service;
+    (fixture.channel as unknown as { sidePromptService: SidePromptServiceStub }).sidePromptService = service;
 
-    expect((await fixture.channel.handleAdaptiveCardAction(new Request("https://example.com/agent/card-action", { method: "POST" }))).status)
-      .toBe(205);
     expect((await fixture.channel.handleAgentSidePrompt(new Request("https://example.com/agent/side-prompt", { method: "POST" }))).status)
       .toBe(206);
     expect((await fixture.channel.handleAgentSidePromptStream(new Request("https://example.com/agent/side-prompt/stream", { method: "POST" }))).status)
       .toBe(207);
 
     expect(calls).toEqual([
-      "card:POST:/agent/card-action",
       "side-prompt:POST:/agent/side-prompt",
       "side-prompt-stream:POST:/agent/side-prompt/stream",
     ]);

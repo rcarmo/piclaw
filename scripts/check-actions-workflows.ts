@@ -86,7 +86,8 @@ expectEqual(nativeContract.roots, {
   DURABLE_CORE_ADDONS_ROOT: "native",
   DURABLE_GOAL_ADDON_ROOT: "native",
   DURABLE_CONTRACT_ADDONS_ROOT: "contract",
-}, "ADDONS/CORE/GOAL must share the native checkout; historical contracts use their own checkout.");
+  DURABLE_AUTORESEARCH_ROOT: "autoresearch",
+}, "ADDONS/CORE/GOAL must share the native checkout; historical contracts and Autoresearch use their own checkouts.");
 expectEqual(nativeContract.catalogDependencies, "qualification/native/node_modules",
   "Catalogue dependencies must use frozen qualification tooling, never a live profile.");
 expectEqual(nativeContract.typeProjects, ["runtime/durable-engine", "qualification/native"],
@@ -102,8 +103,8 @@ expectTrue(readPins?.run?.includes('readFileSync("scripts/native-gate-contract.j
   readPins.run.includes("fixture.ref") && readPins.run.includes("^[0-9a-f]{40}$") &&
   readPins.run.includes("GITHUB_OUTPUT"), "Setup must read and validate immutable pins from the shared JSON.");
 const fixtureCheckouts = nativeSteps.filter(step => step.uses?.startsWith("actions/checkout@"));
-expectEqual(fixtureCheckouts.length, 2, "Native setup must have exactly two fixture checkouts.");
-for (const [index, name] of ["native", "contract"].entries()) {
+expectEqual(fixtureCheckouts.length, 3, "Native setup must have exactly three fixture checkouts.");
+for (const [index, name] of ["native", "contract", "autoresearch"].entries()) {
   const pin = nativeContract.fixtures[name];
   expectTrue(/^[0-9a-f]{40}$/.test(pin.ref) && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(pin.repository),
     `${name} fixture must have an immutable SHA and repository.`);
@@ -112,7 +113,7 @@ for (const [index, name] of ["native", "contract"].entries()) {
   expectEqual(checkout.with, {
     repository: `\${{ steps.contract.outputs.${name}-repository }}`,
     ref: `\${{ steps.contract.outputs.${name}-ref }}`,
-    path: name === "native" ? ".qualification-native-addons" : ".qualification-addons",
+    path: { native: ".qualification-native-addons", contract: ".qualification-addons", autoresearch: ".qualification-autoresearch" }[name],
     "persist-credentials": false,
   }, `${name} checkout must consume shared pin outputs without persisting credentials.`);
   expectTrue(nativeSteps.indexOf(readPins) < nativeSteps.indexOf(checkout), "Pins must be validated before checkout.");
@@ -132,7 +133,7 @@ const exportPaths = nativeSteps.at(-1);
 expectTrue(exportPaths?.run?.includes('readFileSync("scripts/native-gate-contract.json"') &&
   exportPaths.run.includes("Object.entries(contract.roots)") && exportPaths.run.includes("checkouts[fixture]") &&
   exportPaths.run.includes("GITHUB_ENV") && exportPaths.run.includes("DURABLE_CATALOG_DEPENDENCIES=") &&
-  exportPaths.run.includes("contract.catalogDependencies"), "Setup must export all five fixture paths from the shared contract.");
+  exportPaths.run.includes("contract.catalogDependencies"), "Setup must export all six fixture paths from the shared contract.");
 for (const [event, filter] of Object.entries(ci.on)) {
   const paths = values((filter as Workflow).paths);
   for (const path of ["scripts/native-*.ts", "scripts/native-gate-contract.json", "scripts/integration-test-suite.ts",

@@ -766,24 +766,20 @@
         "off"
       ],
       "secret": false,
-      "persistence": [
-        "env",
-        "dotenv",
-        "json-config"
-      ],
+      "persistence": [],
       "precedence": [
         "process.env",
         ".env",
         "json-config",
         "defaults"
       ],
-      "status": "supported",
-      "compatibilityAliasFor": "domains.web.debugCardSubmissions",
-      "deprecation": "compatibility env alias for domains.web.debugCardSubmissions",
-      "removalVersion": "3.0.0",
+      "status": "removed",
+      "compatibilityAliasFor": null,
+      "deprecation": "Removed with Adaptive Cards. A2UI submits through normal native input admission.",
+      "removalVersion": null,
       "bootstrapAllowed": false,
-      "source": "runtime/src/core/config-web.ts domain schema (#752A)",
-      "migrationDisposition": "migrated-to-domain-config"
+      "source": "Retired the config-web.ts card submission debug override.",
+      "migrationDisposition": "remove"
     },
     {
       "name": "PICLAW_DISABLE_BACKGROUND_WORKSPACE_INDEX",

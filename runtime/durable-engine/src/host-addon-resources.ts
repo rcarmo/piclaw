@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
 import type { Database } from "bun:sqlite";
 import { apply } from "@earendil-works/chord/delta";
+import { parseVisibleContentBlocks } from "../../src/db/messages.js";
 import type { NativeSessionTarget } from "./host-application-input.js";
 /** Static resources are registered ONLY by the qualified public resourceLoader. */
 export interface NativeResourceDescriptor {
@@ -70,14 +71,23 @@ export function createRootDashboardReader(options: {
         const branch = options.root.query("SELECT agent_name,root_chat_jid,branch_id,archived_at FROM chat_branches WHERE chat_jid=? AND branch_id=?").get(target.chatJid, target.branchId) as any;
         if (!branch) throw Error("Native branch mapping changed");
         const timeline = options.root.query("SELECT count(*) AS count,max(timestamp) AS updated FROM messages WHERE chat_jid=?").get(target.chatJid) as {count: number; updated: string | null};
-        const latest = options.root.query(`SELECT content,content_blocks FROM messages WHERE chat_jid=?
+        const candidates = options.root.query<{content: string | null; content_blocks: string | null}, [string]>(
+          `SELECT content,content_blocks FROM messages WHERE chat_jid=?
           AND (coalesce(trim(content),'')<>'' OR coalesce(trim(content_blocks),'')<>'')
           ORDER BY (is_bot_message=1 OR is_terminal_agent_reply=1 OR lower(coalesce(sender,'')) IN ('assistant','agent')) DESC,
-          datetime(timestamp) DESC,rowid DESC LIMIT 1`).get(target.chatJid) as {content: string | null; content_blocks: string | null} | null;
+          datetime(timestamp) DESC,rowid DESC`).iterate(target.chatJid);
+        let latestOutput: string | undefined, latestBlocks: string | undefined;
+        for (const candidate of candidates) {
+          const blocks = parseVisibleContentBlocks(candidate.content_blocks);
+          if (!candidate.content?.trim() && !blocks?.length) continue;
+          latestOutput = candidate.content || undefined;
+          latestBlocks = blocks?.length ? JSON.stringify(blocks) : undefined;
+          break;
+        }
         const tasks = options.root.query("SELECT id,status FROM tasks WHERE conversation_id=? ORDER BY id").all(target.conversationId) as {id: number; status: string}[];
         const row = { conversationId: String(target.conversationId), sessionId: target.sessionId, chatJid: target.chatJid,
           agentName: branch.agent_name, updatedAt: timeline.updated, messageCount: timeline.count,
-          latestOutput: latest?.content || undefined, latestBlocks: latest?.content_blocks || undefined,
+          latestOutput, latestBlocks,
           history: { rootChatJid: branch.root_chat_jid || undefined, branchId: target.branchId, archivedAt: branch.archived_at || undefined },
           usage: usage(target.conversationId), tasks };
         check(accepted); targets.resolve(target);

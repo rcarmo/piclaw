@@ -28,6 +28,34 @@ test('without a verified boundary catch-up proves the oldest retained suffix rat
 test('an unverified zero boundary with individual rows uses the conservative oldest suffix',async()=>{
  const calls:number[]=[],result=await fetchContiguousTimeline([{id:1},{id:145}],async(limit:number,before:number|null)=>{const end=before===null?145:before-1;calls.push(end);return{posts:rows(Math.max(1,end-limit+1),end),has_more:end-limit>=1};},()=>true,0);expect(calls).toEqual([145,95,45]);expect(result!.posts).toHaveLength(145);
 });
+test('reconnect revalidates an older cached A2UI form even when the newest page joins the timeline', async () => {
+ const form=(state:string,revision:number)=>({id:25,data:{content_blocks:[{type:'a2ui_surface',state,revision}]}});
+ const cache=[...rows(1,120).filter(row=>row.id!==25),form('active',1)];
+ const completed=form('completed',2);
+ const calls:(number|null)[]=[];
+ const result=await fetchContiguousTimeline(cache,async(limit:number,before:number|null)=>{
+   calls.push(before);
+   const end=before===null?120:before-1;
+   return {posts:rows(Math.max(1,end-limit+1),end).map(row=>row.id===25?completed:row).reverse(),has_more:end>limit};
+ },()=>true,120);
+ expect(calls).toEqual([null,71]);
+ expect(result?.posts.find(row=>row.id===25)).toEqual(completed);
+ expect(result?.posts).toHaveLength(120);
+});
+
+test('an older active form beyond the catch-up cap is not restored from cache', async () => {
+ const stale={id:25,data:{content_blocks:[{type:'a2ui_surface',state:'active',revision:1}]}};
+ let calls=0;
+ const result=await fetchContiguousTimeline([stale,{id:1000}],async(limit:number,before:number|null)=>{
+   calls++;
+   const end=before===null?1000:before-1;
+   return {posts:rows(end-limit+1,end).reverse(),has_more:true};
+ },()=>true,1000);
+ expect(calls).toBe(10);
+ expect(result?.posts).toHaveLength(500);
+ expect(result?.posts).not.toContain(stale);
+});
+
 test('an SSE mutation during a multi-page catch-up invalidates the whole candidate',async()=>{
  let version=0,calls=0;expect(await fetchContiguousTimeline(rows(1,20),async(limit:number,before:number|null)=>{if(++calls===2)version++;const end=before===null?145:before-1;return{posts:rows(end-limit+1,end),has_more:true};},()=>version===0,20)).toBeNull();expect(calls).toBe(2);
 });

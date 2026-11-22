@@ -232,7 +232,7 @@ Image-editing example:
   - `extract` (capture repeated structured values from message content, optionally deduped/sorted)
   - `diff` (checkpoint-style summary of message activity after a row boundary)
   - `add` (insert a row, optionally attaching media)
-  - `post` (store + broadcast a message with structured `content_blocks` such as Adaptive Cards)
+  - `post` (store + broadcast a message with structured presentation blocks; use `send_a2ui` for forms)
   - `delete` (thread-cascade delete, optional `dry_run`, optional `force`)
 - `search_workspace` — full‑text search across configured workspace FTS roots (notes + skills by default, with aggressive cleanup and size limits)
 - `refresh_workspace_index` — rebuild workspace FTS indexing for the configured roots (the same index state surfaced in the workspace explorer status chip)
@@ -248,7 +248,7 @@ The legacy `introspect_sql` executor is retired. Native conversations do not reg
 - `list_tools` — list available tools with compact summaries, active-state markers, toolset membership, capability metadata, and intent-based recommendations via `intent`
 - `list_scripts` — discover packaged skill scripts plus workspace skill/note scripts with compact summaries, role markers (`entrypoint` vs `module`), Bun invocation hints, and the same kind of query/intent shortlisting used for tool discovery
 - `open_office_viewer` — open an Office document (`.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`) in the built-in JS Office viewer (`/office-viewer/*`)
-- `send_adaptive_card` — post an agent-owned Adaptive Card message in the web UI timeline
+- `send_a2ui` — post or revise a native A2UI Express surface in the current Classic web thread
 - `send_dashboard_widget` — post an interactive widget with agent-authored HTML to the web timeline (opens in floating pane with piclawWidget bridge; vendored libs: Babylon.js, ECharts, D3). See [vendored-widget-libraries.md](vendored-widget-libraries.md) for API reference.
 
   ![ECharts treemap widget example](echarts-treemap-widget.png)
@@ -536,7 +536,7 @@ Each skill keeps its script alongside its `SKILL.md` for portability. Current se
 | `extension-troubleshoot` | Diagnose and fix extension issues (imports, DB init, watcher perms) |
 | `kanban-management` | **ARCHIVED** — legacy file-board workflow kept for history only; direct users to `github-issues` |
 | `github-issues` | Manage project work items via GitHub Issues and GitHub Projects v2 (including lane transitions via `gh project item-edit`) |
-| `adaptive-cards-authoring` | Author Adaptive Cards for structured web interactions |
+| `a2ui-express-authoring` | Author A2UI Express forms for Classic |
 | `close-of-day` | End-of-day sweep: situate, backup, timeline cleanup, daily-notes summarisation |
 | `export-timeline-pdf` | Export a chat timeline to PDF via Playwright |
 | `feature-refinement-flow` | Structured 20-question refinement flow before implementation |
@@ -563,7 +563,7 @@ For agent-driven infrastructure work, use the addon-provided `proxmox` / `portai
 For web-facing extension work, prefer the following order of surfaces:
 
 1. **Pane extensions** for substantial mounted UI
-2. **Adaptive Cards / timeline messages** for structured conversational UI
+2. **A2UI Express / timeline messages** for structured conversational UI
 3. **`extension_ui_*` bridge events** for lightweight browser-session integrations
 
 See [extension-ui-contract.md](extension-ui-contract.md) and [web-pane-extensions.md](web-pane-extensions.md) for the current contract.
@@ -659,9 +659,8 @@ The bundled `pi-mcp-adapter` now prefers shared MCP config first: `~/.config/mcp
 
 Supported flags: `--scope notes|skills|all`, `--limit`, `--offset`, `--refresh`, `--no-refresh`, `--max-kb`.
 
-Adaptive Card and side-conversation helpers are intentionally explicit web-facing affordances:
-- `send_adaptive_card` is the preferred internal tool for posting agent-owned Adaptive Cards in the web UI without routing through a local slash command.
-- card submissions are persisted as structured `adaptive_card_submission` blocks, so the timeline can render compact receipt UI and finished cards can display their submitted values read-only.
+Classic provides two separate web affordances:
+- `send_a2ui` publishes a structured form with a visible fallback. The current thread owns the surface and its submissions.
 - `/btw` is currently a thin consumer of the side-prompt substrate: it streams a side answer in the web panel, reseeds from current main-chat context, and only injects back into the main chat when explicitly requested.
 - `/btw` currently reuses the chat's model/thinking context but is still prompt-only rather than a full side tool-using agent loop.
 - `/theme` and `/tint` are web-local UI commands handled without an LLM round-trip. System meters, including optional [Intel GPU activity/memory](intel-gpu-meters.md), are always shown; there is no command to hide them.

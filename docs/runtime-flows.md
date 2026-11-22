@@ -102,21 +102,14 @@ Separately, the live status surface now keeps more operator-useful context visib
 
 That means the user-facing surface is no longer a silent binary of “worked” vs “mysteriously resumed somehow” — successful recovery leaves a visible breadcrumb, timed-out salvage leaves an explicit breadcrumb, and live status keeps the most recent tool context visible for longer.
 
-## Adaptive Card actions
+## A2UI Express surfaces
 
-The web UI can render `adaptive_card` content blocks inline in timeline posts and route card actions back through the normal web channel.
+`send_a2ui` compiles a bounded A2UI Express program into an A2UI v1.0 snapshot. Classic renders that snapshot with its existing Preact layer. Storage keeps the committed snapshot and revision, so reconnects need no patch replay.
 
-- `Action.OpenUrl` is handled client-side with URL validation and an explicit secondary action button pattern.
-- `Action.Submit` posts to `POST /agent/card-action`.
-- Submissions are persisted as `adaptive_card_submission` content blocks on the follow-up message.
-- The timeline renders those submission blocks as compact receipt-style UI instead of relying on raw fallback text.
-- Card lifecycle is tracked on the original card block:
-  - default submit behavior: `active → completed`
-  - explicit terminal variants can resolve to `cancelled` or `failed`
-  - cards with `submit_behavior: "keep_active"` remain interactive after submit
-- Completed/cancelled/failed cards are re-rendered from the original card payload with the last submitted values hydrated back into the inputs.
-- Finished cards then lock those inputs read-only, hide action buttons, and show a concise theme-consistent status banner rather than echoing the full submission in banner text.
-- Validation cards can be posted through the internal `send_adaptive_card` tool, including cases that exercise bad URL handling, submit errors, keep-active cards, and terminal-state transitions.
+- `POST /agent/a2ui-action` checks the authenticated chat, source post, thread, surface, revision and control. Ordinary submissions become accepted user input through the native queue. The surface revision and source acceptance commit together.
+- An explicit cancel closes an agent form without admitting input. A keep-active form accepts another submission on the next revision. Static HTTP(S) links open in the browser.
+- Built-in login and TOTP controls return credentials or challenges only in authenticated, no-store responses. Private values never become ordinary submissions.
+- The cutover removes Adaptive Cards, the old action endpoint and the old posting tool. Historical blocks are left in storage; Classic displays their ordinary post text and cannot submit their controls. Restart pending authentication flows after upgrading.
 
 ## Side prompts and early `/btw` UI
 

@@ -14,7 +14,7 @@
 - **Settings:** Opened very often during dev/test; accessed via typeahead primarily
 - **Attachments:** Screenshots pasted constantly, lightbox and file preview heavily used
 - **Panes:** Terminal, VNC, office viewers all used on all devices
-- **Adaptive Cards:** Liked for logins/pickers; widgets for complex input
+- **A2UI forms:** Liked for logins/pickers; widgets for complex input
 - **Push notifications:** Not a priority (HTTPS-limited)
 - **Recovery action:** Refresh (full page reload)
 
