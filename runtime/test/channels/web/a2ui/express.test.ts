@@ -57,6 +57,13 @@ describe("Classic A2UI Express", () => {
       description:'Project preview', fit:'scaleDown', variant:'avatar' });
   });
 
+  test("compiles native audio and video players with bound sources and poster", () => {
+    const source = '$/clip="/media/51"; root=Column([AudioPlayer(url=$/clip, description="Recording"), Video(url="https://media.test/clip.mp4", posterUrl="/media/42")]);';
+    const snapshot = applyA2uiMessages('media', compileA2uiExpress(source,'media'))!;
+    expect(snapshot.components).toContainEqual(expect.objectContaining({component:'AudioPlayer', url:{'@path':'/clip'}, description:'Recording'}));
+    expect(snapshot.components).toContainEqual(expect.objectContaining({component:'Video', url:'https://media.test/clip.mp4', posterUrl:'/media/42'}));
+  });
+
   test("resolves tab titles and validates their child graph", () => {
     const surface = 'tabs-1';
     const source = '$/title = "Details"; root = Tabs(tabs=[{title:"Overview",child:first},{title:$/title,child:second}]); first = Text("First panel"); second = Text("Second panel");';

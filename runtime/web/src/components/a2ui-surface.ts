@@ -3,10 +3,11 @@ import { html, useCallback, useRef, useState } from '../vendor/preact-htm.js';
 import { a2uiBindingPath, buildA2uiAction, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
 import { a2uiDateTimeDisplay, a2uiDateTimeType } from '../../../src/channels/web/a2ui/date-time.js';
 import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
+import { A2uiPlayback } from './a2ui-playback.js';
 import { A2uiModal } from './a2ui-modal.js';
 import { A2uiTabs } from './a2ui-tabs.js';
 import { A2uiTotpDialog, readTotpPresentation, type TotpPresentation } from './a2ui-totp-dialog.js';
-import { a2uiSliderRange, readA2uiImageUrl, readA2uiLink, type A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
+import { a2uiSliderRange, readA2uiImageUrl, readA2uiLink, readA2uiPlaybackUrl, type A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
 
 type Submit = (request: A2uiActionRequest, options?: { signal?: AbortSignal }) => Promise<unknown>;
 
@@ -84,6 +85,17 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 const fit = item.fit === 'scaleDown' ? 'scale-down' : item.fit === 'cover' || item.fit === 'contain' || item.fit === 'none' ? item.fit : 'fill';
                 return html`<img key=${id} class=${`a2ui-image a2ui-image-${size}`} src=${src} alt=${alt}
                     loading="lazy" decoding="async" referrerpolicy="no-referrer" style=${{ objectFit: fit }} />`;
+            }
+            case 'AudioPlayer':
+            case 'Video': {
+                const kind = item.component === 'AudioPlayer' ? 'audio' : 'video';
+                const origin = window.location.origin;
+                const source = readA2uiPlaybackUrl(read(item.url), origin, kind);
+                const description = text(item.description);
+                if (!source) return description || null;
+                const poster = kind === 'video' ? readA2uiImageUrl(read(item.posterUrl), origin) : undefined;
+                return html`<${A2uiPlayback} key=${JSON.stringify([item.id, source.url, poster])} kind=${kind} source=${source.url}
+                    external=${source.external} label=${description} poster=${poster} />`;
             }
             case 'Card': return html`<div key=${id} class="a2ui-card">${child(item.child)}</div>`;
             case 'Row':

@@ -15,6 +15,7 @@ import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import { APP_ASSET_VERSION_REL_PATHS, computeAssetContentVersion } from "../../../utils/asset-content-version.js";
 import { WEB_RUNTIME_CONFIG } from "../../../core/config.js";
 import { isPublicWidgetAssetPath } from "./route-flags.js";
+import { CLASSIC_CONTENT_SECURITY_POLICY } from "./security.js";
 
 const RUNTIME_DIR = resolve(import.meta.dir, "..", "..", "..", "..");
 const STATIC_DIR = resolve(
@@ -207,6 +208,7 @@ export async function serveStatic(relPath: string, notFound: () => Response, req
       "Content-Type": contentType,
       "Cache-Control": cacheControl,
     };
+    if (filePath === resolve(STATIC_DIR, 'classic/index.html')) responseHeaders['Content-Security-Policy'] = CLASSIC_CONTENT_SECURITY_POLICY;
     if (relPath === "sw.js") {
       responseHeaders["Service-Worker-Allowed"] = "/";
     }

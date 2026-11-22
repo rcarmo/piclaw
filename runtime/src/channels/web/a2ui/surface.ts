@@ -4,6 +4,8 @@ export const CLASSIC_A2UI_CATALOG = "https://a2ui.org/specification/v1_0/catalog
 export const CLASSIC_A2UI_PROPERTIES = {
   Text: ["text", "variant"],
   Image: ["url", "description", "fit", "variant"],
+  AudioPlayer: ["url", "description"],
+  Video: ["url", "posterUrl"],
   Row: ["children", "align", "justify"],
   Column: ["children", "align", "justify"],
   List: ["children", "direction", "align"],
@@ -83,9 +85,23 @@ function readA2uiHttpUrl(target: unknown): URL | undefined {
 /** A surface may show owned media, typed inline images or external HTTP(S) resources. */
 export function readA2uiImageUrl(value: unknown, origin: string): string | undefined {
   if (typeof value !== 'string' || value.length > 32_768 || /[\\\x00-\x20\x7f]/.test(value)) return;
-  const ownedPath = /^\/media\/[1-9]\d*(?:\/thumbnail)?$/;
-  if (ownedPath.test(value) || /^data:image\/(?:png|jpeg|gif|webp|avif|svg\+xml);base64,[A-Za-z0-9+/]+=*$/i.test(value)) return value;
+  if (/^data:image\/(?:png|jpeg|gif|webp|avif|svg\+xml);base64,[A-Za-z0-9+/]+=*$/i.test(value)) return value;
+  return readA2uiResourceUrl(value, origin, /^\/media\/[1-9]\d*(?:\/thumbnail)?$/)?.url;
+}
+
+export function readA2uiPlaybackUrl(value: unknown, origin: string, kind: 'audio' | 'video') {
+  if (typeof value !== 'string' || value.length > 32_768 || /[\\\x00-\x20\x7f]/.test(value)) return;
+  const inline = kind === 'audio' ? /^data:audio\/(?:mpeg|ogg|wav|webm|mp4);base64,[A-Za-z0-9+/]+=*$/i
+    : /^data:video\/(?:mp4|webm|ogg);base64,[A-Za-z0-9+/]+=*$/i;
+  if (inline.test(value)) return { url: value, external: false };
+  return readA2uiResourceUrl(value, origin, /^\/media\/[1-9]\d*$/);
+}
+
+function readA2uiResourceUrl(value: string, origin: string, ownedPath: RegExp) {
+  if (ownedPath.test(value)) return { url: value, external: false };
   const url = readA2uiHttpUrl(value);
-  if (!url || (url.origin === origin && (!ownedPath.test(url.pathname) || url.search || url.hash))) return;
-  return url.href;
+  if (!url) return;
+  const external = url.origin !== origin;
+  if (!external && (!ownedPath.test(url.pathname) || url.search || url.hash)) return;
+  return { url: url.href, external };
 }

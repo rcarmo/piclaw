@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium, webkit } from "playwright";
+import { CLASSIC_CONTENT_SECURITY_POLICY } from '../../../../src/channels/web/http/security.js';
 import { applyA2uiMessages, compileA2uiExpress } from "../../../../src/channels/web/a2ui/express.js";
 
 const browserTest = process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === "1" ? test : test.skip;
@@ -20,6 +21,8 @@ const source = `
     Modal(trigger=show, content=help),
     Image(url=$/preview, description="Project preview", variant="avatar", fit="cover"),
     Image(url=$/unsafe, description="Unavailable preview"),
+    AudioPlayer(url=$/audio, description="Fixture recording"),
+    Video(url="/media/43", posterUrl=$/preview),
     TextField(label="Note", value=$/note),
     CheckBox(label="Notify", value=$/notify),
     Slider(label="Level", min=0, max=10, steps=5, value=$/level),
@@ -32,6 +35,13 @@ const source = `
   help = Text("Help panel is local");
 `;
 
+// 100 ms of silent 8-bit mono PCM, with no media or codec dependency on the test runner.
+const wav = Buffer.alloc(844, 128);
+wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8);
+wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(8000, 28); wav.writeUInt16LE(1, 32);
+wav.writeUInt16LE(8, 34); wav.write('data', 36); wav.writeUInt32LE(wav.length - 44, 40);
+
 for (const engine of [chromium, webkit]) {
   browserTest(`Classic Preact timeline form on ${engine.name()}`, async () => {
     const web = new URL("../../../../web/", import.meta.url).pathname;
@@ -39,6 +49,17 @@ for (const engine of [chromium, webkit]) {
     const entry = join(scratch, "fixture.ts");
     let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
     let server: ReturnType<typeof Bun.serve> | undefined;
+    const audioRequests: (string | null)[] = [];
+    const audioOrigin = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(req) {
+      audioRequests.push(req.headers.get('cookie'));
+      const headers = new Headers({ 'Content-Type': 'audio/wav', 'Access-Control-Allow-Origin': '*', 'Accept-Ranges': 'bytes' });
+      const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.get('range') ?? '');
+      if (!range) return new Response(wav, { headers });
+      const start = Number(range[1]), end = Math.min(wav.length - 1, Number(range[2] || wav.length - 1));
+      if (start > end) return new Response(null, { status: 416, headers });
+      headers.set('Content-Range', `bytes ${start}-${end}/${wav.length}`);
+      return new Response(wav.subarray(start, end + 1), { status: 206, headers });
+    }});
     try {
       await Bun.write(entry, `
         import { html, render } from ${JSON.stringify(join(web, "src/vendor/preact-htm.js"))};
@@ -71,7 +92,7 @@ for (const engine of [chromium, webkit]) {
         if (pathname === '/media/42') return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="green"/></svg>', {headers:{'Content-Type':'image/svg+xml'}});
         if (pathname === "/fixture.js") return new Response(Bun.file(join(scratch, "fixture.js")));
         if (pathname === "/base.css" || pathname === "/content.css") return new Response(Bun.file(join(web, "static/classic/css", pathname.slice(1))));
-        return new Response('<!doctype html><html lang="en" data-theme="dark"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/base.css"><link rel="stylesheet" href="/content.css"></head><body><script type="module" src="/fixture.js"></script></body></html>', { headers: { "Content-Type": "text/html" } });
+        return new Response('<!doctype html><html lang="en" data-theme="dark"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/base.css"><link rel="stylesheet" href="/content.css"></head><body><script type="module" src="/fixture.js"></script></body></html>', { headers: { "Content-Type": "text/html", 'Content-Security-Policy': CLASSIC_CONTENT_SECURITY_POLICY } });
       } });
       browser = await engine.launch({headless:true});
       const page = await browser.newPage({ viewport: { width: 390, height: 800 }, colorScheme: 'dark' });
@@ -80,7 +101,7 @@ for (const engine of [chromium, webkit]) {
       page.on("pageerror", (err) => errors.push(err.message));
       await page.goto(`http://127.0.0.1:${server.port}/`);
       await page.waitForFunction(() => typeof (window as any).draw === "function");
-      const block = { type: "a2ui_surface", state: "active", revision: 1, surface: applyA2uiMessages("test-form", compileA2uiExpress(source, "test-form")), fallback_text: "Form fallback" };
+      const block = { type: "a2ui_surface", state: "active", revision: 1, surface: applyA2uiMessages("test-form", compileA2uiExpress(`$/audio = ${JSON.stringify(`${audioOrigin.url.origin}/fixture.wav`)};\n${source}`, "test-form")), fallback_text: "Form fallback" };
       await page.evaluate((block) => (window as any).draw(block), block);
       const list = page.locator('.a2ui-surface').getByRole('list');
       expect(await list.getByRole('listitem').allTextContents()).toEqual(['First step', 'Second step']);
@@ -118,6 +139,19 @@ for (const engine of [chromium, webkit]) {
       expect(await preview.evaluate(element => getComputedStyle(element).objectFit)).toBe('cover');
       await page.waitForFunction(() => (document.querySelector('img[alt="Project preview"]') as HTMLImageElement)?.naturalWidth === 8);
       expect(await page.getByText('Unavailable preview').count()).toBe(1);
+      expect(audioRequests).toHaveLength(0);
+      expect(await page.locator('audio').count()).toBe(0);
+      const video = page.locator('.a2ui-surface video');
+      expect(await video.getAttribute('poster')).toBe('/media/42');
+      expect(await video.evaluate(el => (el as HTMLVideoElement).controls && !(el as HTMLVideoElement).autoplay)).toBe(true);
+      await page.context().addCookies([{ name: 'media_fixture', value: 'synthetic', url: audioOrigin.url.origin }]);
+      await page.getByRole('button', { name: 'Load external audio' }).click();
+      const audio = page.locator('audio[aria-label="Fixture recording"]');
+      await audio.waitFor();
+      expect(await audio.evaluate(el => el === document.activeElement)).toBe(true);
+      await page.waitForFunction(() => (document.querySelector('audio') as HTMLAudioElement)?.duration === 0.1);
+      expect(audioRequests.length).toBeGreaterThan(0);
+      expect(audioRequests.every(cookie => cookie === null)).toBe(true);
       await page.getByRole("checkbox", { name: "Notify" }).check();
       const slider = page.getByRole('slider', { name: 'Level' });
       expect(await slider.inputValue()).toBe('4');
@@ -218,6 +252,7 @@ for (const engine of [chromium, webkit]) {
     } finally {
       await browser?.close();
       server?.stop(true);
+      audioOrigin.stop(true);
       await rm(scratch, { recursive: true, force: true });
     }
   });
