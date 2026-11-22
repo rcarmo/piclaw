@@ -11,7 +11,7 @@ import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
 import type {Models} from "@earendil-works/pi-ai";
 import {AgentDoc,AssistantEntry,CompactionEntry,defineDoc,defineEntry,LiveDoc,SystemEntry,type AgentState,type Conversation,type ConversationId,type Harness,type RegistryReader} from "@earendil-works/pi-durable";
 import {Type} from "typebox";import{Value}from"typebox/value";
-import {carriedSnapshotIds,lastAssistantEntry,latestOptimizerEntry,nativeOptimizerTool,nativeOptimizerResult,nativeOptimizerTrajectory,optimizerSections} from "./token-optimizer-source.ts";
+import {carriedSnapshotIds,lastAssistantEntry,latestOptimizerEntry,nativeOptimizerTool,nativeOptimizerResult,nativeOptimizerTrajectory,optimizerModelFree,optimizerSections,readOptimizerContext} from "./token-optimizer-source.ts";
 import type {TokenOptimizerConfiguration} from "./token-optimizer-config.ts";
 import {recordOptimizerOperation} from "./token-optimizer-operations.ts";
 export interface CoreOptimizerAgent {agentId:string;durableId:ConversationId;branches?:ConversationId[];parentId?:string;rootId?:string;readOnly?:boolean;oneShotCallId?:string;title?:string;label?:string}
@@ -157,7 +157,7 @@ export function createNativeTokenOptimizer(options:{workspaceId:string;harness:(
     const scope = {host:"piclaw.native",repository:options.workspaceId,environment:options.environmentRevision}, known = (await options.harness().snapshot(NativeEpoch,conversation.id,context))?.id ?? null;
     // A known session keeps its frozen context, so reopening a workspace needs no context or history read.
     const resumed = known !== null && Boolean((await options.harness().snapshot(SessionsDoc,context))?.sessions[sessionKey(scope,known)]);
-    const view = resumed ? null : await conversation.context(context), latest = resumed ? null : await latestOptimizerEntry(conversation), carried = view ? optimizerSections(view.entries) : {};
+    const summary = resumed ? null : await readOptimizerContext(conversation), latest = summary?.tail, carried = summary?.sections ?? {};
     const host = await options.harness().commit(async tx => {
       const epoch = await tx.doc(NativeEpoch,conversation.id), sessions = await tx.doc(NativeOptimizerSessions);
       if (epoch.id === null) {
@@ -171,7 +171,7 @@ export function createNativeTokenOptimizer(options:{workspaceId:string;harness:(
       const row = sessions.sessions[epoch.id];if (!row) throw new Error("Missing native optimizer epoch");row.end = null;return detach(row.host);
     },context);
     hosts.set(conversation.id,host);
-    const assistant = view ? view.entries.findLast(entry => AssistantEntry.is(entry)) : await lastAssistantEntry(conversation);modelFree.set(conversation.id,assistant?.model?.some(message => message.role === "assistant" && message.provider === "piclaw" && message.model === "codemode-template") ?? false);
+    modelFree.set(conversation.id,summary ? summary.modelFree : optimizerModelFree(await lastAssistantEntry(conversation)));
     const existing = (await options.harness().snapshot(SessionsDoc,context))?.sessions[sessionKey(host.scope,host.id)];
     const carriedIds = existing ? existing.injectedIds : carried[contextSection] ? await carriedSnapshotIds(conversation,carried[contextSection]) : [];
     // Legacy forks may predate incremental learning. Read the actual fork bound
@@ -182,7 +182,7 @@ export function createNativeTokenOptimizer(options:{workspaceId:string;harness:(
     const runningMask = live?.run && !live.run.afterRun && live.run.inputs.length > 0 ? existing?.frozenMask ?? mask?.owned ?? [] : undefined;
     preparing.add(conversation.id);
     queueMicrotask(() => void refreshChips());
-    try {await optimizer.sessionStarted(host,{event,visibleHistory:view ? view.entries.some(entry => (entry.model?.length ?? 0) > 0) : true,carriedSections:carried,carriedIds,runningMask,learningAfter:inheritedAt !== undefined ? String(inheritedAt) : event === "fork" ? String(latest ?? 0) : undefined});} finally {preparing.delete(conversation.id);}
+    try {await optimizer.sessionStarted(host,{event,visibleHistory:summary?.visibleHistory ?? true,carriedSections:carried,carriedIds,runningMask,learningAfter:inheritedAt !== undefined ? String(inheritedAt) : event === "fork" ? String(latest ?? 0) : undefined});} finally {preparing.delete(conversation.id);}
     return host;
   }
   async function end(id:ConversationId) {
@@ -209,11 +209,11 @@ export function createNativeTokenOptimizer(options:{workspaceId:string;harness:(
       const source = options.harness().observeCommits({advance(publication) {
         // Optimizer state changed: refresh the footer chips after this publication, never inside it.
         if (publication.changes.some(change => change.type === "document" && /^(token-economizer|piclaw\.token-optimizer)\./.test(change.record.kind))) queueMicrotask(() => void refreshChips());
-        for (const change of publication.changes) if (change.type === "entry" && AssistantEntry.is(change.value)) modelFree.set(change.value.conversationId,change.value.model?.some(message => message.role === "assistant" && message.provider === "piclaw" && message.model === "codemode-template") ?? false);
+        for (const change of publication.changes) if (change.type === "entry" && AssistantEntry.is(change.value)) modelFree.set(change.value.conversationId,optimizerModelFree(change.value));
         for (const change of publication.changes) if (change.type === "entry" && (SystemEntry.is(change.value) || CompactionEntry.is(change.value))) {
           const entry = change.value, host = hosts.get(entry.conversationId);if (!host) continue;
           events = events.then(async () => {
-            const compacted = CompactionEntry.is(entry), sections = compacted ? optimizerSections((await (await options.harness().conversation(host.conversationId,context))!.context(context)).entries) : optimizerSections([entry]);
+            const compacted = CompactionEntry.is(entry), sections = compacted ? (await readOptimizerContext((await options.harness().conversation(host.conversationId,context))!)).sections : optimizerSections([entry]);
             await optimizer.replaySections(host,sections,compacted);
           }).catch(error => console.error("Token optimizer section replay failed",error));
         }

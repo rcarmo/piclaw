@@ -10,6 +10,11 @@
     {
       "path": "test/durable.test.ts",
       "sha256": "b7366f0465727050bdc7c80618c97e8ae9027812fc1d37fb60aee3c5feca11a5"
+    },
+    {
+      "path": "test/incremental.test.ts",
+      "sha256": "cbb0e2b46648ac40c8a0ca52ee44bacc50aadc5d5eb27690d6415ce69b3ecf5c",
+      "reason": "Port the v0.8.7 regression against counting missing evidence as disuse."
     }
   ],
   "changes": [
@@ -27,6 +32,21 @@
       "path": "src/pi-durable/controller.ts",
       "sha256": "4c82b43d5dc6cfe7a0f2f021c418d6c1bff7cf80ce1c767601c1e49e84b7bf95",
       "reason": "Use the existing live judge boundary for ordinary loop redirect delivery after a standalone SDK tool has handed off to the next generation. The original safe admitted-run checks, whenBusy=steer/whenIdle=reject, nudge budget and request-only goal-drift path remain unchanged; no new execution owner or retry."
+    },
+    {
+      "path": "src/core/sessions.ts",
+      "sha256": "78a4b42bae26bde25207d471b59e052c15cf2862fcbde34eaec5429acc52c131",
+      "reason": "Port v0.8.7's optional incomplete-tool-evidence flag on the existing learning session."
+    },
+    {
+      "path": "src/pi-durable/domain.ts",
+      "sha256": "d92cf6cbec11a25a7bbeb8820e2bb6dc78a02491d3b0bec7bc143a5acf641a02",
+      "reason": "Carry v0.8.7's partial trajectory marker through the existing host domain."
+    },
+    {
+      "path": "src/pi-durable/fold.ts",
+      "sha256": "b48279dc9decc88783e1dbe4145a41161ba2ed15e005f218496b359617612ce3",
+      "reason": "Port v0.8.7 partial-evidence safeguards without changing inference budgets, task ownership or cursor storage."
     }
   ],
   "hostFixes": [
@@ -36,6 +56,13 @@
       "target": "runtime/durable-engine/src/token-optimizer-source.ts",
       "regression": "runtime/durable-engine/qualification/optimizer-checkpoint.test.ts",
       "reason": "Verify a pre-checkpoint model tool call through its matching same-conversation durable ToolTask record; skip only its boundary-straddling result and continue newer learning. Unverifiable orphan results remain unreadable."
+    },
+    {
+      "commit": "6d1cd82928daecda1e530483a750cee9dd5378b2",
+      "source": "packages/builtin-agent/src/server/token-optimizer-source.ts",
+      "target": "runtime/durable-engine/src/token-optimizer-source.ts",
+      "regression": "runtime/durable-engine/qualification/optimizer-checkpoint.test.ts",
+      "reason": "Adapt the rolling optimiser history bounds and partial evidence contract to Piclaw's host executor while preserving ordinary SDK reads."
     }
   ]
 }

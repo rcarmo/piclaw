@@ -1,19 +1,22 @@
-// Kintsugi 9be0a5e MIT port; attribution in mcp/UPSTREAM-LICENSE.
+// Kintsugi 9be0a5e MIT port; bounded evidence adapted from v0.8.7 (6d1cd829).
+// Attribution in mcp/UPSTREAM-LICENSE.
+import { createHash } from "node:crypto";
 const isDurableUserEntry=(entry:import("@earendil-works/pi-durable").EntryRecord)=>entry.kind==="pi.user"||entry.kind==="host.accepted";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { ownedSlice } from "@earendil-works/chord/delta";
-import { contentText, type JsonObject, type Message } from "@earendil-works/pi-ai";
+import { contentText } from "@earendil-works/pi-ai";
 import { AssistantEntry, LiveDoc, ToolResultEntry, ToolTask, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type Harness } from "@earendil-works/pi-durable";
 import { ContextSnapshotEntry, FactContextEntry } from "#token-optimizer/pi-durable";
 const isJsonObject=(value:unknown):value is import("@earendil-works/pi-durable").JsonObject=>value!==null&&typeof value==="object"&&!Array.isArray(value);
-import { makeObservation, workEvidence, type ToolMapping } from "#token-optimizer/core";
+import { contextSection, makeObservation, workEvidence, type ToolMapping } from "#token-optimizer/core";
 import { decodeArguments, decodeResult } from "#token-optimizer/pi-durable";
 import { runnerVerdict, statusOfTests } from "#token-optimizer/core";
 import type { HostSession, Trajectory, ToolResultData } from "#token-optimizer/pi-durable";
 import type { Observation } from "#token-optimizer/core";
-import {optimizerBashOutput,optimizerCallEntry as codemodeCallEntry,type OptimizerCallStart as CallStart} from "./optimizer-output-source.ts";
+import {optimizerBashOutput,optimizerCallEntry as codemodeCallEntry} from "./optimizer-output-source.ts";
 import {Type} from 'typebox';
 import {Value} from 'typebox/value';
+import {optimizerHistoryRead,optimizerHistoryWindow,optimizerOversizedEntry,optimizerReadBudget,OptimizerTaskPayloadSkipped} from './optimizer-history-read.js';
 /** Preserve actual Root SDK shell status without changing the tool's script value. */
 export function nativeOptimizerResult(result:ToolResultData){
   if(result.name==='bash'){
@@ -38,29 +41,42 @@ type EntryRange = {order:"ascending";minEntryId?:EntryId;maxEntryId?:EntryId};
 const entryBound = (value:number) => value as EntryId;
 /** Entries after `after` (exclusive) up to `upTo` (inclusive), oldest first.
  * Do not retain decoded history across pages. Yield to foreground I/O between reads. */
-export async function* optimizerEntries(conversation:Conversation,bounds:{after:number;upTo:number}):AsyncGenerator<EntryRecord> {
+type EntryReader = Pick<Conversation,'entries'>;
+export async function* optimizerEntries(conversation:EntryReader,bounds:{after:number;upTo:number},readContext=context):AsyncGenerator<EntryRecord> {
+  if (bounds.after >= bounds.upTo) return;
   let cursor:Cursor|undefined;
   const query:EntryRange = {order:"ascending"};
-  if (bounds.after > 0) query.minEntryId = entryBound(bounds.after);
+  if (bounds.after > 0) query.minEntryId = entryBound(bounds.after+1);
   if (Number.isFinite(bounds.upTo)) query.maxEntryId = entryBound(bounds.upTo);
+  const budget=optimizerHistoryRead.getStore();
   do {
-    const page = await conversation.entries(query,32,cursor,context);
-    for (const entry of page.items) if (entry.id > bounds.after) yield entry;
+    if (budget && budget !== 'id' && (budget.remaining <= 0 || budget.bytes <= 0)) {budget.partial=true;return;}
+    const page = await conversation.entries(query,budget ? 4 : 32,cursor,readContext);
+    yield* page.items;
     cursor = page.next;
     if (cursor) await new Promise<void>(resolve => setImmediate(resolve));
   } while (cursor);
 }
-/** The newest visible entry ID, without reading the transcript. */
+/** The newest visible entry ID from SDK metadata; no entry payload is needed. */
 export async function latestOptimizerEntry(conversation:Conversation):Promise<number|null> {
-  return (await conversation.entries({},1,undefined,context)).items[0]?.id ?? null;
+  return await conversation.commit(tx=>tx.latestEntryId(conversation.id),context) ?? null;
+}
+/** A small pinned ledger for matching actual Code Mode output, not commands inferred from prose. */
+export async function* recentOptimizerEntries(conversation:EntryReader,window:number,readContext:typeof context) {
+  const latest = await optimizerHistoryRead.run('id',async()=>(await conversation.entries({},1,undefined,readContext)).items[0]?.id);
+  if(latest === undefined)return;
+  const budget = optimizerReadBudget();budget.remaining = Math.min(budget.remaining,window);
+  const scan=optimizerEntries(conversation,{after:Math.max(0,latest-window),upTo:latest},readContext);
+  for(;;){const next=await optimizerHistoryRead.run(budget,()=>scan.next());if(next.done)return;yield next.value;}
 }
 /** The newest assistant entry, searching backwards; one tool round at most in practice. */
 export async function lastAssistantEntry(conversation:Conversation):Promise<EntryRecord|undefined> {
   let cursor:Cursor|undefined;
   do {
-    const page = await conversation.entries({},200,cursor,context), found = page.items.find(entry => AssistantEntry.is(entry));
+    const page = await conversation.entries({},32,cursor,context), found = page.items.find(entry => AssistantEntry.is(entry));
     if (found) return found;
     cursor = page.next;
+    if (cursor) await new Promise<void>(resolve => setImmediate(resolve));
   } while (cursor);
   return undefined;
 }
@@ -68,62 +84,140 @@ export async function lastAssistantEntry(conversation:Conversation):Promise<Entr
 export async function carriedSnapshotIds(conversation:Conversation,section:string):Promise<string[]> {
   let cursor:Cursor|undefined;
   do {
-    const page = await conversation.entries({},200,cursor,context);
+    const page = await conversation.entries({},32,cursor,context);
     for (const entry of page.items) if ((ContextSnapshotEntry.is(entry) || FactContextEntry.is(entry)) && entry.data.section === section) return entry.data.injectedIds;
     cursor = page.next;
+    if (cursor) await new Promise<void>(resolve => setImmediate(resolve));
   } while (cursor);
   return [];
 }
-export function optimizerMessageSections(messages:readonly Message[]) {
-  const sections:Record<string,string> = {};
-  for (const message of messages) if (message.role === "system") for (const [key,value] of Object.entries(message.sections ?? {})) {if (value === null) delete sections[key];else sections[key] = value;}
-  return sections;
+
+function updateOptimizerSection(sections:Record<string,string>,entry:EntryRecord) {
+  if (FactContextEntry.is(entry)) {sections[contextSection] = entry.data.section;return;}
+  for (const message of entry.model ?? []) if (message.role === "system" && message.sections) {
+    const value = message.sections[contextSection];
+    if (value === null) delete sections[contextSection];else if (value !== undefined) sections[contextSection] = value;
+  }
 }
 export function optimizerSections(entries:readonly EntryRecord[]) {
-  return optimizerMessageSections(entries.flatMap(entry => FactContextEntry.is(entry) ? [{role:"system" as const,content:"",sections:{"token-economizer":entry.data.section},timestamp:0}] : [...entry.model ?? []]));
+  const sections:Record<string,string> = {};
+  for (const entry of entries) updateOptimizerSection(sections,entry);
+  return sections;
+}
+export function optimizerModelFree(entry:EntryRecord|undefined):boolean {
+  return entry?.model?.some(message => message.role === "assistant" && message.provider === "piclaw" && message.model === "codemode-template") ?? false;
+}
+
+/** Metadata from the SDK's immutable active-entry range. Do not instantiate a
+ * model context or retain its transcript. The head contributes first; older
+ * head markers do not contribute, just as in the public ContextView. */
+export async function readOptimizerContext(conversation:Conversation) {
+  const {head,tail} = await conversation.commit(async tx => ({
+    head:await tx.latestHeadMarker(conversation.id), tail:await tx.latestEntryId(conversation.id),
+  }),context);
+  const sections:Record<string,string> = {};
+  let visibleHistory = false, modelFree = false;
+  const observe = (entry:EntryRecord) => {
+    updateOptimizerSection(sections,entry);
+    if (entry.model?.length) visibleHistory = true;
+    if (AssistantEntry.is(entry)) modelFree = optimizerModelFree(entry);
+  };
+  if (head) observe(head);
+  if (tail !== undefined) for await (const entry of optimizerEntries(conversation,{after:head ? head.head-1 : 0,upTo:tail})) {
+    if (!head || entry.head === undefined) observe(entry);
+  }
+  return {sections,visibleHistory,modelFree,tail};
 }
 const modelCallOrigin = Type.Object({kind:Type.Literal("model"),callId:Type.String(),assistant:Type.Integer({minimum:1,maximum:Number.MAX_SAFE_INTEGER})});
 /** Verify a boundary-straddling result by task ID without reading pre-checkpoint arguments. */
-async function callPrecedesRange(harness:Harness,entry:EntryRecord,callId:string,after:number):Promise<boolean> {
+async function callPrecedesRange(harness:Harness,entry:EntryRecord,callId:string,after:number):Promise<boolean|"skipped"> {
   if (!entry.byTaskId || after === 0) return false;
-  const task = await harness.getTask(entry.byTaskId,context);
-  return task?.kind === ToolTask.definition.name && task.conversationId === entry.conversationId
-    && Value.Check(modelCallOrigin,task.input) && task.input.callId === callId && task.input.assistant <= after;
+  try {
+    const task = await harness.getTask(entry.byTaskId,context);
+    return task?.kind === ToolTask.definition.name && task.conversationId === entry.conversationId
+      && Value.Check(modelCallOrigin,task.input) && task.input.callId === callId && task.input.assistant <= after;
+  } catch(error) {
+    if(error instanceof OptimizerTaskPayloadSkipped)return 'skipped';
+    throw error;
+  }
 }
+type CallArguments = ReturnType<typeof decodeArguments>;
+const unknownArguments:CallArguments = {command:"",targets:[],coverage:"partial"};
+const maxPendingCalls = 64, maxObservations = 128;
+export const optimizerEvidenceBytes = 256 * 1024;
+function boundedArguments(args:CallArguments):CallArguments {
+  const command = ownedSlice(args.command,0,2048), targets = args.targets.slice(0,8).map(target=>ownedSlice(target,0,256));
+  return {command,targets,coverage:command.length < args.command.length || targets.length < args.targets.length || targets.some((target,i)=>target.length < args.targets[i]!.length) ? "partial" : args.coverage};
+}
+function shortKey(value:string) {return value.length <= 256 ? `=${value}` : createHash('sha256').update(value).digest('hex');}
+
+/** Bound derived evidence across branches, not SDK payload reads. A truncated
+ * result must never teach the optimiser that an unobserved tool was unused. */
+class RecentEvidence {
+  readonly items:{entryId:EntryId;root:boolean;observation:Observation;bytes:number}[] = [];
+  private bytes = 2;
+  partial = false;
+  add(entryId:EntryId,observation:Observation,root:boolean) {
+    if (this.items.some(item=>item.entryId === entryId && item.observation.id === observation.id)) return;
+    const bytes = 1+Buffer.byteLength(JSON.stringify(observation));
+    const index = this.items.findIndex(item=>item.entryId > entryId);
+    this.items.splice(index < 0 ? this.items.length : index,0,{entryId,root,observation,bytes});
+    this.bytes += bytes;
+    while (this.items.length > maxObservations || this.bytes > optimizerEvidenceBytes) {
+      this.bytes -= this.items.shift()!.bytes;this.partial = true;
+    }
+  }
+}
+
 /** One conversation's committed tool results within a session range. */
-async function readSource(harness:Harness,entries:AsyncIterable<EntryRecord>,host:HostSession,after:number) {
-  const observed:Observation[] = [], calls = new Map<string,{name:string;args:JsonObject;runId:string}>(), starts = new Map<string,{start:CallStart;runId:string|undefined}>();
+async function readSource(harness:Harness,entries:AsyncIterable<EntryRecord>,host:HostSession,after:number,evidence:RecentEvidence,root:boolean,partial:boolean) {
+  const calls = new Map<string,{name:string;args:CallArguments;runId:string}>();
+  const starts = new Map<string,{name:string;args:CallArguments;runId:string|undefined;at:number}>();
   let prompts = 0, activity = 0, answeredTurns = 0, answeredEnd = 0, awaitingAnswer = false;
+  function remember<V>(map:Map<string,V>,key:string,value:V) {
+    if (!map.has(key) && map.size === maxPendingCalls) {map.delete(map.keys().next().value!);partial = true;}
+    map.set(key,value);
+  }
   for await (const entry of entries) {
+    if (entry.kind === optimizerOversizedEntry) {partial = true;continue;}
     if (isDurableUserEntry(entry)) {prompts++;awaitingAnswer = true;}
     if (AssistantEntry.is(entry)) for (const message of entry.model ?? []) if (message.role === "assistant") {
-      if (awaitingAnswer && message.stopReason === "stop" && message.content.some(block => block.type === "text" && block.text.trim()) && !message.content.some(block => block.type === "toolCall")) {answeredTurns++;answeredEnd = observed.length;awaitingAnswer = false;}
-      for (const call of message.content) if (call.type === "toolCall") calls.set(call.id,{name:call.name,args:call.arguments,runId:String(entry.byTaskId ?? "unknown")});
+      if (awaitingAnswer && message.stopReason === "stop" && message.content.some(block => block.type === "text" && block.text.trim()) && !message.content.some(block => block.type === "toolCall")) {answeredTurns++;answeredEnd = entry.id;awaitingAnswer = false;}
+      for (const call of message.content) if (call.type === "toolCall") {
+        if (call.name.length > 256) {partial = true;continue;}
+        remember(calls,shortKey(call.id),{name:ownedSlice(call.name,0),args:boundedArguments(decodeArguments(call.arguments)),runId:String(entry.byTaskId ?? "unknown")});
+      }
     }
-    function capture(name:string,args:JsonObject|null,result:ToolResultData,outer:string,nested:string|null,runId:string,at:number) {
+    function capture(name:string,args:CallArguments,result:ToolResultData,outer:string,nested:string|null,runId:string,at:number) {
       const mapping = nativeOptimizerTool(name);if (mapping.semantic === "wrapper") return;
-      const decoded = nativeOptimizerResult(result), arguments_ = args === null ? {command:"",targets:[],coverage:"partial" as const} : decodeArguments(args), status = mapping.semantic === "shell" ? statusOfTests(arguments_.command) : null, verdict = status === null ? null : runnerVerdict(decoded.output);
-      observed.push(makeObservation({source:{conversation:String(entry.conversationId),outerCall:outer,nestedKey:nested,phase:"result"},sessionId:host.id,runId,tool:name,mapping,completedNonProcess:mapping.semantic !== "shell",command:arguments_.command,targets:arguments_.targets,output:ownedSlice(decoded.output,-16_384),isError:result.isError,exitCode:decoded.exitCode,timedOut:decoded.timedOut,aborted:decoded.aborted,coverage:decoded.output.length > 16_384 || arguments_.coverage === "partial" ? "partial" : decoded.coverage,at,verification:status === null ? null : verdict !== null ? verdict ? "failed" : "passed" : status === "own" && decoded.exitCode !== null ? decoded.exitCode === 0 ? "passed" : "failed" : null}));activity = Math.max(activity,at);
+      if (outer.length > 256 || (nested?.length ?? 0) > 256) {partial = true;return;}
+      const decoded = nativeOptimizerResult(result), status = mapping.semantic === "shell" ? statusOfTests(args.command) : null, verdict = status === null ? null : runnerVerdict(decoded.output);
+      evidence.add(entry.id,makeObservation({source:{conversation:String(entry.conversationId),outerCall:outer,nestedKey:nested,phase:"result"},sessionId:host.id,runId,tool:name,mapping,completedNonProcess:mapping.semantic !== "shell",command:args.command,targets:args.targets,output:ownedSlice(decoded.output,-16_384),isError:result.isError,exitCode:decoded.exitCode,timedOut:decoded.timedOut,aborted:decoded.aborted,coverage:decoded.output.length > 16_384 || args.coverage === "partial" ? "partial" : decoded.coverage,at,verification:status === null ? null : verdict !== null ? verdict ? "failed" : "passed" : status === "own" && decoded.exitCode !== null ? decoded.exitCode === 0 ? "passed" : "failed" : null}),root);activity = Math.max(activity,at);
     }
     if (codemodeCallEntry.is(entry)) {
-      const data = entry.data, key = JSON.stringify([entry.byTaskId,data.callId,data.key]);
-      if (data.phase === "start") starts.set(key,{start:data,runId:calls.get(data.callId)?.runId});
-      else {
-        const source = starts.get(key);if (!source) return {kind:"unreadable" as const,reason:"Native nested result has no visible start"};
-        const args = isJsonObject(source.start.arguments) ? source.start.arguments : null;
-        capture(source.start.name,args,{name:source.start.name,structured:null,details:data.details ?? null,output:data.output ?? data.error ?? "",isError:data.isError,diagnostics:data.cancelled ? [{code:"aborted",message:data.error ?? "Cancelled"}] : []},String(entry.byTaskId),data.key,calls.get(data.callId)?.runId ?? source.runId ?? "unknown",source.start.issuedAt ?? 0);starts.delete(key);
+      const data = entry.data, callId = shortKey(data.callId), key = JSON.stringify([entry.byTaskId,callId,shortKey(data.key)]);
+      if (data.phase === "start") {
+        if (data.name.length > 256) {partial = true;continue;}
+        remember(starts,key,{name:ownedSlice(data.name,0),args:isJsonObject(data.arguments) ? boundedArguments(decodeArguments(data.arguments)) : unknownArguments,runId:calls.get(callId)?.runId,at:data.issuedAt ?? 0});
+      } else {
+        const source = starts.get(key);
+        if (!source) {if (partial) continue;return {kind:"unreadable" as const,reason:"Native nested result has no visible start"};}
+        capture(source.name,source.args,{name:source.name,structured:null,details:data.details ?? null,output:data.output ?? data.error ?? "",isError:data.isError,diagnostics:data.cancelled ? [{code:"aborted",message:data.error ?? "Cancelled"}] : []},String(entry.byTaskId),data.key,calls.get(callId)?.runId ?? source.runId ?? "unknown",source.at);starts.delete(key);
       }
     } else if (ToolResultEntry.is(entry)) for (const message of entry.model ?? []) if (message.role === "toolResult") {
-      const source = calls.get(message.toolCallId);
+      const callId = shortKey(message.toolCallId), source = calls.get(callId);
       if (!source) {
-        if (await callPrecedesRange(harness,entry,message.toolCallId,after)) continue;
+        if (partial) continue;
+        const before = await callPrecedesRange(harness,entry,message.toolCallId,after);
+        if (before === "skipped") {partial = true;continue;}
+        if (before) continue;
         return {kind:"unreadable" as const,reason:"Tool result has no visible originating arguments"};
       }
       capture(source.name,source.args,{name:source.name,structured:null,details:JSON.parse(JSON.stringify(message.details ?? null)),output:contentText(message.content),isError:message.isError,diagnostics:entry.data.diagnostics.map(diagnostic => ({code:diagnostic.code ?? "",message:diagnostic.message}))},String(entry.byTaskId),null,source.runId,message.timestamp);
-      calls.delete(message.toolCallId);
+      calls.delete(callId);
     }
   }
-  return {kind:"read" as const,observations:observed,prompts,activity,answeredTurns,answeredEnd,unfinished:starts.size > 0};
+  return {kind:"read" as const,prompts,activity,answeredTurns,answeredEnd,unfinished:starts.size > 0,partial};
 }
 /**
  * Reads only the active fork's committed native source; never executes a tool or imports abandoned history. Subagent
@@ -137,22 +231,56 @@ export async function nativeOptimizerTrajectory(harness:Harness,host:HostSession
   }
   let maximum = end ?? Infinity;
   if (cutoff !== null) {const value = Number(cutoff);if (!Number.isSafeInteger(value) || value < 0) throw new Error("Invalid saved optimizer source cutoff");maximum = Math.min(maximum,value);}
-  // Freeze the source boundary before scanning: another prompt may already be appending entries.
-  const latest = await latestOptimizerEntry(conversation);
-  maximum = Math.min(maximum,latest ?? begin);
-  const root = await readSource(harness,optimizerEntries(conversation,{after:begin,upTo:maximum}),host,begin);
+  // Freeze one journal boundary for the root and recent child conversations;
+  // a saved cutoff must not absorb entries appended by a later request.
+  const pinned = Number.isFinite(maximum);
+  const heads = await harness.commit(async tx=>{
+    let latest=begin, omitted=0;
+    const recent:{id:ConversationId;entry:number}[]=[];
+    for (const id of [host.conversationId,...descendants]) {
+      if (!await tx.conversation(id)) continue;
+      const newest=await tx.latestEntryId(id) ?? begin;
+      if (!pinned && (id===host.conversationId || newest>begin)) {
+        const live=await tx.doc(LiveDoc,id);
+        if (live.run && !live.run.afterRun) return null;
+      }
+      latest=Math.max(latest,newest);
+      if(id===host.conversationId || newest<=begin || recent.some(row=>row.id===id))continue;
+      const entry=newest<=maximum ? newest : await optimizerHistoryRead.run('id',async()=>
+        (await tx.scanEntries({conversationId:id,minEntryId:entryBound(begin+1),maxEntryId:entryBound(maximum)},1)).items[0]?.id ?? begin);
+      if(entry<=begin)continue;
+      const index=recent.findIndex(row=>row.entry<entry);
+      recent.splice(index<0?recent.length:index,0,{id,entry});
+      if(recent.length>32)omitted=Math.max(omitted,recent.pop()!.entry);
+    }
+    return {latest,recent,omitted};
+  },context);
+  if(!heads)return {kind:'later',reason:'Agent or subagent run is still recording learning evidence'};
+  maximum = Math.min(maximum,heads.latest);
+  // This is Kintsugi's journal-ID window, not a wall-clock cutoff.
+  const recentBegin = Math.max(begin,maximum-optimizerHistoryWindow);
+  const budget = optimizerReadBudget();
+  const evidence = new RecentEvidence();
+  const root = await optimizerHistoryRead.run(budget,()=>readSource(harness,optimizerEntries(conversation,{after:recentBegin,upTo:maximum}),host,recentBegin,evidence,true,recentBegin>begin));
   if (root.kind === "unreadable") return root;
-  if (root.unfinished) return (await harness.snapshot(LiveDoc,host.conversationId,context))?.run ? {kind:"later",reason:"Native calls are still running"} : {kind:"unreadable",reason:"Ended trajectory contains an unfinished native call"};
-  const observations = [...root.observations];let activity = root.activity;
-  for (const id of descendants) {
-    const child = await harness.conversation(id,context);if (!child) continue;
-    const read = await readSource(harness,optimizerEntries(child,{after:begin,upTo:maximum}),host,begin);
-    // A descendant's unreadable history must not cost the root its learning; skip that conversation.
-    if (read.kind === "unreadable") continue;
-    if (read.unfinished && (await harness.snapshot(LiveDoc,id,context))?.run) return {kind:"later",reason:"A subagent is still running"};
-    observations.push(...read.observations);activity = Math.max(activity,read.activity);
+  if (root.unfinished) {
+    if ((await harness.snapshot(LiveDoc,host.conversationId,context))?.run) return {kind:"later",reason:"Native calls are still running"};
+    if (!root.partial && !budget.partial) return {kind:"unreadable",reason:"Ended trajectory contains an unfinished native call"};
   }
-  const result:Trajectory = {kind:"ready",cutoff:String(Math.min(maximum,latest ?? begin)),observations,prompts:root.prompts,transcriptActivity:activity};
-  if (root.answeredTurns) result.work = workEvidence(root.observations.slice(Math.max(0,root.answeredEnd-64),root.answeredEnd),root.answeredTurns,host.repositoryRoot);
+  let partial = root.partial || heads.omitted > recentBegin, activity = root.activity;
+  for (const {id,entry} of heads.recent) {
+    if(entry<=recentBegin)break;
+    if(budget.remaining<=0 || budget.bytes<=0){budget.partial=true;break;}
+    const child = await harness.conversation(id,context);if (!child) {partial = true;continue;}
+    const childEvidence = new RecentEvidence();
+    const read = await optimizerHistoryRead.run(budget,()=>readSource(harness,optimizerEntries(child,{after:recentBegin,upTo:maximum}),host,recentBegin,childEvidence,false,recentBegin>begin));
+    if (read.kind === "unreadable") {partial = true;continue;}
+    if (read.unfinished && (await harness.snapshot(LiveDoc,id,context))?.run) return {kind:"later",reason:"A subagent is still running"};
+    for (const item of childEvidence.items) evidence.add(item.entryId,item.observation,false);
+    partial ||= childEvidence.partial || read.partial || read.unfinished;activity = Math.max(activity,read.activity);
+  }
+  const result:Trajectory = {kind:"ready",cutoff:String(Math.max(begin,maximum)),observations:evidence.items.map(item=>item.observation),prompts:root.prompts,transcriptActivity:activity};
+  if (partial || evidence.partial || budget.partial) result.partial = true;
+  if (root.answeredTurns && !result.partial) result.work = workEvidence(evidence.items.filter(item=>item.root && item.entryId<=root.answeredEnd).slice(-64).map(item=>item.observation),root.answeredTurns,host.repositoryRoot);
   return result;
 }
