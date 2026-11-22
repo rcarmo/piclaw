@@ -89,7 +89,10 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     requireClassic(record(component) && isId(component.id) && !ids.has(component.id), "invalid or duplicate component id");
     const name = component.component;
     requireClassic(typeof name === "string" && Object.hasOwn(CLASSIC_A2UI_PROPERTIES, name), "unsupported component");
-    requireClassic(allowedKeys(component, ["id", "component", "weight", ...CLASSIC_A2UI_PROPERTIES[name as A2uiComponent["component"]]]), "unsupported component property");
+    requireClassic(allowedKeys(component, ["id", "component", "weight", "@accessibility", "accessibility", ...CLASSIC_A2UI_PROPERTIES[name as A2uiComponent["component"]]]), "unsupported component property");
+    requireClassic(!(Object.hasOwn(component, '@accessibility') && Object.hasOwn(component, 'accessibility')), 'conflicting accessibility descriptors');
+    const a11y = component['@accessibility'] ?? component.accessibility;
+    if (a11y !== undefined) requireClassic(record(a11y) && allowedKeys(a11y, ['label', 'description', 'hidden', 'live']), 'invalid accessibility descriptor');
     requireClassic(component.weight === undefined || (typeof component.weight === 'number' && component.weight >= 0), "invalid layout weight");
     for (const [key, value] of Object.entries(component)) {
       if (key !== "action" || !readA2uiLink(value)) checkValueCalls(value);
@@ -154,6 +157,21 @@ export function bindA2uiDraftId(messages: readonly unknown[], surfaceId: string)
   });
 }
 
+/** The current SDK calls the v1.0 wire field `accessibility` internally. */
+function forRendererState(messages: readonly unknown[]): unknown[] {
+  return structuredClone(messages).map(message => {
+    if (!record(message)) return message;
+    const body = message.createSurface ?? message.updateComponents;
+    if (record(body) && Array.isArray(body.components)) {
+      for (const item of body.components) if (record(item) && Object.hasOwn(item, '@accessibility')) {
+        item.accessibility = item['@accessibility'];
+        delete item['@accessibility'];
+      }
+    }
+    return message;
+  });
+}
+
 /** Apply exactly one owned surface's bounded batch to a detached snapshot. */
 export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[], previous?: A2uiSnapshot): A2uiSnapshot | null {
   requireClassic(isId(surfaceId) && messages.length > 0 && messages.length <= MAX_MESSAGES, "invalid surface or batch size");
@@ -164,7 +182,7 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
     requireClassic(previous.surfaceId === surfaceId, "snapshot belongs to another surface");
     // Validate the rehydrated snapshot too and detach the SDK's mutable data model from it.
     verifySnapshot(previous);
-    state.checkTopology(state.apply([{ version: "1.0", createSurface: structuredClone(previous) }]));
+    state.checkTopology(state.apply(forRendererState([{ version: "1.0", createSurface: previous }])));
   }
 
   let exists = !!previous;
@@ -193,14 +211,17 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
       }
     }
   }
-  state.checkTopology(state.apply(structuredClone(messages)));
+  state.checkTopology(state.apply(forRendererState(messages)));
   if (!exists) return null;
 
   const result = state.getSurface(surfaceId)!;
   const snapshot: A2uiSnapshot = {
     surfaceId,
     catalogId: CLASSIC_A2UI_CATALOG,
-    components: Array.from(result.componentsModel.values, ({ id, type, properties }) => ({ ...properties, id, component: type } as A2uiComponent)),
+    components: Array.from(result.componentsModel.values, ({ id, type, properties }) => {
+      const { accessibility, ...rest } = properties;
+      return { ...rest, id, component: type, ...(accessibility === undefined ? {} : { '@accessibility': accessibility }) } as A2uiComponent;
+    }),
     // SDK deletion leaves an empty array slot; persisted JSON represents it as null without shifting indices.
     dataModel: JSON.parse(JSON.stringify(result.dataModel.get("/"))),
   };

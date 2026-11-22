@@ -263,12 +263,19 @@ for (const engine of [chromium, webkit]) {
       const binding = { '@path': '/a~1b/~0label text' };
       const pointerSurface = applyA2uiMessages(pointerId, [{ version:'1.0', createSurface:{
         surfaceId:pointerId, catalogId:'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json',
-        components:[{id:'root',component:'Column',children:['field','send']}, {id:'field',component:'TextField',label:'Escaped field',value:binding},
+        components:[{id:'root',component:'Column',children:['field','send','status'], '@accessibility':{label:'Wire form',live:'polite'}},
+          {id:'status',component:'Text',text:'Visible but decorative', '@accessibility':{hidden:{'@path':'/hide'}}},
+          {id:'field',component:'TextField',label:'Escaped field',value:binding, '@accessibility':{label:{'@path':'/accessibleName'},description:'Use ordinary text'}},
           {id:'send',component:'Button',child:'label',action:{event:{name:'send',context:{field:binding}}}}, {id:'label',component:'Text',text:'Send escaped value'}],
-        dataModel:{'a/b':{'~label text':'Stored value'}},
+        dataModel:{'a/b':{'~label text':'Stored value'},accessibleName:'Escaped value',hide:true},
       }}]);
       await page.evaluate((block) => (window as any).draw(block), {...block, revision: 8, surface:pointerSurface});
-      const pointerField = page.getByLabel('Escaped field');
+      const pointerFrame = page.getByRole('group', {name:'Wire form'});
+      expect(await pointerFrame.getAttribute('aria-live')).toBe('polite');
+      const pointerField = pointerFrame.getByRole('textbox', {name:'Escaped value'});
+      expect(await pointerField.getAttribute('aria-description')).toBe('Use ordinary text');
+      expect(await pointerFrame.getByText('Visible but decorative').getAttribute('aria-hidden')).toBe('true');
+      expect(await pointerFrame.getByText('Visible but decorative').isVisible()).toBe(true);
       expect(await pointerField.inputValue()).toBe('Stored value');
       await pointerField.fill('Edited value');
       await page.getByRole('button', {name:'Send escaped value'}).click();

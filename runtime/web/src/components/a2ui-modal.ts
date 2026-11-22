@@ -1,7 +1,9 @@
 import { html, useLayoutEffect, useRef, useState } from '../vendor/preact-htm.js';
+import type { A2uiAria } from './a2ui-accessibility.js';
 
-export function A2uiModal({ label, buttonTrigger, renderTrigger, renderContent }: {
+export function A2uiModal({ label, aria, buttonTrigger, renderTrigger, renderContent }: {
     label: string;
+    aria: A2uiAria;
     buttonTrigger: boolean;
     renderTrigger: (open: (event: Event) => void) => unknown;
     renderContent: () => unknown;
@@ -24,7 +26,7 @@ export function A2uiModal({ label, buttonTrigger, renderTrigger, renderContent }
             if (trigger.current?.isConnected) trigger.current.focus({ preventScroll: true });
         };
     }, [open]);
-    return html`<div class="a2ui-modal">
+    return html`<div class="a2ui-modal" aria-hidden=${aria['aria-hidden']}>
         ${buttonTrigger ? renderTrigger(show) : html`<div role="button" tabIndex=${0} aria-haspopup="dialog" class="a2ui-modal-trigger"
             onClick=${show} onKeyDown=${(event: KeyboardEvent) => {
                 if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
@@ -32,7 +34,7 @@ export function A2uiModal({ label, buttonTrigger, renderTrigger, renderContent }
                 show(event);
             }}>${renderTrigger(show)}</div>`}
         ${open && html`<dialog ref=${dialog} class="a2ui-surface a2ui-modal-dialog" data-no-session-dashboard-shortcut=""
-            aria-label=${label} onCancel=${(event: Event) => { event.preventDefault(); dismiss(); }}
+            aria-label=${label} ...${aria} onCancel=${(event: Event) => { event.preventDefault(); dismiss(); }}
             onClick=${(event: MouseEvent) => {
                 if (event.target !== dialog.current) return;
                 const bounds = dialog.current.getBoundingClientRect();

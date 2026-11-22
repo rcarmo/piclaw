@@ -1,8 +1,10 @@
 import { html, useState } from '../vendor/preact-htm.js';
+import type { A2uiAria } from './a2ui-accessibility.js';
 
 let nextTabsId = 0;
 
-export function A2uiTabs({ tabs, renderChild }: {
+export function A2uiTabs({ tabs, aria, renderChild }: {
+    aria: A2uiAria;
     tabs: { child: string; title: string }[];
     renderChild: (id: string) => unknown;
 }) {
@@ -21,8 +23,8 @@ export function A2uiTabs({ tabs, renderChild }: {
         select(tabs[next]!.child);
         (event.currentTarget as HTMLElement).ownerDocument.getElementById(tabId(next))?.focus();
     }
-    return html`<div class="a2ui-tabs">
-        <div role="tablist" class="a2ui-tab-list">
+    return html`<div class="a2ui-tabs" aria-hidden=${aria['aria-hidden']}>
+        <div role="tablist" ...${aria} class="a2ui-tab-list">
             ${tabs.map((tab, index) => html`<button type="button" role="tab" key=${tab.child} id=${tabId(index)}
                 aria-controls=${panelId(index)} aria-selected=${tab.child === active} tabIndex=${tab.child === active ? 0 : -1}
                 onClick=${() => select(tab.child)} onKeyDown=${(event: KeyboardEvent) => keydown(event, index)}>${tab.title}</button>`)}

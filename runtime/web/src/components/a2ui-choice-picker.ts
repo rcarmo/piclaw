@@ -1,9 +1,11 @@
 import { html, useState } from '../vendor/preact-htm.js';
+import type { A2uiAria } from './a2ui-accessibility.js';
 
 let nextGroup = 0;
 
-export function A2uiChoicePicker({ label, options, selected, multiple, chips, filterable, disabled, onChange }: {
+export function A2uiChoicePicker({ label, aria, options, selected, multiple, chips, filterable, disabled, onChange }: {
     label: string;
+    aria: A2uiAria;
     options: { label: string; value: string }[];
     selected: readonly string[];
     multiple: boolean;
@@ -20,7 +22,7 @@ export function A2uiChoicePicker({ label, options, selected, multiple, chips, fi
         if (disabled) return;
         onChange(!multiple ? [value] : selected.includes(value) ? selected.filter(choice => choice !== value) : [...selected, value]);
     }
-    return html`<div role="group" aria-label=${label || 'Choose an option'} class="a2ui-field">
+    return html`<div role="group" aria-label=${label || 'Choose an option'} ...${aria} class="a2ui-field">
         ${label && html`<span>${label}</span>`}
         ${filterable && html`<input type="search" aria-label="Filter options" placeholder="Filter options" maxLength="256"
             value=${filter} onInput=${(event: Event) => setFilter((event.currentTarget as HTMLInputElement).value)} />`}

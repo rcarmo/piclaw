@@ -143,6 +143,23 @@ describe("Classic A2UI Express", () => {
     expect(() => applyA2uiMessages("form-1", compileA2uiExpress(source, "form-1"))).toThrow();
   });
 
+  test('preserves canonical accessibility descriptors through component updates and JSON rehydration', () => {
+    const id = 'accessible';
+    const component = { id:'root', component:'Text', text:'Status', '@accessibility':{
+      label:{'@path':'/label'}, description:'Current state', live:'polite', hidden:{'@path':'/hide'},
+    }};
+    const initial = applyA2uiMessages(id, [{ version:'1.0', createSurface:{surfaceId:id,
+      catalogId:'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json', components:[component], dataModel:{label:'State',hide:false},
+    }}])!;
+    expect(initial.components[0]).toEqual(component);
+    const next = applyA2uiMessages(id, [{ version:'1.0', updateDataModel:{surfaceId:id,path:'/hide',value:true} }], JSON.parse(JSON.stringify(initial)))!;
+    expect(next.components[0]).toEqual(component);
+    for (const properties of [ { ...component, accessibility:{label:'conflict'} },
+      { ...component, '@accessibility':{ live:'urgent' } }, { ...component, '@accessibility':{ 'aria-owns':'ancestor' } } ]) {
+      expect(() => applyA2uiMessages(id, [{version:'1.0',updateComponents:{surfaceId:id,components:[properties]}}], initial)).toThrow();
+    }
+  });
+
   test('bounds expansion across nested templates', () => {
     const surfaceId = 'nested';
     const spec = `

@@ -5,6 +5,7 @@ import { projectA2uiTemplates } from '../../../src/channels/web/a2ui/templates.j
 import { a2uiDateTimeDisplay, a2uiDateTimeType } from '../../../src/channels/web/a2ui/date-time.js';
 import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
 import { a2uiIconPaths } from './a2ui-icon-paths.js';
+import { a2uiAria } from './a2ui-accessibility.js';
 import { A2uiChoicePicker } from './a2ui-choice-picker.js';
 import { A2uiPlayback } from './a2ui-playback.js';
 import { A2uiModal } from './a2ui-modal.js';
@@ -83,23 +84,25 @@ export function A2uiSurface({ block, source, onSubmit }: {
         const locked = disabled || pending || !path;
         const child = (childId: unknown) => renderComponent(childId, depth + 1);
         const label = text(item.label);
+        const aria = a2uiAria(item['@accessibility'], read);
+        const groupRole = aria['aria-label'] ? 'group' : undefined;
         switch (item.component) {
-            case 'Text': return html`<span key=${id} class=${item.variant === 'caption' ? 'a2ui-caption' : ''}>${text(item.text)}</span>`;
+            case 'Text': return html`<span key=${id} role=${groupRole} ...${aria} class=${item.variant === 'caption' ? 'a2ui-caption' : ''}>${text(item.text)}</span>`;
             case 'Icon': {
                 const name = read(item.name);
                 const path = typeof name === 'string' && Object.hasOwn(a2uiIconPaths, name) ? a2uiIconPaths[name]
                     : name && typeof name === 'object' && Object.hasOwn(name, 'svgPath') ? read((name as { svgPath: unknown }).svgPath) : undefined;
                 if (typeof path !== 'string' || path.length > 4096 || !/^[Mm][MmZzLlHhVvCcSsQqTtAa0-9eE.,+\-\s]+$/.test(path)) return null;
-                return html`<svg key=${id} class="a2ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d=${path}></path></svg>`;
+                return html`<svg key=${id} class="a2ui-icon" viewBox="0 0 24 24" aria-hidden=${aria['aria-label'] ? undefined : 'true'} role=${aria['aria-label'] ? 'img' : undefined} ...${aria} focusable="false"><path d=${path}></path></svg>`;
             }
             case 'Image': {
                 const src = readA2uiImageUrl(read(item.url), window.location.origin);
                 const alt = text(item.description);
-                if (!src) return alt || null;
+                if (!src) return alt ? html`<span role=${groupRole} ...${aria}>${alt}</span>` : null;
                 const size = typeof item.variant === 'string' && ['icon', 'avatar', 'smallFeature', 'mediumFeature', 'largeFeature', 'header'].includes(item.variant)
                     ? item.variant : 'mediumFeature';
                 const fit = item.fit === 'scaleDown' ? 'scale-down' : item.fit === 'cover' || item.fit === 'contain' || item.fit === 'none' ? item.fit : 'fill';
-                return html`<img key=${id} class=${`a2ui-image a2ui-image-${size}`} src=${src} alt=${alt}
+                return html`<img key=${id} class=${`a2ui-image a2ui-image-${size}`} src=${src} alt=${alt} ...${aria}
                     loading="lazy" decoding="async" referrerpolicy="no-referrer" style=${{ objectFit: fit }} />`;
             }
             case 'AudioPlayer':
@@ -111,15 +114,15 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 if (!source) return description || null;
                 const poster = kind === 'video' ? readA2uiImageUrl(read(item.posterUrl), origin) : undefined;
                 return html`<${A2uiPlayback} key=${JSON.stringify([item.id, source.url, poster])} kind=${kind} source=${source.url}
-                    external=${source.external} label=${description} poster=${poster} />`;
+                    external=${source.external} label=${description} poster=${poster} aria=${aria} />`;
             }
-            case 'Card': return html`<div key=${id} class="a2ui-card">${child(item.child)}</div>`;
+            case 'Card': return html`<div key=${id} role=${groupRole} ...${aria} class="a2ui-card">${child(item.child)}</div>`;
             case 'Row':
             case 'Column': {
                 const direction = item.component === 'Row' ? 'row' : 'column';
                 const align = typeof item.align === 'string' ? ({ center: 'center', start: 'start', end: 'end', stretch: 'stretch' })[item.align] : undefined;
                 const justify = typeof item.justify === 'string' ? ({ center: 'center', start: 'start', end: 'end', stretch: 'stretch', spaceBetween: 'space-between', spaceAround: 'space-around', spaceEvenly: 'space-evenly' })[item.justify] : undefined;
-                return html`<div key=${id} class=${`a2ui-${direction}`} style=${{ alignItems: align, justifyContent: justify }}>
+                return html`<div key=${id} role=${groupRole} ...${aria} class=${`a2ui-${direction}`} style=${{ alignItems: align, justifyContent: justify }}>
                     ${Array.isArray(item.children) ? item.children.map(childId => {
                         const weight = components.get(childId)?.weight;
                         return typeof weight === 'number' && weight >= 0
@@ -132,34 +135,34 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 if (!trigger) return null;
                 const title = trigger.component === 'Button' && typeof trigger.child === 'string' ? components.get(trigger.child) : trigger;
                 const dialogLabel = text(title?.text) || 'Details';
-                return html`<${A2uiModal} key=${id} label=${dialogLabel} buttonTrigger=${trigger.component === 'Button'}
+                return html`<${A2uiModal} key=${id} label=${dialogLabel} aria=${aria} buttonTrigger=${trigger.component === 'Button'}
                     renderTrigger=${(open: (event: Event) => void) => renderComponent(trigger.id, depth + 1, open)}
                     renderContent=${() => child(item.content)} />`;
             }
             case 'Tabs': {
                 if (!Array.isArray(item.tabs)) return null;
                 const tabs = item.tabs.map(tab => ({ child: tab.child, title: text(tab.title) }));
-                return html`<${A2uiTabs} key=${id} tabs=${tabs} renderChild=${child} />`;
+                return html`<${A2uiTabs} key=${id} tabs=${tabs} aria=${aria} renderChild=${child} />`;
             }
             case 'List': {
                 const direction = item.direction === 'horizontal' ? 'a2ui-list-horizontal' : '';
                 const align = item.align === 'start' || item.align === 'center' || item.align === 'end' ? item.align : 'stretch';
-                return html`<div key=${id} role="list" class=${`a2ui-list ${direction}`} style=${{ alignItems: align }}>
+                return html`<div key=${id} role="list" ...${aria} class=${`a2ui-list ${direction}`} style=${{ alignItems: align }}>
                     ${Array.isArray(item.children) && item.children.map(childId => html`<div key=${childId} role="listitem">${child(childId)}</div>`)}</div>`;
             }
-            case 'Divider': return html`<hr key=${id} class=${item.axis === 'vertical' ? 'a2ui-divider-vertical' : ''} />`;
+            case 'Divider': return html`<hr key=${id} ...${aria} class=${item.axis === 'vertical' ? 'a2ui-divider-vertical' : ''} />`;
             case 'Button': {
                 const link = readA2uiLink(item.action);
                 const buttonChild = typeof item.child === 'string' ? components.get(item.child) : undefined;
                 const name = buttonChild?.component === 'Icon' ? read(buttonChild.name) : undefined;
                 const buttonLabel = buttonChild?.component !== 'Icon' ? undefined : typeof name === 'string' && Object.hasOwn(a2uiIconPaths, name)
                     ? name.replace(/([A-Z])/g, ' $1').replace(/^./, char => char.toUpperCase()) : link ? 'Open link' : 'Action';
-                if (link && !disabled) return html`<a key=${id} class="a2ui-button a2ui-button-borderless" href=${link} aria-label=${buttonLabel}
+                if (link && !disabled) return html`<a key=${id} class="a2ui-button a2ui-button-borderless" href=${link} aria-label=${buttonLabel} ...${aria}
                     aria-haspopup=${openModal ? 'dialog' : undefined} onClick=${openModal}
                     target="_blank" rel="noopener noreferrer">${child(item.child)}</a>`;
                 if (block.owner === 'login' && (id === 'continue' || id === 'check')) return null;
                 return html`<button key=${id} type="button" class=${`a2ui-button a2ui-button-${item.variant || 'default'}`}
-                disabled=${disabled} aria-disabled=${pending || disabled} aria-label=${buttonLabel} aria-haspopup=${openModal ? 'dialog' : undefined}
+                disabled=${disabled} aria-disabled=${pending || disabled} aria-label=${buttonLabel} ...${aria} aria-haspopup=${openModal ? 'dialog' : undefined}
                 onClick=${(event: Event) => {
                     if (pending || disabled) return;
                     openModal?.(event);
@@ -168,14 +171,14 @@ export function A2uiSurface({ block, source, onSubmit }: {
             }
             case 'TextField': {
                 if (block.owner === 'login' && item.variant === 'obscured') return html`<label key=${id} class="a2ui-field">${label}
-                    <input ref=${privateInput} disabled=${disabled || pending} type="password" autocomplete="off" maxlength="4096" placeholder=${text(item.placeholder)} />
+                    <input ref=${privateInput} ...${aria} disabled=${disabled || pending} type="password" autocomplete="off" maxlength="4096" placeholder=${text(item.placeholder)} />
                 </label>`;
                 const value = text(item.value);
                 const placeholder = text(item.placeholder);
                 const onInput = (event: Event) => edit(path, (event.currentTarget as HTMLInputElement).value);
                 return html`<label key=${id} class="a2ui-field">${label}${item.variant === 'longText'
-                    ? html`<textarea disabled=${locked} value=${value} placeholder=${placeholder} maxLength="4096" onInput=${onInput}></textarea>`
-                    : html`<input type=${item.variant === 'number' ? 'number' : 'text'} disabled=${locked} value=${value}
+                    ? html`<textarea ...${aria} disabled=${locked} value=${value} placeholder=${placeholder} maxLength="4096" onInput=${onInput}></textarea>`
+                    : html`<input type=${item.variant === 'number' ? 'number' : 'text'} ...${aria} disabled=${locked} value=${value}
                         placeholder=${placeholder} maxLength="4096" onInput=${onInput} />`}</label>`;
             }
             case 'DateTimeInput': {
@@ -185,7 +188,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 const min = a2uiDateTimeDisplay(readA2uiValue(snapshot, item.min), type);
                 const max = a2uiDateTimeDisplay(readA2uiValue(snapshot, item.max), type);
                 return html`<label key=${id} class="a2ui-field">${label}
-                    <input type=${type} aria-label=${label || (type === 'datetime-local' ? 'Date and time' : type === 'date' ? 'Date' : 'Time')}
+                    <input type=${type} aria-label=${label || (type === 'datetime-local' ? 'Date and time' : type === 'date' ? 'Date' : 'Time')} ...${aria}
                         disabled=${locked} min=${min} max=${max} step=${type === 'date' ? undefined : 'any'} value=${value}
                         onChange=${(event: Event) => edit(path, (event.currentTarget as HTMLInputElement).value)} />
                 </label>`;
@@ -195,12 +198,12 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 if (!range) return null;
                 const value = read(item.value);
                 return html`<label key=${id} class="a2ui-field">${label}
-                    <input type="range" aria-label=${label || 'Value'} disabled=${locked} min=${range.min} max=${range.max}
+                    <input type="range" aria-label=${label || 'Value'} ...${aria} disabled=${locked} min=${range.min} max=${range.max}
                         step=${range.step ?? 'any'} value=${typeof value === 'number' ? value : range.min}
                         onInput=${(event: Event) => edit(path, (event.currentTarget as HTMLInputElement).valueAsNumber)} />
                 </label>`;
             }
-            case 'CheckBox': return html`<label key=${id} class="a2ui-checkbox"><input type="checkbox" disabled=${locked}
+            case 'CheckBox': return html`<label key=${id} class="a2ui-checkbox"><input type="checkbox" ...${aria} disabled=${locked}
                 checked=${read(item.value) === true} onChange=${(event: Event) => edit(path, (event.currentTarget as HTMLInputElement).checked)} />${label}</label>`;
             case 'ChoicePicker': {
                 const selected = read(item.value);
@@ -208,12 +211,12 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 const multiple = item.variant === 'multipleSelection';
                 if (!block.owner || block.owner === 'agent' || item.displayStyle !== undefined || item.filterable === true) {
                     const options = Array.isArray(item.options) ? item.options.map(option => ({ value: option.value, label: text(option.label) })) : [];
-                    return html`<${A2uiChoicePicker} key=${id} label=${label} options=${options} selected=${choices} multiple=${multiple}
+                    return html`<${A2uiChoicePicker} key=${id} label=${label} aria=${aria} options=${options} selected=${choices} multiple=${multiple}
                         chips=${item.displayStyle === 'chips'} filterable=${item.filterable === true} disabled=${locked}
                         onChange=${(value: string[]) => edit(path, value)} />`;
                 }
                 return html`<label key=${id} class="a2ui-field">${label}
-                    <select multiple=${multiple} disabled=${locked} aria-label=${label || 'Choose an option'}
+                    <select multiple=${multiple} disabled=${locked} aria-label=${label || 'Choose an option'} ...${aria}
                         value=${multiple ? undefined : choices[0] ?? ''} onChange=${(event: Event) => edit(path,
                             Array.from((event.currentTarget as HTMLSelectElement).selectedOptions, option => option.value).filter(Boolean))}>
                         ${!multiple && html`<option value="">Select an option</option>`}
