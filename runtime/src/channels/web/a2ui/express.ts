@@ -7,7 +7,7 @@ import {
   type AgentToRendererMessage,
 } from "@a2ui/agent";
 import { basicCatalog } from "@a2ui/web_core/catalogs/basic/v1";
-import { CLASSIC_A2UI_CATALOG, CLASSIC_A2UI_PROPERTIES, readA2uiLink, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
+import { CLASSIC_A2UI_CATALOG, CLASSIC_A2UI_PROPERTIES, a2uiSliderRange, readA2uiLink, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
 
 const MAX_SOURCE_BYTES = 16_384;
 const MAX_SURFACE_BYTES = 32_768;
@@ -88,6 +88,7 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     if (name === "Row" || name === "Column" || name === "List") {
       requireClassic(Array.isArray(component.children) && component.children.every(isId), "only fixed child lists are supported");
     }
+    if (name === "Slider") requireClassic(a2uiSliderRange(component as A2uiComponent), "invalid slider interval");
     if (name === "TextField" && component.variant === "obscured") {
       throw new Error("Invalid Classic A2UI: private inputs require a host-owned surface");
     }

@@ -24,6 +24,19 @@ test("Classic emits a v1.0 action from local drafts without sending the data mod
   expect(validateA2uiAction(snapshot, event)).toEqual(event.action);
 });
 
+test("a Slider submits a number within the stored range and step grid", () => {
+  const slider = applyA2uiMessages("slider", compileA2uiExpress(`
+    $/value = 0.2;
+    root = Column([Slider(label="Level", min=0.1, max=0.4, steps=3, value=$/value), submit]);
+    submit = Button(Text("Send"), action=Event("send", {level:$/value}));
+  `, "slider"))!;
+  const action = buildA2uiAction(slider, "submit", new Map([["/value", 0.3]]), timestamp);
+  expect(action.action.context).toEqual({ level: 0.3 });
+  for (const level of [0.09, 0.25, 0.41, "0.3"]) {
+    expect(() => validateA2uiAction(slider, { ...action, action: { ...action.action, context: { level } } })).toThrow();
+  }
+});
+
 test("Classic does not accept authority, options, fixed values or undeclared inputs from the action", () => {
   const message = buildA2uiAction(snapshot, "submit", new Map(), timestamp);
   const action = message.action;

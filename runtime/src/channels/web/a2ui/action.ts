@@ -1,5 +1,5 @@
 /** Classic's subset of the v1.0 action message. Owning a post is a separate server check. */
-import type { A2uiComponent, A2uiSnapshot } from "./surface.js";
+import { a2uiSliderRange, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
 
 type ActionValue = string | number | boolean | null | string[];
 export interface A2uiAction {
@@ -51,7 +51,7 @@ function eventDescriptor(snapshot: A2uiSnapshot, sourceComponentId: string) {
 
 function controlForPath(snapshot: A2uiSnapshot, path: string): A2uiComponent | undefined {
   return snapshot.components.find((component) =>
-    (component.component === "TextField" || component.component === "CheckBox" || component.component === "ChoicePicker")
+    (component.component === "TextField" || component.component === "CheckBox" || component.component === "ChoicePicker" || component.component === "Slider")
     && a2uiBindingPath(component.value) === path);
 }
 
@@ -63,6 +63,14 @@ export function isA2uiActionValue(value: unknown): value is ActionValue {
 
 function validControlValue(control: A2uiComponent, value: ActionValue): boolean {
   if (control.component === "CheckBox") return typeof value === "boolean";
+  if (control.component === "Slider") {
+    const range = a2uiSliderRange(control);
+    if (typeof value !== "number" || !range || value < range.min || value > range.max) return false;
+    if (range.step === undefined) return true;
+    const snapped = range.min + Math.round((value - range.min) / range.step) * range.step;
+    const rounding = 4 * Number.EPSILON * Math.max(Math.abs(range.min), Math.abs(range.max));
+    return Math.abs(value - snapped) <= Math.min(rounding, range.step / 4);
+  }
   if (control.component === "ChoicePicker") {
     return Array.isArray(value) && (control.variant === "multipleSelection" || value.length <= 1)
       && new Set(value).size === value.length && Array.isArray(control.options)
@@ -74,6 +82,7 @@ function validControlValue(control: A2uiComponent, value: ActionValue): boolean 
 function defaultControlValue(component: A2uiComponent | undefined): ActionValue {
   if (component?.component === "CheckBox") return false;
   if (component?.component === "ChoicePicker") return [];
+  if (component?.component === "Slider") return a2uiSliderRange(component)?.min ?? null;
   return component ? "" : null;
 }
 

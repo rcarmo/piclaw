@@ -12,12 +12,25 @@ export const CLASSIC_A2UI_PROPERTIES = {
   TextField: ["label", "value", "placeholder", "variant"],
   CheckBox: ["label", "value"],
   ChoicePicker: ["label", "value", "options", "variant"],
+  Slider: ["label", "value", "min", "max", "steps"],
 } as const;
 
 export type A2uiComponent = Record<string, unknown> & {
   id: string;
   component: keyof typeof CLASSIC_A2UI_PROPERTIES;
 };
+
+/** Resolve the catalogue's numeric interval before it reaches a browser control. */
+export function a2uiSliderRange(item: A2uiComponent) {
+  const min = item.min ?? 0;
+  const { max, steps } = item;
+  if (typeof min !== "number" || typeof max !== "number" || !Number.isFinite(max - min) || min >= max) return;
+  if (steps === undefined) return { min, max, step: undefined, steps: undefined };
+  if (typeof steps !== "number" || !Number.isSafeInteger(steps) || steps < 1) return;
+  const step = (max - min) / steps;
+  if (step <= 0 || min + step === min || max - step === max) return;
+  return { min, max, step, steps };
+}
 
 /** A canonical v1.0 createSurface body; no unbounded replay of update messages. */
 export interface A2uiSnapshot {

@@ -3,7 +3,7 @@ import { html, useCallback, useRef, useState } from '../vendor/preact-htm.js';
 import { a2uiBindingPath, buildA2uiAction, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
 import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
 import { A2uiTotpDialog, readTotpPresentation, type TotpPresentation } from './a2ui-totp-dialog.js';
-import { readA2uiLink, type A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
+import { a2uiSliderRange, readA2uiLink, type A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
 
 type Submit = (request: A2uiActionRequest, options?: { signal?: AbortSignal }) => Promise<unknown>;
 
@@ -107,6 +107,16 @@ export function A2uiSurface({ block, source, onSubmit }: {
                     ? html`<textarea disabled=${locked} value=${value} placeholder=${placeholder} maxLength="4096" onInput=${onInput}></textarea>`
                     : html`<input type=${item.variant === 'number' ? 'number' : 'text'} disabled=${locked} value=${value}
                         placeholder=${placeholder} maxLength="4096" onInput=${onInput} />`}</label>`;
+            }
+            case 'Slider': {
+                const range = a2uiSliderRange(item);
+                if (!range) return null;
+                const value = read(item.value);
+                return html`<label key=${id} class="a2ui-field">${label}
+                    <input type="range" aria-label=${label || 'Value'} disabled=${locked} min=${range.min} max=${range.max}
+                        step=${range.step ?? 'any'} value=${typeof value === 'number' ? value : range.min}
+                        onInput=${(event: Event) => edit(path, (event.currentTarget as HTMLInputElement).valueAsNumber)} />
+                </label>`;
             }
             case 'CheckBox': return html`<label key=${id} class="a2ui-checkbox"><input type="checkbox" disabled=${locked}
                 checked=${read(item.value) === true} onChange=${(event: Event) => edit(path, (event.currentTarget as HTMLInputElement).checked)} />${label}</label>`;

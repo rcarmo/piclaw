@@ -10,12 +10,14 @@ const source = `
   $/note = "";
   $/notify = false;
   $/choice = ["small"];
+  $/level = 4;
   root = Column([Text("<img src=x onerror=alert(1)>"),
     List(children=[Text("First step"), Text("Second step")], direction="horizontal", align="center"),
     TextField(label="Note", value=$/note),
     CheckBox(label="Notify", value=$/notify),
+    Slider(label="Level", min=0, max=10, steps=5, value=$/level),
     ChoicePicker(label="Size", options=[{label:"Small",value:"small"},{label:"Large",value:"large"}],value=$/choice),
-    Button(Text("Submit"), variant="primary", action=Event("save", {note:$/note,notify:$/notify,size:$/choice}))]);
+    Button(Text("Submit"), variant="primary", action=Event("save", {note:$/note,notify:$/notify,size:$/choice,level:$/level}))]);
 `;
 
 for (const engine of [chromium, webkit]) {
@@ -77,6 +79,11 @@ for (const engine of [chromium, webkit]) {
       expect(await field.evaluate((el) => el === document.activeElement)).toBe(true);
       expect(await page.locator(".a2ui-surface img").count()).toBe(0);
       await page.getByRole("checkbox", { name: "Notify" }).check();
+      const slider = page.getByRole('slider', { name: 'Level' });
+      expect(await slider.inputValue()).toBe('4');
+      await slider.focus();
+      await page.keyboard.press('ArrowRight');
+      expect(await slider.inputValue()).toBe('6');
       await page.getByRole("combobox", { name: "Size" }).selectOption("large");
       const button = page.getByRole("button", { name: "Submit" });
       expect(await button.evaluate(el => el.closest('[data-no-session-dashboard-shortcut]') !== null)).toBe(true);
@@ -89,7 +96,7 @@ for (const engine of [chromium, webkit]) {
       expect(events).toHaveLength(2);
       expect(events[1]).toMatchObject({ post_id: 19, thread_id: 3, chat_jid: "web:test", revision: 1,
         request_id: events[0].request_id, message: { version: "1.0", action: { name:"save", surfaceId:"test-form",
-          context:{note:"Keep this draft",notify:true,size:["large"]} } } });
+          context:{note:"Keep this draft",notify:true,size:["large"],level:6} } } });
       await page.evaluate((block) => (window as any).draw(block), { ...block, state: "completed", revision: 2 });
       expect(await button.isDisabled()).toBe(true);
       const panel = page.locator('.a2ui-surface');
