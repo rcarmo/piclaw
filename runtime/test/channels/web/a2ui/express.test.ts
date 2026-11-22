@@ -81,6 +81,16 @@ describe("Classic A2UI Express", () => {
       .toEqual(['accountCircle', { svgPath: { '@path':'/path' } }, 'check']);
   });
 
+  test('accepts catalogue choice presentation and weights only within Rows and Columns', () => {
+    const source = '$/values=[]; root=Row([choice, other]); choice=ChoicePicker(value=$/values, options=[{label:"Alpha",value:"a"}], displayStyle="chips", filterable=true, weight=2); other=Text("Other", weight=1);';
+    const snapshot = applyA2uiMessages('layout', compileA2uiExpress(source,'layout'))!;
+    expect(snapshot.components.find(item => item.id === 'choice')).toMatchObject({displayStyle:'chips', filterable:true, weight:2});
+    expect(snapshot.components.find(item => item.id === 'other')?.weight).toBe(1);
+    for (const invalid of ['root=Text("Outside", weight=1);', 'root=List(children=[Text("List child", weight=1)]);', source.replace('weight=2','weight=-1')]) {
+      expect(() => applyA2uiMessages('layout', compileA2uiExpress(invalid, 'layout'))).toThrow();
+    }
+  });
+
   test("resolves tab titles and validates their child graph", () => {
     const surface = 'tabs-1';
     const source = '$/title = "Details"; root = Tabs(tabs=[{title:"Overview",child:first},{title:$/title,child:second}]); first = Text("First panel"); second = Text("Second panel");';

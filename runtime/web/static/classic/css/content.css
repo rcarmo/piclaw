@@ -1637,6 +1637,12 @@
 .a2ui-row, .a2ui-column, .a2ui-field, .a2ui-checkbox { display: flex; gap: 8px; min-width: 0; }
 .a2ui-row { flex-wrap: wrap; }
 .a2ui-column, .a2ui-field { flex-direction: column; }
+.a2ui-weighted { min-width: 0; }
+.a2ui-option, .a2ui-chips { display: flex; gap: 8px; align-items: center; }
+.a2ui-chips { flex-wrap: wrap; }
+.a2ui-field .a2ui-option input { width: 1em; min-height: 0; padding: 0; margin: 0; accent-color: var(--accent-color); }
+.a2ui-button.a2ui-chip { border-radius: var(--radius-full, 999px); }
+.a2ui-chip[aria-pressed="true"] { border-color: var(--accent-color); color: var(--accent-color); }
 .a2ui-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .a2ui-list-horizontal { flex-direction: row; overflow-x: auto; }
 .a2ui-list-horizontal > [role="listitem"] { flex: 0 0 auto; max-width: 100%; }

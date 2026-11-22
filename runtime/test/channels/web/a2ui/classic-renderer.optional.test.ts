@@ -11,6 +11,7 @@ const source = `
   $/note = "";
   $/notify = false;
   $/choice = ["small"];
+  $/tags = ["front"];
   $/level = 4;
   $/date = "2028-02-29";
   $/preview = "/media/42";
@@ -31,8 +32,10 @@ const source = `
     CheckBox(label="Notify", value=$/notify),
     Slider(label="Level", min=0, max=10, steps=5, value=$/level),
     DateTimeInput(label="Due date", enableDate=true, min="2028-02-28", max="2028-03-31", value=$/date),
+    Row([Text("One part", weight=1), Text("Two parts", weight=2)]),
     ChoicePicker(label="Size", options=[{label:"Small",value:"small"},{label:"Large",value:"large"}],value=$/choice),
-    Button(Text("Submit"), variant="primary", action=Event("save", {note:$/note,notify:$/notify,size:$/choice,level:$/level,date:$/date}))]);
+    ChoicePicker(label="Tags", options=[{label:"Frontend",value:"front"},{label:"Backend",value:"back"}], value=$/tags, variant="multipleSelection", displayStyle="chips", filterable=true),
+    Button(Text("Submit"), variant="primary", action=Event("save", {note:$/note,notify:$/notify,size:$/choice,level:$/level,date:$/date,tags:$/tags}))]);
   summary = Text("Summary panel");
   details = Text("Details panel");
   show = Text("Show help");
@@ -173,7 +176,15 @@ for (const engine of [chromium, webkit]) {
       expect(await date.getAttribute('min')).toBe('2028-02-28');
       expect(await date.getAttribute('max')).toBe('2028-03-31');
       await date.fill('2028-03-01');
-      await page.getByRole("combobox", { name: "Size" }).selectOption("large");
+      expect(await page.getByText('Two parts').evaluate(el => getComputedStyle(el.parentElement!).flexGrow)).toBe('2');
+      const size = page.getByRole('group', { name: 'Size' });
+      await size.getByRole('radio', { name: 'Large' }).check();
+      expect(await size.getByRole('radio', { name: 'Small' }).isChecked()).toBe(false);
+      const tags = page.getByRole('group', { name: 'Tags' });
+      await tags.getByRole('searchbox', { name: 'Filter options' }).fill(' BACK ');
+      expect(await tags.getByRole('button', { name: 'Frontend' }).count()).toBe(0);
+      await tags.getByRole('button', { name: 'Backend' }).click();
+      expect(await tags.getByRole('button', { name: 'Backend' }).getAttribute('aria-pressed')).toBe('true');
       const button = page.getByRole("button", { name: "Submit" });
       expect(await button.evaluate(el => el.closest('[data-no-session-dashboard-shortcut]') !== null)).toBe(true);
       await button.focus();
@@ -185,7 +196,7 @@ for (const engine of [chromium, webkit]) {
       expect(events).toHaveLength(2);
       expect(events[1]).toMatchObject({ post_id: 19, thread_id: 3, chat_jid: "web:test", revision: 1,
         request_id: events[0].request_id, message: { version: "1.0", action: { name:"save", surfaceId:"test-form",
-          context:{note:"Keep this draft",notify:true,size:["large"],level:6,date:"2028-03-01"} } } });
+          context:{note:"Keep this draft",notify:true,size:["large"],level:6,date:"2028-03-01",tags:["front","back"]} } } });
       await page.evaluate((block) => (window as any).draw(block), { ...block, state: "completed", revision: 2 });
       expect(await button.isDisabled()).toBe(true);
       const panel = page.locator('.a2ui-surface');

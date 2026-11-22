@@ -4,6 +4,7 @@ import { a2uiBindingPath, buildA2uiAction, readA2uiValue, type A2uiActionRequest
 import { a2uiDateTimeDisplay, a2uiDateTimeType } from '../../../src/channels/web/a2ui/date-time.js';
 import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
 import { a2uiIconPaths } from './a2ui-icon-paths.js';
+import { A2uiChoicePicker } from './a2ui-choice-picker.js';
 import { A2uiPlayback } from './a2ui-playback.js';
 import { A2uiModal } from './a2ui-modal.js';
 import { A2uiTabs } from './a2ui-tabs.js';
@@ -112,7 +113,12 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 const align = typeof item.align === 'string' ? ({ center: 'center', start: 'start', end: 'end', stretch: 'stretch' })[item.align] : undefined;
                 const justify = typeof item.justify === 'string' ? ({ center: 'center', start: 'start', end: 'end', stretch: 'stretch', spaceBetween: 'space-between', spaceAround: 'space-around', spaceEvenly: 'space-evenly' })[item.justify] : undefined;
                 return html`<div key=${id} class=${`a2ui-${direction}`} style=${{ alignItems: align, justifyContent: justify }}>
-                    ${Array.isArray(item.children) ? item.children.map(child) : null}</div>`;
+                    ${Array.isArray(item.children) ? item.children.map(childId => {
+                        const weight = components.get(childId)?.weight;
+                        return typeof weight === 'number' && weight >= 0
+                            ? html`<div key=${childId} class="a2ui-weighted" style=${{ flexGrow: weight }}>${child(childId)}</div>`
+                            : child(childId);
+                    }) : null}</div>`;
             }
             case 'Modal': {
                 const trigger = typeof item.trigger === 'string' ? components.get(item.trigger) : undefined;
@@ -193,6 +199,12 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 const selected = read(item.value);
                 const choices = Array.isArray(selected) ? selected : [];
                 const multiple = item.variant === 'multipleSelection';
+                if (!block.owner || block.owner === 'agent' || item.displayStyle !== undefined || item.filterable === true) {
+                    const options = Array.isArray(item.options) ? item.options.map(option => ({ value: option.value, label: text(option.label) })) : [];
+                    return html`<${A2uiChoicePicker} key=${id} label=${label} options=${options} selected=${choices} multiple=${multiple}
+                        chips=${item.displayStyle === 'chips'} filterable=${item.filterable === true} disabled=${locked}
+                        onChange=${(value: string[]) => edit(path, value)} />`;
+                }
                 return html`<label key=${id} class="a2ui-field">${label}
                     <select multiple=${multiple} disabled=${locked} aria-label=${label || 'Choose an option'}
                         value=${multiple ? undefined : choices[0] ?? ''} onChange=${(event: Event) => edit(path,

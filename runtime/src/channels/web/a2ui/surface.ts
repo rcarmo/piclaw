@@ -17,7 +17,7 @@ export const CLASSIC_A2UI_PROPERTIES = {
   Button: ["child", "variant", "action"],
   TextField: ["label", "value", "placeholder", "variant"],
   CheckBox: ["label", "value"],
-  ChoicePicker: ["label", "value", "options", "variant"],
+  ChoicePicker: ["label", "value", "options", "variant", "displayStyle", "filterable"],
   Slider: ["label", "value", "min", "max", "steps"],
   DateTimeInput: ["label", "value", "enableDate", "enableTime", "min", "max"],
 } as const;

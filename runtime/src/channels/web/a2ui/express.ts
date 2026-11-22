@@ -80,7 +80,8 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     requireClassic(record(component) && isId(component.id) && !ids.has(component.id), "invalid or duplicate component id");
     const name = component.component;
     requireClassic(typeof name === "string" && Object.hasOwn(CLASSIC_A2UI_PROPERTIES, name), "unsupported component");
-    requireClassic(allowedKeys(component, ["id", "component", ...CLASSIC_A2UI_PROPERTIES[name as A2uiComponent["component"]]]), "unsupported component property");
+    requireClassic(allowedKeys(component, ["id", "component", "weight", ...CLASSIC_A2UI_PROPERTIES[name as A2uiComponent["component"]]]), "unsupported component property");
+    requireClassic(component.weight === undefined || (typeof component.weight === 'number' && component.weight >= 0), "invalid layout weight");
     for (const [key, value] of Object.entries(component)) {
       if (key !== "action" || !readA2uiLink(value)) requireClassic(!containsCall(value), "functions are not supported in values");
     }
@@ -183,11 +184,12 @@ function verifySnapshot(snapshot: A2uiSnapshot): void {
   checkComponents(snapshot.components);
   const components = new Map(snapshot.components.map((item) => [item.id, item]));
   const seen = new Set<string>();
-  function walk(id: string, depth: number): void {
+  function walk(id: string, depth: number, canWeight = false): void {
     const item = components.get(id);
     requireClassic(item && !seen.has(id) && depth <= MAX_DEPTH, "expected a bounded component tree");
     seen.add(id);
-    if (Array.isArray(item.children)) for (const child of item.children) walk(child, depth + 1);
+    requireClassic(item.weight === undefined || canWeight, "layout weight requires a Row or Column parent");
+    if (Array.isArray(item.children)) for (const child of item.children) walk(child, depth + 1, item.component === "Row" || item.component === "Column");
     if (item.component === "Tabs" && Array.isArray(item.tabs)) for (const tab of item.tabs) walk(tab.child, depth + 1);
     if (item.component === "Modal" && typeof item.trigger === "string" && typeof item.content === "string") {
       walk(item.trigger, depth + 1);
