@@ -202,6 +202,8 @@
     "@replit/codemirror-vim": "6.4.0",
     "@types/proper-lockfile": "4.1.4",
     "@uiw/codemirror-theme-github": "4.25.12",
+    "ajv": "8.18.0",
+    "ajv-formats": "3.0.1",
     "assemblyscript": "0.28.20",
     "bun-types": "1.4.4",
     "codemirror": "6.0.2",

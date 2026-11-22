@@ -2,7 +2,6 @@
 import {
   ExpressParser,
   RendererState,
-  type AgentToRendererMessage,
 } from "@a2ui/agent";
 import { basicCatalog } from "@a2ui/web_core/catalogs/basic/v1";
 import { DataModel } from '@a2ui/web_core/state';
@@ -47,6 +46,11 @@ function isId(value: unknown): value is string {
   return typeof value === "string" && ID.test(value) && !FORBIDDEN_KEYS.has(value);
 }
 
+function isSurfaceId(value: unknown): value is string {
+  // Surface identities are opaque strings, not catalogue identifiers.
+  return typeof value === 'string' && value.length > 0 && value.length <= 128 && !/[\x00-\x1f\x7f]/.test(value);
+}
+
 function allowedKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
   return Object.keys(value).every((key) => keys.includes(key));
 }
@@ -67,11 +71,7 @@ function checkJson(value: unknown, depth = 0, opaqueMetadata = false): void {
   const entries = Object.entries(value);
   requireClassic(entries.length <= MAX_COMPONENTS, "object too large");
   for (const [key, item] of entries) {
-    if (!opaqueMetadata) requireClassic(!FORBIDDEN_KEYS.has(key) && (key !== "@call" || isClassicFunctionName(item)) && (key !== '@catalogId' || item === CLASSIC_A2UI_CATALOG), "unsupported key");
-    if (!opaqueMetadata && key === "@path") {
-      requireClassic(entries.length === 1, "malformed path binding");
-      requireClassic(scopedA2uiPointer(item) !== undefined, "unsupported data binding");
-    }
+    if (!opaqueMetadata) requireClassic(!FORBIDDEN_KEYS.has(key), 'unsupported key');
     checkJson(item, depth + 1, opaqueMetadata || key === 'metadata' || key === '@metadata');
   }
 }
@@ -92,6 +92,10 @@ function containsCall(value: unknown, name?: string): boolean {
 function checkValueCalls(value: unknown, allowRemote = false): void {
   if (Array.isArray(value)) return value.forEach(item=>checkValueCalls(item,allowRemote));
   if (!record(value)) return;
+  if (Object.hasOwn(value,'@path')) {
+    requireClassic(Object.keys(value).length===1 && scopedA2uiPointer(value['@path'])!==undefined,'unsupported data binding');
+    return;
+  }
   if (Object.hasOwn(value, '@call')) {
     const name = value['@call'];
     requireClassic((isClassicValueFunction(name) || (allowRemote && isClassicFunctionName(name) && name!=='openUrl'))
@@ -114,21 +118,20 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     requireClassic(record(component) && isId(component.id) && !ids.has(component.id), 'invalid or duplicate component id', `${path}/id`);
     const name = component.component;
     requireClassic(typeof name === 'string' && Object.hasOwn(CLASSIC_A2UI_PROPERTIES, name), 'unsupported component', `${path}/component`);
-    requireClassic(allowedKeys(component, ["id", "component", "@catalogId", "weight", "@accessibility", "accessibility", "@checks", "checks", "@metadata", "metadata", ...CLASSIC_A2UI_PROPERTIES[name as A2uiComponent["component"]]]), "unsupported component property", path);
-    requireClassic(!(Object.hasOwn(component, '@metadata') && Object.hasOwn(component, 'metadata')), 'conflicting metadata');
-    checkMetadata(Object.hasOwn(component, '@metadata') ? component['@metadata'] : component.metadata);
-    requireClassic(!(Object.hasOwn(component, '@checks') && Object.hasOwn(component, 'checks')), 'conflicting check descriptors');
-    const checks = component['@checks'] ?? component.checks;
+    requireClassic(component['@catalogId']===undefined || component['@catalogId']===CLASSIC_A2UI_CATALOG,
+      'unsupported component catalogue',`${path}/@catalogId`);
+    requireClassic(allowedKeys(component, ["id", "component", "@catalogId", "weight", "@accessibility", "@checks", "@metadata", ...CLASSIC_A2UI_PROPERTIES[name as A2uiComponent["component"]]]), "unsupported component property", path);
+    checkMetadata(component['@metadata']);
+    const checks = component['@checks'];
     if (checks !== undefined) requireClassic(['Button','TextField','CheckBox','ChoicePicker','Slider','DateTimeInput'].includes(name)
       && Array.isArray(checks) && checks.length <= 16 && checks.every(rule => record(rule) && allowedKeys(rule, ['condition','message'])
         && record(rule.condition) && (Object.hasOwn(rule.condition, '@path') || isClassicFunctionName(rule.condition['@call']))
         && (rule.message === undefined || (typeof rule.message === 'string' && rule.message.length <= 1024))), 'invalid checks');
-    requireClassic(!(Object.hasOwn(component, '@accessibility') && Object.hasOwn(component, 'accessibility')), 'conflicting accessibility descriptors');
-    const a11y = component['@accessibility'] ?? component.accessibility;
+    const a11y = component['@accessibility'];
     if (a11y !== undefined) requireClassic(record(a11y) && allowedKeys(a11y, ['label', 'description', 'hidden', 'live']), 'invalid accessibility descriptor');
     requireClassic(component.weight === undefined || (typeof component.weight === 'number' && component.weight >= 0), "invalid layout weight");
     for (const [key, value] of Object.entries(component)) {
-      if (key === 'metadata' || key === '@metadata') continue;
+      if (key === '@metadata') continue;
       const call = key === 'action' ? readClassicActionFunction(value) : undefined;
       const target = key === 'action' ? readA2uiLinkTarget(value) : undefined;
       if (call) checkValueCalls(call.args,call.name!=='openUrl');
@@ -169,7 +172,7 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
 }
 
 /** Compile the upstream DSL (bare tool source); compilation alone never grants admission. */
-export function compileA2uiExpress(source: string, surfaceId: string): AgentToRendererMessage[] {
+export function compileA2uiExpress(source: string, surfaceId: string): unknown[] {
   requireClassic(isId(surfaceId), "invalid surface id");
   requireClassic(source.length <= MAX_SOURCE_BYTES && encoder.encode(source).length <= MAX_SOURCE_BYTES, "Express source too large");
   // Bound the grammar's recursion before calling ANTLR. Ignore delimiters in its comments and strings.
@@ -180,7 +183,7 @@ export function compileA2uiExpress(source: string, surfaceId: string): AgentToRe
     if ("([{".includes(token)) requireClassic(++depth <= MAX_DEPTH, "Express source too deeply nested");
     else if (")]}".includes(token)) depth--;
   }
-  return new ExpressParser(catalog, surfaceId, "1.0").compile(source);
+  return projectComponentEnvelope(new ExpressParser(catalog, surfaceId, "1.0").compile(source),true);
 }
 
 const surfaceOperations = ["createSurface", "updateComponents", "updateDataModel", "deleteSurface"] as const;
@@ -188,7 +191,7 @@ const surfaceOperations = ["createSurface", "updateComponents", "updateDataModel
 export function readA2uiDraftSurfaceId(messages: readonly unknown[]): string | undefined {
   const first = messages[0];
   const source = record(first) && record(first.createSurface) ? first.createSurface.surfaceId : undefined;
-  return isId(source) ? source : undefined;
+  return isSurfaceId(source) ? source : undefined;
 }
 
 /** A new publication uses a host-assigned ID. Rebind only the protocol envelope of its single draft surface. */
@@ -206,16 +209,19 @@ export function bindA2uiDraftId(messages: readonly unknown[], surfaceId: string)
   });
 }
 
-/** Adapt the canonical @-prefixed component descriptors to the installed SDK. */
-function forRendererState(messages: readonly unknown[]): unknown[] {
+/** Adapt @-prefixed component descriptors at the installed SDK boundary only. */
+function projectComponentEnvelope(messages: readonly unknown[], canonical = false): unknown[] {
   return structuredClone(messages).map(message => {
     if (!record(message)) return message;
     const body = message.createSurface ?? message.updateComponents;
     if (record(body) && Array.isArray(body.components)) {
       for (const item of body.components) if (record(item)) {
-        for (const key of ['catalogId','accessibility','checks','metadata'] as const) if (Object.hasOwn(item, `@${key}`)) {
-          item[key] = item[`@${key}`];
-          delete item[`@${key}`];
+        for (const key of ['catalogId','accessibility','checks','metadata'] as const) {
+          const [from,to]=canonical ? [key,`@${key}`] : [`@${key}`,key];
+          if (Object.hasOwn(item,from)) {
+            item[to]=item[from];
+            delete item[from];
+          }
         }
       }
     }
@@ -226,7 +232,7 @@ function forRendererState(messages: readonly unknown[]): unknown[] {
 /** Apply exactly one owned surface's bounded batch to a detached snapshot. */
 export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[], previous?: A2uiSnapshot, allowProgressive = false): A2uiSnapshot | null {
   const progressive = previous ? previous.progressive === true : allowProgressive;
-  requireClassic(isId(surfaceId) && messages.length > 0 && messages.length <= MAX_MESSAGES, "invalid surface or batch size");
+  requireClassic(isSurfaceId(surfaceId) && messages.length > 0 && messages.length <= MAX_MESSAGES, "invalid surface or batch size");
   checkJson(messages);
   requireClassic(encoder.encode(JSON.stringify(messages)).length <= MAX_SURFACE_BYTES, "batch too large");
   const state = progressive ? RendererState.of(new ClassicWireProcessor([catalog])) : new RendererState([catalog]);
@@ -235,7 +241,7 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
     // Validate the rehydrated snapshot too and detach the SDK's mutable data model from it.
     verifySnapshot(previous);
     const { progressive: _hostFlag, components, ...body } = previous;
-    const restored = state.apply(forRendererState([{ version: "1.0", createSurface: {
+    const restored = state.apply(projectComponentEnvelope([{ version: "1.0", createSurface: {
       ...body, ...(components.length ? { components } : {}),
     } }]));
     if (!progressive) state.checkTopology(restored);
@@ -257,18 +263,21 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
       exists = true;
     } else {
       requireClassic(exists, "surface does not exist");
-      if (operation === "updateComponents") checkComponents(body.components);
+      if (operation === "updateComponents") {
+        requireClassic(allowedKeys(body,['surfaceId','components']),'invalid component update');
+        checkComponents(body.components);
+      }
       if (operation === "updateDataModel") {
         requireClassic(allowedKeys(body, ["surfaceId", "path", "value"]) && Object.hasOwn(body, "value"), "invalid data update");
         if (body.path !== undefined) checkPath(body.path, true);
       }
       if (operation === "deleteSurface") {
-        requireClassic(previous && index === messages.length - 1, "delete must finish an existing surface's batch");
+        requireClassic(previous && index === messages.length - 1 && allowedKeys(body,['surfaceId']), "delete must finish an existing surface's batch");
         exists = false;
       }
     }
   }
-  const touched = state.apply(forRendererState(messages));
+  const touched = state.apply(projectComponentEnvelope(messages));
   if (!progressive) state.checkTopology(touched);
   if (!exists) return null;
 
@@ -309,7 +318,7 @@ function verifySnapshot(snapshot: A2uiSnapshot): void {
   requireClassic((snapshot.catalogId === undefined || snapshot.catalogId === CLASSIC_A2UI_CATALOG) && record(snapshot.dataModel)
     && encoder.encode(JSON.stringify(snapshot)).length <= MAX_SURFACE_BYTES, "invalid snapshot or snapshot too large");
   checkMetadata(snapshot.metadata);
-  requireClassic(!containsCall(snapshot.dataModel), "functions are not supported in data models");
+  // A data-model object is not an expression, even if it has directive-shaped keys.
   checkComponents(snapshot.components);
   const components = new Map(snapshot.components.map((item) => [item.id, item]));
   const componentPaths = new Map(snapshot.components.map((item, index) => [item.id, `/components/${index}`]));

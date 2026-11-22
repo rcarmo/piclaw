@@ -1,0 +1,69 @@
+{
+  "195": {
+    "version": "1.0",
+    "createSurface": {
+      "surfaceId": "user_profile_card",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+      "sendDataModel": true,
+      "components": [
+        {
+          "id": "root",
+          "component": "Column",
+          "children": [
+            "user_name"
+          ]
+        },
+        {
+          "id": "user_name",
+          "component": "Text",
+          "text": {
+            "@path": "/name"
+          }
+        }
+      ],
+      "dataModel": {
+        "name": "John Doe"
+      }
+    }
+  },
+  "232": {
+    "version": "1.0",
+    "updateComponents": {
+      "surfaceId": "user_profile_card",
+      "components": [
+        {
+          "id": "root",
+          "component": "Column",
+          "children": [
+            "user_name",
+            "user_title"
+          ]
+        },
+        {
+          "id": "user_name",
+          "component": "Text",
+          "text": "John Doe"
+        },
+        {
+          "id": "user_title",
+          "component": "Text",
+          "text": "Software Engineer"
+        }
+      ]
+    }
+  },
+  "270": {
+    "version": "1.0",
+    "updateDataModel": {
+      "surfaceId": "user_profile_card",
+      "path": "/user/name",
+      "value": "Jane Doe"
+    }
+  },
+  "291": {
+    "version": "1.0",
+    "deleteSurface": {
+      "surfaceId": "user_profile_card"
+    }
+  }
+}

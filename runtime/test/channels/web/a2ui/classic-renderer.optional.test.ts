@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium, webkit } from "playwright";
+import { referenceValidator } from '../../../fixtures/a2ui-v1/schema.js';
 import { CLASSIC_CONTENT_SECURITY_POLICY } from '../../../../src/channels/web/http/security.js';
 import { applyA2uiMessages, compileA2uiExpress } from "../../../../src/channels/web/a2ui/express.js";
 import type { CallAgentFunctionMessage } from '@a2ui/web_core/v1_0';
@@ -247,6 +248,8 @@ for (const engine of [chromium, webkit]) {
       expect(await field.inputValue()).toBe("Keep this draft");
       await button.click();
       const events = await page.evaluate(() => (window as any).events);
+      const validateToAgent=(await referenceValidator())('renderer_to_agent.json');
+      expect(validateToAgent(events.at(-1).message),JSON.stringify(validateToAgent.errors)).toBe(true);
       expect(events).toHaveLength(2);
       expect(events[1]).toMatchObject({ post_id: 19, thread_id: 3, chat_jid: "web:test", revision: 1,
         request_id: events[0].request_id, message: { version: "1.0", action: { name:"save", surfaceId:"test-form",
