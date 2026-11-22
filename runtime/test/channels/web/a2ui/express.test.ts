@@ -269,6 +269,17 @@ describe("Classic A2UI Express", () => {
   });
 });
 
+test('template system actions reject unknown index arguments',()=>{
+  const surfaceId='indexed-action',catalogId='https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json';
+  const create=(args:unknown)=>[{version:'1.0',createSurface:{surfaceId,catalogId,dataModel:{rows:[{}]},components:[
+    {id:'root',component:'List',children:{componentId:'row',path:'/rows'}},
+    {id:'row',component:'Button',child:'label',action:{functionCall:{'@call':'@index',args}}},
+    {id:'label',component:'Text',text:'Index'},
+  ]}}];
+  expect(applyA2uiMessages(surfaceId,create({offset:2}),undefined,true)).toBeTruthy();
+  expect(()=>applyA2uiMessages(surfaceId,create({offset:2,ignored:'extra'}),undefined,true)).toThrow();
+});
+
 test('wire actions resolve their catalogue without relaxing the component or function envelope', () => {
   const surfaceId='wire-invocation';
   const catalogId='https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json';

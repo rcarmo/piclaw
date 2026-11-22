@@ -91,8 +91,13 @@ function containsCall(value: unknown, name?: string): boolean {
 
 function checkFunctionArguments(name:string,args:unknown) {
   requireClassic(args===undefined || (record(args) && Object.keys(args).every(isClassicEntityName)),'invalid function arguments');
+  if (name==='@index') {
+    if (record(args)) requireClassic(allowedKeys(args,['offset']) && (args.offset===undefined || typeof args.offset==='number'
+      || (record(args.offset) && (Object.hasOwn(args.offset,'@path') || isClassicFunctionName(args.offset['@call'])))), 'invalid @index arguments');
+    return;
+  }
   const definition=basicCatalog.functions.get(name);
-  if (!definition || name==='@index') return;
+  if (!definition) return;
   // The installed SDK's Zod schemas strip surplus arguments and retain some
   // JSON Schema constraints as annotations. Enforce those at wire admission.
   const {shape}=definition.schema as {shape?:Record<string,unknown>};
@@ -118,11 +123,7 @@ function checkValueCalls(value: unknown, allowRemote = false): void {
     requireClassic((isClassicValueFunction(name) || (allowRemote && isClassicFunctionName(name) && name!=='openUrl'))
       && allowedKeys(value, ['@call', 'args', 'catalogId'])
       && (value.catalogId === undefined || (name !== '@index' && value.catalogId === CLASSIC_A2UI_CATALOG)), 'unsupported function in a value');
-    const args = value.args;
-    checkFunctionArguments(name,args);
-    if (name === '@index' && record(args)) requireClassic(allowedKeys(args, ['offset']) && (args.offset === undefined
-      || typeof args.offset === 'number' || (record(args.offset) && (Object.hasOwn(args.offset, '@path') || isClassicValueFunction(args.offset['@call'])
-        || (allowRemote && isClassicFunctionName(args.offset['@call']))))), 'invalid @index arguments');
+    checkFunctionArguments(name,value.args);
   }
   Object.values(value).forEach(item=>checkValueCalls(item,allowRemote));
 }

@@ -125,6 +125,7 @@ for (const engine of [chromium, webkit]) {
             await displayRpc.promise;
             return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,value:`Ready: ${callFunction.args?.label}`}});
           }
+          if (callFunction['@call']==='verifyProjection') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,value:true}});
           if (callFunction['@call']==='checkValue') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,
             value:callFunction.args?.input==='ready' ? {valid:true} : {valid:false,message:'Awaiting verified value'},
           }});
@@ -517,6 +518,34 @@ for (const engine of [chromium, webkit]) {
         rpc_derived_receipts:{'context:summary':[sites[0].message.callAgentFunction.functionCallId],userMessage:[sites[1].message.callAgentFunction.functionCallId]},
         message:{action:{name:'verified',userMessage:'Fresh summary',context:{value:'ready',summary:'Fresh summary'}}},
       });
+      const recheckId='async-check-projection';
+      const recheck=applyA2uiMessages(recheckId,[{version:'1.0',createSurface:{surfaceId:recheckId,catalogId:basicCatalogue,
+        dataModel:{value:'Stored condition'},components:[
+          {id:'root',component:'Column',children:['edit','check','audio']},
+          {id:'edit',component:'TextField',label:'Unshared field',value:{'@path':'/value'}},
+          {id:'check',component:'Button',child:'checkLabel',action:{event:{name:'verifiedProjection'}},
+            '@checks':[{condition:{'@call':'verifyProjection',args:{input:{'@path':'/value'}}}}]},
+          {id:'checkLabel',component:'Text',text:'Confirm projected check'},
+          {id:'audio',component:'AudioPlayer',url:{'@path':'/absent'},description:'Unavailable audio',
+            '@accessibility':{label:'Recording description',hidden:true,live:'polite'}},
+        ],
+      }}],undefined,true)!;
+      await page.evaluate(item=>(window as any).draw(item),{...block,owner:'agent',revision:21,surface:recheck});
+      const recheckButton=panel.getByRole('button',{name:'Confirm projected check'});
+      await page.waitForFunction(()=>document.querySelector('.a2ui-surface button')?.getAttribute('aria-disabled')==='false');
+      await panel.getByRole('textbox',{name:'Unshared field'}).fill('Local condition');
+      await page.waitForFunction(()=>document.querySelector('.a2ui-surface button')?.getAttribute('aria-disabled')==='false');
+      const rechecks=()=>rpcRequests.filter(request=>request.message.callAgentFunction.surfaceId===recheckId);
+      expect(rechecks().map(r=>r.message.callAgentFunction.callFunction.args?.input)).toEqual(['Stored condition','Local condition']);
+      await recheckButton.click();
+      await page.waitForFunction(()=>(window as any).events.at(-1)?.message.action.name==='verifiedProjection',undefined,{timeout:2500});
+      expect(rechecks().map(r=>r.message.callAgentFunction.callFunction.args?.input)).toEqual(['Stored condition','Local condition','Stored condition']);
+      const projected=await page.evaluate(()=>(window as any).events.at(-1));
+      expect(projected.message.action.context).toEqual({});
+      expect(projected.a2ui_drafts?.some((draft:{surface_id:string})=>draft.surface_id===recheckId) ?? false).toBe(false);
+      expect(projected.rpc_receipts).toEqual([rechecks().at(-1)!.message.callAgentFunction.functionCallId]);
+      expect(await panel.getByText('Unavailable audio').getAttribute('aria-hidden')).toBe('true');
+      expect(await panel.getByText('Unavailable audio').getAttribute('aria-live')).toBe('polite');
       const localId='local-expression-errors';
       const badFormat={'@call':'formatNumber',args:{value:{'@path':'/number'}}};
       const brokenLocal=applyA2uiMessages(localId,[{version:'1.0',createSurface:{surfaceId:localId,catalogId:basicCatalogue,

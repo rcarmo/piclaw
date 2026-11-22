@@ -97,10 +97,8 @@ export function A2uiSurface({ block, source, onSubmit }: {
         const action = components.get(componentId)?.action as {event?: {name?:string;context?:Record<string,unknown>;userMessage?:unknown};functionCall?:unknown} | undefined;
         const functionCall = readClassicActionFunction(action);
         const derivesRemotely=remoteField(action?.event?.userMessage) || Object.values(action?.event?.context ?? {}).some(remoteField);
-        const staleEvidence=[...(valueFunctions.receipts?.values() ?? [])].some(receipt=>receipt.refreshAfter<=Date.now());
-        const needsFunctionLifetime=!!functionCall || derivesRemotely || staleEvidence;
-        const signal=needsFunctionLifetime ? functionLifetime.current?.signal : undefined;
-        if (needsFunctionLifetime && !signal) return;
+        const signal=block.owner==='agent' ? functionLifetime.current?.signal : undefined;
+        if (block.owner==='agent' && !signal) return;
         inFlight.current = true;
         setPending(true);
         setError('');
@@ -114,7 +112,8 @@ export function A2uiSurface({ block, source, onSubmit }: {
             const own=syncDraft && !cancels ? steps : a2uiTopologyDrafts(block.surface,steps);
             const others=block.owner==='agent' && !cancels ? a2uiDraftsFor(chat)?.filter(draft=>draft.surface_id!==surfaceId) ?? [] : [];
             const currentDrafts=own.length ? [...others.slice(-6),{surface_id:surfaceId,revision:block.revision,edits:[...own]}] : others;
-            const evaluation=derivesRemotely || staleEvidence ? prepareA2uiActionEvaluation(block.surface,instance.id,edits,instance.instancePath,own) : undefined;
+            const evaluation=derivesRemotely || valueFunctions.expressions.size
+                ? prepareA2uiActionEvaluation(block.surface,instance.id,edits,instance.instancePath,own) : undefined;
             const settledSites=new Map<string,{id:string;key:string;value:unknown}[]>();
             if (derivesRemotely && signal && evaluation) {
                 for (const {site,value} of evaluation.derived) {
@@ -138,8 +137,11 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 };
             };
             const currentReceipts=new Map<string,{id:string;value:unknown;refreshAfter:number}>(valueFunctions.receipts);
-            if (staleEvidence && signal && evaluation) {
+            if (signal && evaluation) {
                 const memo=new Map<string,Promise<unknown>>();
+                // The action may deliberately omit unshared edits used by the live
+                // check. Reuse only a fresh receipt for its final argument values.
+                for (const [key,receipt] of currentReceipts) if (receipt.refreshAfter>Date.now()) memo.set(key,Promise.resolve(receipt.value));
                 for (const candidate of actionValidationExpressions(evaluation)) {
                     await evaluateA2uiFunction(candidate.value,{snapshot:evaluation.projection.snapshot,edits:evaluation.declaredEdits,
                         instance:candidate.instance,source:{...source,revision:block.revision},signal,memo,receipts:currentReceipts,
@@ -261,7 +263,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 const origin = window.location.origin;
                 const source = readA2uiPlaybackUrl(read(item.url), origin, kind);
                 const description = text(item.description);
-                if (!source) return description || null;
+                if (!source) return description ? html`<span key=${id} role=${groupRole} ...${aria}>${description}</span>` : null;
                 const poster = kind === 'video' ? readA2uiImageUrl(read(item.posterUrl), origin) : undefined;
                 return html`<${A2uiPlayback} key=${JSON.stringify([item.id, source.url, poster])} kind=${kind} source=${source.url}
                     external=${source.external} label=${description} poster=${poster} aria=${aria} />`;
