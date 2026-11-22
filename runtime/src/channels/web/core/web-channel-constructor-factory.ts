@@ -81,6 +81,7 @@ export interface WebChannelConstructorFactoryRuntimeOpts {
   queue: AgentQueue;
   agentPool: AgentPool;
   prepareInputSourceAdmission?: WebChannelLike["prepareInputSourceAdmission"];
+  a2uiRpcScope?: WebChannelLike['a2uiRpcScope'];
   prepareInputText?: WebChannelLike["prepareInputText"];
   inspectAddonInstall?: WebChannelLike["inspectAddonInstall"];
   getInputSourceAdmission?: WebChannelLike["getInputSourceAdmission"];

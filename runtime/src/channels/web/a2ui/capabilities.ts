@@ -18,8 +18,8 @@ function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** A Classic offer is scoped to one accepted input. Never resolve catalogue IDs as URLs. */
-export function negotiateClassicA2ui(metadata: unknown): ClassicA2uiRendererCapabilities | undefined {
+/** Read version-scoped IDs, never interpreting them as URLs or accepting inline catalogue code. */
+export function readA2uiCatalogueOffer(metadata: unknown): readonly string[] | undefined {
   if (metadata === undefined) return;
   if (!record(metadata)) throw new InvalidA2uiCapabilitiesError();
   const capabilities = metadata.a2uiRendererCapabilities;
@@ -32,5 +32,10 @@ export function negotiateClassicA2ui(metadata: unknown): ClassicA2uiRendererCapa
     || (offer.inlineCatalogs !== undefined && (!Array.isArray(offer.inlineCatalogs) || offer.inlineCatalogs.length > 0))) {
     throw new InvalidA2uiCapabilitiesError();
   }
-  return offer.supportedCatalogIds.includes(CLASSIC_A2UI_CATALOG) ? CLASSIC_A2UI_RENDERER_CAPABILITIES : undefined;
+  return offer.supportedCatalogIds;
+}
+
+/** Ordinary Classic messages negotiate the Basic Catalogue on this accepted input only. */
+export function negotiateClassicA2ui(metadata: unknown): ClassicA2uiRendererCapabilities | undefined {
+  return readA2uiCatalogueOffer(metadata)?.includes(CLASSIC_A2UI_CATALOG) ? CLASSIC_A2UI_RENDERER_CAPABILITIES : undefined;
 }

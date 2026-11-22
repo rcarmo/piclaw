@@ -1,4 +1,10 @@
-import { isA2uiActionValue, type A2uiActionValue } from './action.js';
+export type A2uiActionValue = string | number | boolean | null | string[];
+
+export function isA2uiActionValue(value: unknown): value is A2uiActionValue {
+  return value === null || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))
+    || (typeof value === 'string' && value.length <= 4096)
+    || (Array.isArray(value) && value.length <= 96 && value.every(entry => typeof entry === 'string' && entry.length <= 256));
+}
 
 export interface A2uiDraftEdit {
   component_id: string;

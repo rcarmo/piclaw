@@ -183,14 +183,15 @@ function createSchema(database: Database): void {
       PRIMARY KEY (id, chat_jid),
       FOREIGN KEY (chat_jid) REFERENCES chats(jid)
     );
-    CREATE TABLE IF NOT EXISTS a2ui_synced_surfaces (
+    CREATE TABLE IF NOT EXISTS a2ui_surface_owners (
       chat_jid TEXT NOT NULL,
       message_id TEXT NOT NULL,
       conversation_id INTEGER NOT NULL,
+      send_data_model INTEGER NOT NULL,
       PRIMARY KEY (chat_jid, message_id),
       FOREIGN KEY (message_id, chat_jid) REFERENCES messages(id, chat_jid) ON DELETE CASCADE
     );
-    CREATE INDEX IF NOT EXISTS idx_a2ui_synced_surfaces_owner ON a2ui_synced_surfaces(chat_jid, conversation_id);
+    CREATE INDEX IF NOT EXISTS idx_a2ui_surface_owners_sync ON a2ui_surface_owners(chat_jid, conversation_id) WHERE send_data_model=1;
     -- Agent-input metadata is not part of the messages table or its timeline/search projections.
     CREATE TABLE IF NOT EXISTS a2ui_input_metadata (
       chat_jid TEXT NOT NULL,

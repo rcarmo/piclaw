@@ -85,6 +85,7 @@ export interface WebChannelOpts {
   agentPool: AgentPool;
   /** Internal host coordinator only; never derived from request fields. */
   prepareInputSourceAdmission?: WebChannelLike["prepareInputSourceAdmission"];
+  a2uiRpcScope?: WebChannelLike['a2uiRpcScope'];
   prepareInputText?: WebChannelLike["prepareInputText"];
   inspectAddonInstall?: WebChannelLike["inspectAddonInstall"];
   getInputSourceAdmission?: WebChannelLike["getInputSourceAdmission"];
@@ -506,6 +507,7 @@ export class WebChannel implements WebChannelLike {
   queue!: AgentQueue;
   agentPool!: AgentPool;
   declare prepareInputSourceAdmission?: WebChannelOpts["prepareInputSourceAdmission"];
+  declare a2uiRpcScope?: WebChannelOpts['a2uiRpcScope'];
   declare prepareInputText?: WebChannelOpts["prepareInputText"];
   declare inspectAddonInstall?: WebChannelOpts["inspectAddonInstall"];
   declare getInputSourceAdmission?: WebChannelOpts["getInputSourceAdmission"];

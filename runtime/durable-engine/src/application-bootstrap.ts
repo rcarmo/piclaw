@@ -32,6 +32,7 @@ import { createHostDurableBindings, createInputHandoffCompletion } from "./host-
 import { prepareHostSchema } from "./host-schema.js";
 import { readApplicationMessagePayload } from "./accepted-payload-recovery.js";
 import { ownsA2uiModelSync, projectA2uiAgentInput, readA2uiRendererDataModel, storeA2uiInputMetadata } from '../../src/channels/web/a2ui/input-metadata.js';
+import { A2uiAgentRpc, type A2uiAgentFunction } from '../../src/channels/web/a2ui/agent-rpc.js';
 import { value, effect, sealed } from "./host-effects.js";
 import { hashScheduledLeaseToken } from "../../src/service-effects/current-piclaw/scheduled-run-values.js";
 import type { ScheduledRunLease } from "../../src/service-effects/contracts/scheduled-run-store.js";
@@ -117,6 +118,7 @@ export interface ApplicationBootstrapOptions {
   onRuntime?: (runtime: import("./host-runtime.js").HostConversationRuntime) => void | Promise<void>;
   onConversationReady?: (id:ConversationId)=>Promise<void>;
   preparePrompt?: (id:ConversationId,text:string)=>Promise<void>;
+  a2uiAgentFunctions?: readonly A2uiAgentFunction[];
   assertConversationAvailable?: () => void;
   assertAdmission?: RuntimeOptions["assertAdmission"];
   /** Host-owned physical catalog approval; no credentials or provider execution. */
@@ -438,6 +440,17 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       const scope=routeIndex.get(chat);if(!scope||!lookup(chat,scope.branchId))throw Error("Unbound native queue");
       const check=()=>{assertLive();authorise?.();if(routeIndex.get(chat)!==scope||!lookup(chat,scope.branchId))throw Error("Native queue authority changed");};check();
       return candidateDatabase.withAdmissionGuard(check,()=>runtime.reorderQueuedMessages({incarnation:r.incarnation,...scope},ids));
+    };
+    const a2uiAgentRpc = new A2uiAgentRpc(config.a2uiAgentFunctions);
+    const a2uiRpcScope: NonNullable<WebChannelOpts['a2uiRpcScope']> = chat => {
+      assertLive();
+      const route = routeIndex.get(chat);
+      if (!route || lookup(chat, route.branchId)?.conversationId !== route.conversationId) return;
+      return { conversationId:route.conversationId, agent:a2uiAgentRpc, signal:shutdown.signal, assertCurrent() {
+        assertLive();
+        if (routeIndex.get(chat) !== route || lookup(chat, route.branchId)?.conversationId !== route.conversationId)
+          throw Error('A2UI RPC conversation changed');
+      } };
     };
     const getInputSourceAdmission = (chat: string, provenanceRef="application:pi-durable"): ReturnType<NonNullable<WebChannelOpts["getInputSourceAdmission"]>> => {
       const current = () => { const binding = routeIndex.get(chat); return binding && lookup(chat, binding.branchId); };
@@ -957,7 +970,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       bind(options: Pick<WebChannelOpts, "queue" | "agentPool">): Readonly<WebChannelOpts> {
         assert(); if (bound || closing) throw Error("Application bundle already bound or closing");
         bound = true;
-        return Object.freeze({ ...options, prepareInputSourceAdmission, getInputSourceAdmission,
+        return Object.freeze({ ...options, prepareInputSourceAdmission, getInputSourceAdmission, a2uiRpcScope,
           prepareInputText: prepareInputText ? (chat: string, text: string) => { assertLive(); if (!routeIndex.has(chat)) throw Error("Unbound input preparation"); return prepareInputText(chat, text); } : undefined,
           dispatchAcceptedInput: dispatch, filterNativeTimeline, readNativeQueue, controlNativeQueue, reorderNativeQueue });
       },

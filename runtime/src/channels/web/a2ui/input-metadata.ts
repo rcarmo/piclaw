@@ -31,29 +31,38 @@ export async function prepareA2uiDraftProjection(patches: A2uiDraftPatch[]): Pro
   };
 }
 
-export function reserveA2uiModelSync(database: Database, chatJid: string, messageId: string, conversationId: number): void {
-  if (!database.inTransaction) throw Error('A2UI model sync requires the surface publication transaction');
-  const count = database.query('SELECT COUNT(*) AS total FROM a2ui_synced_surfaces WHERE chat_jid=? AND conversation_id=?')
-    .get(chatJid, conversationId) as {total: number};
-  // Seven maximum-sized models and envelope overhead fit in one bounded native input.
-  if (count.total >= 7) throw Error('Too many active A2UI surfaces with model sync');
-  database.query('INSERT INTO a2ui_synced_surfaces (chat_jid,message_id,conversation_id) VALUES (?,?,?)').run(chatJid,messageId,conversationId);
+export function bindA2uiSurfaceOwner(database: Database, chatJid: string, messageId: string, conversationId: number, sync: boolean): void {
+  if (!database.inTransaction) throw Error('A2UI ownership requires the surface publication transaction');
+  if (sync) {
+    const count = database.query('SELECT COUNT(*) AS total FROM a2ui_surface_owners WHERE chat_jid=? AND conversation_id=? AND send_data_model=1')
+      .get(chatJid, conversationId) as {total: number};
+    // Seven maximum-sized models and envelope overhead fit in one bounded native input.
+    if (count.total >= 7) throw Error('Too many active A2UI surfaces with model sync');
+  }
+  database.query('INSERT INTO a2ui_surface_owners (chat_jid,message_id,conversation_id,send_data_model) VALUES (?,?,?,?)')
+    .run(chatJid,messageId,conversationId,Number(sync));
 }
 
-export function ownsA2uiModelSync(database: Database, chatJid: string, messageId: string, conversationId: number | undefined): boolean {
-  return conversationId !== undefined && !!database.query(`SELECT 1 FROM a2ui_synced_surfaces WHERE chat_jid=? AND message_id=? AND conversation_id=?`)
-    .get(chatJid, messageId, conversationId);
+export function readA2uiSurfaceOwner(database: Database, chatJid: string, messageId: string) {
+  return database.query(`SELECT s.conversation_id,s.send_data_model,m.rowid AS post_id FROM a2ui_surface_owners s
+    JOIN messages m ON m.chat_jid=s.chat_jid AND m.id=s.message_id WHERE s.chat_jid=? AND s.message_id=?`)
+    .get(chatJid, messageId) as {conversation_id:number;send_data_model:0|1;post_id:number} | null;
+}
+
+export function ownsA2uiModelSync(database: Database, chatJid: string, messageId: string, conversationId: number): boolean {
+  const owner = readA2uiSurfaceOwner(database, chatJid, messageId);
+  return owner?.conversation_id === conversationId && owner.send_data_model === 1;
 }
 
 export function releaseA2uiModelSync(database: Database, chatJid: string, messageId: string): void {
   if (!database.inTransaction) throw Error('A2UI model sync release requires the surface transaction');
-  database.query('DELETE FROM a2ui_synced_surfaces WHERE chat_jid=? AND message_id=?').run(chatJid,messageId);
+  database.query('UPDATE a2ui_surface_owners SET send_data_model=0 WHERE chat_jid=? AND message_id=?').run(chatJid,messageId);
 }
 
 /** Collect active agent-owned models for the exact native conversation, not from the browser. */
 export function readA2uiRendererDataModel(database: Database, chatJid: string, conversationId: number, input?: A2uiRendererInput): A2uiRendererDataModel {
-  const rows = database.query(`SELECT m.id, m.content_blocks FROM a2ui_synced_surfaces s JOIN messages m
-    ON m.id=s.message_id AND m.chat_jid=s.chat_jid WHERE s.chat_jid=? AND s.conversation_id=? AND m.is_bot_message=1
+  const rows = database.query(`SELECT m.id, m.content_blocks FROM a2ui_surface_owners s JOIN messages m
+    ON m.id=s.message_id AND m.chat_jid=s.chat_jid WHERE s.chat_jid=? AND s.conversation_id=? AND s.send_data_model=1 AND m.is_bot_message=1
     AND json_valid(m.content_blocks) ORDER BY m.id`).all(chatJid,conversationId) as {id: string; content_blocks: string}[];
   const surfaces: A2uiRendererDataModel['surfaces'] = {};
   for (const row of rows) {

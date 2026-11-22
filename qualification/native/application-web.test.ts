@@ -15,6 +15,9 @@ import { createRuntimeBaseServices } from "../../runtime/src/runtime/composition
 import { acquireRuntimeLock } from "../../runtime/src/runtime/single-instance.js";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
 import { storeChatMetadata } from "../../runtime/src/db.js";
+import { storeMessageInDatabase } from '../../runtime/src/db/messages.js';
+import { defineA2uiAgentFunction } from '../../runtime/src/channels/web/a2ui/agent-rpc.js';
+import { publishAgentA2ui } from '../../runtime/src/channels/web/a2ui/publish.js';
 import { installTerminalSettlementCompositionSchema } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-schema.js";
 import { BunSqliteDatabase } from "../../runtime/durable-engine/src/bun-sqlite.js";
 import { applicationOwnership, createApplicationBootstrapBundle } from "../../runtime/durable-engine/src/application-bootstrap.js";
@@ -84,7 +87,13 @@ for (const forks of [false, true]) {
   const failed = barrier();
   const terminalEffects: string[] = [];
   let settlementRuntime: import("../../runtime/durable-engine/src/host-runtime.js").HostConversationRuntime | undefined;
+  const rpcCatalogue = 'urn:piclaw:qualification:rpc:v1';
+  let rpcCalls = 0;
   const options = { root: db, path, ownership,
+    a2uiAgentFunctions: [defineA2uiAgentFunction({catalogue:rpcCatalogue,name:'capitalizeLabel',
+      parseArgs: args => Object.keys(args).length === 1 && typeof args.label === 'string' ? {label:args.label} : undefined,
+      run: ({label}) => { rpcCalls++; return label.toUpperCase(); },
+    })],
     onRuntime(runtime) { settlementRuntime = runtime; },
     async dispatchHostCommand(chat, text) {
       expect(chat).toBe(importedBindings.manifest[0]!.chatJid);
@@ -248,6 +257,25 @@ for (const forks of [false, true]) {
     }
     expect(base.host.modelCalls).toBe(0);
     expect(await channel.readNativeQueue!(chat)).toEqual([]);
+    const threadId=storeMessageInDatabase(db,{id:'rpc-source',chat_jid:chat,sender:'fixture',sender_name:'Fixture',content:'RPC source',timestamp:new Date().toISOString(),is_from_me:false});
+    const published=await publishAgentA2ui({root:db,chatJid:chat,conversationId:importedRoot.id,thread:() => threadId,
+      authorise:() => lock.assertCurrentOwner()}, {fallback:'Scoped RPC surface',express:'root=Text("RPC fixture")'});
+    const call={chat_jid:chat,post_id:published.rowId,thread_id:threadId,revision:published.revision,
+      metadata:{a2uiRendererCapabilities:{'1.0':{supportedCatalogIds:[rpcCatalogue]}}},
+      message:{version:'1.0',callAgentFunction:{surfaceId:published.surfaceId,functionCallId:'native-rpc-1',
+        callFunction:{'@call':'capitalizeLabel',catalogId:rpcCatalogue,args:{label:'piclaw'}}}}};
+    const ask = (body:unknown, origin='http://fixture') => channel.handleRequest(new Request('http://fixture/agent/a2ui-rpc', {
+      method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify(body),
+    }));
+    expect((await ask(call,'http://other.invalid')).status).toBe(403);
+    expect((await ask({...call,chat_jid:forks ? sibling : unbound})).status).toBe(409);
+    for (const response of await Promise.all([ask(call),ask(call)])) {
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({version:'1.0',agentFunctionResponse:{functionCallId:'native-rpc-1',value:'PICLAW'}});
+    }
+    expect(rpcCalls).toBe(1);
+    expect(base.host.modelCalls).toBe(0);
+    expect(db.query('SELECT count(*) AS n FROM service_effect_s01_sources WHERE chat_jid=?').get(chat)).toEqual({n:0});
   } catch (error) {
     // Preserve the original assertion if cleanup of a deliberately uncertain
     // operation also times out. These fixtures contain synthetic data only.

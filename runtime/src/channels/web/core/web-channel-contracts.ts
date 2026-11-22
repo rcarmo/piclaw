@@ -21,6 +21,7 @@ import type { WebauthnEnrolPageContext } from "../auth/webauthn-enrol-page.js";
 import type { getAddonApiHealthSnapshot } from "../../../addons/addon-api-health.js";
 import type { StoreWebMessageOptions } from "../messaging/message-store.js";
 import type { A2uiRendererInput } from '../a2ui/input-metadata.js';
+import type { A2uiRpcRuntimeScope } from '../a2ui/agent-rpc.js';
 
 export interface TokenUsageCounterSummary {
   input_tokens: number;
@@ -128,6 +129,7 @@ export interface WebChannelLike
   queue: TaskQueueLike;
   /** Trusted host-only selection, captured before reading HTTP input; absent by default. */
   prepareInputSourceAdmission?(chatJid: string): Promise<void>;
+  a2uiRpcScope?(chatJid: string): A2uiRpcRuntimeScope | undefined;
   prepareInputText?(chatJid: string, text: string): PreparedInputText;
   /** Read-only compatibility check from the active native source policy. */
   inspectAddonInstall?(name: string, version?: string, directory?: string): { supportedVersion: string; problem?: string } | undefined;

@@ -8,7 +8,7 @@ import { admitSqliteWrite } from '../../../db/sqlite-async-admission.js';
 import { stripInternalTags } from '../../../router.js';
 import { replaceSurfaceBlocks } from './persistence.js';
 import { publicationProtocolError } from './protocol-errors.js';
-import { ownsA2uiModelSync, releaseA2uiModelSync, reserveA2uiModelSync } from './input-metadata.js';
+import { bindA2uiSurfaceOwner, readA2uiSurfaceOwner, releaseA2uiModelSync } from './input-metadata.js';
 import { isA2uiSurfaceBlock, type A2uiSurfaceBlock } from './surface.js';
 
 export const a2uiToolParameters = Type.Object({
@@ -75,8 +75,9 @@ export async function publishAgentA2ui(options: {
     if (prior) {
       const current = lookup(params.post_id!);
       if (!current || JSON.stringify(current.surface) !== JSON.stringify(prior.surface)) throw new Error('Surface has changed');
-      if (current.surface.surface.sendDataModel && !ownsA2uiModelSync(root, chatJid, messageId, conversationId))
-        throw new Error('Model sync belongs to another agent conversation');
+      const owner = readA2uiSurfaceOwner(root, chatJid, messageId);
+      if (owner ? owner.conversation_id !== conversationId : current.surface.surface.sendDataModel)
+        throw new Error('Surface belongs to another agent conversation');
       const blocks = current.blocks.map(block => block === current.surface
         ? next ?? { type: "a2ui_surface_removed", revision } : block);
       replaceSurfaceBlocks(root, chatJid, params.post_id!, blocks);
@@ -88,7 +89,7 @@ export async function publishAgentA2ui(options: {
       sender: 'assistant', sender_name: getIdentityConfig().assistantName, is_from_me: true, is_bot_message: true,
       timestamp: new Date().toISOString(), content: fallback, content_blocks: [next] });
     if (row <= 0) throw new Error('Could not store surface');
-    if (next.surface.sendDataModel) reserveA2uiModelSync(root, chatJid, messageId, conversationId!);
+    if (conversationId !== undefined) bindA2uiSurfaceOwner(root, chatJid, messageId, conversationId, next.surface.sendDataModel === true);
     return row;
   }, check, signal, undefined, assertBinding);
   return { rowId, surfaceId, revision, deleted: !surface, created: !editing };

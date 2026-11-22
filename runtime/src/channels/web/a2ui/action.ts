@@ -5,11 +5,10 @@ import { checkA2uiComponent } from "./checks.js";
 import { a2uiInstanceId, projectA2uiTemplates } from "./templates.js";
 import { a2uiDateTimeType, validA2uiDateTime } from "./date-time.js";
 import { a2uiSliderRange, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
-import type { A2uiDraftEdit, A2uiDraftPatch } from './drafts.js';
+import { isA2uiActionValue, type A2uiActionValue as ActionValue, type A2uiDraftEdit, type A2uiDraftPatch } from './drafts.js';
+export { isA2uiActionValue } from './drafts.js';
 import type { ClassicA2uiRendererCapabilities } from './capabilities.js';
 
-export type A2uiActionValue = string | number | boolean | null | string[];
-type ActionValue = A2uiActionValue;
 export interface A2uiAction {
   surfaceId: string;
   sourceComponentId: string;
@@ -53,12 +52,6 @@ function isInput(component: A2uiComponent): boolean {
 
 function controlForPath(snapshot: A2uiSnapshot, path: string): A2uiComponent | undefined {
   return snapshot.components.find(component => isInput(component) && a2uiBindingPath(component.value) === path);
-}
-
-export function isA2uiActionValue(value: unknown): value is ActionValue {
-  return value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))
-    || (typeof value === "string" && value.length <= 4096)
-    || (Array.isArray(value) && value.length <= 96 && value.every((entry) => typeof entry === "string" && entry.length <= 256));
 }
 
 function validControlValue(snapshot: A2uiSnapshot, control: A2uiComponent, value: ActionValue): boolean {

@@ -972,5 +972,5 @@ ${tt.map(({id:ne,name:He},Ps)=>{let yr=He||`attachment-${Ps+1}`;return`- attachm
     </main>
   `}var rd=document.createElement("style");rd.textContent="html,body,#session-picker-fixture-root{margin:0;width:100%;height:100%;overflow:hidden}.session-picker-fixture{position:relative;width:100%;height:100%;display:flex;align-items:flex-end;background:var(--bg-primary,#111827)}.session-picker-fixture>.compose-box{width:100%}#session-picker-action{position:fixed;top:4px;left:4px;z-index:2;font:12px monospace;color:var(--text-primary,#fff)}";document.head.appendChild(rd);var id=document.getElementById("session-picker-fixture-root")||document.body.appendChild(document.createElement("div"));id.id="session-picker-fixture-root";ln(v`<${qb} />`,id);
 
-//# debugId=00ABEC8F3EF8996D64756E2164756E21
+//# debugId=9543978D986702AF64756E2164756E21
 //# sourceMappingURL=session-picker-fixture.bundle.js.map
