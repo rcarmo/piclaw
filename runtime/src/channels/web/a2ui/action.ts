@@ -11,6 +11,7 @@ export interface A2uiAction {
   name: string;
   timestamp: string;
   context: Record<string, ActionValue>;
+  userMessage?: string;
 }
 
 export interface A2uiActionMessage {
@@ -56,7 +57,8 @@ function eventDescriptor(projection: Projection, sourceComponentId: string, inst
   const source = projection.snapshot.components.find(({ id }) => id === instanceId);
   if (source?.component !== "Button" || !record(source.action) || !record(source.action.event)
     || typeof source.action.event.name !== "string") throw new Error("Invalid surface action");
-  return { name: source.action.event.name, context: record(source.action.event.context) ? source.action.event.context : {} };
+  return { name: source.action.event.name, context: record(source.action.event.context) ? source.action.event.context : {},
+    userMessage: source.action.event.userMessage };
 }
 
 function controlForPath(snapshot: A2uiSnapshot, path: string): A2uiComponent | undefined {
@@ -101,6 +103,14 @@ function defaultControlValue(component: A2uiComponent | undefined): ActionValue 
   return component ? "" : null;
 }
 
+function resolveUserMessage(snapshot: A2uiSnapshot, descriptor: unknown, edits: ReadonlyMap<string, unknown>, instancePath?: string): string | undefined {
+  const value = readA2uiValue(snapshot, descriptor, edits, instancePath);
+  if (value === undefined || value === null) return;
+  const text = typeof value === 'number' && Number.isFinite(value) ? String(value) : value;
+  if (typeof text !== 'string' || text.length > 4096) throw new Error('Invalid action description');
+  return text;
+}
+
 /** Send only context declared by this button. Neither edits nor snapshot leave the browser wholesale. */
 export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string, edits: ReadonlyMap<string, unknown>, timestamp: string, instancePath?: string): A2uiActionMessage {
   const projection = projectA2uiTemplates(source);
@@ -110,7 +120,8 @@ export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string,
   const declaredEdits = new Map<string, unknown>();
   for (const [, binding] of contextBindings) {
     const path = a2uiBindingPath(binding);
-    if (path && edits.has(path) && controlForPath(snapshot, path)) declaredEdits.set(path, edits.get(path));
+    const control = path ? controlForPath(snapshot, path) : undefined;
+    if (path && control) declaredEdits.set(path, readA2uiValue(snapshot, binding, edits) ?? defaultControlValue(control));
   }
   const context = Object.fromEntries(contextBindings.map(([key, binding]) => {
     const path = a2uiBindingPath(binding);
@@ -119,8 +130,10 @@ export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string,
     if (!isA2uiActionValue(value)) throw new Error("Invalid form value");
     return [key, value];
   }));
+  const userMessage = resolveUserMessage(snapshot, event.userMessage, declaredEdits, instancePath);
   const message: A2uiActionMessage = { version: "1.0", action: {
     surfaceId: snapshot.surfaceId, sourceComponentId, name: event.name, timestamp, context,
+    ...(userMessage === undefined ? {} : {userMessage}),
   } };
   validateProjectedA2uiAction(projection, message, instancePath);
   return message;
@@ -137,7 +150,7 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
     throw new Error("Invalid surface action");
   }
   const action = payload.action;
-  if (Object.keys(action).length !== 5 || action.surfaceId !== snapshot.surfaceId || typeof action.sourceComponentId !== "string"
+  if (Object.keys(action).length !== 5 + Number(Object.hasOwn(action, 'userMessage')) || action.surfaceId !== snapshot.surfaceId || typeof action.sourceComponentId !== "string"
     || typeof action.timestamp !== "string" || action.timestamp.length > 35 || !Number.isFinite(Date.parse(action.timestamp))
     || !record(action.context)) throw new Error("Invalid surface action");
   const event = eventDescriptor(projection, action.sourceComponentId, instancePath);
@@ -161,8 +174,10 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
   for (const [binding, input] of derived) {
     if (!sameValue(input, readA2uiValue(snapshot, binding, boundValues, instancePath) ?? null)) throw new Error('Invalid form value');
   }
+  const userMessage = resolveUserMessage(snapshot, event.userMessage, boundValues, instancePath);
+  if (userMessage !== action.userMessage) throw new Error('Invalid action description');
   return { surfaceId: snapshot.surfaceId, name: event.name, sourceComponentId: action.sourceComponentId, timestamp: action.timestamp,
-    context: Object.fromEntries(Object.keys(event.context).map((key) => [key, (action.context as Record<string, ActionValue>)[key]])) };
+    ...(userMessage === undefined ? {} : {userMessage}), context: Object.fromEntries(Object.keys(event.context).map((key) => [key, (action.context as Record<string, ActionValue>)[key]])) };
 }
 
 /** Piclaw transport metadata is not part of the A2UI protocol message. */

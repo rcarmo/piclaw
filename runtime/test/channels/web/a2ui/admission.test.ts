@@ -56,15 +56,19 @@ test('repeated buttons are admitted from a real instance and cannot share a retr
   const template = applyA2uiMessages('repeated', compileA2uiExpress(`
     $/rows = [{label:"same"},{label:"same"}];
     root = List(_template($/rows, submit));
-    submit = Button(Text("Save"),action=Event("save",{label:$label}));
+    submit = Button(Text("Save"),action=Event("save",{label:$label},userMessage="Saved selected row"));
   `, 'repeated'))!;
   const f = await fixture({template});
   for (const instance_path of [undefined, '/2', '/01', '/0/0']) {
     expect((await f.send({...f.payload, instance_path})).status).toBe(400);
   }
+  const { message } = f.payload;
+  expect((await f.send({...f.payload, message:{...message,action:{...message.action,userMessage:'Unexpected'}}})).status).toBe(400);
   expect((await f.send()).status).toBe(201);
   expect((await f.send()).status).toBe(200);
   expect((await f.send({...f.payload, instance_path:'/0'})).status).toBe(409);
+  expect(getDb().query('SELECT content FROM messages WHERE chat_jid=? AND thread_id=? AND content LIKE ?')
+    .get(chat, f.payload.thread_id, 'Submitted save%')).toEqual({content:'Submitted save\nSaved selected row\nlabel: "same"'});
   expect(f.dispatch()).toBe(1);
 });
 

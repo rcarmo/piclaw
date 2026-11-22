@@ -187,7 +187,8 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
 
   const pathname = '/agent/default/message';
   const fields = Object.entries(action.context).map(([key, value]) => `${key}: ${JSON.stringify(value)}`);
-  const body = JSON.stringify({ content: recovery ?? [`Submitted ${action.name}`, ...fields].join('\n'), thread_id: threadId });
+  const description = action.userMessage ? [action.userMessage] : [];
+  const body = JSON.stringify({ content: recovery ?? [`Submitted ${action.name}`, ...description, ...fields].join('\n'), thread_id: threadId });
   const forward = new Request(`http://internal${pathname}`, { method: 'POST', signal: req.signal,
     headers: { 'Content-Type': 'application/json' }, body });
   bindInputRequestAuthority(forward, chatJid, body, validate);

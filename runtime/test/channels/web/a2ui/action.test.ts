@@ -110,6 +110,22 @@ test('the server derives @index from the selected template, including a declared
   }}])).toThrow(/template/);
 });
 
+test('emits the stored userMessage after resolving only declared draft values', () => {
+  const authored = applyA2uiMessages('spoken', compileA2uiExpress(`
+    $/note = "Original";
+    root=Column([TextField(label="Note",value=$/note),send]);
+    send=Button(Text("Send"),action=Event("send",{note:$/note},userMessage=$/note));
+  `, 'spoken'))!;
+  const event = buildA2uiAction(authored, 'send', new Map([['/note','Edited']]), timestamp);
+  expect(event.action.userMessage).toBe('Edited');
+  expect(validateA2uiAction(authored,event).userMessage).toBe('Edited');
+  expect(() => validateA2uiAction(authored,{...event,action:{...event.action,userMessage:'Forged'}})).toThrow();
+  const unset = {...authored, dataModel:{}};
+  expect(buildA2uiAction(unset, 'send', new Map(), timestamp).action.userMessage).toBe('');
+  const {userMessage: _ignored, ...without} = event.action;
+  expect(() => validateA2uiAction(authored,{...event,action:without})).toThrow();
+});
+
 test("Classic does not accept authority, options, fixed values or undeclared inputs from the action", () => {
   const message = buildA2uiAction(snapshot, "submit", new Map(), timestamp);
   const action = message.action;

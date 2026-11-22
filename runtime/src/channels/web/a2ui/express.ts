@@ -116,7 +116,7 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
       const { action } = component;
       if (readA2uiLink(action)) continue;
       requireClassic(record(action) && allowedKeys(action, ["event"]) && record(action.event)
-        && allowedKeys(action.event, ["name", "context"]) && isId(action.event.name), "expected a server event");
+        && allowedKeys(action.event, ["name", "context", "userMessage"]) && isId(action.event.name), "expected a server event");
       const { context } = action.event;
       requireClassic(context === undefined || (record(context) && Object.entries(context).every(([key, entry]) =>
         isId(key) && (!entry || typeof entry !== "object" || (record(entry) && (Object.hasOwn(entry, "@path") || entry['@call'] === '@index'))))), "unsupported event context");
