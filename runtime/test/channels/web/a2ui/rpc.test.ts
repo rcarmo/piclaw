@@ -123,6 +123,19 @@ test('private renderer diagnostics are correlated, scrubbed and delivered once w
   expect(f.root.transaction(()=>take(11))()).toEqual([]);
 });
 
+test('a surface-scoped expression diagnostic keeps its local meaning after scrubbing', async () => {
+  const f=await fixture();
+  const {metadata:_metadata,message,...source}=f.make();
+  const {surfaceId}=message.callAgentFunction;
+  const sent=await f.report({...source,surface_id:surfaceId,message:{version:'1.0',error:{
+    code:'EXPRESSION_ERROR',surfaceId,message:'Raw input and model details',
+  }}});
+  expect(sent.status).toBe(204);
+  expect(f.root.transaction(()=>takeA2uiRendererErrors(f.root,source.chat_jid,11))()).toEqual([
+    {version:'1.0',error:{code:'EXPRESSION_ERROR',surfaceId,message:'The renderer could not evaluate the function.'}},
+  ]);
+});
+
 test('a revision change suppresses the result of an asynchronous function', async () => {
   const f = await fixture();
   const pause = Promise.withResolvers<void>(); f.pause(pause.promise);

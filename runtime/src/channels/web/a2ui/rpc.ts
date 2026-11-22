@@ -266,7 +266,9 @@ export async function handleA2uiRendererError(channel: WebChannelLike, req: Requ
     || (callId===undefined ? error.surfaceId!==surfaceId : typeof callId!=='string' || !validCallId(callId) || code!=='EXPRESSION_ERROR')
     || (path!==undefined && (typeof path!=='string' || path.length>128 || !absoluteA2uiPointer(path,true))))
     return json({error:'Invalid A2UI renderer error.'},400);
-  const message=ErrorMessageSchema.parse({version:'1.0',error:{code,message:A2UI_ERROR_TEXT[code as keyof typeof A2UI_ERROR_TEXT],
+  const description=code==='EXPRESSION_ERROR' && callId===undefined
+    ? 'The renderer could not evaluate the function.' : A2UI_ERROR_TEXT[code as keyof typeof A2UI_ERROR_TEXT];
+  const message=ErrorMessageSchema.parse({version:'1.0',error:{code,message:description,
     ...(callId===undefined ? {surfaceId} : {functionCallId:callId}),...(path===undefined ? {} : {path}),
   }});
   try {
