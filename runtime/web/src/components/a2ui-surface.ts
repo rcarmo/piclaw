@@ -1,7 +1,7 @@
 /** Render the admitted A2UI catalog in Classic's Preact timeline. */
 import { html, useCallback, useLayoutEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import { a2uiBindingPath, buildA2uiAction, isA2uiActionValue, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
-import { CLASSIC_A2UI_RENDERER_CAPABILITIES } from '../../../src/channels/web/a2ui/capabilities.js';
+import { a2uiRendererContext } from '../ui/a2ui-renderer-peer.js';
 import { checkA2uiComponent } from '../../../src/channels/web/a2ui/checks.js';
 import { a2uiDraftsFor, discardOldA2uiDraft, readA2uiDraft, rememberA2uiDraftEdit, subscribeA2uiDraft } from '../ui/a2ui-drafts.js';
 import { projectA2uiTemplates } from '../../../src/channels/web/a2ui/templates.js';
@@ -31,18 +31,19 @@ export function A2uiSurface({ block, source, onSubmit }: {
     }, [block.surface]);
     const snapshot = projection?.snapshot ?? block.surface;
     const [checkPrefix] = useState(() => `a2ui-check-${++nextCheckPrefix}`);
-    const syncDraft = block.owner === 'agent' && block.surface.sendDataModel === true && !!onSubmit;
+    const tracksDraft = block.owner === 'agent' && !!onSubmit;
+    const syncDraft = tracksDraft && block.surface.sendDataModel === true;
     const { chat_jid: chat } = source;
     const {surfaceId} = block.surface;
-    const [edits, setEdits] = useState(() => new Map<string, unknown>(syncDraft
+    const [edits, setEdits] = useState(() => new Map<string, unknown>(tracksDraft
         ? Array.from(readA2uiDraft(chat, surfaceId, block.revision) ?? [], ([path, edit]) => [path, edit.value]) : []));
     useLayoutEffect(() => {
-        if (!syncDraft) return;
+        if (!tracksDraft) return;
         discardOldA2uiDraft(chat, surfaceId, block.revision);
         return subscribeA2uiDraft(chat, surfaceId, (revision, draft) => {
             if (revision === block.revision) setEdits(new Map(Array.from(draft, ([path, edit]) => [path, edit.value])));
         });
-    }, [syncDraft, chat, surfaceId, block.revision]);
+    }, [tracksDraft, chat, surfaceId, block.revision]);
     const [pending, setPending] = useState(false);
     const [error, setError] = useState('');
     const [totp, setTotp] = useState<{ presentation: TotpPresentation; request: A2uiActionRequest } | null>(null);
@@ -55,9 +56,9 @@ export function A2uiSurface({ block, source, onSubmit }: {
     function edit(id: string, path: string | undefined, value: unknown) {
         if (!path || disabled || inFlight.current) return;
         const instance = projection?.instances.get(id);
-        if (syncDraft && instance && isA2uiActionValue(value)) rememberA2uiDraftEdit(chat, surfaceId, block.revision, path, {
+        if (tracksDraft && instance && isA2uiActionValue(value)) rememberA2uiDraftEdit(chat, surfaceId, block.revision, path, {
             component_id: instance.id, ...(instance.instancePath ? { instance_path: instance.instancePath } : {}), value,
-        });
+        }, syncDraft);
         else setEdits((previous: Map<string, unknown>) => new Map(previous).set(path, value));
         setError('');
     }
@@ -78,7 +79,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
             if (!lastAttempt.current || lastAttempt.current.key !== key) {
                 lastAttempt.current = { key, request: { ...source, revision: block.revision, request_id: Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''), message,
                     ...(instance.instancePath ? { instance_path: instance.instancePath } : {}), ...(currentDrafts?.length ? { a2ui_drafts: currentDrafts } : {}),
-                    ...(block.owner === 'agent' || block.owner === 'recovery' ? { metadata: { a2uiRendererCapabilities: CLASSIC_A2UI_RENDERER_CAPABILITIES } } : {}) } };
+                    ...(block.owner === 'agent' || block.owner === 'recovery' ? a2uiRendererContext(chat) : {}) } };
             }
             const request = lastAttempt.current.request;
             const value = block.owner === 'login' && componentId === 'save' ? privateInput.current?.value : undefined;

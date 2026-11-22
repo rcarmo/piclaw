@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 
 import {
   BTW_SESSION_KEY,
+  classicBundleUrl,
   describeSearchScope,
   getCurrentAppAssetVersion,
   getRenameBranchFormLock,
@@ -39,6 +40,14 @@ test('getCurrentAppAssetVersion prefers import.meta query and falls back to scri
     },
   })).toBe('malformed789');
   expect(getCurrentAppAssetVersion({ importMetaUrl: null, document: { querySelectorAll: () => [] } })).toBeNull();
+});
+
+test('a split Classic module keeps the shell version on separately built siblings', () => {
+  expect(classicBundleUrl('editor', {
+    importMetaUrl: 'https://example.test/static/classic/dist/app-abcd1234.js',
+    origin: 'https://example.test',
+    document: {querySelectorAll: () => [createScript('/static/classic/dist/app.bundle.js?v=feed1234')]},
+  })).toBe('/static/classic/dist/editor.bundle.js?v=feed1234');
 });
 
 test('getRenameBranchFormLock shares the same lock object per window', () => {

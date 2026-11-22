@@ -6,7 +6,7 @@ import { recordAppPerfRequest } from './ui/app-perf-tracing.js';
 import { resolveScreenSizeHint } from './ui/screen-size-hint.js';
 import { isCommittedComposeInput } from './ui/compose-submission.js';
 import { a2uiDraftsFor } from './ui/a2ui-drafts.js';
-import { CLASSIC_A2UI_RENDERER_CAPABILITIES } from '../../src/channels/web/a2ui/capabilities.js';
+import { a2uiRendererContext, openA2uiRendererPeer } from './ui/a2ui-renderer-peer.js';
 import { getAgentUiSnapshot, currentUiChatJid } from './ui/agent-ui-snapshot.js';
 
 export { uploadMedia, uploadWorkspaceFile } from './ui/upload-transfers.js';
@@ -81,7 +81,7 @@ async function request(url, options: RequestInit & ApiOptions = {}) {
         throw Object.assign(new Error(error.error || `HTTP ${response.status}`), { status: response.status, payload: error });
     }
     
-    return response.json();
+    return response.status === 204 ? undefined : response.json();
 }
 
 function parseEventStreamBlock(block) {
@@ -240,8 +240,8 @@ export async function saveUiState(payload) {
 function outgoingA2uiContext(content: unknown, chatJid: string | null) {
     const text = typeof content === 'string' ? content.trimStart() : '';
     if (text.startsWith('/') && !/^\/(?:queue|steer)\s/i.test(text)) return {};
-    return { metadata: { a2uiRendererCapabilities: CLASSIC_A2UI_RENDERER_CAPABILITIES },
-        a2ui_drafts: a2uiDraftsFor(chatJid || 'web:default') };
+    const chat = chatJid || 'web:default';
+    return { ...a2uiRendererContext(chat), a2ui_drafts: a2uiDraftsFor(chat) };
 }
 
 /**
@@ -952,11 +952,16 @@ export class SSEClient {
     staleThresholdMs: number;
     connectionGeneration: number;
     disposed: boolean;
+    private closeRendererPeer: (()=>void) | null = null;
+    private readonly enableA2uiRpc: boolean;
+    private readonly rendererCatalogues: Parameters<typeof openA2uiRendererPeer>[0]['catalogues'];
 
     constructor(onEvent, onStatusChange, options: ApiOptions = {}) {
         this.onEvent = onEvent;
         this.onStatusChange = onStatusChange;
         this.chatJid = typeof options?.chatJid === 'string' && options.chatJid.trim() ? options.chatJid.trim() : null;
+        this.enableA2uiRpc = options?.enableA2uiRpc === true;
+        this.rendererCatalogues = options?.rendererCatalogues;
         this.eventSource = null;
         this.reconnectTimeout = null;
         this.reconnectDelay = 1000;
@@ -999,6 +1004,22 @@ export class SSEClient {
         }, 15000);
     }
 
+    private acquireRendererPeer() {
+        const chatJid=this.chatJid;
+        if (!this.enableA2uiRpc || !chatJid || this.closeRendererPeer) return;
+        const close=openA2uiRendererPeer({chatJid,catalogues:this.rendererCatalogues,
+            readPost:(id,signal) => request(`/thread/${id}?chat_jid=${encodeURIComponent(chatJid)}`,{signal}),
+            reply:(body,signal) => request('/agent/a2ui-renderer-reply',{method:'POST',body:JSON.stringify(body),signal}),
+            onLost:()=>{ if (this.closeRendererPeer===close) this.closeRendererPeer=null; },
+        });
+        this.closeRendererPeer=close;
+    }
+
+    private releaseRendererPeer() {
+        this.closeRendererPeer?.();
+        this.closeRendererPeer = null;
+    }
+
     forceReconnect({ immediate = false } = {}) {
         if (this.disposed) return;
         this.connecting = false;
@@ -1006,6 +1027,7 @@ export class SSEClient {
         const source = this.eventSource;
         this.eventSource = null;
         source?.close();
+        this.releaseRendererPeer();
         this.clearStaleMonitor();
         this.status = 'disconnected';
         this.onStatusChange('disconnected');
@@ -1035,6 +1057,7 @@ export class SSEClient {
         const previousSource = this.eventSource;
         this.eventSource = null;
         previousSource?.close();
+        this.releaseRendererPeer();
         this.clearStaleMonitor();
         
         const query = this.chatJid ? `?chat_jid=${encodeURIComponent(this.chatJid)}` : '';
@@ -1047,6 +1070,8 @@ export class SSEClient {
             source.addEventListener(eventType, (e) => {
                 if (!this.isAuthoritativeConnection(source, generation)) return;
                 this.markActivity();
+                // An accepted post can establish the native route of a previously empty chat.
+                if (eventType==='new_post') this.acquireRendererPeer();
                 this.onEvent(eventType, JSON.parse(e.data));
             });
         };
@@ -1069,6 +1094,7 @@ export class SSEClient {
             this.connectionGeneration += 1;
             this.eventSource = null;
             source.close();
+            this.releaseRendererPeer();
             this.clearStaleMonitor();
             this.status = 'disconnected';
             this.onStatusChange('disconnected');
@@ -1087,6 +1113,7 @@ export class SSEClient {
             } catch {
                 payload = {};
             }
+            this.acquireRendererPeer();
             this.onEvent('connected', payload);
         });
 
@@ -1195,6 +1222,7 @@ export class SSEClient {
         const source = this.eventSource;
         this.eventSource = null;
         source?.close();
+        this.releaseRendererPeer();
         if (this.reconnectTimeout) {
             clearTimeout(this.reconnectTimeout);
             this.reconnectTimeout = null;

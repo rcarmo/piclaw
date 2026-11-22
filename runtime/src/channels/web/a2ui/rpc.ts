@@ -8,7 +8,7 @@ import { captureInputTarget } from '../messaging/input-request-authority.js';
 import { readA2uiCatalogueOffer } from './capabilities.js';
 import { parseA2uiDrafts } from './drafts.js';
 import { prepareA2uiDraftProjection, readA2uiRendererDataModel, readA2uiSurfaceOwner, type AcceptedRendererPeer } from './input-metadata.js';
-import { boundedRpcJson, MAX_RPC_VALUE } from './agent-rpc.js';
+import { boundedRpcJson, MAX_RPC_VALUE } from './rpc-json.js';
 import { isA2uiSurfaceBlock } from './surface.js';
 
 const MAX_BODY = 96 * 1024;

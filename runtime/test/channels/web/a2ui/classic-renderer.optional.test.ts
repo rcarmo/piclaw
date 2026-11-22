@@ -97,13 +97,14 @@ for (const engine of [chromium, webkit]) {
           post=\${{id:19, chat_jid:"web:test", is_bot_message:true,
             data:{content:"Form fallback",content_blocks:[block],thread_id:3}}} onSubmitA2uiAction=\${submit} />\`, document.body);
       `);
-      const build = await Bun.build({ entrypoints: [entry], outdir: scratch, target: "browser", format: "esm" });
+      const build = await Bun.build({ entrypoints: [entry], outdir: scratch, target: "browser", format: "esm", splitting: true });
       expect(build.success).toBe(true);
+      const scripts = new Set(build.outputs.map(file=>file.path.split('/').at(-1)));
       server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
         const { pathname } = new URL(req.url);
         if (pathname === '/agent/default/message') return Response.json(await req.json());
         if (pathname === '/media/42') return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="green"/></svg>', {headers:{'Content-Type':'image/svg+xml'}});
-        if (pathname === "/fixture.js") return new Response(Bun.file(join(scratch, "fixture.js")));
+        if (scripts.has(pathname.slice(1))) return new Response(Bun.file(join(scratch, pathname.slice(1))));
         if (pathname === '/marked.js') return new Response(Bun.file(join(web, 'static/common/js/marked.min.js')), {headers:{'Content-Type':'text/javascript'}});
         if (pathname === "/base.css" || pathname === "/content.css") return new Response(Bun.file(join(web, "static/classic/css", pathname.slice(1))));
         return new Response('<!doctype html><html lang="en" data-theme="dark"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/base.css"><link rel="stylesheet" href="/content.css"></head><body><script src="/marked.js"></script><script type="module" src="/fixture.js"></script></body></html>', { headers: { "Content-Type": "text/html", 'Content-Security-Policy': CLASSIC_CONTENT_SECURITY_POLICY } });
@@ -118,6 +119,7 @@ for (const engine of [chromium, webkit]) {
       const block = { type: "a2ui_surface", state: "active", revision: 1, surface: applyA2uiMessages("test-form", compileA2uiExpress(`$/audio = ${JSON.stringify(`${audioOrigin.url.origin}/fixture.wav`)};\n${source}`, "test-form")), fallback_text: "Form fallback" };
       await page.evaluate((block) => (window as any).draw(block), block);
       const list = page.locator('.a2ui-surface .a2ui-list');
+      await list.getByRole('listitem').first().waitFor();
       expect(await list.getByRole('listitem').allTextContents()).toEqual(['First step', 'Second step']);
       expect(await list.evaluate(el => getComputedStyle(el).flexDirection)).toBe('row');
       const field = page.getByRole("textbox", { name: "Note" });

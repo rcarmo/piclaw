@@ -1,0 +1,66 @@
+import type { RendererFunctionResponseMessage } from '@a2ui/web_core/v1_0';
+import type { RendererCallOptions } from './a2ui-renderer-executor.js';
+import { CLASSIC_A2UI_RENDERER_CAPABILITIES, type ClassicA2uiRendererCapabilities } from '../../../src/channels/web/a2ui/capabilities.js';
+import { CLASSIC_A2UI_CATALOG } from '../../../src/channels/web/a2ui/surface.js';
+
+type Options = RendererCallOptions & {
+    reply: (body: {chat_jid:string;renderer_peer:string;message:RendererFunctionResponseMessage}, signal: AbortSignal) => Promise<unknown>;
+    onLost?: () => void;
+};
+type PeerOffer = {lease:string;capabilities:ClassicA2uiRendererCapabilities};
+const connected = new Map<string, PeerOffer>();
+const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+
+/** Keep the opaque lease in this tab, never in timeline state or public connection events. */
+export function a2uiRendererContext(chatJid: string) {
+    const peer = connected.get(chatJid);
+    return {metadata:{a2uiRendererCapabilities:peer?.capabilities ?? CLASSIC_A2UI_RENDERER_CAPABILITIES},
+        ...(peer ? {renderer_peer:peer.lease} : {})};
+}
+
+function record(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value==='object' && !Array.isArray(value);
+}
+/** Subsidiary private stream owned by one connection generation of Classic's main SSE client. */
+export function openA2uiRendererPeer(options: Options): () => void {
+    const { chatJid }=options;
+    const stream=new EventSource(`/agent/a2ui-peer?chat_jid=${encodeURIComponent(chatJid)}`);
+    const lifetime=new AbortController();
+    const seen=new Set<string>();
+    let peer: PeerOffer | undefined;
+    const close=()=>{
+        lifetime.abort(); stream.close();
+        if (peer && connected.get(chatJid)===peer) connected.delete(chatJid);
+    };
+    stream.onerror=()=>{ close(); options.onLost?.(); }; // No separate retry loop.
+    stream.addEventListener('a2ui_peer',event=>{
+        if (lifetime.signal.aborted || peer) return;
+        try {
+            const {renderer_peer:lease}=JSON.parse((event as MessageEvent<string>).data);
+            if (typeof lease!=='string' || !uuid.test(lease)) return close();
+            const ids=[...new Set([CLASSIC_A2UI_CATALOG,...(options.catalogues ?? []).filter(c=>c.protocolVersion==='1.0').map(c=>c.id)])].slice(0,32);
+            peer={lease,capabilities:{'1.0':{supportedCatalogIds:ids}}};
+            connected.set(chatJid,peer);
+        } catch { close(); }
+    });
+    stream.addEventListener('a2ui_call',event=>{
+        const accepted=peer;
+        if (!accepted || lifetime.signal.aborted || connected.get(chatJid)!==accepted) return;
+        let raw: unknown;
+        try { raw=JSON.parse((event as MessageEvent<string>).data); }
+        catch { return; }
+        const call=record(raw)&&record(raw.message)&&record(raw.message.callRendererFunction) ? raw.message.callRendererFunction : undefined;
+        const id=call?.functionCallId;
+        if (typeof id!=='string' || !id || id.length>128 || seen.has(id) || seen.size>=1024) return;
+        seen.add(id);
+        void (async()=>{
+            let message: RendererFunctionResponseMessage | undefined;
+            try { message=await (await import('./a2ui-renderer-executor.js')).runRendererCall(raw,options,lifetime.signal); }
+            catch { message={version:'1.0',rendererFunctionResponse:{functionCallId:id,error:{code:'EXECUTION_ERROR',message:'The renderer could not complete the request.'}}}; }
+            if (!message || lifetime.signal.aborted || connected.get(chatJid)!==accepted) return;
+            try { await options.reply({chat_jid:chatJid,renderer_peer:accepted.lease,message},lifetime.signal); }
+            catch { return; } // Do not retry a reply after transport loss or expiry.
+        })();
+    });
+    return close;
+}

@@ -144,6 +144,12 @@ export function getCurrentAppAssetVersion(options: CurrentAppAssetVersionOptions
   }
 }
 
+/** Keep sibling bundles on the shell version even when the caller is in a split chunk. */
+export function classicBundleUrl(name: string, options?: CurrentAppAssetVersionOptions): string {
+  const version = getCurrentAppAssetVersion(options);
+  return `/static/classic/dist/${name}.bundle.js${version ? `?v=${encodeURIComponent(version)}` : ''}`;
+}
+
 /** Return the shared cross-reload branch-rename form lock. */
 export function getRenameBranchFormLock(options: RenameBranchFormLockOptions = {}): RenameBranchFormLock | null {
   const win = options.window === undefined

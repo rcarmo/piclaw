@@ -38,6 +38,7 @@ import { iconDeveloperPane, iconEditorPane } from './settings/core-pane-icons.js
 import { consumeRequestedSettingsOpenState, normalizeSettingsSectionId, peekRequestedSettingsSection, requestOpenSettingsDialog } from './settings-dialog-events.js';
 // General is statically imported — it's always the first visible section.
 import { GeneralSection } from './settings/general.js';
+import { classicBundleUrl } from '../ui/app-shell-state.js';
 perf('imports-done');
 
 type SettingsSectionComponent = unknown;
@@ -75,7 +76,7 @@ const BUILTIN_SECTION_LOADERS: Record<BuiltinSectionId, () => Promise<SettingsSe
 const LAZY_EXTENSION_PANES: Array<{ id: string; label: string; icon: unknown; order: number; load: () => Promise<unknown>; searchable?: boolean; searchPlaceholder?: string; component?: any }> = [
     { id: 'editor', label: 'Editor', icon: iconEditorPane, order: 150, load: () => import('./settings/editor-settings.js') },
     { id: 'delegate', label: 'Delegate', icon: renderToolIcon(), order: 30.25, load: () => {
-        const url = '/static/classic/dist/delegate-settings.bundle.js' + new URL(import.meta.url).search;
+        const url = classicBundleUrl('delegate-settings');
         return import(url).then(module => module.registerDelegateSettings({ html, useState, useEffect, useCallback, registerSettingsPane, notifySettingsPanesChanged }));
     } },
     { id: 'developer', label: 'Developer', icon: iconDeveloperPane, order: 900, load: () => import('./settings/developer-settings.js') },

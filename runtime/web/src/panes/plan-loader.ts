@@ -1,10 +1,11 @@
+import { classicBundleUrl } from '../ui/app-shell-state.js';
 import type { PaneContext, PaneInstance, WebPaneExtension } from './pane-types.js';
 
 export const PLAN_TAB_PATH = 'piclaw://plan';
 let loading: Promise<{ planPaneExtension: WebPaneExtension }> | null = null;
 function loadPlan() {
   if (!loading) {
-    const url = '/static/classic/dist/plan-pane.bundle.js' + new URL(import.meta.url).search;
+    const url = classicBundleUrl('plan-pane');
     loading = import(url).catch(error => { loading = null; throw error; });
   }
   return loading;

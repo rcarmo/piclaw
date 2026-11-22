@@ -8,7 +8,7 @@ export const CLASSIC_A2UI_AGENT_CAPABILITIES = Object.freeze({
   '1.0': Object.freeze({ supportedCatalogIds, acceptsInlineCatalogs: false }),
 });
 
-export type ClassicA2uiRendererCapabilities = typeof CLASSIC_A2UI_RENDERER_CAPABILITIES;
+export type ClassicA2uiRendererCapabilities = { readonly '1.0': { readonly supportedCatalogIds: readonly string[] } };
 
 export class InvalidA2uiCapabilitiesError extends Error {
   constructor() { super('Invalid A2UI renderer capabilities.'); }

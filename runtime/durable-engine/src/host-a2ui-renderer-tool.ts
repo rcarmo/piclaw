@@ -1,7 +1,7 @@
 import { defineTool } from '@earendil-works/pi-durable';
 import { Type } from 'typebox';
 import { CallRendererFunctionMessageSchema } from '@a2ui/web_core/v1_0';
-import { boundedRpcJson, MAX_RPC_VALUE } from '../../src/channels/web/a2ui/agent-rpc.js';
+import { boundedRpcJson, MAX_RPC_VALUE } from '../../src/channels/web/a2ui/rpc-json.js';
 import { readAcceptedRendererPeer, readA2uiSurfaceOwner } from '../../src/channels/web/a2ui/input-metadata.js';
 import { rendererRpcError, type RendererRpcBroker } from '../../src/channels/web/a2ui/renderer-rpc.js';
 import { CLASSIC_A2UI_CATALOG, isA2uiSurfaceBlock } from '../../src/channels/web/a2ui/surface.js';
