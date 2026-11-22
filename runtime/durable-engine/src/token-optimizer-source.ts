@@ -1,5 +1,5 @@
 // Kintsugi 9be0a5e MIT port; bounded evidence adapted from v0.8.7 (6d1cd829).
-// Attribution in mcp/UPSTREAM-LICENSE. Do not rewrite SDK storage SQL here.
+// Attribution in mcp/UPSTREAM-LICENSE.
 import { createHash } from "node:crypto";
 const isDurableUserEntry=(entry:import("@earendil-works/pi-durable").EntryRecord)=>entry.kind==="pi.user"||entry.kind==="host.accepted";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
@@ -16,6 +16,7 @@ import type { Observation } from "#token-optimizer/core";
 import {optimizerBashOutput,optimizerCallEntry as codemodeCallEntry} from "./optimizer-output-source.ts";
 import {Type} from 'typebox';
 import {Value} from 'typebox/value';
+import {optimizerHistoryRead,optimizerHistoryWindow,optimizerOversizedEntry,optimizerReadBudget,OptimizerTaskPayloadSkipped} from './optimizer-history-read.js';
 /** Preserve actual Root SDK shell status without changing the tool's script value. */
 export function nativeOptimizerResult(result:ToolResultData){
   if(result.name==='bash'){
@@ -40,21 +41,33 @@ type EntryRange = {order:"ascending";minEntryId?:EntryId;maxEntryId?:EntryId};
 const entryBound = (value:number) => value as EntryId;
 /** Entries after `after` (exclusive) up to `upTo` (inclusive), oldest first.
  * Do not retain decoded history across pages. Yield to foreground I/O between reads. */
-export async function* optimizerEntries(conversation:Conversation,bounds:{after:number;upTo:number}):AsyncGenerator<EntryRecord> {
+type EntryReader = Pick<Conversation,'entries'>;
+export async function* optimizerEntries(conversation:EntryReader,bounds:{after:number;upTo:number},readContext=context):AsyncGenerator<EntryRecord> {
+  if (bounds.after >= bounds.upTo) return;
   let cursor:Cursor|undefined;
   const query:EntryRange = {order:"ascending"};
-  if (bounds.after > 0) query.minEntryId = entryBound(bounds.after);
+  if (bounds.after > 0) query.minEntryId = entryBound(bounds.after+1);
   if (Number.isFinite(bounds.upTo)) query.maxEntryId = entryBound(bounds.upTo);
+  const budget=optimizerHistoryRead.getStore();
   do {
-    const page = await conversation.entries(query,32,cursor,context);
-    for (const entry of page.items) if (entry.id > bounds.after) yield entry;
+    if (budget && budget !== 'id' && (budget.remaining <= 0 || budget.bytes <= 0)) {budget.partial=true;return;}
+    const page = await conversation.entries(query,budget ? 4 : 32,cursor,readContext);
+    yield* page.items;
     cursor = page.next;
     if (cursor) await new Promise<void>(resolve => setImmediate(resolve));
   } while (cursor);
 }
-/** The newest visible entry ID, without reading the transcript. */
+/** The newest visible entry ID from SDK metadata; no entry payload is needed. */
 export async function latestOptimizerEntry(conversation:Conversation):Promise<number|null> {
-  return (await conversation.entries({},1,undefined,context)).items[0]?.id ?? null;
+  return await conversation.commit(tx=>tx.latestEntryId(conversation.id),context) ?? null;
+}
+/** A small pinned ledger for matching actual Code Mode output, not commands inferred from prose. */
+export async function* recentOptimizerEntries(conversation:EntryReader,window:number,readContext:typeof context) {
+  const latest = await optimizerHistoryRead.run('id',async()=>(await conversation.entries({},1,undefined,readContext)).items[0]?.id);
+  if(latest === undefined)return;
+  const budget = optimizerReadBudget();budget.remaining = Math.min(budget.remaining,window);
+  const scan=optimizerEntries(conversation,{after:Math.max(0,latest-window),upTo:latest},readContext);
+  for(;;){const next=await optimizerHistoryRead.run(budget,()=>scan.next());if(next.done)return;yield next.value;}
 }
 /** The newest assistant entry, searching backwards; one tool round at most in practice. */
 export async function lastAssistantEntry(conversation:Conversation):Promise<EntryRecord|undefined> {
@@ -117,11 +130,16 @@ export async function readOptimizerContext(conversation:Conversation) {
 }
 const modelCallOrigin = Type.Object({kind:Type.Literal("model"),callId:Type.String(),assistant:Type.Integer({minimum:1,maximum:Number.MAX_SAFE_INTEGER})});
 /** Verify a boundary-straddling result by task ID without reading pre-checkpoint arguments. */
-async function callPrecedesRange(harness:Harness,entry:EntryRecord,callId:string,after:number):Promise<boolean> {
+async function callPrecedesRange(harness:Harness,entry:EntryRecord,callId:string,after:number):Promise<boolean|"skipped"> {
   if (!entry.byTaskId || after === 0) return false;
-  const task = await harness.getTask(entry.byTaskId,context);
-  return task?.kind === ToolTask.definition.name && task.conversationId === entry.conversationId
-    && Value.Check(modelCallOrigin,task.input) && task.input.callId === callId && task.input.assistant <= after;
+  try {
+    const task = await harness.getTask(entry.byTaskId,context);
+    return task?.kind === ToolTask.definition.name && task.conversationId === entry.conversationId
+      && Value.Check(modelCallOrigin,task.input) && task.input.callId === callId && task.input.assistant <= after;
+  } catch(error) {
+    if(error instanceof OptimizerTaskPayloadSkipped)return 'skipped';
+    throw error;
+  }
 }
 type CallArguments = ReturnType<typeof decodeArguments>;
 const unknownArguments:CallArguments = {command:"",targets:[],coverage:"partial"};
@@ -152,15 +170,16 @@ class RecentEvidence {
 }
 
 /** One conversation's committed tool results within a session range. */
-async function readSource(harness:Harness,entries:AsyncIterable<EntryRecord>,host:HostSession,after:number,evidence:RecentEvidence,root:boolean) {
+async function readSource(harness:Harness,entries:AsyncIterable<EntryRecord>,host:HostSession,after:number,evidence:RecentEvidence,root:boolean,partial:boolean) {
   const calls = new Map<string,{name:string;args:CallArguments;runId:string}>();
   const starts = new Map<string,{name:string;args:CallArguments;runId:string|undefined;at:number}>();
-  let prompts = 0, activity = 0, answeredTurns = 0, answeredEnd = 0, awaitingAnswer = false, partial = false;
+  let prompts = 0, activity = 0, answeredTurns = 0, answeredEnd = 0, awaitingAnswer = false;
   function remember<V>(map:Map<string,V>,key:string,value:V) {
     if (!map.has(key) && map.size === maxPendingCalls) {map.delete(map.keys().next().value!);partial = true;}
     map.set(key,value);
   }
   for await (const entry of entries) {
+    if (entry.kind === optimizerOversizedEntry) {partial = true;continue;}
     if (isDurableUserEntry(entry)) {prompts++;awaitingAnswer = true;}
     if (AssistantEntry.is(entry)) for (const message of entry.model ?? []) if (message.role === "assistant") {
       if (awaitingAnswer && message.stopReason === "stop" && message.content.some(block => block.type === "text" && block.text.trim()) && !message.content.some(block => block.type === "toolCall")) {answeredTurns++;answeredEnd = entry.id;awaitingAnswer = false;}
@@ -188,7 +207,10 @@ async function readSource(harness:Harness,entries:AsyncIterable<EntryRecord>,hos
     } else if (ToolResultEntry.is(entry)) for (const message of entry.model ?? []) if (message.role === "toolResult") {
       const callId = shortKey(message.toolCallId), source = calls.get(callId);
       if (!source) {
-        if (partial || await callPrecedesRange(harness,entry,message.toolCallId,after)) continue;
+        if (partial) continue;
+        const before = await callPrecedesRange(harness,entry,message.toolCallId,after);
+        if (before === "skipped") {partial = true;continue;}
+        if (before) continue;
         return {kind:"unreadable" as const,reason:"Tool result has no visible originating arguments"};
       }
       capture(source.name,source.args,{name:source.name,structured:null,details:JSON.parse(JSON.stringify(message.details ?? null)),output:contentText(message.content),isError:message.isError,diagnostics:entry.data.diagnostics.map(diagnostic => ({code:diagnostic.code ?? "",message:diagnostic.message}))},String(entry.byTaskId),null,source.runId,message.timestamp);
@@ -209,28 +231,56 @@ export async function nativeOptimizerTrajectory(harness:Harness,host:HostSession
   }
   let maximum = end ?? Infinity;
   if (cutoff !== null) {const value = Number(cutoff);if (!Number.isSafeInteger(value) || value < 0) throw new Error("Invalid saved optimizer source cutoff");maximum = Math.min(maximum,value);}
-  // Freeze the source boundary before scanning: another prompt may already be appending entries.
-  const latest = await latestOptimizerEntry(conversation);
-  maximum = Math.min(maximum,latest ?? begin);
+  // Freeze one journal boundary for the root and recent child conversations;
+  // a saved cutoff must not absorb entries appended by a later request.
+  const pinned = Number.isFinite(maximum);
+  const heads = await harness.commit(async tx=>{
+    let latest=begin, omitted=0;
+    const recent:{id:ConversationId;entry:number}[]=[];
+    for (const id of [host.conversationId,...descendants]) {
+      if (!await tx.conversation(id)) continue;
+      const newest=await tx.latestEntryId(id) ?? begin;
+      if (!pinned && (id===host.conversationId || newest>begin)) {
+        const live=await tx.doc(LiveDoc,id);
+        if (live.run && !live.run.afterRun) return null;
+      }
+      latest=Math.max(latest,newest);
+      if(id===host.conversationId || newest<=begin || recent.some(row=>row.id===id))continue;
+      const entry=newest<=maximum ? newest : await optimizerHistoryRead.run('id',async()=>
+        (await tx.scanEntries({conversationId:id,minEntryId:entryBound(begin+1),maxEntryId:entryBound(maximum)},1)).items[0]?.id ?? begin);
+      if(entry<=begin)continue;
+      const index=recent.findIndex(row=>row.entry<entry);
+      recent.splice(index<0?recent.length:index,0,{id,entry});
+      if(recent.length>32)omitted=Math.max(omitted,recent.pop()!.entry);
+    }
+    return {latest,recent,omitted};
+  },context);
+  if(!heads)return {kind:'later',reason:'Agent or subagent run is still recording learning evidence'};
+  maximum = Math.min(maximum,heads.latest);
+  // This is Kintsugi's journal-ID window, not a wall-clock cutoff.
+  const recentBegin = Math.max(begin,maximum-optimizerHistoryWindow);
+  const budget = optimizerReadBudget();
   const evidence = new RecentEvidence();
-  const root = await readSource(harness,optimizerEntries(conversation,{after:begin,upTo:maximum}),host,begin,evidence,true);
+  const root = await optimizerHistoryRead.run(budget,()=>readSource(harness,optimizerEntries(conversation,{after:recentBegin,upTo:maximum}),host,recentBegin,evidence,true,recentBegin>begin));
   if (root.kind === "unreadable") return root;
   if (root.unfinished) {
     if ((await harness.snapshot(LiveDoc,host.conversationId,context))?.run) return {kind:"later",reason:"Native calls are still running"};
-    if (!root.partial) return {kind:"unreadable",reason:"Ended trajectory contains an unfinished native call"};
+    if (!root.partial && !budget.partial) return {kind:"unreadable",reason:"Ended trajectory contains an unfinished native call"};
   }
-  let partial = root.partial, activity = root.activity;
-  for (const id of descendants) {
+  let partial = root.partial || heads.omitted > recentBegin, activity = root.activity;
+  for (const {id,entry} of heads.recent) {
+    if(entry<=recentBegin)break;
+    if(budget.remaining<=0 || budget.bytes<=0){budget.partial=true;break;}
     const child = await harness.conversation(id,context);if (!child) {partial = true;continue;}
     const childEvidence = new RecentEvidence();
-    const read = await readSource(harness,optimizerEntries(child,{after:begin,upTo:maximum}),host,begin,childEvidence,false);
+    const read = await optimizerHistoryRead.run(budget,()=>readSource(harness,optimizerEntries(child,{after:recentBegin,upTo:maximum}),host,recentBegin,childEvidence,false,recentBegin>begin));
     if (read.kind === "unreadable") {partial = true;continue;}
     if (read.unfinished && (await harness.snapshot(LiveDoc,id,context))?.run) return {kind:"later",reason:"A subagent is still running"};
     for (const item of childEvidence.items) evidence.add(item.entryId,item.observation,false);
     partial ||= childEvidence.partial || read.partial || read.unfinished;activity = Math.max(activity,read.activity);
   }
-  const result:Trajectory = {kind:"ready",cutoff:String(Math.min(maximum,latest ?? begin)),observations:evidence.items.map(item=>item.observation),prompts:root.prompts,transcriptActivity:activity};
-  if (partial || evidence.partial) result.partial = true;
+  const result:Trajectory = {kind:"ready",cutoff:String(Math.max(begin,maximum)),observations:evidence.items.map(item=>item.observation),prompts:root.prompts,transcriptActivity:activity};
+  if (partial || evidence.partial || budget.partial) result.partial = true;
   if (root.answeredTurns && !result.partial) result.work = workEvidence(evidence.items.filter(item=>item.root && item.entryId<=root.answeredEnd).slice(-64).map(item=>item.observation),root.answeredTurns,host.repositoryRoot);
   return result;
 }

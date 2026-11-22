@@ -8,10 +8,7 @@ import { purposeAllowed, type Policy } from "../core/config.ts";
 import type { InferenceRequest, InferenceResult, SideCall, Spend } from "../core/types.ts";
 import { JobsDoc, type InferenceJob } from "./documents.ts";
 import type { OperationSink } from "./operations.ts";
-export type JobOrigin = { sessionKey: string; account: string; runId: string | null; revision: string; digest: string; estimatedMaximumCost: number | null; expiresAt?: number;
-  /** Stable ID supplied by the owner of a verified backfill, not a provider or an individual retry. */
-  backfillId?: string;
-};
+export type JobOrigin = { sessionKey: string; account: string; runId: string | null; revision: string; digest: string; estimatedMaximumCost: number | null; expiresAt?: number };
 export type JobAdmission = { accepted: boolean; reason: string; job: InferenceJob | null };
 export function createInferenceQueue(options: { harness: () => Harness; backgroundOwner?:() => ConversationId; policy: (sessionKey: string) => Policy; sideCall: SideCall; currentPlan?:(job:InferenceJob) => Promise<boolean>; maximumCost?:(request:InferenceRequest) => number|null;onAuthPause?:(account:string,revision:number,key:string) => Promise<void>; now?:() => number;onOperation?:OperationSink }) {
   async function report(tx:Tx,job:InferenceJob,at:number) {
@@ -147,10 +144,9 @@ export function createInferenceQueue(options: { harness: () => Harness; backgrou
         const now = (options.now ?? Date.now)();
         const deadlineMs = Math.min(policy.budget.deadlineMs,request.deadlineMs,origin.expiresAt === undefined ? Infinity : origin.expiresAt-now);
         if (deadlineMs <= 0) return {accepted:false,reason:"expired",job:null};
-        const admission = reserve(state.budget, request.id, origin.sessionKey, new Date(now).toISOString().slice(0,10), origin.estimatedMaximumCost ?? options.maximumCost?.(request) ?? null, policy, origin.backfillId);
+        const admission = reserve(state.budget, request.id, origin.sessionKey, new Date(now).toISOString().slice(0,10), origin.estimatedMaximumCost ?? options.maximumCost?.(request) ?? null, policy);
         if (!admission.accepted) return { accepted: false, reason: admission.reason, job: null };
         const job: InferenceJob = { id: request.id, sessionKey: origin.sessionKey, account: origin.account, runId: origin.runId, revision: origin.revision, digest: origin.digest,
-          ...(origin.backfillId === undefined ? {} : {backfillId:origin.backfillId}),
           conversationId,request: { ...request, prompt:redact(request.prompt), maxOutputTokens: Math.min(request.maxOutputTokens,policy.budget.maxOutputTokens), deadlineMs }, created: now, deadline: now+deadlineMs, taskId: null, status: "queued", result: null, error: null };
         job.taskId = await tx.createTask(task, { id: job.id }, { ownership: { kind: "conversation" }, conversationId:options.backgroundOwner?.() ?? conversationId, background: true });
         state.jobs[job.id] = job;

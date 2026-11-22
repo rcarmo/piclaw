@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { Policy } from "./config.ts";
 import type { Price, Spend, Usage } from "./types.ts";
-export type BudgetState = { calls: Record<string, number>; dailyCalls: Record<string, number>; backfillCalls?: Record<string, number>; reserved: Record<string, { session: string; day: string; cost: number | null }>; ledger: Spend[]; unknown: string[] };
-const maxBackfillCalls = 12;
+export type BudgetState = { calls: Record<string, number>; dailyCalls: Record<string, number>; reserved: Record<string, { session: string; day: string; cost: number | null }>; ledger: Spend[]; unknown: string[] };
 export function emptyBudget(): BudgetState { return { calls: {}, dailyCalls: {}, reserved: {}, ledger: [], unknown: [] }; }
 export function priceUsage(usage: Usage, price: Price | null): number | null {
   if (!price) return null;
@@ -21,16 +20,11 @@ export function cacheBuckets(total: number, longer: Record<string, number>): Cac
   if (rest < 0) throw new Error("Cache-write subsets exceed the total");
   return { default: rest, ...longer };
 }
-export type BudgetAdmission = { accepted: boolean; reason: "duplicate" | "call_budget" | "backfill_budget" | "unknown_cost" | "cost_budget" | "reserved" };
-export function reserve(state: BudgetState, id: string, session: string, day: string, cost: number | null, policy: Policy, backfillId?: string): BudgetAdmission {
+export type BudgetAdmission = { accepted: boolean; reason: "duplicate" | "call_budget" | "unknown_cost" | "cost_budget" | "reserved" };
+export function reserve(state: BudgetState, id: string, session: string, day: string, cost: number | null, policy: Policy): BudgetAdmission {
   if (cost !== null && (!Number.isFinite(cost) || cost < 0)) throw new Error("Invalid optimisation cost reservation");
-  if (backfillId !== undefined && (!backfillId.trim() || backfillId.length > 512)) throw new Error("Invalid optimisation backfill identity");
   if (state.reserved[id] || state.ledger.some(row => row.id === id)) return { accepted: false, reason: "duplicate" };
   if ((state.calls[session] ?? 0) >= policy.budget.callsPerSession || (state.dailyCalls[day] ?? 0) >= policy.budget.callsPerDay) return { accepted: false, reason: "call_budget" };
-  // Charge the logical backfill, independently of session keys or UTC days.
-  // Never refund this slot on cancellation, failure or an uncertain invocation.
-  const backfillKey = backfillId === undefined ? undefined : JSON.stringify([backfillId]);
-  if (backfillKey !== undefined && (state.backfillCalls?.[backfillKey] ?? 0) >= maxBackfillCalls) return { accepted: false, reason: "backfill_budget" };
   const cap = policy.budget.maxCostPerSession;
   if (cap !== null) {
     const rows = state.ledger.filter(row => row.sessionId === session);
@@ -41,10 +35,6 @@ export function reserve(state: BudgetState, id: string, session: string, day: st
   }
   state.calls[session] = (state.calls[session] ?? 0) + 1;
   state.dailyCalls[day] = (state.dailyCalls[day] ?? 0) + 1;
-  if (backfillKey !== undefined) {
-    if (state.backfillCalls) state.backfillCalls[backfillKey] = (state.backfillCalls[backfillKey] ?? 0) + 1;
-    else state.backfillCalls = {[backfillKey]:1};
-  }
   state.reserved[id] = { session, day, cost };
   return { accepted: true, reason: "reserved" };
 }

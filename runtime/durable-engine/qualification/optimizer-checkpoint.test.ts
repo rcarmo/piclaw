@@ -12,13 +12,14 @@ import {SqliteStorage} from '@earendil-works/pi-durable/storage/sqlite';
 import {CodemodeSandbox} from '@earendil-works/pi-codemode';
 import {Type} from 'typebox';
 import {SessionsDoc} from '#token-optimizer/pi-durable';
-import {defaultPolicy,sessionKey} from '#token-optimizer/core';
-import {createInferenceQueue} from '../vendor/token-economizer/src/pi-durable/sidecall.ts';
+import {sessionKey} from '#token-optimizer/core';
 import {BunSqliteDatabase} from '../src/bun-sqlite.ts';
 import {createOptimizerCodemodeTool} from '../src/optimizer-codemode.ts';
 import {createNativeTokenOptimizer,type CoreOptimizerAgent} from '../src/token-optimizer.ts';
 import {TokenOptimizerConfiguration} from '../src/token-optimizer-config.ts';
 import {optimizerEntries,optimizerEvidenceBytes,optimizerModelFree,optimizerSections,readOptimizerContext} from '../src/token-optimizer-source.ts';
+import {boundOptimizerHistoryReads,optimizerHistoryRead,optimizerOversizedEntry,optimizerReadBudget,OptimizerTaskPayloadSkipped} from '../src/optimizer-history-read.ts';
+import type {SqliteExecutor,SqliteValue} from '@earendil-works/pi-durable/storage/sqlite';
 import {applicationRetainedDatabase} from '../src/mcp/retained-database.ts';
 const cleanups:(()=>Promise<void>)[]=[];afterEach(async()=>{for(const close of cleanups.splice(0).reverse())await close();});
 async function settleLearning(harness:Harness){
@@ -145,40 +146,56 @@ test('checkpoint bounds derived evidence, keeps the newest results and marks mis
  expect((await c.entries({minEntryId:oldest as typeof last,maxEntryId:oldest as typeof last},1,undefined,context)).items).toHaveLength(1);
 },15_000);
 
-test('one durable backfill cap survives duplicate jobs, unknown outcomes, midnight and SQLite reopen',async()=>{
- const dir=mkdtempSync(join(tmpdir(),'optimizer-backfill-budget-')),file=join(dir,'state.sqlite');
- cleanups.push(async()=>{rmSync(dir,{recursive:true,force:true});});
- const settings={registry:createRegistry(),models:createModels(),now:()=>now};
- const policy=defaultPolicy();Object.assign(policy,{enabled:true,mode:'active',microSkills:'distiller'});
- let now=Date.parse('2026-01-01T23:59:00Z'), harness:Harness|undefined;
- const attempts:string[]=[],model={provider:'fixture',id:'fixture'};
- const queue=createInferenceQueue({harness:()=>harness!,policy:()=>policy,now:()=>now,sideCall:async request=>{
-  attempts.push(request.id);
-  if(request.id==='fixture-0')throw Error('Synthetic uncertain provider outcome');
-  return {text:'{"facts":[],"extractors":[]}',model,usage:null,cost:0,durationMs:1,authUnavailable:false,error:null};
- }});
- settings.registry.install(queue.extension);
- const open=async()=>{harness=await Harness.open(await SqliteStorage.open(new BunSqliteDatabase(file)),settings,context);return harness.root(context);};
- cleanups.push(async()=>{await harness?.close(context);});
- let root=await open();
- const request=(id:string)=>({id,purpose:'proposer' as const,model,prompt:'Synthetic evidence',maxOutputTokens:32,deadlineMs:1000});
- const origin=(sessionKey:string,backfillId='one-logical-backfill')=>({sessionKey,backfillId,account:'fixture',runId:null,revision:'1',digest:'fixture',estimatedMaximumCost:0});
- for(let n=0;n<6;n++){
-  const accepted=await queue.enqueue(root.id,request(`fixture-${n}`),origin('first-session'));
-  expect(accepted.accepted).toBe(true);
-  await harness!.waitForTask(accepted.job!.taskId!,context);
- }
- expect((await queue.enqueue(root.id,request('fixture-0'),origin('first-session'))).reason).toBe('duplicate');
- await harness!.close(context);harness=undefined;now=Date.parse('2026-01-02T00:01:00Z');root=await open();
- for(let n=6;n<12;n++){
-  const accepted=await queue.enqueue(root.id,request(`fixture-${n}`),origin('second-session'));
-  expect(accepted.accepted).toBe(true);
-  await harness!.waitForTask(accepted.job!.taskId!,context);
- }
- expect((await queue.enqueue(root.id,request('fixture-12'),origin('second-session'))).reason).toBe('backfill_budget');
- expect(attempts).toEqual(Array.from({length:12},(_,i)=>`fixture-${i}`));
- policy.budget.callsPerSession=6;
- expect((await queue.enqueue(root.id,request('stricter-limit'),origin('second-session','another-backfill'))).reason).toBe('call_budget');
+test('the optimiser SQLite adapter checks size and shared slots before fetching any entry payload',async()=>{
+ const scan='SELECT record FROM entries WHERE conversation_id = ? ORDER BY id DESC LIMIT ?';
+ const reads:{sql:string;params:SqliteValue[]}[]=[];
+ const absent=async()=>{};
+ const executor:SqliteExecutor={exec:absent,run:absent,runCounted:async()=>0,
+  async get<T extends object>(sql:string,...params:SqliteValue[]){
+   reads.push({sql,params});
+   return (sql.startsWith('SELECT octet_length')?{bytes:256000}:{record:'original task'}) as unknown as T;
+  },
+  async all<T extends object>(sql:string,...params:SqliteValue[]){
+   reads.push({sql,params});
+   if(sql.startsWith('SELECT id, conversation_id'))return [{id:3,conversation_id:1,bytes:256000},{id:2,conversation_id:1,bytes:64},{id:1,conversation_id:1,bytes:32}] as unknown as T[];
+   if(sql.startsWith('SELECT id, record'))return [{id:2,record:'permitted payload'}] as unknown as T[];
+   return [{record:'unmodified'}] as unknown as T[];
+  }};
+ const wrapped=boundOptimizerHistoryReads(executor),budget=optimizerReadBudget();budget.remaining=1;
+ const rows=await optimizerHistoryRead.run(budget,()=>wrapped.all<{record:string}>(scan,1,3));
+ const payloadReads=reads.filter(read=>read.sql.startsWith('SELECT id, record'));
+ expect(payloadReads.map(read=>read.params)).toEqual([[2]]);
+ expect(JSON.parse(rows[0]!.record)).toMatchObject({id:3,kind:optimizerOversizedEntry});
+ expect(rows[1]!.record).toBe('permitted payload');
+ expect(JSON.parse(rows[2]!.record)).toMatchObject({id:1,kind:optimizerOversizedEntry});
+ expect(budget.partial).toBe(true);expect(budget.remaining).toBe(0);
+ await expect(optimizerHistoryRead.run(budget,()=>wrapped.all('SELECT record FROM entries WHERE id = ?',3))).rejects.toThrow('Unrecognised optimiser history scan');
+ expect(await wrapped.all(scan,1,3)).toEqual([{record:'unmodified'}]);
+ const task='SELECT record FROM tasks WHERE id = ?';
+ await expect(optimizerHistoryRead.run(optimizerReadBudget(),()=>wrapped.get(task,17))).rejects.toBeInstanceOf(OptimizerTaskPayloadSkipped);
+ expect(reads.filter(read=>read.sql===task)).toEqual([]);
+ expect(await wrapped.get(task,17)).toEqual({record:'original task'});
+});
+
+test('rolling history excludes old and oversized inputs without changing the original journal',async()=>{
+ const f=await setup('sqlite'),c=f.conversation;
+ const padding=defineEntry<{text:string}>('fixture.rolling-history');
+ const usage={input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}};
+ const {old,newest,oversized}=await c.commit(async tx=>{
+  async function result(n:string,output:string){
+   await tx.appendEntry(AssistantEntry,c.id,{model:[{role:'assistant',content:[{type:'toolCall',id:n,name:'bash',arguments:{command:`pytest ${n}`}}],api:'openai-completions',provider:'faux',model:'faux-1',stopReason:'toolUse',timestamp:1,usage}]});
+   return (await tx.appendEntry(ToolResultEntry,c.id,{data:{diagnostics:[]},model:[{role:'toolResult',toolCallId:n,toolName:'bash',content:[{type:'text',text:output}],isError:false,timestamp:2}]})).id;
+  }
+  const old=await result('old','not in the rolling window');
+  for(let n=0;n<520;n++)await tx.appendEntry(padding,c.id,{data:{text:`row ${n}`}});
+  const oversized=await result('oversized','x'.repeat(180_000));
+  return {old,oversized,newest:await result('recent','recent proof')};
+ },context);
+ const result=await f.native.domain.trajectory(f.host,String(newest));
+ expect(result).toMatchObject({kind:'ready',partial:true,cutoff:String(newest),observations:[{command:'pytest recent',output:'recent proof'}]});
+ expect((await c.entries({minEntryId:old,maxEntryId:old},1,undefined,context)).items).toHaveLength(1);
+ const ordinary=(await c.entries({minEntryId:oversized,maxEntryId:oversized},1,undefined,context)).items[0];
+ expect(JSON.stringify(ordinary).length).toBeGreaterThan(180_000);
 },15_000);
 
 test('a tool result without a matching call or durable task is still unreadable',async()=>{

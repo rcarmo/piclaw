@@ -1,5 +1,6 @@
 // Kintsugi b8469c29 MIT port; see mcp/UPSTREAM-LICENSE. Off leaves new task memos untouched.
 import { createHash } from "node:crypto";
+import { ownedSlice } from '@earendil-works/chord/delta';
 import { defineExtension, defineTool, hook, ToolTask, type HookApi, type ToolExecutionResult, type ConversationId } from "@earendil-works/pi-durable";
 import type { Context } from "@earendil-works/chord/context";
 import { Type } from "typebox";
@@ -8,6 +9,7 @@ const isJsonObject=(value:unknown):value is Record<string,import("@earendil-work
 import { observing, offloadPresentation, outputLineCount, outputOffload, reduceToolOutput, type Policy } from "#token-optimizer/core";
 import {optimizerCallEntry as codemodeCallEntry} from "./optimizer-output-source.ts";
 import { optimizerBashOutput, stripTerminalEscapes, type SavedOutputRead } from "./optimizer-output-source.ts";
+import {optimizerEvidenceBytes,recentOptimizerEntries} from './token-optimizer-source.js';
 import type { ToolOutputScope, ToolOutputStore } from "./mcp/tool-output-store.ts";
 const commandSchema = Type.Object({command:Type.String()});
 const codeSchema = Type.Object({code:Type.String()});
@@ -127,17 +129,25 @@ export function createToolOutputTools(store:ToolOutputStore,scopeOf:(id:Conversa
   ];
 }
 async function nestedOutputs(api:HookApi,context:Context) {
-  // Bounded to this script's recent ledger; no guessing a command from model-emitted prose.
-  const entries = [...(await api.entries({order:"descending"},256,undefined,context)).items].reverse();
-  const starts = new Map<string,string>(), candidates:Parameters<typeof reduceToolOutput>[0][] = [];
-  for (const entry of entries) if (entry.byTaskId === api.taskId && codemodeCallEntry.is(entry)) {
-    const data = entry.data;
-    if (data.phase === "start" && data.name === "bash" && Value.Check(commandSchema,data.arguments)) starts.set(data.key,data.arguments.command);
-    if (data.phase === "end" && data.output && !data.cancelled && starts.has(data.key)) {
-      let value:unknown; try { value = JSON.parse(data.output); } catch { continue; }
-      const bash = optimizerBashOutput(value,data.details);
-      if (bash) candidates.push({command:starts.get(data.key)!,...bash});
+  const starts=new Map<string,string>(), candidates:{value:Parameters<typeof reduceToolOutput>[0];bytes:number}[]=[];
+  let retained=0;
+  for await (const entry of recentOptimizerEntries(api,256,context)) if (entry.byTaskId === api.taskId && codemodeCallEntry.is(entry)) {
+    const data=entry.data;
+    if(data.key.length>256)continue;
+    if(data.phase==='start' && data.name==='bash' && Value.Check(commandSchema,data.arguments) && data.arguments.command.length<=2048){
+      if(!starts.has(data.key) && starts.size===64)starts.delete(starts.keys().next().value!);
+      starts.set(ownedSlice(data.key,0),ownedSlice(data.arguments.command,0));
     }
+    if(data.phase!=='end')continue;
+    const command=starts.get(data.key);starts.delete(data.key);
+    if(!command || !data.output || data.cancelled)continue;
+    let parsed:unknown;try{parsed=JSON.parse(data.output);}catch{continue;}
+    const bash=optimizerBashOutput(parsed,data.details);
+    if(!bash || bash.fullOutputPath.length>2048)continue;
+    const value={...bash,command,output:ownedSlice(bash.output,0),fullOutputPath:ownedSlice(bash.fullOutputPath,0)};
+    const bytes=Buffer.byteLength(value.output)+Buffer.byteLength(value.fullOutputPath)+Buffer.byteLength(command);
+    candidates.push({value,bytes});retained+=bytes;
+    while(candidates.length>16 || retained>optimizerEvidenceBytes)retained-=candidates.shift()!.bytes;
   }
-  return candidates;
+  return candidates.map(row=>row.value);
 }
