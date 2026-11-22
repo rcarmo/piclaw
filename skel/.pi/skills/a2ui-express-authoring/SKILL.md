@@ -23,8 +23,9 @@ root = Column([
 ]);
 ```
 
-- `root` is required when creating a surface. Supported components: `Text`, `Column`, `Row`, `Card`, `Divider`, `Button`, `TextField`, `CheckBox`, and `ChoicePicker`.
-- Bind inputs to absolute `$` data paths. `ChoicePicker` binds a list of selected option values: initialise it with `[]` or `["value"]` using double quotes for strings. Include only the expected fields in the button's `Event` context.
+- `root` is required when creating a surface. Classic renders the 18 Basic Catalogue component types, including tabs, modals, images, audio, video, sliders and date/time inputs.
+- Use absolute bindings like `$/topic` for shared values. `List`, `Row` and `Column` can repeat a component with `_template($/rows, row)`. In the repeated component, `$label` reads `label` from that row. Include only the expected fields in the button's `Event` context.
+- `ChoicePicker` binds a list of selected option values: initialise it with `[]` or `["value"]`. Use `displayStyle="chips"` for compact choices and `filterable=true` for a search field.
 - `Event("cancel")` closes an agent form without submitting values. A normal event submits a new user input in the original thread. Set `keep_active` only when repeated submissions are useful.
 - `openUrl("https://example.com/docs")` is a static browser link. Dynamic URLs, custom functions, embedded HTML and remote catalogs are unsupported.
 - Never request keys, tokens, OTPs or other credentials in an agent form. Built-in auth flows have separate private controls.

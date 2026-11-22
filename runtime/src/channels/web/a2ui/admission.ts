@@ -54,14 +54,15 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
   catch { return json({ error: 'Surface action not authorised.' }, 403); }
   try { payload = await readBody(req); }
   catch { return json({ error: 'Invalid or oversized surface action.' }, 400); }
-  if (!record(payload) || Object.keys(payload).length !== 6 + Number(Object.hasOwn(payload, 'private_code')) + Number(Object.hasOwn(payload, 'private_value'))) return json({ error: 'Invalid surface action.' }, 400);
-  const { chat_jid: chatJid, post_id: postId, thread_id: threadId, revision, request_id: requestId, message, private_code: code, private_value: privateValue } = payload;
+  if (!record(payload) || Object.keys(payload).length !== 6 + Number(Object.hasOwn(payload, 'private_code')) + Number(Object.hasOwn(payload, 'private_value')) + Number(Object.hasOwn(payload, 'instance_path'))) return json({ error: 'Invalid surface action.' }, 400);
+  const { chat_jid: chatJid, post_id: postId, thread_id: threadId, revision, request_id: requestId, message, instance_path: instancePath, private_code: code, private_value: privateValue } = payload;
   if (typeof chatJid !== 'string' || !chatJid.startsWith('web:') || chatJid.length > 240
     || typeof postId !== 'number' || !Number.isSafeInteger(postId) || postId < 1
     || typeof threadId !== 'number' || !Number.isSafeInteger(threadId) || threadId < 1
     || typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 1
     || typeof requestId !== 'string' || !requestIdentity.test(requestId) || !record(message) || !record(message.action)
-    || typeof message.action.surfaceId !== 'string') return json({ error: 'Invalid surface action.' }, 400);
+    || typeof message.action.surfaceId !== 'string'
+    || (instancePath !== undefined && (typeof instancePath !== 'string' || !/^(?:\/(?:0|[1-9][0-9]?)){1,24}$/.test(instancePath)))) return json({ error: 'Invalid surface action.' }, 400);
   const surfaceId = message.action.surfaceId;
   const readSource = () => getMessageByRowId(chatJid, postId);
   function sourceBlock(row: ReturnType<typeof readSource>) {
@@ -82,7 +83,7 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
   if (!isA2uiSurfaceBlock(block)) return source.data?.content_blocks?.some(isA2uiSurfaceBlock) ? changed() : json({ error: 'Surface not found.' }, 404);
   if (block.owner !== 'agent' && block.owner !== 'recovery' && (block.state !== 'active' || block.revision !== revision)) return changed();
   let action: ReturnType<typeof validateA2uiAction>;
-  try { action = validateA2uiAction(block.surface, message); }
+  try { action = validateA2uiAction(block.surface, message, instancePath); }
   catch { return json({ error: 'Invalid surface action.' }, 400); }
   if (block.owner === 'login') {
     if (code !== undefined) return json({ error: 'Unexpected private authentication input.' }, 400);
@@ -152,7 +153,7 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
     ? recoveryPrompt(action.name, postId) : undefined;
   if ((block.owner !== 'agent' && !recovery) || code !== undefined) return json({ error: 'Surface action not authorised.' }, 403);
   const { timestamp: _timestamp, ...submitted } = action;
-  const digest = createHash('sha256').update(JSON.stringify(submitted)).digest('hex');
+  const digest = createHash('sha256').update(JSON.stringify({ ...submitted, instancePath })).digest('hex');
   const duplicate = (latest: unknown) => isA2uiSurfaceBlock(latest) && latest.last_submission?.request_id === requestId
     && latest.last_submission.revision === revision && latest.last_submission.digest === digest;
   const accepted = () => json({ status: 'accepted', duplicate: true }, 200);

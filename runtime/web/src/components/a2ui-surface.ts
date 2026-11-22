@@ -1,6 +1,7 @@
 /** Render the admitted A2UI catalog in Classic's Preact timeline. */
-import { html, useCallback, useRef, useState } from '../vendor/preact-htm.js';
+import { html, useCallback, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import { a2uiBindingPath, buildA2uiAction, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
+import { projectA2uiTemplates } from '../../../src/channels/web/a2ui/templates.js';
 import { a2uiDateTimeDisplay, a2uiDateTimeType } from '../../../src/channels/web/a2ui/date-time.js';
 import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
 import { a2uiIconPaths } from './a2ui-icon-paths.js';
@@ -18,7 +19,11 @@ export function A2uiSurface({ block, source, onSubmit }: {
     source: Pick<A2uiActionRequest, 'chat_jid' | 'post_id' | 'thread_id'>;
     onSubmit?: Submit;
 }) {
-    const snapshot = block.surface;
+    const projection: ReturnType<typeof projectA2uiTemplates> | undefined = useMemo(() => {
+        try { return projectA2uiTemplates(block.surface); }
+        catch { return undefined; } // An invalid stored surface still has a plain-text fallback.
+    }, [block.surface]);
+    const snapshot = projection?.snapshot ?? block.surface;
     const [edits, setEdits] = useState(new Map<string, unknown>());
     const [pending, setPending] = useState(false);
     const [error, setError] = useState('');
@@ -28,7 +33,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
     const inFlight = useRef(false);
     const privateInput = useRef<HTMLInputElement | null>(null);
     const disabled = block.state !== 'active' || !onSubmit;
-    const components = new Map(snapshot.components.map(item => [item.id, item]));
+    const components = new Map((projection?.snapshot.components ?? []).map(item => [item.id, item]));
     const read = (value: unknown) => readA2uiValue(snapshot, value, edits);
     const text = (value: unknown) => {
         const resolved = read(value);
@@ -41,15 +46,16 @@ export function A2uiSurface({ block, source, onSubmit }: {
     }
     async function submit(event: Event, componentId: string) {
         event.stopPropagation();
-        if (disabled || !onSubmit || inFlight.current) return;
+        const instance = projection?.instances.get(componentId);
+        if (disabled || !onSubmit || !instance || inFlight.current) return;
         inFlight.current = true;
         setPending(true);
         setError('');
         try {
-            const message = buildA2uiAction(snapshot, componentId, edits, new Date().toISOString());
+            const message = buildA2uiAction(block.surface, instance.id, edits, new Date().toISOString(), instance.instancePath);
             const key = JSON.stringify([componentId, message.action.context]);
             if (!lastAttempt.current || lastAttempt.current.key !== key) {
-                lastAttempt.current = { key, request: { ...source, revision: block.revision, request_id: Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''), message } };
+                lastAttempt.current = { key, request: { ...source, revision: block.revision, request_id: Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''), message, ...(instance.instancePath ? { instance_path: instance.instancePath } : {}) } };
             }
             const request = lastAttempt.current.request;
             const value = block.owner === 'login' && componentId === 'save' ? privateInput.current?.value : undefined;

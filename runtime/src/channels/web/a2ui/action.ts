@@ -1,5 +1,6 @@
 /** Classic's subset of the v1.0 action message. Owning a post is a separate server check. */
-import { absoluteA2uiPointer } from "./data-path.js";
+import { readA2uiPath } from "./data-path.js";
+import { a2uiInstanceId, projectA2uiTemplates } from "./templates.js";
 import { a2uiDateTimeType, validA2uiDateTime } from "./date-time.js";
 import { a2uiSliderRange, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
 
@@ -30,15 +31,8 @@ export function a2uiBindingPath(value: unknown): string | undefined {
 export function readA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?: ReadonlyMap<string, unknown>): unknown {
   const path = a2uiBindingPath(value);
   if (!path) return value;
-  const keys = absoluteA2uiPointer(path);
-  if (!keys) return undefined;
   if (edits?.has(path)) return edits.get(path);
-  let current: unknown = snapshot.dataModel;
-  for (const key of keys) {
-    if ((!record(current) && !Array.isArray(current)) || (Array.isArray(current) && !/^\d+$/.test(key)) || !Object.hasOwn(current, key)) return undefined;
-    current = (current as Record<string, unknown>)[key];
-  }
-  return current;
+  return readA2uiPath(snapshot.dataModel, path);
 }
 
 function sameValue(left: unknown, right: unknown): boolean {
@@ -46,8 +40,13 @@ function sameValue(left: unknown, right: unknown): boolean {
     && left.every((item, index) => item === right[index]));
 }
 
-function eventDescriptor(snapshot: A2uiSnapshot, sourceComponentId: string) {
-  const source = snapshot.components.find(({ id }) => id === sourceComponentId);
+type Projection = ReturnType<typeof projectA2uiTemplates>;
+
+function eventDescriptor(projection: Projection, sourceComponentId: string, instancePath?: string) {
+  const instanceId = a2uiInstanceId(sourceComponentId, instancePath);
+  const identity = projection.instances.get(instanceId);
+  if (identity?.id !== sourceComponentId || identity.instancePath !== instancePath) throw new Error('Invalid surface action');
+  const source = projection.snapshot.components.find(({ id }) => id === instanceId);
   if (source?.component !== "Button" || !record(source.action) || !record(source.action.event)
     || typeof source.action.event.name !== "string") throw new Error("Invalid surface action");
   return { name: source.action.event.name, context: record(source.action.event.context) ? source.action.event.context : {} };
@@ -96,8 +95,10 @@ function defaultControlValue(component: A2uiComponent | undefined): ActionValue 
 }
 
 /** Send only context declared by this button. Neither edits nor snapshot leave the browser wholesale. */
-export function buildA2uiAction(snapshot: A2uiSnapshot, sourceComponentId: string, edits: ReadonlyMap<string, unknown>, timestamp: string): A2uiActionMessage {
-  const event = eventDescriptor(snapshot, sourceComponentId);
+export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string, edits: ReadonlyMap<string, unknown>, timestamp: string, instancePath?: string): A2uiActionMessage {
+  const projection = projectA2uiTemplates(source);
+  const { snapshot } = projection;
+  const event = eventDescriptor(projection, sourceComponentId, instancePath);
   const context = Object.fromEntries(Object.entries(event.context).map(([key, binding]) => {
     const path = a2uiBindingPath(binding);
     const control = path ? controlForPath(snapshot, path) : undefined;
@@ -108,12 +109,17 @@ export function buildA2uiAction(snapshot: A2uiSnapshot, sourceComponentId: strin
   const message: A2uiActionMessage = { version: "1.0", action: {
     surfaceId: snapshot.surfaceId, sourceComponentId, name: event.name, timestamp, context,
   } };
-  validateA2uiAction(snapshot, message);
+  validateProjectedA2uiAction(projection, message, instancePath);
   return message;
 }
 
 /** Re-resolve authority and field constraints from the stored descriptor, not browser declarations. */
-export function validateA2uiAction(snapshot: A2uiSnapshot, payload: unknown): A2uiAction {
+export function validateA2uiAction(source: A2uiSnapshot, payload: unknown, instancePath?: string): A2uiAction {
+  return validateProjectedA2uiAction(projectA2uiTemplates(source), payload, instancePath);
+}
+
+function validateProjectedA2uiAction(projection: Projection, payload: unknown, instancePath?: string): A2uiAction {
+  const { snapshot } = projection;
   if (!record(payload) || payload.version !== "1.0" || Object.keys(payload).length !== 2 || !record(payload.action)) {
     throw new Error("Invalid surface action");
   }
@@ -121,7 +127,7 @@ export function validateA2uiAction(snapshot: A2uiSnapshot, payload: unknown): A2
   if (Object.keys(action).length !== 5 || action.surfaceId !== snapshot.surfaceId || typeof action.sourceComponentId !== "string"
     || typeof action.timestamp !== "string" || action.timestamp.length > 35 || !Number.isFinite(Date.parse(action.timestamp))
     || !record(action.context)) throw new Error("Invalid surface action");
-  const event = eventDescriptor(snapshot, action.sourceComponentId);
+  const event = eventDescriptor(projection, action.sourceComponentId, instancePath);
   if (event.name !== action.name || Object.keys(event.context).length !== Object.keys(action.context).length) {
     throw new Error("Invalid surface action");
   }
@@ -151,6 +157,7 @@ export interface A2uiActionRequest {
   revision: number;
   request_id: string;
   message: A2uiActionMessage;
+  instance_path?: string;
   private_code?: string;
   private_value?: string;
 }

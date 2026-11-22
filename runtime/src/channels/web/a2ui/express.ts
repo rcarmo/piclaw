@@ -7,7 +7,8 @@ import {
   type AgentToRendererMessage,
 } from "@a2ui/agent";
 import { basicCatalog } from "@a2ui/web_core/catalogs/basic/v1";
-import { absoluteA2uiPointer } from "./data-path.js";
+import { absoluteA2uiPointer, scopedA2uiPointer } from "./data-path.js";
+import { projectA2uiTemplates, readA2uiTemplate } from "./templates.js";
 import { CLASSIC_A2UI_CATALOG, CLASSIC_A2UI_PROPERTIES, a2uiSliderRange, readA2uiLink, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
 
 const MAX_SOURCE_BYTES = 16_384;
@@ -40,7 +41,7 @@ function allowedKeys(value: Record<string, unknown>, keys: readonly string[]): b
 }
 
 function checkPath(value: unknown, allowRoot = false): void {
-  requireClassic(absoluteA2uiPointer(value, allowRoot), "unsupported data path");
+  requireClassic(typeof value === 'string' && value.length <= 256 && absoluteA2uiPointer(value, allowRoot), "unsupported data path");
 }
 
 function checkJson(value: unknown, depth = 0): void {
@@ -58,7 +59,7 @@ function checkJson(value: unknown, depth = 0): void {
     requireClassic(!FORBIDDEN_KEYS.has(key) && (key !== "@call" || item === "openUrl") && key !== "@catalogId", "unsupported key");
     if (key === "@path") {
       requireClassic(entries.length === 1, "malformed path binding");
-      checkPath(item);
+      requireClassic(scopedA2uiPointer(item) !== undefined, "unsupported data binding");
     }
     checkJson(item, depth + 1);
   }
@@ -83,7 +84,9 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     }
     ids.add(component.id);
     if (name === "Row" || name === "Column" || name === "List") {
-      requireClassic(Array.isArray(component.children) && component.children.every(isId), "only fixed child lists are supported");
+      const template = readA2uiTemplate(component.children);
+      requireClassic((Array.isArray(component.children) && component.children.every(isId)) ||
+        (template && isId(template.componentId) && scopedA2uiPointer(template.path) !== undefined), "invalid child list or template");
     }
     if (name === "Tabs") {
       requireClassic(Array.isArray(component.tabs) && component.tabs.length > 0 && component.tabs.every(tab =>
@@ -189,7 +192,10 @@ function verifySnapshot(snapshot: A2uiSnapshot): void {
     requireClassic(item && !seen.has(id) && depth <= MAX_DEPTH, "expected a bounded component tree");
     seen.add(id);
     requireClassic(item.weight === undefined || canWeight, "layout weight requires a Row or Column parent");
-    if (Array.isArray(item.children)) for (const child of item.children) walk(child, depth + 1, item.component === "Row" || item.component === "Column");
+    const weightedChildren = item.component === "Row" || item.component === "Column";
+    if (Array.isArray(item.children)) for (const child of item.children) walk(child, depth + 1, weightedChildren);
+    const template = readA2uiTemplate(item.children);
+    if (template) walk(template.componentId, depth + 1, weightedChildren);
     if (item.component === "Tabs" && Array.isArray(item.tabs)) for (const tab of item.tabs) walk(tab.child, depth + 1);
     if (item.component === "Modal" && typeof item.trigger === "string" && typeof item.content === "string") {
       walk(item.trigger, depth + 1);
@@ -205,4 +211,5 @@ function verifySnapshot(snapshot: A2uiSnapshot): void {
   }
   walk("root", 0);
   requireClassic(seen.size === components.size, "unreachable components");
+  projectA2uiTemplates(snapshot);
 }

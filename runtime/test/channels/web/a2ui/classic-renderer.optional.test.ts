@@ -273,6 +273,21 @@ for (const engine of [chromium, webkit]) {
       await pointerField.fill('Edited value');
       await page.getByRole('button', {name:'Send escaped value'}).click();
       expect(await page.evaluate(() => (window as any).events.at(-1)?.message.action.context)).toEqual({field:'Edited value'});
+      const repeated = applyA2uiMessages('repeated-browser', compileA2uiExpress(`
+        $/groups=[{items:[{label:"First",note:"one"}]},{items:[{label:"Second",note:"two"}]}];
+        root=Column(_template($/groups, group));
+        group=List(_template($items, item));
+        item=Row([Text($label),TextField(label="Row note",value=$note),submit]);
+        submit=Button(Text("Apply row"),action=Event("apply",{label:$label,note:$note}));
+      `, 'repeated-browser'));
+      await page.evaluate((block) => (window as any).draw(block), {...block, revision:9, surface:repeated});
+      const firstRow = page.getByRole('listitem').filter({hasText:'First'});
+      const secondRow = page.getByRole('listitem').filter({hasText:'Second'});
+      await secondRow.getByLabel('Row note').fill('second draft');
+      expect(await firstRow.getByLabel('Row note').inputValue()).toBe('one');
+      await secondRow.getByRole('button', {name:'Apply row'}).click();
+      expect(await page.evaluate(() => (window as any).events.at(-1))).toMatchObject({instance_path:'/1/0',
+        message:{action:{sourceComponentId:'submit', context:{label:'Second',note:'second draft'}}}});
       const legacyRequests: string[] = [];
       page.on('request', request => { if (request.url().includes('adaptivecards')) legacyRequests.push(request.url()); });
       await page.evaluate(() => (window as any).draw({

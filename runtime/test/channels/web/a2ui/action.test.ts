@@ -67,6 +67,24 @@ test("a modal trigger and content keep their explicitly authored actions", () =>
   expect(buildA2uiAction(modal, 'submit', new Map(), timestamp).action.name).toBe('send');
 });
 
+test('template actions bind relative edits and immutable context to the selected row', () => {
+  const forms = applyA2uiMessages('repeated', compileA2uiExpress(`
+    $/rows = [{label:"First",note:"one"},{label:"Second",note:"two"}];
+    $/tag = "Global";
+    root = List(_template($/rows, row));
+    row = Row([Text($label), TextField(label="Row note", value=$note), send]);
+    send = Button(Text("Apply"), action=Event("apply", {label:$label, note:$note, tag:$/tag}));
+  `, 'repeated'))!;
+  const drafts = new Map([['/rows/0/note','first draft'], ['/rows/1/note','second draft']]);
+  const second = buildA2uiAction(forms, 'send', drafts, timestamp, '/1');
+  expect(second.action.sourceComponentId).toBe('send');
+  expect(second.action.context).toEqual({label:'Second',note:'second draft',tag:'Global'});
+  expect(validateA2uiAction(forms, second, '/1')).toEqual(second.action);
+  for (const forged of [undefined, '/0', '/2', '/01', '/1/0']) expect(() => validateA2uiAction(forms, second, forged)).toThrow();
+  expect(() => validateA2uiAction(forms, { ...second, action: { ...second.action, sourceComponentId: ':send:/1' } })).toThrow();
+  expect(buildA2uiAction(forms, 'send', drafts, timestamp, '/0').action.context.note).toBe('first draft');
+});
+
 test("Classic does not accept authority, options, fixed values or undeclared inputs from the action", () => {
   const message = buildA2uiAction(snapshot, "submit", new Map(), timestamp);
   const action = message.action;

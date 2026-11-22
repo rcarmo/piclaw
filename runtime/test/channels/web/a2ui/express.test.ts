@@ -143,6 +143,22 @@ describe("Classic A2UI Express", () => {
     expect(() => applyA2uiMessages("form-1", compileA2uiExpress(source, "form-1"))).toThrow();
   });
 
+  test('bounds expansion across nested templates', () => {
+    const surfaceId = 'nested';
+    const spec = `
+      $/groups = [{items:[{name:"A"},{name:"B"}]},{items:[{name:"C"}]}];
+      root = Column(_template($/groups, group));
+      group = List(_template($items, item));
+      item = Text($name);
+    `;
+    const initial = applyA2uiMessages(surfaceId, compileA2uiExpress(spec,surfaceId))!;
+    const changed = applyA2uiMessages(surfaceId, [{ version:'1.0', updateDataModel:{surfaceId, path:'/groups/1/items', value:[]} }], initial)!;
+    expect(changed.dataModel.groups).toEqual([{items:[{name:'A'},{name:'B'}]},{items:[]}]);
+    expect(() => applyA2uiMessages(surfaceId, [{ version:'1.0', updateDataModel:{surfaceId, path:'/groups',
+      value:Array.from({length:24}, () => ({items:Array.from({length:24}, () => ({name:'x'}))}))} }], initial)).toThrow(/oversized A2UI template tree/);
+    expect(() => applyA2uiMessages(surfaceId, compileA2uiExpress(spec.replace('$items, item','$items, root'),surfaceId))).toThrow();
+  });
+
   test('uses the same escaped JSON Pointer for updates and reads', () => {
     const surfaceId = 'pointer';
     const original = applyA2uiMessages(surfaceId, [{ version:'1.0', createSurface: {
