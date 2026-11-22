@@ -54,11 +54,11 @@ for (const engine of [chromium, webkit]) {
       server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(req) {
         const { pathname } = new URL(req.url);
         if (pathname === "/fixture.js") return new Response(Bun.file(join(scratch, "fixture.js")));
-        if (pathname === "/classic.css") return new Response(Bun.file(join(web, "static/classic/css/content.css")));
-        return new Response('<!doctype html><html lang="en" data-theme="dark"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/classic.css"></head><body><script type="module" src="/fixture.js"></script></body></html>', { headers: { "Content-Type": "text/html" } });
+        if (pathname === "/base.css" || pathname === "/content.css") return new Response(Bun.file(join(web, "static/classic/css", pathname.slice(1))));
+        return new Response('<!doctype html><html lang="en" data-theme="dark"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/base.css"><link rel="stylesheet" href="/content.css"></head><body><script type="module" src="/fixture.js"></script></body></html>', { headers: { "Content-Type": "text/html" } });
       } });
       browser = await engine.launch({headless:true});
-      const page = await browser.newPage({ viewport: { width: 390, height: 800 } });
+      const page = await browser.newPage({ viewport: { width: 390, height: 800 }, colorScheme: 'dark' });
       page.setDefaultTimeout(5000);
       const errors: string[] = [];
       page.on("pageerror", (err) => errors.push(err.message));
@@ -87,6 +87,23 @@ for (const engine of [chromium, webkit]) {
           context:{note:"Keep this draft",notify:true,size:["large"]} } } });
       await page.evaluate((block) => (window as any).draw(block), { ...block, state: "completed", revision: 2 });
       expect(await button.isDisabled()).toBe(true);
+      const panel = page.locator('.a2ui-surface');
+      const dark = await panel.evaluate(element => getComputedStyle(element).backgroundColor);
+      expect(await panel.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      // Rehydrate the committed snapshot after a full page reload at desktop width.
+      await page.setViewportSize({ width: 1280, height: 820 });
+      await page.emulateMedia({ colorScheme: 'light' });
+      await page.reload();
+      await page.waitForFunction(() => typeof (window as any).draw === 'function');
+      await page.evaluate((block) => {
+        document.documentElement.removeAttribute('data-theme');
+        (window as any).draw(block);
+      }, { ...block, state: 'completed', revision: 2 });
+      expect(await button.isDisabled()).toBe(true);
+      expect(await field.inputValue()).toBe('');
+      const light = await panel.evaluate(element => getComputedStyle(element).backgroundColor);
+      expect(light).not.toBe(dark);
       await page.evaluate((block) => (window as any).draw(block, true), { ...block, revision: 3 });
       expect(await button.isDisabled()).toBe(true);
       const auth = { ...block, owner: 'totp', revision: 4,

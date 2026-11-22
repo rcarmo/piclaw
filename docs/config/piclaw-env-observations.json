@@ -1053,6 +1053,7 @@
           "helperReaders": 0,
           "semanticReaders": 2,
           "files": [
+            ".github/workflows/ci.yml",
             ".github/workflows/integration-gate.yml",
             "Makefile",
             "docs/archive/legacy-compaction-models-and-deadlines.md",

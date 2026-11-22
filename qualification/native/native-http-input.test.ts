@@ -144,10 +144,16 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     expect(block).toMatchObject({ owner:"agent",revision:1,state:"active" });
     const message = buildA2uiAction(block.surface,"root",new Map(),new Date().toISOString());
     const body = JSON.stringify({ chat_jid:"web:default",post_id:form.rowid,thread_id:form.thread_id,revision:1,request_id:crypto.randomUUID(),message });
-    const submit = () => channel!.handleRequest(new Request("https://fixture/agent/a2ui-action",{method:"POST",headers:{"content-type":"application/json"},body}));
+    const submit = (origin = "https://fixture") => channel!.handleRequest(new Request("https://fixture/agent/a2ui-action",{
+      method:"POST",headers:{"content-type":"application/json",origin},body,
+    }));
+    expect((await submit("https://other.invalid")).status).toBe(403);
     expect((await submit()).status).toBe(201);
     expect((await submit()).status).toBe(200);
-    expect(getMessageByRowId("web:default",form.rowid)?.data?.content_blocks?.find(isA2uiSurfaceBlock)).toMatchObject({state:"completed",revision:2});
+    const reload = await channel.handleRequest(new Request(`https://fixture/thread/${form.rowid}?chat_jid=web:default`));
+    expect(reload.status).toBe(200);
+    const { thread } = await reload.json() as {thread: { data: {content_blocks: unknown[]} }[]};
+    expect(thread[0]?.data.content_blocks.find(isA2uiSurfaceBlock)).toMatchObject({state:"completed",revision:2});
     expect(database.query("SELECT count(*) n FROM messages WHERE content='Submitted confirm' AND thread_id=?").get(form.thread_id)).toEqual({n:1});
 
     await control.setExecutionPolicy!("autoRetry",false);
