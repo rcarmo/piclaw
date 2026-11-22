@@ -63,6 +63,7 @@ for (const engine of [chromium, webkit]) {
     const audioRequests: (string | null)[] = [];
     const rpcRequests: {chat_jid:string;post_id:number;thread_id:number;revision:number;message:CallAgentFunctionMessage}[] = [];
     const delayedRpc = Promise.withResolvers<void>();
+    const displayRpc = Promise.withResolvers<void>();
     const audioOrigin = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(req) {
       audioRequests.push(req.headers.get('cookie'));
       const headers = new Headers({ 'Content-Type': 'audio/wav', 'Access-Control-Allow-Origin': '*', 'Accept-Ranges': 'bytes' });
@@ -114,6 +115,12 @@ for (const engine of [chromium, webkit]) {
             await delayedRpc.promise;
             return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,error:{code:'INVALID_FUNCTION_CALL',message:'Obsolete response'}}});
           }
+          if (callFunction['@call']==='displayStatus') {
+            await displayRpc.promise;
+            return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,value:`Ready: ${callFunction.args?.label}`}});
+          }
+          if (callFunction['@call']==='displayNumber') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,value:42}});
+          if (callFunction['@call']==='displayFailure') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,error:{code:'UNKNOWN_FUNCTION',message:'Not registered'}}});
           if (callFunction['@call']==='broken') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId:'wrong',value:'cannot be accepted'}});
           return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,value:null}});
         }
@@ -444,6 +451,27 @@ for (const engine of [chromium, webkit]) {
       delayedRpc.resolve();
       expect(await panel.getByRole('alert').count()).toBe(0);
       expect(await page.evaluate(()=>(window as any).events.length)).toBe(initialEventCount);
+      const displayId='agent-binding-form';
+      const display=applyA2uiMessages(displayId,[{version:'1.0',createSurface:{surfaceId:displayId,catalogId:basicCatalogue,dataModel:{label:'Classic'},components:[
+        {id:'root',component:'Column',children:['sibling','remote','same','nested','missing']},
+        {id:'sibling',component:'Text',text:'Unaffected sibling'},
+        {id:'remote',component:'Text',text:{'@call':'displayStatus',args:{label:{'@path':'/label'}}}},
+        {id:'same',component:'Text',text:{'@call':'displayStatus',args:{label:'Classic'}}},
+        {id:'nested',component:'Text',text:{'@call':'formatNumber',args:{value:{'@call':'displayNumber'}}}},
+        {id:'missing',component:'Text',text:{'@call':'displayFailure'}},
+      ]}}],undefined,true)!;
+      await page.evaluate((item)=>(window as any).draw(item),{...block,owner:'agent',revision:14,surface:display});
+      await panel.getByText('Unaffected sibling').waitFor();
+      await page.locator('.a2ui-surface[aria-busy="true"]').waitFor();
+      expect(await panel.getByText('Ready: Classic').count()).toBe(0);
+      displayRpc.resolve();
+      await page.locator('.a2ui-surface[aria-busy="false"]').waitFor();
+      expect(await panel.getByText('Ready: Classic').count()).toBe(2);
+      expect(await panel.getByText('Unaffected sibling').count()).toBe(1);
+      expect(await panel.getByText('42',{exact:true}).count()).toBe(1);
+      expect(await panel.getByText('Not registered').count()).toBe(0);
+      expect(rpcRequests.filter(request=>request.message.callAgentFunction.callFunction['@call']==='displayStatus')).toHaveLength(1);
+      expect(rpcRequests.filter(request=>request.message.callAgentFunction.callFunction['@call']==='displayFailure')).toHaveLength(1);
       const legacyRequests: string[] = [];
       page.on('request', request => { if (request.url().includes('adaptivecards')) legacyRequests.push(request.url()); });
       await page.evaluate(() => (window as any).draw({
@@ -457,6 +485,7 @@ for (const engine of [chromium, webkit]) {
       expect(errors).toEqual([]);
     } finally {
       delayedRpc.resolve();
+      displayRpc.resolve();
       await browser?.close();
       server?.stop(true);
       audioOrigin.stop(true);

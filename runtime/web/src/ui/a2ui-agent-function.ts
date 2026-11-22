@@ -1,35 +1,38 @@
 import { AgentFunctionResponseMessageSchema } from '@a2ui/web_core/v1_0';
 import { readClassicFunctionCall } from '../../../src/channels/web/a2ui/function-call.js';
-import { isClassicValueFunction, readA2uiValue } from '../../../src/channels/web/a2ui/functions.js';
+import { a2uiBindingPath, evaluateClassicLocalFunction, isClassicValueFunction, readA2uiValue } from '../../../src/channels/web/a2ui/functions.js';
 import { boundedRpcJson, MAX_RPC_VALUE } from '../../../src/channels/web/a2ui/rpc-json.js';
-import { type A2uiSnapshot } from '../../../src/channels/web/a2ui/surface.js';
+import type { A2uiSnapshot } from '../../../src/channels/web/a2ui/surface.js';
 import { requestA2uiAgentFunction } from '../api.js';
 
-interface EvaluationContext {
+export interface A2uiFunctionContext {
     snapshot: A2uiSnapshot;
     edits: ReadonlyMap<string,unknown>;
     instance: {scope:string;instancePath?:string};
     source: Parameters<typeof requestA2uiAgentFunction>[0];
     signal: AbortSignal;
+    /** Only reactive evaluations share results; every action click gets a new call ID. */
+    memo?: Map<string,Promise<unknown>>;
 }
 
-/** Route an admitted function to Classic's pure evaluator or the owning agent, never by URL. */
-export async function evaluateA2uiFunction(value: unknown, context: EvaluationContext): Promise<unknown> {
-    const {snapshot,edits,instance,source,signal}=context;
-    signal.throwIfAborted();
+function record(value: unknown): value is Record<string,unknown> {
+    return !!value && typeof value==='object' && !Array.isArray(value);
+}
+
+/** Whether an admitted expression needs the owning agent, looking only at its syntax. */
+export function hasA2uiAgentFunction(value: unknown): boolean {
     const call=readClassicFunctionCall(value);
-    const catalogId=call?.catalogId ?? snapshot.catalogId;
-    if (!call || call.name==='openUrl' || (call.name!=='@index' && !catalogId)) throw Error('The function has no available catalogue.');
-    if (isClassicValueFunction(call.name)) {
-        const result=readA2uiValue(snapshot,value,edits,instance.instancePath,instance.scope);
-        if (result===undefined) throw Error('The renderer could not evaluate the function.');
-        return result;
-    }
-    const args=boundedRpcJson(readA2uiValue(snapshot,call.args ?? {},edits,instance.instancePath,instance.scope,true)) as Record<string,unknown>;
-    if (new TextEncoder().encode(JSON.stringify(args)).length>MAX_RPC_VALUE) throw Error('The function arguments are too large.');
+    if (call) return call.name!=='openUrl' && (!isClassicValueFunction(call.name) || hasA2uiAgentFunction(call.args));
+    if (a2uiBindingPath(value)!==undefined) return false;
+    if (Array.isArray(value)) return value.some(hasA2uiAgentFunction);
+    return record(value) && Object.values(value).some(hasA2uiAgentFunction);
+}
+
+async function invokeAgent(context: A2uiFunctionContext, name: string, catalogId: string, args: Record<string, unknown>) {
+    const {snapshot,source,signal}=context;
     const functionCallId=crypto.randomUUID();
     const response=await requestA2uiAgentFunction(source,{version:'1.0',callAgentFunction:{
-        surfaceId:snapshot.surfaceId,functionCallId,callFunction:{'@call':call.name,catalogId,args},
+        surfaceId:snapshot.surfaceId,functionCallId,callFunction:{'@call':name,catalogId,args},
     }},signal);
     signal.throwIfAborted();
     const parsed=AgentFunctionResponseMessageSchema.safeParse(response);
@@ -37,4 +40,48 @@ export async function evaluateA2uiFunction(value: unknown, context: EvaluationCo
         throw Error('The agent function did not complete.');
     }
     return boundedRpcJson(parsed.data.agentFunctionResponse.value ?? null);
+}
+
+/** Resolve arguments in order and invoke the correct owner. Returned JSON is never executed. */
+export async function evaluateA2uiFunction(value: unknown, context: A2uiFunctionContext): Promise<unknown> {
+    const {snapshot,edits,instance,signal,memo}=context;
+    const read=(part:unknown)=>readA2uiValue(snapshot,part,edits,instance.instancePath,instance.scope);
+    let remaining=256;
+    async function resolve(input: unknown, depth: number): Promise<unknown> {
+        signal.throwIfAborted();
+        if (--remaining<0 || depth>24) throw Error('A2UI expression limit exceeded.');
+        if (a2uiBindingPath(input)!==undefined) return read(input);
+        const call=readClassicFunctionCall(input);
+        if (call) {
+            const catalogId=call.catalogId ?? snapshot.catalogId;
+            if (call.name==='openUrl' || (call.name!=='@index' && !catalogId)) throw Error('The function has no available catalogue.');
+            const args=await resolve(call.args ?? {},depth+1) as Record<string,unknown>;
+            if (isClassicValueFunction(call.name)) {
+                const result=evaluateClassicLocalFunction(call.name,args,instance.instancePath,read);
+                if (result===undefined) throw Error('The renderer could not evaluate the function.');
+                return result;
+            }
+            const safeArgs=boundedRpcJson(args) as Record<string,unknown>;
+            const fingerprint=JSON.stringify([catalogId,call.name,safeArgs]);
+            if (new TextEncoder().encode(fingerprint).length>MAX_RPC_VALUE) throw Error('The function arguments are too large.');
+            signal.throwIfAborted();
+            const existing=memo?.get(fingerprint);
+            if (existing) return existing;
+            const pending=invokeAgent(context,call.name,catalogId!,safeArgs);
+            memo?.set(fingerprint,pending);
+            return pending;
+        }
+        if (Array.isArray(input)) {
+            const items: unknown[]=[];
+            for (const item of input) items.push(await resolve(item,depth+1));
+            return items;
+        }
+        if (record(input)) {
+            const entries: [string,unknown][]=[];
+            for (const [key,item] of Object.entries(input)) entries.push([key,await resolve(item,depth+1)]);
+            return Object.fromEntries(entries);
+        }
+        return input;
+    }
+    return resolve(value,0);
 }

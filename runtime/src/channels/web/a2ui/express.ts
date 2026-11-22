@@ -89,19 +89,21 @@ function containsCall(value: unknown, name?: string): boolean {
     || Object.values(value).some(item => containsCall(item, name)));
 }
 
-function checkValueCalls(value: unknown): void {
-  if (Array.isArray(value)) return value.forEach(checkValueCalls);
+function checkValueCalls(value: unknown, allowRemote = false): void {
+  if (Array.isArray(value)) return value.forEach(item=>checkValueCalls(item,allowRemote));
   if (!record(value)) return;
   if (Object.hasOwn(value, '@call')) {
     const name = value['@call'];
-    requireClassic(isClassicValueFunction(name) && allowedKeys(value, ['@call', 'args', 'catalogId'])
+    requireClassic((isClassicValueFunction(name) || (allowRemote && isClassicFunctionName(name) && name!=='openUrl'))
+      && allowedKeys(value, ['@call', 'args', 'catalogId'])
       && (value.catalogId === undefined || (name !== '@index' && value.catalogId === CLASSIC_A2UI_CATALOG)), 'unsupported function in a value');
     const args = value.args;
     requireClassic(args === undefined || record(args), 'invalid function arguments');
     if (name === '@index' && record(args)) requireClassic(allowedKeys(args, ['offset']) && (args.offset === undefined
-      || typeof args.offset === 'number' || (record(args.offset) && (Object.hasOwn(args.offset, '@path') || isClassicValueFunction(args.offset['@call'])))), 'invalid @index arguments');
+      || typeof args.offset === 'number' || (record(args.offset) && (Object.hasOwn(args.offset, '@path') || isClassicValueFunction(args.offset['@call'])
+        || (allowRemote && isClassicFunctionName(args.offset['@call']))))), 'invalid @index arguments');
   }
-  Object.values(value).forEach(checkValueCalls);
+  Object.values(value).forEach(item=>checkValueCalls(item,allowRemote));
 }
 
 function checkComponents(value: unknown): asserts value is A2uiComponent[] {
@@ -129,8 +131,9 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
       if (key === 'metadata' || key === '@metadata') continue;
       const call = key === 'action' ? readClassicActionFunction(value) : undefined;
       const target = key === 'action' ? readA2uiLinkTarget(value) : undefined;
-      if (call) checkValueCalls(call.args);
-      else checkValueCalls(target === undefined ? value : target);
+      const dateBound = name==='DateTimeInput' && (key==='min' || key==='max');
+      if (call) checkValueCalls(call.args,call.name!=='openUrl');
+      else checkValueCalls(target === undefined ? value : target,!dateBound && key!=='action' && key!=='@checks' && key!=='checks');
     }
     ids.add(component.id);
     if (name === "Row" || name === "Column" || name === "List") {

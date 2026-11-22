@@ -3,6 +3,7 @@ import { html, useCallback, useLayoutEffect, useMemo, useRef, useState } from '.
 import { a2uiBindingPath, buildA2uiAction, isA2uiActionValue, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
 import { a2uiRendererContext } from '../ui/a2ui-renderer-peer.js';
 import { evaluateA2uiFunction } from '../ui/a2ui-agent-function.js';
+import { useA2uiValueFunctions } from '../ui/use-a2ui-value-functions.js';
 import { readClassicActionFunction } from '../../../src/channels/web/a2ui/function-call.js';
 import { checkA2uiComponent } from '../../../src/channels/web/a2ui/checks.js';
 import { a2uiDraftsFor, discardOldA2uiDraft, readA2uiDraft, rememberA2uiDraftEdit, subscribeA2uiDraft } from '../ui/a2ui-drafts.js';
@@ -54,6 +55,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
     const inFlight = useRef(false);
     const privateInput = useRef<HTMLInputElement | null>(null);
     const disabled = block.state !== 'active' || !onSubmit;
+    const valueFunctions = useA2uiValueFunctions(projection,edits,{...source,revision:block.revision},!disabled && block.owner==='agent');
     const components = new Map((projection?.snapshot.components ?? []).map(item => [item.id, item]));
     const functionLifetime = useRef<AbortController | null>(null);
     useLayoutEffect(() => {
@@ -119,7 +121,8 @@ export function A2uiSurface({ block, source, onSubmit }: {
         const item = typeof id === 'string' ? components.get(id) : undefined;
         if (!item || depth > 24) return null;
         const instance = projection?.instances.get(item.id);
-        const read = (value: unknown) => readA2uiValue(snapshot, value, edits, instance?.instancePath, instance?.scope);
+        const read = (value: unknown) => value && typeof value==='object' && valueFunctions.expressions.has(value)
+            ? valueFunctions.values?.get(value) : readA2uiValue(snapshot,value,edits,instance?.instancePath,instance?.scope);
         const text = (value: unknown) => {
             const resolved = read(value);
             return typeof resolved === 'string' ? resolved : typeof resolved === 'number' && Number.isFinite(resolved) ? String(resolved) : '';
@@ -286,7 +289,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
             default: return null;
         }
     }
-    return html`<section class="a2ui-surface" data-no-session-dashboard-shortcut="" aria-busy=${pending} onClick=${(event: Event) => event.stopPropagation()}>
+    return html`<section class="a2ui-surface" data-no-session-dashboard-shortcut="" aria-busy=${pending || valueFunctions.busy} onClick=${(event: Event) => event.stopPropagation()}>
         ${renderComponent('root', 0) || block.fallback_text}
         ${totp && !disabled && html`<${A2uiTotpDialog} presentation=${totp.presentation} dismiss=${dismissTotp}
             confirm=${async (code: string) => {
