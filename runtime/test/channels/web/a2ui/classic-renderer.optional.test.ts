@@ -285,7 +285,7 @@ for (const engine of [chromium, webkit]) {
         $/groups=[{items:[{label:"First",note:"one"}]},{items:[{label:"Second",note:"two"}]}];
         root=Column(_template($/groups, group));
         group=List(_template($items, item));
-        item=Row([Text($label),index,TextField(label="Row note",value=$note),submit]);
+        item=Row([Text($label),index,TextField(label="Row note",value=$note),Text(formatString("Draft: \${note}")),submit]);
         index=Text("Placeholder");
         submit=Button(Text("Apply row"),action=Event("apply",{label:$label,note:$note}));
       `, repeatId))!;
@@ -299,6 +299,8 @@ for (const engine of [chromium, webkit]) {
       expect(await secondRow.getByText('2', {exact:true}).count()).toBe(0);
       await secondRow.getByLabel('Row note').fill('second draft');
       expect(await firstRow.getByLabel('Row note').inputValue()).toBe('one');
+      expect(await firstRow.getByText('Draft: one').isVisible()).toBe(true);
+      expect(await secondRow.getByText('Draft: second draft').isVisible()).toBe(true);
       await secondRow.getByRole('button', {name:'Apply row'}).click();
       expect(await page.evaluate(() => (window as any).events.at(-1))).toMatchObject({instance_path:'/1/0',
         message:{action:{sourceComponentId:'submit', context:{label:'Second',note:'second draft'}}}});

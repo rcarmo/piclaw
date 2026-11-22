@@ -29,13 +29,13 @@ function scopeBindings(value: unknown, scope: string): unknown {
 /** Resolve layout and bindings afresh from the committed revision, not from submitted context. */
 export function projectA2uiTemplates(snapshot: A2uiSnapshot) {
   const definitions = new Map(snapshot.components.map(component => [component.id, component]));
-  const instances = new Map<string, { id: string; instancePath?: string }>();
+  const instances = new Map<string, { id: string; scope: string; instancePath?: string }>();
   const projected: A2uiComponent[] = [];
   function walk(id: string, depth: number, scope: string, instancePath?: string): string {
     const definition = definitions.get(id);
     const instanceId = a2uiInstanceId(id, instancePath);
     if (!definition || depth > 24 || instances.size >= 384 || instances.has(instanceId)) throw Error('Invalid or oversized A2UI template tree');
-    instances.set(instanceId, { id, instancePath });
+    instances.set(instanceId, { id, scope, instancePath });
     const component: A2uiComponent = { ...scopeBindings(definition, scope) as A2uiComponent, id: instanceId };
     projected.push(component);
     const child = (reference: string) => walk(reference, depth + 1, scope, instancePath);

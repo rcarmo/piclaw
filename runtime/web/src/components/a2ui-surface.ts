@@ -74,8 +74,8 @@ export function A2uiSurface({ block, source, onSubmit }: {
     function renderComponent(id: unknown, depth: number, openModal?: (event: Event) => void): unknown {
         const item = typeof id === 'string' ? components.get(id) : undefined;
         if (!item || depth > 24) return null;
-        const instancePath = projection?.instances.get(item.id)?.instancePath;
-        const read = (value: unknown) => readA2uiValue(snapshot, value, edits, instancePath);
+        const instance = projection?.instances.get(item.id);
+        const read = (value: unknown) => readA2uiValue(snapshot, value, edits, instance?.instancePath, instance?.scope);
         const text = (value: unknown) => {
             const resolved = read(value);
             return typeof resolved === 'string' ? resolved : typeof resolved === 'number' && Number.isFinite(resolved) ? String(resolved) : '';

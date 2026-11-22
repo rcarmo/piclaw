@@ -1,5 +1,6 @@
 /** Classic's subset of the v1.0 action message. Owning a post is a separate server check. */
-import { readA2uiPath } from "./data-path.js";
+import { a2uiBindingPath, readA2uiValue } from "./functions.js";
+export { a2uiBindingPath, readA2uiValue } from "./functions.js";
 import { a2uiInstanceId, projectA2uiTemplates } from "./templates.js";
 import { a2uiDateTimeType, validA2uiDateTime } from "./date-time.js";
 import { a2uiSliderRange, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
@@ -23,26 +24,6 @@ function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-export function a2uiBindingPath(value: unknown): string | undefined {
-  return record(value) && Object.hasOwn(value, "@path") && typeof value["@path"] === "string"
-    ? value["@path"] : undefined;
-}
-
-/** Resolve a projected binding or the template index without interpreting strings. */
-export function readA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?: ReadonlyMap<string, unknown>, instancePath?: string): unknown {
-  if (record(value) && value['@call'] === '@index') {
-    if (!instancePath) return undefined;
-    const index = Number(instancePath.slice(instancePath.lastIndexOf('/') + 1));
-    const offset = record(value.args) ? readA2uiValue(snapshot, value.args.offset, edits, instancePath) : undefined;
-    const computed = index + (typeof offset === 'number' && Number.isFinite(offset) ? offset : 0);
-    return Number.isFinite(computed) ? computed : undefined;
-  }
-  const path = a2uiBindingPath(value);
-  if (!path) return value;
-  if (edits?.has(path)) return edits.get(path);
-  return readA2uiPath(snapshot.dataModel, path);
-}
-
 function sameValue(left: unknown, right: unknown): boolean {
   return left === right || (Array.isArray(left) && Array.isArray(right) && left.length === right.length
     && left.every((item, index) => item === right[index]));
@@ -58,7 +39,7 @@ function eventDescriptor(projection: Projection, sourceComponentId: string, inst
   if (source?.component !== "Button" || !record(source.action) || !record(source.action.event)
     || typeof source.action.event.name !== "string") throw new Error("Invalid surface action");
   return { name: source.action.event.name, context: record(source.action.event.context) ? source.action.event.context : {},
-    userMessage: source.action.event.userMessage };
+    userMessage: source.action.event.userMessage, scope: identity.scope };
 }
 
 function controlForPath(snapshot: A2uiSnapshot, path: string): A2uiComponent | undefined {
@@ -103,8 +84,8 @@ function defaultControlValue(component: A2uiComponent | undefined): ActionValue 
   return component ? "" : null;
 }
 
-function resolveUserMessage(snapshot: A2uiSnapshot, descriptor: unknown, edits: ReadonlyMap<string, unknown>, instancePath?: string): string | undefined {
-  const value = readA2uiValue(snapshot, descriptor, edits, instancePath);
+function resolveUserMessage(snapshot: A2uiSnapshot, descriptor: unknown, edits: ReadonlyMap<string, unknown>, instancePath: string | undefined, scope: string): string | undefined {
+  const value = readA2uiValue(snapshot, descriptor, edits, instancePath, scope);
   if (value === undefined || value === null) return;
   const text = typeof value === 'number' && Number.isFinite(value) ? String(value) : value;
   if (typeof text !== 'string' || text.length > 4096) throw new Error('Invalid action description');
@@ -126,11 +107,11 @@ export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string,
   const context = Object.fromEntries(contextBindings.map(([key, binding]) => {
     const path = a2uiBindingPath(binding);
     const control = path ? controlForPath(snapshot, path) : undefined;
-    const value = readA2uiValue(snapshot, binding, declaredEdits, instancePath) ?? defaultControlValue(control);
+    const value = readA2uiValue(snapshot, binding, declaredEdits, instancePath, event.scope) ?? defaultControlValue(control);
     if (!isA2uiActionValue(value)) throw new Error("Invalid form value");
     return [key, value];
   }));
-  const userMessage = resolveUserMessage(snapshot, event.userMessage, declaredEdits, instancePath);
+  const userMessage = resolveUserMessage(snapshot, event.userMessage, declaredEdits, instancePath, event.scope);
   const message: A2uiActionMessage = { version: "1.0", action: {
     surfaceId: snapshot.surfaceId, sourceComponentId, name: event.name, timestamp, context,
     ...(userMessage === undefined ? {} : {userMessage}),
@@ -172,9 +153,9 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
     }
   }
   for (const [binding, input] of derived) {
-    if (!sameValue(input, readA2uiValue(snapshot, binding, boundValues, instancePath) ?? null)) throw new Error('Invalid form value');
+    if (!sameValue(input, readA2uiValue(snapshot, binding, boundValues, instancePath, event.scope) ?? null)) throw new Error('Invalid form value');
   }
-  const userMessage = resolveUserMessage(snapshot, event.userMessage, boundValues, instancePath);
+  const userMessage = resolveUserMessage(snapshot, event.userMessage, boundValues, instancePath, event.scope);
   if (userMessage !== action.userMessage) throw new Error('Invalid action description');
   return { surfaceId: snapshot.surfaceId, name: event.name, sourceComponentId: action.sourceComponentId, timestamp: action.timestamp,
     ...(userMessage === undefined ? {} : {userMessage}), context: Object.fromEntries(Object.keys(event.context).map((key) => [key, (action.context as Record<string, ActionValue>)[key]])) };

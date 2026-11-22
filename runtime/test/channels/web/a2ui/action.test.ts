@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { buildA2uiAction, validateA2uiAction } from "../../../../src/channels/web/a2ui/action.js";
+import { buildA2uiAction, readA2uiValue, validateA2uiAction } from "../../../../src/channels/web/a2ui/action.js";
 import { applyA2uiMessages, compileA2uiExpress } from "../../../../src/channels/web/a2ui/express.js";
 import { CLASSIC_A2UI_CATALOG } from '../../../../src/channels/web/a2ui/surface.js';
 
@@ -124,6 +124,35 @@ test('emits the stored userMessage after resolving only declared draft values', 
   expect(buildA2uiAction(unset, 'send', new Map(), timestamp).action.userMessage).toBe('');
   const {userMessage: _ignored, ...without} = event.action;
   expect(() => validateA2uiAction(authored,{...event,action:without})).toThrow();
+});
+
+test('Basic Catalogue functions resolve on the server and can derive action context', () => {
+  const authored = applyA2uiMessages('functions', compileA2uiExpress(`
+    $/name="Initial";
+    root=Column([Text(formatNumber(1234.5,decimals=2)),TextField(label="Name",value=$/name),send]);
+    send=Button(Text("Send"),action=Event("send",{name:$/name,description:formatString("Hello \${/name}")}));
+  `, 'functions'))!;
+  const message = buildA2uiAction(authored,'send',new Map([['/name','Morgan']]),timestamp);
+  expect(message.action.context).toEqual({name:'Morgan',description:'Hello Morgan'});
+  expect(() => validateA2uiAction(authored,{...message,action:{...message.action,context:{...message.action.context,description:'Hello Initial'}}})).toThrow();
+  const call = (name: string, args: object) => ({'@call':name,args});
+  for (const [input,expected] of [
+    [call('required',{value:''}),false], [call('regex',{value:'abc',pattern:'^[a-z]+$'}),true],
+    [call('numeric',{value:6,min:4,max:8}),true], [call('length',{value:'abc',min:4}),false],
+    [call('email',{value:'person@example.test'}),true],
+    [call('and',{values:[true,call('not',{value:call('required',{value:''})})]}),true],
+    [call('or',{values:[false,true]}),true],
+    [call('formatNumber',{value:1234.5,decimals:2}),'1,234.50'],
+    [call('formatCurrency',{value:19.5,currency:'USD'}),'$19.50'],
+    [call('formatDate',{value:'2028-02-29T12:00:00Z',format:'yyyy-MM-dd'}),'2028-02-29'],
+    [call('pluralize',{value:2,one:'one',other:'many'}),'many'],
+    [call('formatString',{value:'${name}/${formatNumber(value: 5, decimals: 1)}'}),'Initial/5.0'],
+  ] as const) {
+    const result = readA2uiValue(authored,input);
+    expect(result && typeof result === 'object' && 'valid' in result ? result.valid : result).toEqual(expected);
+  }
+  expect(readA2uiValue(authored,call('regex',{value:'a'.repeat(1000)+'!',pattern:'^(a+)+$'}))).toBeUndefined();
+  expect(readA2uiValue(authored,call('openUrl',{url:'https://example.test'}))).toBeUndefined();
 });
 
 test("Classic does not accept authority, options, fixed values or undeclared inputs from the action", () => {
