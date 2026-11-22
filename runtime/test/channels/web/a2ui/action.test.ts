@@ -155,6 +155,25 @@ test('Basic Catalogue functions resolve on the server and can derive action cont
   expect(readA2uiValue(authored,call('openUrl',{url:'https://example.test'}))).toBeUndefined();
 });
 
+test('checks are enforced against accepted drafts and warnings do not veto an action', () => {
+  const source = `
+    $/email="";
+    $/enabled=true;
+    $/warning={valid:false,message:"Review this choice",severity:"warning"};
+    root=Column([field,send]);
+    field=TextField(label="Email",value=$/email,checks=[{condition:email($/email),message:"Use a valid email"}]);
+    send=Button(Text("Send"),action=Event("send",{email:$/email}),checks=[{condition:$/enabled},{condition:$/warning}]);
+  `;
+  const form = applyA2uiMessages('checks',compileA2uiExpress(source,'checks'))!;
+  expect(form.components.find(({id}) => id === 'field')?.['@checks']).toBeDefined();
+  expect(() => buildA2uiAction(form,'send',new Map(),timestamp)).toThrow('Use a valid email');
+  const message = buildA2uiAction(form,'send',new Map([['/email','one@example.test']]),timestamp);
+  expect(validateA2uiAction(form,message)).toEqual(message.action);
+  expect(() => validateA2uiAction(form,{...message,action:{...message.action,context:{email:'invalid'}}})).toThrow('Use a valid email');
+  const blocked = applyA2uiMessages('checks',compileA2uiExpress(source.replace('$/enabled=true','$/enabled=false'),'checks'))!;
+  expect(() => validateA2uiAction(blocked,message)).toThrow('Validation failed');
+});
+
 test("Classic does not accept authority, options, fixed values or undeclared inputs from the action", () => {
   const message = buildA2uiAction(snapshot, "submit", new Map(), timestamp);
   const action = message.action;

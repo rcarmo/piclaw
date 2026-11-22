@@ -1,6 +1,7 @@
 /** Classic's subset of the v1.0 action message. Owning a post is a separate server check. */
 import { a2uiBindingPath, readA2uiValue } from "./functions.js";
 export { a2uiBindingPath, readA2uiValue } from "./functions.js";
+import { checkA2uiComponent } from "./checks.js";
 import { a2uiInstanceId, projectA2uiTemplates } from "./templates.js";
 import { a2uiDateTimeType, validA2uiDateTime } from "./date-time.js";
 import { a2uiSliderRange, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
@@ -39,14 +40,16 @@ function eventDescriptor(projection: Projection, sourceComponentId: string, inst
   if (source?.component !== "Button" || !record(source.action) || !record(source.action.event)
     || typeof source.action.event.name !== "string") throw new Error("Invalid surface action");
   return { name: source.action.event.name, context: record(source.action.event.context) ? source.action.event.context : {},
-    userMessage: source.action.event.userMessage, scope: identity.scope };
+    userMessage: source.action.event.userMessage, scope: identity.scope, source };
+}
+
+function isInput(component: A2uiComponent): boolean {
+  return component.component === "TextField" || component.component === "CheckBox" || component.component === "ChoicePicker"
+    || component.component === "Slider" || (component.component === "DateTimeInput" && a2uiDateTimeType(component) !== undefined);
 }
 
 function controlForPath(snapshot: A2uiSnapshot, path: string): A2uiComponent | undefined {
-  return snapshot.components.find((component) =>
-    (component.component === "TextField" || component.component === "CheckBox" || component.component === "ChoicePicker"
-      || component.component === "Slider" || (component.component === "DateTimeInput" && a2uiDateTimeType(component) !== undefined))
-    && a2uiBindingPath(component.value) === path);
+  return snapshot.components.find(component => isInput(component) && a2uiBindingPath(component.value) === path);
 }
 
 export function isA2uiActionValue(value: unknown): value is ActionValue {
@@ -154,6 +157,12 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
   }
   for (const [binding, input] of derived) {
     if (!sameValue(input, readA2uiValue(snapshot, binding, boundValues, instancePath, event.scope) ?? null)) throw new Error('Invalid form value');
+  }
+  for (const component of snapshot.components) {
+    const path = isInput(component) ? a2uiBindingPath(component.value) : undefined;
+    if (component !== event.source && (path === undefined || !boundValues.has(path))) continue;
+    const error = checkA2uiComponent(snapshot, component, boundValues, projection.instances.get(component.id)).find(finding => finding.severity === 'error');
+    if (error) throw new Error(error.message);
   }
   const userMessage = resolveUserMessage(snapshot, event.userMessage, boundValues, instancePath, event.scope);
   if (userMessage !== action.userMessage) throw new Error('Invalid action description');

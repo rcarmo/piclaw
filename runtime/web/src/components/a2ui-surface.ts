@@ -1,6 +1,7 @@
 /** Render the admitted A2UI catalog in Classic's Preact timeline. */
 import { html, useCallback, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import { a2uiBindingPath, buildA2uiAction, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
+import { checkA2uiComponent } from '../../../src/channels/web/a2ui/checks.js';
 import { projectA2uiTemplates } from '../../../src/channels/web/a2ui/templates.js';
 import { a2uiDateTimeDisplay, a2uiDateTimeType } from '../../../src/channels/web/a2ui/date-time.js';
 import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
@@ -14,6 +15,7 @@ import { A2uiTotpDialog, readTotpPresentation, type TotpPresentation } from './a
 import { a2uiSliderRange, readA2uiImageUrl, readA2uiLink, readA2uiPlaybackUrl, type A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
 
 type Submit = (request: A2uiActionRequest, options?: { signal?: AbortSignal }) => Promise<unknown>;
+let nextCheckPrefix = 0;
 
 export function A2uiSurface({ block, source, onSubmit }: {
     block: A2uiSurfaceBlock;
@@ -25,6 +27,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
         catch { return undefined; } // An invalid stored surface still has a plain-text fallback.
     }, [block.surface]);
     const snapshot = projection?.snapshot ?? block.surface;
+    const [checkPrefix] = useState(() => `a2ui-check-${++nextCheckPrefix}`);
     const [edits, setEdits] = useState(new Map<string, unknown>());
     const [pending, setPending] = useState(false);
     const [error, setError] = useState('');
@@ -84,7 +87,15 @@ export function A2uiSurface({ block, source, onSubmit }: {
         const locked = disabled || pending || !path;
         const child = (childId: unknown) => renderComponent(childId, depth + 1);
         const label = text(item.label);
-        const aria = a2uiAria(item['@accessibility'], read);
+        const findings = checkA2uiComponent(snapshot, item, edits, instance);
+        const invalid = findings.some(finding => finding.severity === 'error');
+        const errorId = `${checkPrefix}-${encodeURIComponent(item.id)}`;
+        const aria = { ...a2uiAria(item['@accessibility'], read), ...(invalid ? {'aria-invalid':'true', 'aria-errormessage':errorId} : {}) };
+        const checked = (control: unknown) => Array.isArray(item['@checks']) && item['@checks'].length ? html`
+            <div class="a2ui-checked" key=${id}>${control}
+                <div id=${errorId} role="status">${findings.map((finding, index) => html`
+                    <p key=${index} class=${finding.severity === 'error' ? 'a2ui-error' : 'a2ui-caption'}>${finding.message}</p>`)}</div>
+            </div>` : control;
         const groupRole = aria['aria-label'] ? 'group' : undefined;
         switch (item.component) {
             case 'Text': return html`<span key=${id} role=${groupRole} ...${aria} class=${item.variant === 'caption' ? 'a2ui-caption' : ''}>${text(item.text)}</span>`;
@@ -157,29 +168,29 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 const name = buttonChild?.component === 'Icon' ? read(buttonChild.name) : undefined;
                 const buttonLabel = buttonChild?.component !== 'Icon' ? undefined : typeof name === 'string' && Object.hasOwn(a2uiIconPaths, name)
                     ? name.replace(/([A-Z])/g, ' $1').replace(/^./, char => char.toUpperCase()) : link ? 'Open link' : 'Action';
-                if (link && !disabled) return html`<a key=${id} class="a2ui-button a2ui-button-borderless" href=${link} aria-label=${buttonLabel} ...${aria}
+                if (link && !disabled && !invalid) return checked(html`<a key=${id} class="a2ui-button a2ui-button-borderless" href=${link} aria-label=${buttonLabel} ...${aria}
                     aria-haspopup=${openModal ? 'dialog' : undefined} onClick=${openModal}
-                    target="_blank" rel="noopener noreferrer">${child(item.child)}</a>`;
+                    target="_blank" rel="noopener noreferrer">${child(item.child)}</a>`);
                 if (block.owner === 'login' && (id === 'continue' || id === 'check')) return null;
-                return html`<button key=${id} type="button" class=${`a2ui-button a2ui-button-${item.variant || 'default'}`}
-                disabled=${disabled} aria-disabled=${pending || disabled} aria-label=${buttonLabel} ...${aria} aria-haspopup=${openModal ? 'dialog' : undefined}
+                return checked(html`<button key=${id} type="button" class=${`a2ui-button a2ui-button-${item.variant || 'default'}`}
+                disabled=${disabled} aria-disabled=${pending || disabled || invalid} aria-label=${buttonLabel} ...${aria} aria-haspopup=${openModal ? 'dialog' : undefined}
                 onClick=${(event: Event) => {
-                    if (pending || disabled) return;
+                    if (pending || disabled || invalid) return;
                     openModal?.(event);
                     void submit(event, item.id);
-                }}>${child(item.child)}</button>`;
+                }}>${child(item.child)}</button>`);
             }
             case 'TextField': {
-                if (block.owner === 'login' && item.variant === 'obscured') return html`<label key=${id} class="a2ui-field">${label}
+                if (block.owner === 'login' && item.variant === 'obscured') return checked(html`<label key=${id} class="a2ui-field">${label}
                     <input ref=${privateInput} ...${aria} disabled=${disabled || pending} type="password" autocomplete="off" maxlength="4096" placeholder=${text(item.placeholder)} />
-                </label>`;
+                </label>`);
                 const value = text(item.value);
                 const placeholder = text(item.placeholder);
                 const onInput = (event: Event) => edit(path, (event.currentTarget as HTMLInputElement).value);
-                return html`<label key=${id} class="a2ui-field">${label}${item.variant === 'longText'
+                return checked(html`<label key=${id} class="a2ui-field">${label}${item.variant === 'longText'
                     ? html`<textarea ...${aria} disabled=${locked} value=${value} placeholder=${placeholder} maxLength="4096" onInput=${onInput}></textarea>`
                     : html`<input type=${item.variant === 'number' ? 'number' : 'text'} ...${aria} disabled=${locked} value=${value}
-                        placeholder=${placeholder} maxLength="4096" onInput=${onInput} />`}</label>`;
+                        placeholder=${placeholder} maxLength="4096" onInput=${onInput} />`}</label>`);
             }
             case 'DateTimeInput': {
                 const type = a2uiDateTimeType(item);
@@ -187,42 +198,42 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 const value = a2uiDateTimeDisplay(read(item.value), type) ?? '';
                 const min = a2uiDateTimeDisplay(readA2uiValue(snapshot, item.min), type);
                 const max = a2uiDateTimeDisplay(readA2uiValue(snapshot, item.max), type);
-                return html`<label key=${id} class="a2ui-field">${label}
+                return checked(html`<label key=${id} class="a2ui-field">${label}
                     <input type=${type} aria-label=${label || (type === 'datetime-local' ? 'Date and time' : type === 'date' ? 'Date' : 'Time')} ...${aria}
                         disabled=${locked} min=${min} max=${max} step=${type === 'date' ? undefined : 'any'} value=${value}
                         onChange=${(event: Event) => edit(path, (event.currentTarget as HTMLInputElement).value)} />
-                </label>`;
+                </label>`);
             }
             case 'Slider': {
                 const range = a2uiSliderRange(item);
                 if (!range) return null;
                 const value = read(item.value);
-                return html`<label key=${id} class="a2ui-field">${label}
+                return checked(html`<label key=${id} class="a2ui-field">${label}
                     <input type="range" aria-label=${label || 'Value'} ...${aria} disabled=${locked} min=${range.min} max=${range.max}
                         step=${range.step ?? 'any'} value=${typeof value === 'number' ? value : range.min}
                         onInput=${(event: Event) => edit(path, (event.currentTarget as HTMLInputElement).valueAsNumber)} />
-                </label>`;
+                </label>`);
             }
-            case 'CheckBox': return html`<label key=${id} class="a2ui-checkbox"><input type="checkbox" ...${aria} disabled=${locked}
-                checked=${read(item.value) === true} onChange=${(event: Event) => edit(path, (event.currentTarget as HTMLInputElement).checked)} />${label}</label>`;
+            case 'CheckBox': return checked(html`<label key=${id} class="a2ui-checkbox"><input type="checkbox" ...${aria} disabled=${locked}
+                checked=${read(item.value) === true} onChange=${(event: Event) => edit(path, (event.currentTarget as HTMLInputElement).checked)} />${label}</label>`);
             case 'ChoicePicker': {
                 const selected = read(item.value);
                 const choices = Array.isArray(selected) ? selected : [];
                 const multiple = item.variant === 'multipleSelection';
                 if (!block.owner || block.owner === 'agent' || item.displayStyle !== undefined || item.filterable === true) {
                     const options = Array.isArray(item.options) ? item.options.map(option => ({ value: option.value, label: text(option.label) })) : [];
-                    return html`<${A2uiChoicePicker} key=${id} label=${label} aria=${aria} options=${options} selected=${choices} multiple=${multiple}
+                    return checked(html`<${A2uiChoicePicker} key=${id} label=${label} aria=${aria} options=${options} selected=${choices} multiple=${multiple}
                         chips=${item.displayStyle === 'chips'} filterable=${item.filterable === true} disabled=${locked}
-                        onChange=${(value: string[]) => edit(path, value)} />`;
+                        onChange=${(value: string[]) => edit(path, value)} />`);
                 }
-                return html`<label key=${id} class="a2ui-field">${label}
+                return checked(html`<label key=${id} class="a2ui-field">${label}
                     <select multiple=${multiple} disabled=${locked} aria-label=${label || 'Choose an option'} ...${aria}
                         value=${multiple ? undefined : choices[0] ?? ''} onChange=${(event: Event) => edit(path,
                             Array.from((event.currentTarget as HTMLSelectElement).selectedOptions, option => option.value).filter(Boolean))}>
                         ${!multiple && html`<option value="">Select an option</option>`}
                         ${Array.isArray(item.options) && item.options.map(option => html`<option key=${option.value} value=${option.value}
                             selected=${multiple ? choices.includes(option.value) : undefined}>${text(option.label)}</option>`)}
-                    </select></label>`;
+                    </select></label>`);
             }
             default: return null;
         }

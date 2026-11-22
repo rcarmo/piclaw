@@ -28,14 +28,15 @@ const source = `
     Image(url=$/unsafe, description="Unavailable preview"),
     AudioPlayer(url=$/audio, description="Fixture recording"),
     Video(url="/media/43", posterUrl=$/preview),
-    TextField(label="Note", value=$/note),
+    TextField(label="Note", value=$/note, checks=[{condition:required($/note),message:"Enter a note"}]),
     CheckBox(label="Notify", value=$/notify),
     Slider(label="Level", min=0, max=10, steps=5, value=$/level),
     DateTimeInput(label="Due date", enableDate=true, min="2028-02-28", max="2028-03-31", value=$/date),
     Row([Text("One part", weight=1), Text("Two parts", weight=2)]),
     ChoicePicker(label="Size", options=[{label:"Small",value:"small"},{label:"Large",value:"large"}],value=$/choice),
     ChoicePicker(label="Tags", options=[{label:"Frontend",value:"front"},{label:"Backend",value:"back"}], value=$/tags, variant="multipleSelection", displayStyle="chips", filterable=true),
-    Button(Text("Submit"), variant="primary", action=Event("save", {note:$/note,notify:$/notify,size:$/choice,level:$/level,date:$/date,tags:$/tags}))]);
+    Button(Text("Submit"), variant="primary", action=Event("save", {note:$/note,notify:$/notify,size:$/choice,level:$/level,date:$/date,tags:$/tags}),
+      checks=[{condition:required($/note),message:"Cannot submit an empty note"}])]);
   summary = Text("Summary panel");
   details = Text("Details panel");
   show = Text("Show help");
@@ -114,7 +115,15 @@ for (const engine of [chromium, webkit]) {
       expect(await list.getByRole('listitem').allTextContents()).toEqual(['First step', 'Second step']);
       expect(await list.evaluate(el => getComputedStyle(el).flexDirection)).toBe('row');
       const field = page.getByRole("textbox", { name: "Note" });
+      const submitButton = page.getByRole('button', {name:'Submit'});
+      expect(await field.getAttribute('aria-invalid')).toBe('true');
+      expect(await page.getByText('Enter a note', {exact:true}).isVisible()).toBe(true);
+      expect(await submitButton.getAttribute('aria-disabled')).toBe('true');
       await field.fill("Keep this draft");
+      expect(await field.getAttribute('aria-invalid')).toBeNull();
+      expect(await page.getByText('Enter a note', {exact:true}).count()).toBe(0);
+      expect(await field.evaluate(el => el === document.activeElement)).toBe(true);
+      expect(await submitButton.getAttribute('aria-disabled')).toBe('false');
       const summary = page.getByRole('tab', { name: 'Summary' });
       const details = page.getByRole('tab', { name: 'Details' });
       expect(await summary.getAttribute('aria-selected')).toBe('true');

@@ -94,7 +94,13 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     requireClassic(record(component) && isId(component.id) && !ids.has(component.id), "invalid or duplicate component id");
     const name = component.component;
     requireClassic(typeof name === "string" && Object.hasOwn(CLASSIC_A2UI_PROPERTIES, name), "unsupported component");
-    requireClassic(allowedKeys(component, ["id", "component", "weight", "@accessibility", "accessibility", ...CLASSIC_A2UI_PROPERTIES[name as A2uiComponent["component"]]]), "unsupported component property");
+    requireClassic(allowedKeys(component, ["id", "component", "weight", "@accessibility", "accessibility", "@checks", "checks", ...CLASSIC_A2UI_PROPERTIES[name as A2uiComponent["component"]]]), "unsupported component property");
+    requireClassic(!(Object.hasOwn(component, '@checks') && Object.hasOwn(component, 'checks')), 'conflicting check descriptors');
+    const checks = component['@checks'] ?? component.checks;
+    if (checks !== undefined) requireClassic(['Button','TextField','CheckBox','ChoicePicker','Slider','DateTimeInput'].includes(name)
+      && Array.isArray(checks) && checks.length <= 16 && checks.every(rule => record(rule) && allowedKeys(rule, ['condition','message'])
+        && record(rule.condition) && (Object.hasOwn(rule.condition, '@path') || isClassicValueFunction(rule.condition['@call']))
+        && (rule.message === undefined || (typeof rule.message === 'string' && rule.message.length <= 1024))), 'invalid checks');
     requireClassic(!(Object.hasOwn(component, '@accessibility') && Object.hasOwn(component, 'accessibility')), 'conflicting accessibility descriptors');
     const a11y = component['@accessibility'] ?? component.accessibility;
     if (a11y !== undefined) requireClassic(record(a11y) && allowedKeys(a11y, ['label', 'description', 'hidden', 'live']), 'invalid accessibility descriptor');
@@ -162,15 +168,17 @@ export function bindA2uiDraftId(messages: readonly unknown[], surfaceId: string)
   });
 }
 
-/** The current SDK calls the v1.0 wire field `accessibility` internally. */
+/** Adapt the canonical @-prefixed component descriptors to the installed SDK. */
 function forRendererState(messages: readonly unknown[]): unknown[] {
   return structuredClone(messages).map(message => {
     if (!record(message)) return message;
     const body = message.createSurface ?? message.updateComponents;
     if (record(body) && Array.isArray(body.components)) {
-      for (const item of body.components) if (record(item) && Object.hasOwn(item, '@accessibility')) {
-        item.accessibility = item['@accessibility'];
-        delete item['@accessibility'];
+      for (const item of body.components) if (record(item)) {
+        for (const key of ['accessibility','checks'] as const) if (Object.hasOwn(item, `@${key}`)) {
+          item[key] = item[`@${key}`];
+          delete item[`@${key}`];
+        }
       }
     }
     return message;
@@ -224,8 +232,9 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
     surfaceId,
     catalogId: CLASSIC_A2UI_CATALOG,
     components: Array.from(result.componentsModel.values, ({ id, type, properties }) => {
-      const { accessibility, ...rest } = properties;
-      return { ...rest, id, component: type, ...(accessibility === undefined ? {} : { '@accessibility': accessibility }) } as A2uiComponent;
+      const { accessibility, checks, ...rest } = properties;
+      return { ...rest, id, component: type, ...(accessibility === undefined ? {} : { '@accessibility': accessibility }),
+        ...(checks === undefined ? {} : { '@checks': checks }) } as A2uiComponent;
     }),
     // SDK deletion leaves an empty array slot; persisted JSON represents it as null without shifting indices.
     dataModel: JSON.parse(JSON.stringify(result.dataModel.get("/"))),
