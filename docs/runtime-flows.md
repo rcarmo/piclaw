@@ -104,10 +104,12 @@ That means the user-facing surface is no longer a silent binary of “worked” 
 
 ## A2UI Express surfaces
 
-`send_a2ui` compiles a bounded A2UI Express program into an A2UI v1.0 snapshot. Classic renders that snapshot with its existing Preact layer. Storage keeps the committed snapshot and revision, so reconnects need no patch replay.
+`send_a2ui` publishes bounded A2UI Express source or v1.0 surface messages. Classic renders the committed snapshot in Preact. Storage keeps its revision, so reconnects do not replay earlier patches.
 
-- `POST /agent/a2ui-action` checks the authenticated chat, source post, thread, surface, revision and control. Ordinary submissions become accepted user input through the native queue. The surface revision and source acceptance commit together.
-- An explicit cancel closes an agent form without admitting input. A keep-active form accepts another submission on the next revision. Static HTTP(S) links open in the browser.
+- Authenticated clients can read `GET /agent/a2ui-capabilities` for `metadata.a2uiAgentCapabilities`. Classic offers the Basic Catalogue in `metadata.a2uiRendererCapabilities["1.0"].supportedCatalogIds` on ordinary sends and agent form actions. The accepted turn must offer the Basic Catalogue for `send_a2ui` to publish. The offer does not carry over to a later turn. Classic does not accept inline catalogues or fetch catalogue IDs.
+- When surface validation fails, `send_a2ui` can return a v1.0 `error` envelope to the model. A validation error identifies the surface and field path. Rejected definitions do not create or change a post.
+- `POST /agent/a2ui-action` checks the authenticated chat, source post, thread, surface, revision and control. Ordinary submissions become accepted user input through the native queue. The surface revision and source acceptance commit together. Only the owning conversation receives opted-in model metadata and validated drafts.
+- An explicit cancel closes an agent form without admitting input. A keep-active form accepts another submission on the next revision. `openUrl` opens a valid HTTP(S) destination in the browser after a click.
 - Built-in login and TOTP controls return credentials or challenges only in authenticated, no-store responses. Private values never become ordinary submissions.
 - The cutover removes Adaptive Cards, the old action endpoint and the old posting tool. Historical blocks are left in storage; Classic displays their ordinary post text and cannot submit their controls. Restart pending authentication flows after upgrading.
 

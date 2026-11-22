@@ -16,6 +16,7 @@ import { getAddonLocalDispatchBlock } from "../../../addons/local-dispatch.js";
 import type { StoreWebMessageOptions } from "../messaging/message-store.js";
 import { prepareA2uiDraftProjection, type A2uiRendererInput } from '../a2ui/input-metadata.js';
 import { InvalidA2uiDraftError, parseA2uiDrafts } from '../a2ui/drafts.js';
+import { InvalidA2uiCapabilitiesError, negotiateClassicA2ui } from '../a2ui/capabilities.js';
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
 import { isSingleUserAccess } from "../../../core/config-access.js";
 
@@ -151,6 +152,9 @@ export async function handleAgentMessage(
   try { revalidateInputAuthority(); }
   catch { return channel.json({ error: 'Input authority changed before admission.' }, 403); }
 
+  let capabilities: ReturnType<typeof negotiateClassicA2ui>;
+  try { capabilities = negotiateClassicA2ui(parsed.payload.metadata); }
+  catch { return channel.json({ error:'Invalid A2UI renderer capabilities.' }, 400); }
   const normalized = normalizeAgentMessagePayload(parsed.payload);
   if (post?.requireReplyThread && !normalized.threadId) return channel.json({ error: "Missing 'thread_id' field" }, 400);
   const localDispatch = getAddonLocalDispatchBlock(req, chatJid, normalized.content ?? "");
@@ -256,19 +260,20 @@ export async function handleAgentMessage(
     let interaction: InteractionRow | null;
     try {
       const drafts = parseA2uiDrafts(parsed.payload.a2ui_drafts);
+      if (drafts?.length && !capabilities) throw new InvalidA2uiCapabilitiesError();
       const draftSurface = drafts?.length ? await prepareA2uiDraftProjection(drafts) : undefined;
       if (draftSurface) revalidateInputAuthority('verify');
       interaction = await admitUserInput(chatJid,content,false,normalized.mediaIds,{
         contentBlocks:normalized.contentBlocks,linkPreviews:normalized.linkPreviews,threadId:normalized.threadId??undefined,
         screenHint:normalized.screenHint,acceptSource: stored => {
-          const result = acceptSource!(stored, { ...post?.a2uiSubmission, draftSurface });
+          const result = acceptSource!(stored, { ...post?.a2uiSubmission, capabilities, draftSurface });
           if (result !== undefined) return result;
           return post?.onAccepted?.(stored);
         },isSteeringMessage:requestMode==="steer",
       },revalidateInputAuthority,req.signal);
     } catch (error) {
       if (req.signal.aborted) return channel.json({error:"Input submission was cancelled before acceptance."},400);
-      if (error instanceof InvalidA2uiDraftError) return channel.json({error:error.message},400);
+      if (error instanceof InvalidA2uiDraftError || error instanceof InvalidA2uiCapabilitiesError) return channel.json({error:error.message},400);
       return channel.json({error:"Message admission could not be confirmed."},503);
     }
     if (!interaction) return channel.json({error:"Failed to store message"},500);
@@ -331,6 +336,7 @@ export async function handleAgentMessage(
       content: forwardedContent, media_ids: normalized.mediaIds, content_blocks: normalized.contentBlocks,
       link_previews: normalized.linkPreviews, mode: requestMode,
       screen_hint: normalized.screenHint,
+      ...(capabilities ? { metadata: { a2uiRendererCapabilities: capabilities } } : {}),
     });
     const forwardReq = new Request(`http://internal/agent/${agentId}/message?chat_jid=${encodeURIComponent(mentionTarget.chat_jid)}`, {
       method: "POST",

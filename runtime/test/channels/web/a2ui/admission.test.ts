@@ -3,6 +3,7 @@ import { expect, test } from 'bun:test';
 import { getDb, getMessageByRowId, initDatabase } from '../../../../src/db.js';
 import { admitWebMessage } from '../../../../src/channels/web/messaging/message-store.js';
 import { handleA2uiAction } from '../../../../src/channels/web/a2ui/admission.js';
+import { CLASSIC_A2UI_RENDERER_CAPABILITIES } from '../../../../src/channels/web/a2ui/capabilities.js';
 import { publishAgentA2ui } from '../../../../src/channels/web/a2ui/publish.js';
 import { projectA2uiAgentInput, readA2uiRendererDataModel, storeA2uiInputMetadata } from '../../../../src/channels/web/a2ui/input-metadata.js';
 import { applyA2uiMessages, compileA2uiExpress } from '../../../../src/channels/web/a2ui/express.js';
@@ -49,7 +50,8 @@ async function fixture(options: { keep?: boolean; cancel?: boolean; template?: A
   }] }))!;
   const instance_path = options.template ? '/1' : undefined;
   const payload: A2uiActionRequest = { chat_jid: chat, post_id: source.id, thread_id: root.id, revision: 1, instance_path,
-    request_id: crypto.randomUUID(), message: buildA2uiAction(surface, options.cancel ? 'root' : 'submit', new Map([['/value', 'hello']]), new Date().toISOString(), instance_path) };
+    request_id: crypto.randomUUID(), ...(options.sync ? {metadata:{a2uiRendererCapabilities:CLASSIC_A2UI_RENDERER_CAPABILITIES}} : {}),
+    message: buildA2uiAction(surface, options.cancel ? 'root' : 'submit', new Map([['/value', 'hello']]), new Date().toISOString(), instance_path) };
   const send = (data = payload) => handleA2uiAction(channel, new Request('http://test/agent/a2ui-action', { method: 'POST', body: JSON.stringify(data) }));
   return { channel, payload, send, updates, dispatch: () => dispatch, routeTo(id: number) { recipientId = id; } };
 }

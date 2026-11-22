@@ -16,6 +16,7 @@ import { createDefaultApplicationRuntime } from "../../runtime/durable-engine/sr
 import { ModelRuntime } from "../../node_modules/@earendil-works/pi-coding-agent/dist/index.js";
 import { buildA2uiAction } from "../../runtime/src/channels/web/a2ui/action.js";
 import { isA2uiSurfaceBlock } from "../../runtime/src/channels/web/a2ui/surface.js";
+import { CLASSIC_A2UI_RENDERER_CAPABILITIES } from '../../runtime/src/channels/web/a2ui/capabilities.js';
 import { getMessageByRowId } from "../../runtime/src/db/messages.js";
 import { createAssistantMessageEventStream } from "../../node_modules/@earendil-works/pi-ai";
 
@@ -73,8 +74,9 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     (channel as any).getQueuedFollowupCount=()=>{throw Error("UI queue admission is retired");};
     (channel as any).getAcceptedQueuedSteering=()=>{throw Error("Host steering admission is retired");};
     pool.isActive=()=>true;pool.isStreaming=()=>false;
-    const send=async(content:string,mode="auto")=>{
-      const request=new Request("https://fixture/agent/default/message",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({content,mode})});
+    const send=async(content:string,mode="auto",offerA2ui=false)=>{
+      const request=new Request("https://fixture/agent/default/message",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({content,mode,
+        metadata:offerA2ui ? {a2uiRendererCapabilities:CLASSIC_A2UI_RENDERER_CAPABILITIES} : undefined})});
       const response=await handleAgentMessage(channel!,request,"/agent/default/message","web:default","default");
       expect(response.status).toBe(201);return response.json() as Promise<any>;
     };
@@ -134,7 +136,7 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     expect(database.query("SELECT count(*) n FROM messages WHERE is_bot_message=1").get()).toEqual({n:3});
     expect(database.query("SELECT * FROM service_effect_s01_operations").all()).toEqual([]);
     expect(database.query("SELECT * FROM service_effect_s02_commits").all()).toEqual([]);
-    const formRoot = await send("Native surface proof");
+    const formRoot = await send("Native surface proof", "auto", true);
     const readForm = () => database.query("SELECT rowid,thread_id FROM messages WHERE content = 'Native form' AND is_bot_message=1").get() as { rowid:number;thread_id:number } | null;
     const formDeadline = Date.now()+5000;
     while (!readForm() && Date.now()<formDeadline) await Bun.sleep(10);

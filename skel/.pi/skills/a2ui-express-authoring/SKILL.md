@@ -5,7 +5,7 @@ description: Show a small interactive form, decision or set of links in the curr
 
 # A2UI Express in Classic
 
-Use `send_a2ui` for small forms in the current Classic thread. Only use it when the tool is available and controls are clearer than prose. Otherwise, ask the same question in Markdown or in the channel's text format. Do not ask the model to emit raw content blocks.
+Use `send_a2ui` for small forms in the current Classic thread when the renderer offers the A2UI v1.0 Basic Catalogue for this turn. Otherwise, ask the same question in Markdown or in the channel's text format. Do not emit raw content blocks. If the tool returns a v1.0 validation error, use its `surfaceId` and field `path` to correct the definition before trying again.
 
 Prefer bare [A2UI Express](https://a2ui.org/) in `express`, without Markdown fences or `<a2ui>` tags. Provide a short `fallback` that makes sense without the form.
 

@@ -1,6 +1,7 @@
 /** Render the admitted A2UI catalog in Classic's Preact timeline. */
 import { html, useCallback, useLayoutEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import { a2uiBindingPath, buildA2uiAction, isA2uiActionValue, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
+import { CLASSIC_A2UI_RENDERER_CAPABILITIES } from '../../../src/channels/web/a2ui/capabilities.js';
 import { checkA2uiComponent } from '../../../src/channels/web/a2ui/checks.js';
 import { a2uiDraftsFor, discardOldA2uiDraft, readA2uiDraft, rememberA2uiDraftEdit, subscribeA2uiDraft } from '../ui/a2ui-drafts.js';
 import { projectA2uiTemplates } from '../../../src/channels/web/a2ui/templates.js';
@@ -76,7 +77,8 @@ export function A2uiSurface({ block, source, onSubmit }: {
             const key = JSON.stringify([componentId, message.action.context, message.action.userMessage, currentDrafts]);
             if (!lastAttempt.current || lastAttempt.current.key !== key) {
                 lastAttempt.current = { key, request: { ...source, revision: block.revision, request_id: Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''), message,
-                    ...(instance.instancePath ? { instance_path: instance.instancePath } : {}), ...(currentDrafts?.length ? { a2ui_drafts: currentDrafts } : {}) } };
+                    ...(instance.instancePath ? { instance_path: instance.instancePath } : {}), ...(currentDrafts?.length ? { a2ui_drafts: currentDrafts } : {}),
+                    ...(block.owner === 'agent' || block.owner === 'recovery' ? { metadata: { a2uiRendererCapabilities: CLASSIC_A2UI_RENDERER_CAPABILITIES } } : {}) } };
             }
             const request = lastAttempt.current.request;
             const value = block.owner === 'login' && componentId === 'save' ? privateInput.current?.value : undefined;

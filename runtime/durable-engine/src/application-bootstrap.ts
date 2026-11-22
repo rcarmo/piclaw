@@ -31,7 +31,7 @@ import { createHostController, type HostControllerOptions } from "./host-control
 import { createHostDurableBindings, createInputHandoffCompletion } from "./host-bindings.js";
 import { prepareHostSchema } from "./host-schema.js";
 import { readApplicationMessagePayload } from "./accepted-payload-recovery.js";
-import { projectA2uiAgentInput, readA2uiRendererDataModel, storeA2uiInputMetadata } from '../../src/channels/web/a2ui/input-metadata.js';
+import { ownsA2uiModelSync, projectA2uiAgentInput, readA2uiRendererDataModel, storeA2uiInputMetadata } from '../../src/channels/web/a2ui/input-metadata.js';
 import { value, effect, sealed } from "./host-effects.js";
 import { hashScheduledLeaseToken } from "../../src/service-effects/current-piclaw/scheduled-run-values.js";
 import type { ScheduledRunLease } from "../../src/service-effects/contracts/scheduled-run-store.js";
@@ -467,8 +467,12 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
         work.acceptSourceInTransaction(input, connection);
         if (renderer && chat.startsWith('web:')) {
           const conversationId = scope.conversationId;
-          const data = readA2uiRendererDataModel(root, chat, conversationId, renderer);
-          storeA2uiInputMetadata(root, { chatJid: chat, sourceId: message.id, conversationId }, data);
+          if (renderer.submittedSurfaceId && !ownsA2uiModelSync(root, chat, `a2ui:${renderer.submittedSurfaceId}`, conversationId))
+            throw Error('Surface renderer belongs to another conversation');
+          if (renderer.capabilities) {
+            const data = readA2uiRendererDataModel(root, chat, conversationId, renderer);
+            storeA2uiInputMetadata(root, { chatJid: chat, sourceId: message.id, conversationId }, data, renderer.capabilities);
+          }
         }
         checkInput();
         assert();

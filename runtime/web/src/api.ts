@@ -6,6 +6,7 @@ import { recordAppPerfRequest } from './ui/app-perf-tracing.js';
 import { resolveScreenSizeHint } from './ui/screen-size-hint.js';
 import { isCommittedComposeInput } from './ui/compose-submission.js';
 import { a2uiDraftsFor } from './ui/a2ui-drafts.js';
+import { CLASSIC_A2UI_RENDERER_CAPABILITIES } from '../../src/channels/web/a2ui/capabilities.js';
 import { getAgentUiSnapshot, currentUiChatJid } from './ui/agent-ui-snapshot.js';
 
 export { uploadMedia, uploadWorkspaceFile } from './ui/upload-transfers.js';
@@ -236,10 +237,11 @@ export async function saveUiState(payload) {
     });
 }
 
-function outgoingA2uiDrafts(content: unknown, chatJid: string | null) {
+function outgoingA2uiContext(content: unknown, chatJid: string | null) {
     const text = typeof content === 'string' ? content.trimStart() : '';
-    if (text.startsWith('/') && !/^\/(?:queue|steer)\s/i.test(text)) return;
-    return a2uiDraftsFor(chatJid || 'web:default');
+    if (text.startsWith('/') && !/^\/(?:queue|steer)\s/i.test(text)) return {};
+    return { metadata: { a2uiRendererCapabilities: CLASSIC_A2UI_RENDERER_CAPABILITIES },
+        a2ui_drafts: a2uiDraftsFor(chatJid || 'web:default') };
 }
 
 /**
@@ -249,7 +251,7 @@ export async function createPost(content, mediaIds = [], chatJid = null) {
     const query = chatJid ? `?chat_jid=${encodeURIComponent(chatJid)}` : '';
     return request(`/post${query}`, {
         method: 'POST',
-        body: JSON.stringify({ content, media_ids: mediaIds, a2ui_drafts: outgoingA2uiDrafts(content, chatJid) }),
+        body: JSON.stringify({ content, media_ids: mediaIds, ...outgoingA2uiContext(content, chatJid) }),
     });
 }
 
@@ -260,7 +262,7 @@ export async function createReply(threadId, content, mediaIds = [], chatJid = nu
     const query = chatJid ? `?chat_jid=${encodeURIComponent(chatJid)}` : '';
     return request(`/post/reply${query}`, {
         method: 'POST',
-        body: JSON.stringify({ thread_id: threadId, content, media_ids: mediaIds, a2ui_drafts: outgoingA2uiDrafts(content, chatJid) }),
+        body: JSON.stringify({ thread_id: threadId, content, media_ids: mediaIds, ...outgoingA2uiContext(content, chatJid) }),
     });
 }
 
@@ -283,7 +285,7 @@ export async function sendAgentMessage(agentId, content, threadId = null, mediaI
         thread_id: threadId,
         media_ids: mediaIds,
         client_context: { screen_hint: resolveScreenSizeHint() },
-        a2ui_drafts: outgoingA2uiDrafts(content, chatJid),
+        ...outgoingA2uiContext(content, chatJid),
     };
     if (mode === 'auto' || mode === 'queue' || mode === 'steer') {
         payload.mode = mode;

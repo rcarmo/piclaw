@@ -7,6 +7,7 @@ import { getMessageByRowIdFromDatabase, storeMessageInDatabase } from '../../../
 import { admitSqliteWrite } from '../../../db/sqlite-async-admission.js';
 import { stripInternalTags } from '../../../router.js';
 import { replaceSurfaceBlocks } from './persistence.js';
+import { publicationProtocolError } from './protocol-errors.js';
 import { ownsA2uiModelSync, releaseA2uiModelSync, reserveA2uiModelSync } from './input-metadata.js';
 import { isA2uiSurfaceBlock, type A2uiSurfaceBlock } from './surface.js';
 
@@ -50,11 +51,17 @@ export async function publishAgentA2ui(options: {
   const fallback = prior?.surface.fallback_text ?? stripInternalTags(params.fallback ?? '').trim();
   if (!fallback || fallback.length > 1024) throw new Error('A visible surface fallback is required');
   const surfaceId = prior?.surface.surface.surfaceId ?? crypto.randomUUID();
-  const { compileA2uiExpress, applyA2uiMessages, bindA2uiDraftId } = await import('./express.js');
+  const { compileA2uiExpress, applyA2uiMessages, bindA2uiDraftId, readA2uiDraftSurfaceId } = await import('./express.js');
   check();
-  const messages = params.express !== undefined ? compileA2uiExpress(params.express, surfaceId)
-    : editing ? params.messages! : bindA2uiDraftId(params.messages!, surfaceId);
-  const surface = applyA2uiMessages(surfaceId, messages, prior?.surface.surface, params.messages !== undefined);
+  let surface: ReturnType<typeof applyA2uiMessages>;
+  try {
+    const messages = params.express !== undefined ? compileA2uiExpress(params.express, surfaceId)
+      : editing ? params.messages! : bindA2uiDraftId(params.messages!, surfaceId);
+    surface = applyA2uiMessages(surfaceId, messages, prior?.surface.surface, params.messages !== undefined);
+  } catch (error) {
+    const draftId = !editing && params.messages ? readA2uiDraftSurfaceId(params.messages) : undefined;
+    throw publicationProtocolError(error, draftId ?? surfaceId) ?? error;
+  }
   if (surface?.sendDataModel && (conversationId === undefined || !Number.isSafeInteger(conversationId) || conversationId < 1))
     throw new Error('Model sync requires an owning agent conversation');
   const messageId = `a2ui:${surfaceId}`;

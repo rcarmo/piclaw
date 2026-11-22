@@ -123,6 +123,29 @@ test('wire model sync requires an exact owning conversation and stops on deletio
   expect(read().surfaces).toEqual({});
 });
 
+test('a rejected draft returns a v1.0 renderer error with its original id and field path', async () => {
+  initDatabase();
+  const chatJid = 'web:renderer-error';
+  const root = getDb();
+  const threadId = storeMessage({id:'error-thread',chat_jid:chatJid,sender:'user',content:'Test a renderer error',timestamp:new Date().toISOString(),is_from_me:false});
+  const fallback = 'Must not be published';
+  const invalid = publishAgentA2ui({root,chatJid,thread:() => threadId,authorise:() => {}}, {fallback,messages:[{
+    version:'1.0',createSurface:{surfaceId:'draft-error',catalogId:'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json',
+      components:[{id:'root',component:'PrivateFixtureSyntax'}]},
+  }]});
+  await expect(invalid).rejects.toMatchObject({rendererMessage:{version:'1.0',error:{code:'VALIDATION_FAILED',
+    surfaceId:'draft-error',path:'/components/0/component',message:'unsupported component'}}});
+  const submit = (components: unknown[]) => publishAgentA2ui({root,chatJid,thread:() => threadId,authorise:() => {}}, {fallback,messages:[{
+    version:'1.0',createSurface:{surfaceId:'draft-error',catalogId:'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json',components},
+  }]});
+  await expect(submit([{id:'root',component:'Text',text:'No parent',weight:1}])).rejects.toMatchObject({rendererMessage:{
+    error:{code:'UNALLOWED_PARENT',surfaceId:'draft-error',path:'/components/0/weight'},
+  }});
+  await expect(submit([{id:'root',component:'Button',child:'invalid',action:{event:{name:'go'}}},
+    {id:'invalid',component:'Divider'}])).rejects.toMatchObject({rendererMessage:{error:{code:'UNALLOWED_CHILD',surfaceId:'draft-error',path:'/components/0/child'}}});
+  expect(root.query('SELECT id FROM messages WHERE chat_jid=? AND content=?').get(chatJid,fallback)).toBeNull();
+});
+
 test('generic content-block APIs cannot install host or agent surface authority', () => {
   const blocks = [{type:'a2ui_surface', owner:'agent'}, {type:'a2ui_surface', owner:'login'}, {type:'a2ui_surface_removed'}, {type:'text', text:'OK'}];
   expect(sanitizeModelPostedContentBlocks(blocks)).toEqual([blocks[3]]);

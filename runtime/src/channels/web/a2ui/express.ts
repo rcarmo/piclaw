@@ -10,6 +10,7 @@ import { basicCatalog } from "@a2ui/web_core/catalogs/basic/v1";
 import { DataModel } from '@a2ui/web_core/state';
 import { CLASSIC_A2UI_FUNCTIONS, isClassicValueFunction } from "./functions.js";
 import { absoluteA2uiPointer, scopedA2uiPointer } from "./data-path.js";
+import { ClassicA2uiValidationError } from './protocol-errors.js';
 import { a2uiChildReferences, projectA2uiTemplates, readA2uiTemplate } from "./templates.js";
 import { CLASSIC_A2UI_CATALOG, CLASSIC_A2UI_PROPERTIES, a2uiSliderRange, readA2uiLink, readA2uiLinkTarget, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
 
@@ -25,8 +26,8 @@ const catalog = new FunctionPruningTransformer(CLASSIC_A2UI_FUNCTIONS).transform
   new ComponentPruningTransformer(Object.keys(CLASSIC_A2UI_PROPERTIES)).transform(basicCatalog),
 );
 
-function requireClassic(condition: unknown, reason: string): asserts condition {
-  if (!condition) throw new Error(`Invalid Classic A2UI: ${reason}`);
+function requireClassic(condition: unknown, reason: string, path?: string, code?: 'UNALLOWED_PARENT' | 'UNALLOWED_CHILD'): asserts condition {
+  if (!condition) throw new ClassicA2uiValidationError(reason, path, code);
 }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -96,13 +97,14 @@ function checkValueCalls(value: unknown): void {
 }
 
 function checkComponents(value: unknown): asserts value is A2uiComponent[] {
-  requireClassic(Array.isArray(value) && value.length <= MAX_COMPONENTS, "too many components");
+  requireClassic(Array.isArray(value) && value.length <= MAX_COMPONENTS, 'too many components', '/components');
   const ids = new Set<string>();
-  for (const component of value) {
-    requireClassic(record(component) && isId(component.id) && !ids.has(component.id), "invalid or duplicate component id");
+  for (const [index, component] of value.entries()) {
+    const path = `/components/${index}`;
+    requireClassic(record(component) && isId(component.id) && !ids.has(component.id), 'invalid or duplicate component id', `${path}/id`);
     const name = component.component;
-    requireClassic(typeof name === "string" && Object.hasOwn(CLASSIC_A2UI_PROPERTIES, name), "unsupported component");
-    requireClassic(allowedKeys(component, ["id", "component", "@catalogId", "weight", "@accessibility", "accessibility", "@checks", "checks", "@metadata", "metadata", ...CLASSIC_A2UI_PROPERTIES[name as A2uiComponent["component"]]]), "unsupported component property");
+    requireClassic(typeof name === 'string' && Object.hasOwn(CLASSIC_A2UI_PROPERTIES, name), 'unsupported component', `${path}/component`);
+    requireClassic(allowedKeys(component, ["id", "component", "@catalogId", "weight", "@accessibility", "accessibility", "@checks", "checks", "@metadata", "metadata", ...CLASSIC_A2UI_PROPERTIES[name as A2uiComponent["component"]]]), "unsupported component property", path);
     requireClassic(!(Object.hasOwn(component, '@metadata') && Object.hasOwn(component, 'metadata')), 'conflicting metadata');
     checkMetadata(Object.hasOwn(component, '@metadata') ? component['@metadata'] : component.metadata);
     requireClassic(!(Object.hasOwn(component, '@checks') && Object.hasOwn(component, 'checks')), 'conflicting check descriptors');
@@ -132,9 +134,7 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     }
     if (name === "Modal") requireClassic(isId(component.trigger) && isId(component.content), "invalid modal references");
     if (name === "Slider") requireClassic(a2uiSliderRange(component as A2uiComponent), "invalid slider interval");
-    if (name === "TextField" && component.variant === "obscured") {
-      throw new Error("Invalid Classic A2UI: private inputs require a host-owned surface");
-    }
+    requireClassic(name !== 'TextField' || component.variant !== 'obscured', 'private inputs require a host-owned surface', `${path}/variant`);
     if (name === "Button") {
       const { action } = component;
       const target = readA2uiLinkTarget(action);
@@ -169,12 +169,17 @@ export function compileA2uiExpress(source: string, surfaceId: string): AgentToRe
 
 const surfaceOperations = ["createSurface", "updateComponents", "updateDataModel", "deleteSurface"] as const;
 
+export function readA2uiDraftSurfaceId(messages: readonly unknown[]): string | undefined {
+  const first = messages[0];
+  const source = record(first) && record(first.createSurface) ? first.createSurface.surfaceId : undefined;
+  return isId(source) ? source : undefined;
+}
+
 /** A new publication uses a host-assigned ID. Rebind only the protocol envelope of its single draft surface. */
 export function bindA2uiDraftId(messages: readonly unknown[], surfaceId: string): unknown[] {
   requireClassic(messages.length > 0 && messages.length <= MAX_MESSAGES, 'invalid draft batch size');
-  const first = messages[0];
-  const source = record(first) && record(first.createSurface) ? first.createSurface.surfaceId : undefined;
-  requireClassic(isId(source), 'first draft message requires a surface ID');
+  const source = readA2uiDraftSurfaceId(messages);
+  requireClassic(source, 'first draft message requires a surface ID', '/surfaceId');
   return messages.map(message => {
     requireClassic(record(message), 'invalid draft message');
     const operation = surfaceOperations.find(name => Object.hasOwn(message, name));
@@ -291,6 +296,7 @@ function verifySnapshot(snapshot: A2uiSnapshot): void {
   requireClassic(!containsCall(snapshot.dataModel), "functions are not supported in data models");
   checkComponents(snapshot.components);
   const components = new Map(snapshot.components.map((item) => [item.id, item]));
+  const componentPaths = new Map(snapshot.components.map((item, index) => [item.id, `/components/${index}`]));
   if (snapshot.progressive) {
     // Buffered definitions are not reachable yet, but still must not contain cycles or unbounded chains.
     const heights = new Map<string, number>();
@@ -317,17 +323,18 @@ function verifySnapshot(snapshot: A2uiSnapshot): void {
     if (!item && snapshot.progressive) return;
     requireClassic(item && !seen.has(id) && depth <= MAX_DEPTH, "expected a bounded component tree");
     seen.add(id);
-    requireClassic(item.weight === undefined || canWeight, "layout weight requires a Row or Column parent");
+    requireClassic(item.weight === undefined || canWeight, 'layout weight requires a Row or Column parent', `${componentPaths.get(id)}/weight`, 'UNALLOWED_PARENT');
     if (!inTemplate) for (const [key, value] of Object.entries(item)) {
       if (key !== 'metadata' && key !== '@metadata') requireClassic(!containsCall(value, '@index'), '@index requires a template instance');
     }
     if (item.component === 'Button' && typeof item.child === 'string') {
       const childKind = components.get(item.child)?.component;
-      requireClassic((snapshot.progressive && childKind === undefined) || childKind === 'Text' || childKind === 'Icon', 'button labels must be text or icons');
+      requireClassic((snapshot.progressive && childKind === undefined) || childKind === 'Text' || childKind === 'Icon', 'button labels must be text or icons', `${componentPaths.get(id)}/child`, 'UNALLOWED_CHILD');
     }
     for (const ref of a2uiChildReferences(item)) walk(ref.id, depth + 1, ref.canWeight, inTemplate || ref.template);
   }
   walk("root", 0);
   requireClassic(snapshot.progressive || seen.size === components.size, "unreachable components");
-  projectA2uiTemplates(snapshot);
+  try { projectA2uiTemplates(snapshot); }
+  catch { throw new ClassicA2uiValidationError('Invalid or oversized A2UI template tree', '/components'); }
 }

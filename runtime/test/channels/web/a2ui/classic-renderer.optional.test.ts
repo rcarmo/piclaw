@@ -372,7 +372,8 @@ for (const engine of [chromium, webkit]) {
       await page.getByRole('textbox',{name:'Draft memo'}).fill('Unsubmitted draft');
       const expectedDraft = {surface_id:syncedId,revision:10,edits:[{component_id:'memo',value:'Unsubmitted draft'}]};
       const query = (chat: string) => page.evaluate(jid => (window as any).sendDraftQuery(jid), chat);
-      expect(await query('web:test')).toMatchObject({content:'Query current model',a2ui_drafts:[expectedDraft]});
+      const capabilities = {a2uiRendererCapabilities:{'1.0':{supportedCatalogIds:[basicCatalogue]}}};
+      expect(await query('web:test')).toMatchObject({content:'Query current model',a2ui_drafts:[expectedDraft],metadata:capabilities});
       expect(await query('web:other')).not.toHaveProperty('a2ui_drafts');
       await page.evaluate((item) => (window as any).draw(item), block);
       await page.evaluate((item) => (window as any).draw(item), synced);
@@ -382,7 +383,7 @@ for (const engine of [chromium, webkit]) {
       expect(await query('web:test')).not.toHaveProperty('a2ui_drafts');
       await page.getByRole('textbox',{name:'Draft memo'}).fill('Action draft');
       await page.getByRole('button',{name:'Send draft'}).click();
-      expect(await page.evaluate(() => (window as any).events.at(-1))).toMatchObject({revision:11,
+      expect(await page.evaluate(() => (window as any).events.at(-1))).toMatchObject({revision:11,metadata:capabilities,
         a2ui_drafts:[{...expectedDraft, revision:11, edits:[{component_id:'memo',value:'Action draft'}]}],
         message:{action:{name:'syncDraft',context:{}}}});
       const legacyRequests: string[] = [];

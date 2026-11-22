@@ -6,6 +6,7 @@ import { a2uiInstanceId, projectA2uiTemplates } from "./templates.js";
 import { a2uiDateTimeType, validA2uiDateTime } from "./date-time.js";
 import { a2uiSliderRange, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
 import type { A2uiDraftEdit, A2uiDraftPatch } from './drafts.js';
+import type { ClassicA2uiRendererCapabilities } from './capabilities.js';
 
 export type A2uiActionValue = string | number | boolean | null | string[];
 type ActionValue = A2uiActionValue;
@@ -208,6 +209,7 @@ export interface A2uiActionRequest {
   message: A2uiActionMessage;
   instance_path?: string;
   a2ui_drafts?: A2uiDraftPatch[];
+  metadata?: { a2uiRendererCapabilities: ClassicA2uiRendererCapabilities };
   private_code?: string;
   private_value?: string;
 }
