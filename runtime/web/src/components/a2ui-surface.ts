@@ -10,6 +10,7 @@ import { a2uiAria } from './a2ui-accessibility.js';
 import { A2uiChoicePicker } from './a2ui-choice-picker.js';
 import { A2uiPlayback } from './a2ui-playback.js';
 import { A2uiModal } from './a2ui-modal.js';
+import { renderA2uiText } from './a2ui-text.js';
 import { A2uiTabs } from './a2ui-tabs.js';
 import { A2uiTotpDialog, readTotpPresentation, type TotpPresentation } from './a2ui-totp-dialog.js';
 import { a2uiSliderRange, readA2uiImageUrl, readA2uiLink, readA2uiPlaybackUrl, type A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
@@ -74,7 +75,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
         }
     }
 
-    function renderComponent(id: unknown, depth: number, openModal?: (event: Event) => void): unknown {
+    function renderComponent(id: unknown, depth: number, openModal?: (event: Event) => void, inlineText = false): unknown {
         const item = typeof id === 'string' ? components.get(id) : undefined;
         if (!item || depth > 24) return null;
         const instance = projection?.instances.get(item.id);
@@ -98,7 +99,11 @@ export function A2uiSurface({ block, source, onSubmit }: {
             </div>` : control;
         const groupRole = aria['aria-label'] ? 'group' : undefined;
         switch (item.component) {
-            case 'Text': return html`<span key=${id} role=${groupRole} ...${aria} class=${item.variant === 'caption' ? 'a2ui-caption' : ''}>${text(item.text)}</span>`;
+            case 'Text': {
+                const formatted = renderA2uiText(text(item.text), inlineText);
+                const tag = formatted.block ? 'div' : 'span';
+                return html`<${tag} key=${id} role=${groupRole} ...${aria} class=${item.variant === 'caption' ? 'a2ui-caption' : ''}>${formatted.content}</${tag}>`;
+            }
             case 'Icon': {
                 const name = read(item.name);
                 const path = typeof name === 'string' && Object.hasOwn(a2uiIconPaths, name) ? a2uiIconPaths[name]
@@ -163,6 +168,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
             }
             case 'Divider': return html`<hr key=${id} ...${aria} class=${item.axis === 'vertical' ? 'a2ui-divider-vertical' : ''} />`;
             case 'Button': {
+                const buttonContent = () => renderComponent(item.child, depth + 1, undefined, true);
                 const link = readA2uiLink(item.action);
                 const buttonChild = typeof item.child === 'string' ? components.get(item.child) : undefined;
                 const name = buttonChild?.component === 'Icon' ? read(buttonChild.name) : undefined;
@@ -170,7 +176,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
                     ? name.replace(/([A-Z])/g, ' $1').replace(/^./, char => char.toUpperCase()) : link ? 'Open link' : 'Action';
                 if (link && !disabled && !invalid) return checked(html`<a key=${id} class="a2ui-button a2ui-button-borderless" href=${link} aria-label=${buttonLabel} ...${aria}
                     aria-haspopup=${openModal ? 'dialog' : undefined} onClick=${openModal}
-                    target="_blank" rel="noopener noreferrer">${child(item.child)}</a>`);
+                    target="_blank" rel="noopener noreferrer">${buttonContent()}</a>`);
                 if (block.owner === 'login' && (id === 'continue' || id === 'check')) return null;
                 return checked(html`<button key=${id} type="button" class=${`a2ui-button a2ui-button-${item.variant || 'default'}`}
                 disabled=${disabled} aria-disabled=${pending || disabled || invalid} aria-label=${buttonLabel} ...${aria} aria-haspopup=${openModal ? 'dialog' : undefined}
@@ -178,7 +184,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
                     if (pending || disabled || invalid) return;
                     openModal?.(event);
                     void submit(event, item.id);
-                }}>${child(item.child)}</button>`);
+                }}>${buttonContent()}</button>`);
             }
             case 'TextField': {
                 if (block.owner === 'login' && item.variant === 'obscured') return checked(html`<label key=${id} class="a2ui-field">${label}

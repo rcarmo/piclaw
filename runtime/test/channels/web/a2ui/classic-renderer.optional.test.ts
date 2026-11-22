@@ -18,6 +18,8 @@ const source = `
   $/unsafe = "javascript:void(0)";
   $/shape = "M2 2 L8 8";
   root = Column([Text("<img src=x onerror=alert(1)>"),
+    Text("**Bold A2UI** and *emphasised* plus [plain label](https://example.test/no-link) and ![plain image alt](https://example.test/no-image)"),
+    Text("- Markdown item one\\n- Markdown item two"),
     List(children=[Text("First step"), Text("Second step")], direction="horizontal", align="center"),
     Tabs(tabs=[{title:"Summary",child:summary},{title:"Details",child:details}]),
     Modal(trigger=show, content=help),
@@ -35,7 +37,7 @@ const source = `
     Row([Text("One part", weight=1), Text("Two parts", weight=2)]),
     ChoicePicker(label="Size", options=[{label:"Small",value:"small"},{label:"Large",value:"large"}],value=$/choice),
     ChoicePicker(label="Tags", options=[{label:"Frontend",value:"front"},{label:"Backend",value:"back"}], value=$/tags, variant="multipleSelection", displayStyle="chips", filterable=true),
-    Button(Text("Submit"), variant="primary", action=Event("save", {note:$/note,notify:$/notify,size:$/choice,level:$/level,date:$/date,tags:$/tags}),
+    Button(Text("**Submit**"), variant="primary", action=Event("save", {note:$/note,notify:$/notify,size:$/choice,level:$/level,date:$/date,tags:$/tags}),
       checks=[{condition:required($/note),message:"Cannot submit an empty note"}])]);
   summary = Text("Summary panel");
   details = Text("Details panel");
@@ -99,8 +101,9 @@ for (const engine of [chromium, webkit]) {
         const { pathname } = new URL(req.url);
         if (pathname === '/media/42') return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="green"/></svg>', {headers:{'Content-Type':'image/svg+xml'}});
         if (pathname === "/fixture.js") return new Response(Bun.file(join(scratch, "fixture.js")));
+        if (pathname === '/marked.js') return new Response(Bun.file(join(web, 'static/common/js/marked.min.js')), {headers:{'Content-Type':'text/javascript'}});
         if (pathname === "/base.css" || pathname === "/content.css") return new Response(Bun.file(join(web, "static/classic/css", pathname.slice(1))));
-        return new Response('<!doctype html><html lang="en" data-theme="dark"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/base.css"><link rel="stylesheet" href="/content.css"></head><body><script type="module" src="/fixture.js"></script></body></html>', { headers: { "Content-Type": "text/html", 'Content-Security-Policy': CLASSIC_CONTENT_SECURITY_POLICY } });
+        return new Response('<!doctype html><html lang="en" data-theme="dark"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/base.css"><link rel="stylesheet" href="/content.css"></head><body><script src="/marked.js"></script><script type="module" src="/fixture.js"></script></body></html>', { headers: { "Content-Type": "text/html", 'Content-Security-Policy': CLASSIC_CONTENT_SECURITY_POLICY } });
       } });
       browser = await engine.launch({headless:true});
       const page = await browser.newPage({ viewport: { width: 390, height: 800 }, colorScheme: 'dark' });
@@ -111,7 +114,7 @@ for (const engine of [chromium, webkit]) {
       await page.waitForFunction(() => typeof (window as any).draw === "function");
       const block = { type: "a2ui_surface", state: "active", revision: 1, surface: applyA2uiMessages("test-form", compileA2uiExpress(`$/audio = ${JSON.stringify(`${audioOrigin.url.origin}/fixture.wav`)};\n${source}`, "test-form")), fallback_text: "Form fallback" };
       await page.evaluate((block) => (window as any).draw(block), block);
-      const list = page.locator('.a2ui-surface').getByRole('list');
+      const list = page.locator('.a2ui-surface .a2ui-list');
       expect(await list.getByRole('listitem').allTextContents()).toEqual(['First step', 'Second step']);
       expect(await list.evaluate(el => getComputedStyle(el).flexDirection)).toBe('row');
       const field = page.getByRole("textbox", { name: "Note" });
@@ -149,6 +152,13 @@ for (const engine of [chromium, webkit]) {
       expect(await field.inputValue()).toBe("Keep this draft");
       expect(await field.evaluate((el) => el === document.activeElement)).toBe(true);
       expect(await page.locator('.a2ui-surface img').count()).toBe(1);
+      expect(await page.locator('.a2ui-surface strong').getByText('Bold A2UI').count()).toBe(1);
+      expect(await page.locator('.a2ui-surface em').getByText('emphasised').count()).toBe(1);
+      expect(await page.getByText(/plain label.*plain image alt/).count()).toBe(1);
+      expect(await page.getByRole('link', { name:'plain label' }).count()).toBe(0);
+      expect(await page.locator('.a2ui-surface ul li').allTextContents()).toEqual(['Markdown item one','Markdown item two']);
+      expect(await submitButton.locator('strong').textContent()).toBe('Submit');
+      expect(await page.getByText('<img src=x onerror=alert(1)>', {exact:true}).count()).toBe(1);
       const preview = page.getByRole('img', { name: 'Project preview' });
       expect(await preview.getAttribute('src')).toBe('/media/42');
       expect(await preview.getAttribute('referrerpolicy')).toBe('no-referrer');
