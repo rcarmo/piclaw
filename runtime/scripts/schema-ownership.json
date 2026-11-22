@@ -21,6 +21,22 @@
     "kintsugi-optimizer-mcp": "Kintsugi4afeac1e on public SDK1.5.2; Core cutover source26508ec06 plus explicit metadata/cache ownership. No new execution ledger or live migration."
   },
   "owners": {
+    "core:a2ui": {
+      "category": "core",
+      "initializer": "runtime/src/db/connection.ts#createSchema",
+      "writers": [
+        "runtime/src/channels/web/a2ui/input-metadata.ts",
+        "runtime/src/channels/web/a2ui/renderer-errors.ts"
+      ],
+      "sourceOfTruth": "Private A2UI surface ownership, accepted-input metadata, and pending renderer diagnostic receipts. These tables do not form part of the public timeline.",
+      "replayRetention": "Accepted metadata follows its source message; surface ownership follows its post. Diagnostics expire and are deduplicated and consumed in the owning input transaction.",
+      "references": [
+        "runtime/src/db/connection.ts",
+        "runtime/src/channels/web/a2ui/admission.ts",
+        "runtime/src/channels/web/a2ui/publish.ts",
+        "runtime/durable-engine/src/accepted-payload-recovery.ts"
+      ]
+    },
     "core:background-contexts": {
       "category": "core",
       "initializer": "runtime/durable-engine/src/host-background-context.ts#publishNativeBackgroundContext",
@@ -1231,6 +1247,60 @@
     }
   },
   "objects": {
+    "table:a2ui_input_metadata": {
+      "owner": "core:a2ui",
+      "fingerprints": [
+        "5e6a6fc70d171891e7d22fc172276dedec16a74d6544bb514a569934a4e7700b"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "derivedIndexes": [
+        "1dc5b9a4e2c260fef8e5aeb61a5a33c857045fceaf0eb55488a19c477797f081"
+      ]
+    },
+    "table:a2ui_renderer_errors": {
+      "owner": "core:a2ui",
+      "fingerprints": [
+        "cb21bc4a44e6fbc17790283eb8296e9e0fba345ea8df1c9c7b95ed1a9a573df6"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "derivedIndexes": [
+        "0e4ae7c505b1113aea3121ca9a0489a573bc38cdf10f5f897433ae6593f35628"
+      ]
+    },
+    "table:a2ui_surface_owners": {
+      "owner": "core:a2ui",
+      "fingerprints": [
+        "05553379a11f391f49dcfdb47e407f867828d910db1e4c9f99519bbda0b082fc"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "derivedIndexes": [
+        "1dc5b9a4e2c260fef8e5aeb61a5a33c857045fceaf0eb55488a19c477797f081"
+      ]
+    },
+    "index:idx_a2ui_surface_owners_sync": {
+      "owner": "core:a2ui",
+      "fingerprints": [
+        "18243eb407b02c20a11e5d4872a3c989910330b176895da95c5ad89519f135a7"
+      ],
+      "requiredIn": [
+        "core",
+        "native",
+        "native-addons"
+      ],
+      "table": "a2ui_surface_owners"
+    },
     "index:idx_budget_allowances_work_cap": {
       "owner": "retired:expense-history",
       "fingerprints": [
