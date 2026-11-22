@@ -126,7 +126,7 @@ export interface FollowupActionOptions {
   removeAgentQueueItem: (rowId: string | number, chatJid: string | null) => Promise<unknown>;
 }
 
-export function handleInjectQueuedFollowupAction(options: FollowupActionOptions): void {
+export async function handleInjectQueuedFollowupAction(options: FollowupActionOptions): Promise<boolean> {
   const {
     queuedItem,
     followupQueueItemsRef,
@@ -139,29 +139,29 @@ export function handleInjectQueuedFollowupAction(options: FollowupActionOptions)
     isCurrent = () => true,
   } = options;
 
-  const optimisticRemoval = resolveFollowupQueueRemovalPlan(followupQueueItemsRef.current, queuedItem);
-  if (!optimisticRemoval || !isCurrent()) return;
-  const { rowId } = optimisticRemoval;
-  // The item stays queued until the next tool round places it; show it as steering now.
-  const previousMode = followupQueueItemsRef.current.find((item) => item?.row_id === rowId)?.mode;
-  setFollowupQueueItems((current) => setFollowupQueueItemMode(current, rowId, 'steer'));
-
-  steerAgentQueueItem(rowId, resolveQueueActionChatJid(currentChatJid))
-    .then((response: any) => {
-      if (!isCurrent()) return;
-      if(response?.queued!=='steer')throw Error('Queue changed before steering');
-      void refreshQueueState();
-    })
-    .catch((error) => {
-      if (!isCurrent()) return;
+  const selection = resolveFollowupQueueRemovalPlan(followupQueueItemsRef.current, queuedItem);
+  if (!selection || !isCurrent()) return false;
+  const { rowId } = selection;
+  try {
+    const response: any = await steerAgentQueueItem(rowId, resolveQueueActionChatJid(currentChatJid));
+    if (!isCurrent()) return false;
+    if (response?.queued !== 'steer') throw Object.assign(Error('Queue changed before steering'), { status: 409 });
+    // The SDK still owns placement. Change the displayed mode only on its receipt.
+    setFollowupQueueItems((current) => setFollowupQueueItemMode(current, rowId, 'steer'));
+    void refreshQueueState();
+    return true;
+  } catch (error) {
+    if (isCurrent()) {
       console.warn('[queue] Failed to steer queued item:', error);
-      const failureToast = resolveFollowupActionFailureToast('steer');
-      showIntentToast(failureToast.title, failureToast.detail, 'warning');
-      // Restore the row even if the refresh below cannot reach the server.
-      setFollowupQueueItems((current) => setFollowupQueueItemMode(current, rowId, previousMode));
+      const status = typeof error === 'object' && error ? Number((error as { status?: number }).status) : NaN;
+      const notice = status >= 400 && status < 500 ? resolveFollowupActionFailureToast('steer')
+        : { title: 'Steering not confirmed', detail: 'Check the queue before requesting steering again.' };
+      showIntentToast(notice.title, notice.detail, 'warning');
       dismissedQueueRowIdsRef.current.delete(rowId);
       void refreshQueueState();
-    });
+    }
+    return false;
+  }
 }
 
 export async function handleRemoveQueuedFollowupAction(options: FollowupActionOptions): Promise<boolean> {

@@ -28,6 +28,7 @@ beforeAll(async()=>{
 afterAll(async()=>{for(const browser of browsers.values())await browser.close();});
 for(const skin of ["classic"])for(const engine of ["chromium","webkit"])for(const touch of [false,true])for(const finalAction of ['remove','return'] as const)browserTest(`${skin}/${engine}/${touch?"touch":"keyboard"}: failed actions and accepted steering/${finalAction} never hide an unplaced SDK item`,async()=>{
   let items=[{row_id:17,content:"Visible SDK input",source:"native_sdk"}],deny=true,denyReads=false,actions=0;
+  const firstSteer = Promise.withResolvers<void>();
   const server=Bun.serve({hostname:"127.0.0.1",port:0,async fetch(req){
     const path=new URL(req.url).pathname;
     if(path==="/")return new Response('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"><div id="root"></div><script type="module" src="/fixture.js"></script>',{headers:{"content-type":"text/html"}});
@@ -36,6 +37,7 @@ for(const skin of ["classic"])for(const engine of ["chromium","webkit"])for(cons
     if(path==="/agent/queue-state")return denyReads?Response.json({error:"offline"},{status:503}):Response.json({count:items.length,items});
     if(path==="/agent/queue-steer"||path==="/agent/queue-remove"){
       actions++;const body=await req.json();expect(body.row_id).toBe(17);
+      if (path.endsWith('steer') && actions === 1) await firstSteer.promise;
       if(deny){denyReads=true;return Response.json({error:"denied"},{status:403});}
       if(path.endsWith("steer"))return Response.json({status:"ok",queued:"steer",removed:false},{status:201});
       items=[];return Response.json({status:"ok",removed:true});
@@ -44,16 +46,36 @@ for(const skin of ["classic"])for(const engine of ["chromium","webkit"])for(cons
   const page=await browsers.get(engine)!.newPage({viewport:touch?{width:520,height:720}:{width:1100,height:800},hasTouch:touch});const errors:string[]=[];page.on("pageerror",error=>errors.push(error.message));
   try{
     await page.goto(`${server.url}?chat_jid=web:queue-browser`);await page.getByText("Visible SDK input",{exact:true}).waitFor();
+    await page.evaluate(() => {
+      document.addEventListener('click', event => {
+        if (!(event.target instanceof Element) || !event.target.closest('.compose-queue-stack-steer-btn')) return;
+        const start = performance.now();
+        const observer = new MutationObserver(() => {
+          if (!document.querySelector('.compose-queue-stack-steer-btn[aria-busy="true"], [data-queue-mode="steer"]')) return;
+          document.body.dataset.steerFeedbackMs = String(performance.now() - start);
+          observer.disconnect();
+        });
+        observer.observe(document.body, { subtree: true, attributes: true, childList: true });
+      }, { capture: true, once: true });
+    });
     const button=(action:"steer"|"remove"|"return")=>page.locator(action==="steer"?".compose-queue-stack-steer-btn":action==="return"?".compose-queue-stack [data-action=edit]":".compose-queue-stack-close-btn").first();
     const invoke=async(action:"steer"|"remove"|"return")=>{const before=actions;const target=button(action);if(touch)await target.tap();else{await target.focus();await page.keyboard.press("Enter");}const until=Date.now()+2000;while(actions===before&&Date.now()<until)await page.waitForTimeout(5);expect(actions).toBe(before+1);await page.waitForTimeout(60);};
     await invoke("steer");expect(await page.getByText("Visible SDK input",{exact:true}).count()).toBe(1);
+    expect(await button('steer').getAttribute('aria-busy')).toBe('true');
+    expect(await page.locator('[data-queue-mode="steer"]').count()).toBe(0);
+    const visiblePendingMs = Number(await page.locator('body').getAttribute('data-steer-feedback-ms'));
+    expect(visiblePendingMs).toBeGreaterThan(0);
+    console.log(`STEER_FEEDBACK ${JSON.stringify({engine,touch,finalAction,visiblePendingMs})}`);
+    firstSteer.resolve();
+    await button('steer').waitFor();
+    await page.waitForFunction(() => !document.querySelector('.compose-queue-stack-steer-btn[aria-busy="true"]'));
     await invoke("remove");expect(await page.getByText("Visible SDK input",{exact:true}).count()).toBe(1);
     await invoke("return");expect(await page.getByText("Visible SDK input",{exact:true}).count()).toBe(1);expect(await page.locator("#draft").inputValue()).toBe("Original draft");
     deny=false;denyReads=false;await invoke("steer");expect(await page.getByText("Visible SDK input",{exact:true}).count()).toBe(1);
     await invoke(finalAction);await page.getByText("Visible SDK input",{exact:true}).waitFor({state:"detached"});
     expect(await page.locator("#draft").inputValue()).toBe(finalAction==='return'?'Visible SDK input':'Original draft');
     expect(actions).toBe(5);expect(errors).toEqual([]);
-  }finally{await page.close();server.stop(true);}
+  }finally{firstSteer.resolve();await page.close();server.stop(true);}
 },15000);
 
 for(const engine of ['chromium','webkit'])for(const touch of [false,true])browserTest(`Classic/${engine}/${touch?'touch':'keyboard'} Stop keeps every pending row through a failed refresh and reload`,async()=>{

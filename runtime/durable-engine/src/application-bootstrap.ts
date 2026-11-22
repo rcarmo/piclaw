@@ -358,7 +358,9 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       const input: AcceptedInput = Object.freeze({incarnation:r.incarnation,conversationId:scope.conversationId as ConversationId,
         chatJid:chat,branchId:scope.branchId,operationId:`native-message:${scope.conversationId}:${source.sourceSeq}`,sourceSeq:source.sourceSeq,
         sourceId:messageId,payloadRef:source.payloadRef,requestId,requestHash:hashCanonicalRequest({type:"input",requestId,content:row.content})});
-      await config.preparePrompt?.(scope.conversationId as ConversationId,row.content);assertLive();
+      // Priority intervention does not wait for an idle prompt's optional optimiser tool pick.
+      if (whenBusy !== "steer") await config.preparePrompt?.(scope.conversationId as ConversationId, row.content);
+      assertLive();
       const id = await runtime.submitMessage(input,whenBusy); assertLive();
       // Observe accepted SDK work even if a later Root cursor ACK is uncertain.
       // No callback here submits or resumes another input.

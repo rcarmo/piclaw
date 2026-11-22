@@ -323,18 +323,21 @@ export class WebAgentControlPlaneService {
         return this.options.json({ error: "Missing or invalid row_id" }, 400);
       }
 
-      if(this.options.readNativeQueue){
-        if(!this.options.controlNativeQueue)throw Error('Native queue control unavailable');
-        const native=await this.options.readNativeQueue(chatJid);
-        const legacy=getDeferredQueuedFollowups(chatJid).some(item=>item.rowId===rowId);
-        if(native.some(item=>item.row_id===rowId)){
-          if(legacy)return this.options.json({error:"Ambiguous queued input; no item changed."},409);
-          const changed=await this.options.controlNativeQueue(chatJid,rowId,"steer",authorise);
-          if(changed)this.options.broadcastEvent("agent_steer_queued",{chat_jid:chatJid,source:"queued-item"});
-          return this.options.json({status:"ok",removed:false,row_id:rowId,queued:changed?"steer":undefined,count:(await this.options.readNativeQueue(chatJid)).length},changed?201:200);
+      if (this.options.readNativeQueue && this.options.controlNativeQueue) {
+        // The SDK checks this exact queued submission at the mutation boundary.
+        // Only a historical ID collision needs a complete preflight read.
+        if (getDeferredQueuedFollowups(chatJid).some(item => item.rowId === rowId)) {
+          const collision = (await this.options.readNativeQueue(chatJid)).some(item => item.row_id === rowId);
+          return this.options.json({ error: collision ? "Ambiguous queued input; no item changed."
+            : "This preserved legacy queue item has no SDK submission; it was not changed." }, 409);
         }
-        if(legacy)return this.options.json({error:"This preserved legacy queue item has no SDK submission; it was not changed."},409);
-        return this.options.json({status:"ok",removed:false,count:native.length});
+        const changed = await this.options.controlNativeQueue(chatJid, rowId, "steer", authorise);
+        if (changed) {
+          this.options.broadcastEvent("agent_steer_queued", { chat_jid: chatJid, source: "queued-item" });
+          // Count/readback is a separate observation, not part of this admitted mode change.
+          return this.options.json({ status: "ok", removed: false, row_id: rowId, queued: "steer" }, 201);
+        }
+        return this.options.json({ status: "ok", removed: false, count: (await this.options.readNativeQueue(chatJid)).length });
       }
       return this.options.json({ error: "Native queue control is unavailable." }, 503);
     } catch (error) {
