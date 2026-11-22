@@ -37,7 +37,7 @@ export function A2uiTotpDialog({ presentation, dismiss, confirm }: {
         catch (err) { setError(err instanceof Error ? err.message : 'Could not confirm TOTP.'); }
         finally { submitting.current = false; setPending(false); }
     }
-    return html`<dialog ref=${dialog} class="a2ui-surface a2ui-private-dialog" aria-label="TOTP enrolment"
+    return html`<dialog ref=${dialog} class="a2ui-surface a2ui-private-dialog" data-no-session-dashboard-shortcut="" aria-label="TOTP enrolment"
         onCancel=${(event: Event) => { event.preventDefault(); dismiss(); }}>
         <form class="a2ui-column" onSubmit=${submit} aria-busy=${pending}>
             <strong>TOTP enrolment</strong>

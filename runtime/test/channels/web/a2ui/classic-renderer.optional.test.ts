@@ -75,6 +75,7 @@ for (const engine of [chromium, webkit]) {
       await page.getByRole("checkbox", { name: "Notify" }).check();
       await page.getByRole("combobox", { name: "Size" }).selectOption("large");
       const button = page.getByRole("button", { name: "Submit" });
+      expect(await button.evaluate(el => el.closest('[data-no-session-dashboard-shortcut]') !== null)).toBe(true);
       await button.focus();
       await page.keyboard.press("Enter");
       await page.getByRole("alert").getByText("Try again").waitFor();
@@ -114,6 +115,7 @@ for (const engine of [chromium, webkit]) {
       await open.click();
       const dialog = page.getByRole('dialog', { name: 'TOTP enrolment' });
       await dialog.getByText('FAKEAUTHCODE').waitFor();
+      expect(await dialog.getAttribute('data-no-session-dashboard-shortcut')).not.toBeNull();
       await page.keyboard.press('Escape');
       await dialog.waitFor({state:'detached'});
       expect(await page.getByText('FAKEAUTHCODE').count()).toBe(0);
@@ -129,6 +131,7 @@ for (const engine of [chromium, webkit]) {
       await page.getByRole('button', {name:'Open private authentication'}).click();
       const providerDialog = page.getByRole('dialog', { name: 'Provider authentication' });
       await providerDialog.getByText('PRIVATEDEVICE').waitFor();
+      expect(await providerDialog.getAttribute('data-no-session-dashboard-shortcut')).not.toBeNull();
       expect(await page.locator('.post').getByText('PRIVATEDEVICE').count()).toBe(0);
       expect(await providerDialog.locator('a').count()).toBe(1);
       // A committed server revision may arrive before the user submits the dialog.

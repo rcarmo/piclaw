@@ -120,7 +120,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
             default: return null;
         }
     }
-    return html`<section class="a2ui-surface" aria-busy=${pending} onClick=${(event: Event) => event.stopPropagation()}>
+    return html`<section class="a2ui-surface" data-no-session-dashboard-shortcut="" aria-busy=${pending} onClick=${(event: Event) => event.stopPropagation()}>
         ${renderComponent('root', 0) || block.fallback_text}
         ${totp && !disabled && html`<${A2uiTotpDialog} presentation=${totp.presentation} dismiss=${dismissTotp}
             confirm=${async (code: string) => {

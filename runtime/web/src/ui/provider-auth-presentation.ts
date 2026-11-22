@@ -72,7 +72,7 @@ function ProviderAuthDialog({ presentation, submit, dismiss }: { presentation: P
             if (!signal.signal.aborted) { setBusy(false); setError('Authentication action failed. Please try again or restart /login.'); }
         } finally { if (controller.current === signal) controller.current = null; }
     }
-    return html`<dialog ref=${dialog} class="a2ui-surface a2ui-private-dialog" aria-label="Provider authentication"
+    return html`<dialog ref=${dialog} class="a2ui-surface a2ui-private-dialog" data-no-session-dashboard-shortcut="" aria-label="Provider authentication"
         onCancel=${(event: Event) => { event.preventDefault(); dismiss(); }}>
         <form class="a2ui-column" onSubmit=${(event: SubmitEvent) => { event.preventDefault(); void run(confirmMethod); }} aria-busy=${busy}>
             <strong>Provider authentication</strong>
