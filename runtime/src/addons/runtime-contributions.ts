@@ -1,3 +1,4 @@
+import { publishAddonA2ui } from "../channels/web/a2ui/addon.js";
 import { addonLocalContextApi, setAddonLocalContextHost } from "./local-context.js";
 import { getCurrentAddonRegistrationOwner } from "./external-routes.js";
 import { mkdirSync, realpathSync } from "node:fs";
@@ -39,16 +40,6 @@ export interface AddonStatusPanelProvider {
   getPayload: (chatJid: string) => Promise<unknown> | unknown;
   runAction?: (action: string, payload: Record<string, unknown>) => Promise<unknown> | unknown;
 }
-
-export interface AddonAdaptiveCardIntentContext {
-  chatJid: string;
-  threadId?: string | null;
-  sourcePostId?: number | null;
-  rawSubmissionData: Record<string, unknown>;
-  sendMessage: (content: string, options?: { threadId?: string | null }) => Promise<void>;
-}
-
-export type AddonAdaptiveCardIntentHandler = (context: AddonAdaptiveCardIntentContext) => Promise<void> | void;
 
 export type AddonAgentMessageEnqueuer = (request: RuntimeAgentMessageRequest) => Promise<RuntimeAgentMessageResult>;
 
@@ -135,7 +126,7 @@ export interface PiclawRuntimeAddonApi {
     onShutdown(handler: () => void | Promise<void>): () => void;
   };
   registerStatusPanelProvider: (provider: AddonStatusPanelProvider) => () => void;
-  registerAdaptiveCardIntentHandler: (intent: string, handler: AddonAdaptiveCardIntentHandler) => () => void;
+  a2ui: { version: 1; post: typeof publishAddonA2ui };
   enqueueAgentMessage: AddonAgentMessageEnqueuer;
   messaging: PiclawRuntimeMessagingApiV1;
   localContext: typeof addonLocalContextApi;
@@ -164,7 +155,6 @@ type RuntimeGlobal = typeof globalThis & {
 
 const log = createLogger("addons.runtime-contributions");
 const statusPanelProviders = new Map<string, AddonStatusPanelProvider>();
-const adaptiveCardIntentHandlers = new Map<string, AddonAdaptiveCardIntentHandler>();
 const addonChatTransportUnregisters = new Set<() => void>();
 const addonRuntimeShutdownHandlers = new Set<() => void | Promise<void>>();
 const ADDON_RUNTIME_SHUTDOWN_TIMEOUT_MS = 4000;
@@ -255,17 +245,6 @@ export function registerAddonStatusPanelProvider(provider: AddonStatusPanelProvi
   return () => {
     if (statusPanelProviders.get(normalizedKey) === normalizedProvider) {
       statusPanelProviders.delete(normalizedKey);
-    }
-  };
-}
-
-export function registerAddonAdaptiveCardIntentHandler(intent: string, handler: AddonAdaptiveCardIntentHandler): () => void {
-  const normalizedIntent = typeof intent === "string" ? intent.trim() : "";
-  if (!normalizedIntent || typeof handler !== "function") return () => {};
-  adaptiveCardIntentHandlers.set(normalizedIntent, handler);
-  return () => {
-    if (adaptiveCardIntentHandlers.get(normalizedIntent) === handler) {
-      adaptiveCardIntentHandlers.delete(normalizedIntent);
     }
   };
 }
@@ -364,7 +343,7 @@ export function installAddonRuntimeApi(): PiclawRuntimeAddonApi {
     authenticatedSockets: { version: 1, register: registerAuthenticatedWebSocket },
     lifecycle: { version: 1, onShutdown: registerAddonRuntimeShutdownHandler },
     registerStatusPanelProvider: registerAddonStatusPanelProvider,
-    registerAdaptiveCardIntentHandler: registerAddonAdaptiveCardIntentHandler,
+    a2ui: { version: 1, post: publishAddonA2ui },
     enqueueAgentMessage: enqueueAgentMessageViaRuntime,
     localContext: addonLocalContextApi,
     messaging: {
@@ -473,25 +452,12 @@ export async function runAddonStatusPanelAction(
   return await provider.runAction(String(action || "").trim(), payload);
 }
 
-export async function runAddonAdaptiveCardIntent(
-  intent: string,
-  context: AddonAdaptiveCardIntentContext,
-): Promise<boolean> {
-  requireSingleUserAddonRuntime("Add-on Adaptive Card intents");
-  await ensureAddonRuntimeEntriesLoaded();
-  const handler = adaptiveCardIntentHandlers.get(String(intent || "").trim());
-  if (!handler) return false;
-  await handler(context);
-  return true;
-}
-
 export async function shutdownAddonRuntimeContributionsForTests(): Promise<void> {
   await shutdownAddonRuntimeContributions();
 }
 
 export function resetAddonRuntimeContributionsForTests(): void {
   statusPanelProviders.clear();
-  adaptiveCardIntentHandlers.clear();
   for (const unregister of [...addonChatTransportUnregisters]) unregister();
   addonChatTransportUnregisters.clear();
   addonRuntimeShutdownHandlers.clear();

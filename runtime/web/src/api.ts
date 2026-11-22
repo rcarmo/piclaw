@@ -654,25 +654,6 @@ export async function respondToAgentRequest(requestId, outcome, chatJid = null) 
     return response.json();
 }
 
-/**
- * Submit an Adaptive Card action back to the web channel.
- */
-export async function submitAdaptiveCardAction(payload, options: { signal?: AbortSignal } = {}) {
-    const response = await fetch(API_BASE + '/agent/card-action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: options.signal,
-    });
-
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Adaptive Card action failed' }));
-        throw new Error(error.error || `HTTP ${response.status}`);
-    }
-
-    return response.json();
-}
-
 export async function streamSidePrompt(prompt, options: ApiOptions = {}) {
     const response = await fetch(API_BASE + '/agent/side-prompt/stream', {
         method: 'POST',
@@ -1221,4 +1202,9 @@ export async function savePostAnnotations(postId: number, annotations: unknown[]
         method: 'PATCH',
         body: JSON.stringify({ annotations }),
     });
+}
+
+/** Submit a revision-bound A2UI event. */
+export function submitA2uiAction(payload: import('../../src/channels/web/a2ui/action.js').A2uiActionRequest, options: { signal?: AbortSignal } = {}) {
+    return request('/agent/a2ui-action', { method: 'POST', body: JSON.stringify(payload), signal: options.signal });
 }

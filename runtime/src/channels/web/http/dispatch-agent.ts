@@ -1,3 +1,4 @@
+import { handleA2uiAction } from "../a2ui/admission.js";
 import { handlePlan } from "../handlers/plan.js";
 import { captureHostDatabaseBinding } from "../../../db/connection.js";
 import { captureWebRequestAuthority } from "../auth/auth-gateway.js";
@@ -73,6 +74,7 @@ interface ExactAgentRoute {
 }
 
 const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
+  { method: "POST", path: "/agent/a2ui-action", handle: handleA2uiAction },
   { method: "GET", path: "/agent/plan", handle: handlePlan },
   { method: "POST", path: "/agent/plan", handle: handlePlan },
   { method: "POST", path: "/agent/models/refresh", handle: handleModelCatalogRefresh },
@@ -306,11 +308,6 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     method: "POST",
     path: "/agent/respond",
     handle: (channel, req) => channel.handleAgentRespond(req),
-  },
-  {
-    method: "POST",
-    path: "/agent/card-action",
-    handle: (channel, req) => channel.handleAdaptiveCardAction(req),
   },
   {
     method: "GET",

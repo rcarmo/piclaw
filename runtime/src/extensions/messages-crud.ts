@@ -1,3 +1,4 @@
+import { isRetiredContentBlock } from "../core/retired-content-blocks.js";
 import { admitSqliteWrite } from "../db/sqlite-async-admission.js";
 /**
  * messages-crud – unified message CRUD tool for internal agent operations.
@@ -109,7 +110,7 @@ export const MessagesSchema = Type.Object({
   ),
   content_blocks: Type.Optional(
     Type.Array(Type.Unknown(), {
-      description: "Structured content blocks (e.g. adaptive_card) for post action.",
+      description: "Structured presentation blocks for post action. Use send_a2ui for interactive forms.",
     }),
   ),
   dry_run: Type.Optional(Type.Boolean({ description: "For delete/move actions, report planned changes without applying." })),
@@ -388,7 +389,7 @@ function parseMessageContentBlocks(raw: string | null | undefined): unknown[] | 
   if (!raw) return undefined;
   try {
     const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? parsed : undefined;
+    return Array.isArray(parsed) ? parsed.filter(block => !isRetiredContentBlock(block)) : undefined;
   } catch {
     return undefined;
   }

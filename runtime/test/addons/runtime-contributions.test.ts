@@ -7,7 +7,6 @@ import {
   initializeStartupAddonRuntime,
   installAddonRuntimeApi,
   resetAddonRuntimeContributionsForTests,
-  runAddonAdaptiveCardIntent,
   runAddonStatusPanelAction,
   setAddonAgentMessageEnqueuer,
   setAddonMessagingRuntimeHandlers,
@@ -21,7 +20,7 @@ import {
   isExternalAddonRouteRegistryFrozen,
 } from "../../src/addons/external-routes.js";
 
-test("installed addon runtime entries register status panel, card-intent, and stream-session handlers", async () => {
+test("installed addon runtime entries register status panel and stream-session handlers", async () => {
   resetAddonRuntimeContributionsForTests();
   await withTempWorkspaceEnv("piclaw-addon-runtime-", {}, async (workspace) => {
     const addonDir = join(workspace.workspace, ".pi", "extensions", "node_modules", "piclaw-addon-example");
@@ -46,9 +45,6 @@ api?.registerStatusPanelProvider?.({
   runAction(action, payload) {
     return { action, payload };
   },
-});
-api?.registerAdaptiveCardIntentHandler?.("example-intent", async (context) => {
-  await context.sendMessage("handled:" + String(context.rawSubmissionData.value || ""), { threadId: context.threadId });
 });
 const stream = api?.streamSessions?.open?.({
   chatJid: "web:test",
@@ -81,20 +77,9 @@ export {};
       payload: { chat_jid: "web:test" },
     });
 
-    const messages: string[] = [];
-    const handled = await runAddonAdaptiveCardIntent("example-intent", {
-      chatJid: "web:test",
-      threadId: "thread-1",
-      rawSubmissionData: { value: "ok" },
-      sendMessage: async (content) => {
-        messages.push(content);
-      },
-    });
-
-    expect(handled).toBe(true);
-    expect(messages).toEqual(["handled:ok"]);
-
     const runtimeApi = (globalThis as any).__piclaw_runtime;
+    expect(runtimeApi.a2ui).toMatchObject({ version: 1, post: expect.any(Function) });
+    expect(runtimeApi.registerAdaptiveCardIntentHandler).toBeUndefined();
     const sessions = runtimeApi.streamSessions.list({ chatJid: "web:test", toolName: "portainer" });
     expect(sessions).toHaveLength(1);
     expect(sessions[0]).toMatchObject({

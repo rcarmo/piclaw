@@ -50,8 +50,6 @@ const EXPECTED_BUILTIN_TOOL_NAMES = [
   // workspace-search
   "search_workspace",
   "refresh_workspace_index",
-  // send-adaptive-card
-  "send_adaptive_card",
   // send-dashboard-widget
   "send_dashboard_widget",
   // chat-tool
@@ -147,6 +145,7 @@ describe("built-in extension tool catalog regression", () => {
       "office_read", "office_write",                  // packaged office tools
       "start_autoresearch", "stop_autoresearch", "autoresearch_status", // addon-provided experiment tools
       "schedule_task",                                // registered by task scheduler, not extension factory
+      "send_a2ui", // native A2UI surface publisher, not a legacy extension
       "exit_process",                                 // native process-control owner, not legacy extension factory
     ]);
 

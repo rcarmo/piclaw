@@ -5,7 +5,7 @@ This document defines the supported extension UI surfaces in Piclaw's web app.
 Piclaw supports four extension UI surfaces:
 
 1. **Pane extensions** are the first-class host for substantial tool or file UI.
-2. **Adaptive Cards and normal timeline messages** are preferred for structured conversation UI that belongs in chat history.
+2. **A2UI surfaces and normal timeline messages** are preferred for structured conversation UI that belongs in chat history.
 3. **Add-on settings panes** use the direct backend add-on config API.
 4. **`extension_ui_*` events** remain a low-level compatibility bridge for lightweight browser-session integrations; they are not a full plugin UI framework.
 
@@ -14,7 +14,7 @@ Piclaw supports four extension UI surfaces:
 | UI need | Preferred surface | Why |
 |---|---|---|
 | File editors, viewers, dashboards, tool panes, persistent chrome-adjacent UI | **Web pane extension** | First-class host model with tabs/dock lifecycle |
-| Structured chat decisions, approvals, forms, receipts | **Adaptive Cards / timeline messages** | Persisted, agent-owned, reconnect-safe, visible in history |
+| Structured chat decisions, approvals, forms, receipts | **A2UI surfaces / timeline messages** | Persisted, agent-owned, reconnect-safe, visible in history |
 | Add-on settings inside **Settings** | **Add-on web settings pane + direct backend config API** | Browser-side pane with explicit local config transport |
 | Lightweight web-only signals for an already-open browser session | **`extension_ui_*` bridge** | Minimal compatibility path for browser event consumers |
 
@@ -32,14 +32,14 @@ If an extension needs a real surface with mounting, focus, resize, disposal, and
 
 See [web-pane-extensions.md](web-pane-extensions.md) for the pane contract.
 
-## Structured conversation UI: Adaptive Cards and timeline messages
+## Structured conversation UI: A2UI surfaces and timeline messages
 
 If the interaction should be visible in conversation history, survive reconnects, or be attributable to the agent/user, prefer timeline-native UI:
 
 - normal messages
 - attachments
-- Adaptive Cards
-- persisted Adaptive Card submission receipts
+- A2UI surfaces
+- submitted input in the source thread
 
 This is the preferred path for:
 
@@ -139,8 +139,8 @@ Extension authors should treat the bridge as a **transport + lightweight afforda
 |---|---|
 | Open a custom viewer/editor/tool | Pane extension |
 | Need a long-lived panel or dock | Pane extension |
-| Need a structured yes/no/choice form in chat history | Adaptive Card |
-| Need a compact success/failure/result message in history | Normal timeline message or Adaptive Card receipt |
+| Need a structured yes/no/choice form in chat history | A2UI form |
+| Need a compact success/failure/result message in history | Normal timeline message or A2UI submission |
 | Need a transient browser-only notification | `extension_ui_notify` |
 | Need browser-only status updates for custom JS UI | `extension_ui_status` / `extension_ui_working` |
 | Need a bespoke browser-side request/response UI | `extension_ui_request` with your own browser listener |
@@ -172,7 +172,7 @@ If the interaction needs those properties, prefer a pane extension or timeline-n
 Use this decision order:
 
 1. **Should this live in history?**
-   - Yes → timeline message / Adaptive Card.
+   - Yes → timeline message / A2UI form.
 2. **Is this an add-on settings surface inside Settings?**
    - Yes → add-on web settings pane + direct backend config API.
 3. **Does this need a persistent mounted UI surface?**

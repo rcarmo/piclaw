@@ -58,7 +58,7 @@ These historical acceptance limits do not describe #1324 validation or authorise
 | All fifteen Classic built-in Settings sections | settings-001–030, including General, Sessions, Quick Actions, Tools, Add-ons, Compaction, Budget, Keyboard, Scheduled Tasks, Workspace, Environment, Providers, Models, Appearance and Keychain |
 | Registered Editor/Developer settings | settings-031–032; local browser preferences, no server save |
 | Workspace/viewers/editor/terminal/VNC | workspace-001–018 plus editor/terminal regressions; unsupported in-pane search not invented |
-| BTW/Adaptive Cards/widgets | extra-001–005; live and persisted widget lifecycles distinguished |
+| BTW/A2UI forms/widgets | extra-001–005; live and persisted widget lifecycles distinguished |
 | Visual search/tasks/scratchpad | extra-006–010; scoped Visual behaviour |
 | Notifications/recovery | extra-011–013; General recovery preferences; outcome marker timeline feature |
 | Mobile/PWA | pwa-001–006, mobile scenarios and responsive/focus dimensions in other features; installation is browser-controlled |

@@ -88,7 +88,6 @@ describe("web http agent dispatch", () => {
       handleAgentBranchRestore: async () => new Response("branch-restore", { status: 212 }),
       handleAgentPeerMessage: async () => new Response("peer-message", { status: 208 }),
       handleAgentRespond: async () => new Response("respond"),
-      handleAdaptiveCardAction: async () => new Response("card-action", { status: 205 }),
       handleAgentSidePrompt: async () => new Response("side-prompt", { status: 206 }),
       handleAgentSidePromptStream: async () => new Response("side-prompt-stream", { status: 207 }),
       json: (_payload: unknown, status: number) => new Response("err", { status }),
@@ -179,7 +178,7 @@ describe("web http agent dispatch", () => {
     expect(await (await handleAgentRoutes(channel, respondReq, "/agent/respond", new URL(respondReq.url)))?.text()).toBe("respond");
 
     const cardReq = new Request("https://example.com/agent/card-action", { method: "POST" });
-    expect((await handleAgentRoutes(channel, cardReq, "/agent/card-action", new URL(cardReq.url)))?.status).toBe(205);
+    expect((await handleAgentRoutes(channel, cardReq, "/agent/card-action", new URL(cardReq.url)))).toBeNull();
 
     const vapidReq = new Request("https://example.com/agent/push/vapid-public-key", { method: "GET" });
     expect((await handleAgentRoutes(channel, vapidReq, "/agent/push/vapid-public-key", new URL(vapidReq.url)))?.status).toBe(200);

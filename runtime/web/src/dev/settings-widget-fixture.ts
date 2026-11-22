@@ -110,7 +110,7 @@ const mockSettingsData = {
   colorKeys: ['bgPrimary', 'bgSecondary', 'textPrimary', 'textSecondary', 'borderColor', 'accent', 'danger', 'success'],
   toolsets: [
     { name: 'core', description: 'Core shell and file tools', tools: [{ name: 'read', kind: 'read-only' }, { name: 'bash', kind: 'mutating' }] },
-    { name: 'ui', description: 'Web UI posting tools', tools: [{ name: 'send_dashboard_widget', kind: 'mutating' }, { name: 'send_adaptive_card', kind: 'mutating' }] },
+    { name: 'ui', description: 'Web UI posting tools', tools: [{ name: 'send_dashboard_widget', kind: 'mutating' }, { name: 'send_a2ui', kind: 'mutating' }] },
     { name: 'remote', description: 'Infrastructure tools', tools: [{ name: 'ssh', kind: 'mixed' }, { name: 'proxmox', kind: 'mixed' }, { name: 'portainer', kind: 'mixed' }] },
   ],
 };

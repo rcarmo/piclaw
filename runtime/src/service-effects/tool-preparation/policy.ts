@@ -44,7 +44,6 @@ const CURRENT_AUTHORITY_PATHS: Readonly<Record<string, string>> = Object.freeze(
   chat: "runtime/src/extensions/chat-tool.ts resolves the live session-tree registry and installed one-hop chat transport before delivery.",
   chat_project: "runtime/src/extensions/chat-project.ts validates and persists the current chat's repository through the branch-owned SQLite project store.",
   session_control: "runtime/src/extensions/session-control.ts resolves and mutates the current AgentPool/session registry lane directly.",
-  send_adaptive_card: "runtime/src/extensions/send-adaptive-card.ts writes the messages SQLite timeline and broadcasts the adaptive-card block over web SSE to the renderer.",
   send_dashboard_widget: "runtime/src/extensions/send-dashboard-widget.ts writes the messages SQLite timeline and broadcasts widget metadata over web SSE to the pane renderer.",
   attach_file: "runtime/src/extensions/file-attachments.ts uses the attachment registry, workspace filesystem, media persistence, and timeline delivery path.",
   read_attachment: "runtime/src/extensions/file-attachments.ts reads the current attachment/media persistence and returns bounded decoded bytes.",
@@ -280,7 +279,7 @@ const entries = Object.freeze([
     authorityRationale: "Mutating control paths persist cancellation/queue authority in ServiceWorkStore.", idempotencyIdentity: "operation ID and owner/version plus request hash",
     certainty: "Stale lane results fail the owner/version fence.", activationPrerequisites: ["query/mutation dispatch", "EF-S01 control API", "selected harness/lane dependency"],
   }),
-  ...servicePolicy(["send_adaptive_card", "send_dashboard_widget"], {
+  ...servicePolicy(["send_dashboard_widget"], {
     effectClass: "mutation", replay: "never", contextFields: ["chatJid", "operationId"], abortExpectation: "may_finish_late", serviceEffector: "EF-S03",
     authorityRationale: "TimelineDraftStore owns non-terminal operation drafts/service notices.", idempotencyIdentity: "operation ID, draft kind and revision plus payload hash",
     certainty: "Equal draft identity reconciles; changed hash conflicts; broadcast remains outside the store.", activationPrerequisites: ["EF-S03 draft API", "post-commit broadcast driver", "selected tagged Harness v3"],

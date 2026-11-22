@@ -21,7 +21,7 @@ describe("web channel constructor wiring factory", () => {
     const broadcastCalls: string[] = [];
     const queueCalls: Array<{ key: string; laneKey?: string }> = [];
     const sends: unknown[][] = [];
-    let sidePromptOptions: Parameters<WebChannelConstructorFactoryDeps["createAdaptiveCardSidePromptService"]>[0] | undefined;
+    let sidePromptOptions: Parameters<WebChannelConstructorFactoryDeps["createSidePromptService"]>[0] | undefined;
     const processCalls: Array<{ chatJid: string; agentId: string; threadRootId?: number | null }> = [];
     const storeCalls: Array<{
       chatJid: string;
@@ -66,8 +66,8 @@ describe("web channel constructor wiring factory", () => {
       handleVncSession: (_req: Request) => new Response("vnc-session"),
       handleVncHandoff: async (_req: Request) => new Response("vnc-handoff"),
     } as unknown as ReturnType<WebChannelConstructorFactoryDeps["createTerminalVncHttpService"]>;
-    const adaptiveCardSidePromptService = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createAdaptiveCardSidePromptService"]>>(
-      "adaptive-card-side-prompt",
+    const sidePromptService = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createSidePromptService"]>>(
+      "side-prompt",
     );
     const peerMessageRelayService = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createPeerMessageRelayService"]>>("peer-message-relay");
 
@@ -125,7 +125,6 @@ describe("web channel constructor wiring factory", () => {
         internalSecret: "internal-secret",
         sessionTtl: 1800,
         terminalEnabled: true,
-        debugCardSubmissions: true,
         totpWindow: 2,
       },
     };
@@ -210,16 +209,12 @@ describe("web channel constructor wiring factory", () => {
         expect(configs).toEqual({ webRuntimeConfig: options.webRuntimeConfig });
         return terminalVncHttpService;
       },
-      createAdaptiveCardSidePromptService: (serviceOptions) => {
-        creationOrder.push("adaptiveCardSidePromptService");
+      createSidePromptService: (serviceOptions) => {
+        creationOrder.push("sidePromptService");
         sidePromptOptions = serviceOptions;
         expect(serviceOptions.defaultChatJid).toBe("web:default");
-        expect(serviceOptions.defaultAgentId).toBe("default");
-        expect(serviceOptions.webRuntimeConfig).toEqual(options.webRuntimeConfig);
-        expect(serviceOptions.authGateway).toBe(authGateway);
-        expect(serviceOptions.interactionBroadcaster).toBe(interactionBroadcaster);
         expect(serviceOptions.agentPool).toBe(channel.agentPool);
-        return adaptiveCardSidePromptService;
+        return sidePromptService;
       },
       createPeerMessageRelayService: (seenChannel, defaults) => {
         creationOrder.push("peerMessageRelayService");
@@ -249,15 +244,15 @@ describe("web channel constructor wiring factory", () => {
       "endpointContexts",
       "controlPlaneService",
       "serverLifecycleGateway",
-      "adaptiveCardSidePromptService",
+      "sidePromptService",
       "peerMessageRelayService",
     ]);
 
     expect(result.sessionBroadcast).toBe(sessionBroadcast);
     expect(result.runtimeState).toBe(runtimeState);
     expect(result).not.toHaveProperty("runtimeFollowupFacade");
-    await sidePromptOptions?.sendMessage?.("web:side-prompt", "reply", { threadId: 4 });
-    expect(sends).toEqual([["web:side-prompt", "reply", { threadId: 4 }]]);
+    expect((await sidePromptOptions!.json({ ready: true }, 201).json())).toEqual({ ready: true });
+    expect(sends).toEqual([]);
     expect(result.interactionBroadcaster).toBe(interactionBroadcaster);
     expect(result.authGateway).toBe(authGateway);
     expect(result).not.toHaveProperty("messageProcessingStorageService");
@@ -268,7 +263,7 @@ describe("web channel constructor wiring factory", () => {
     expect(result.controlPlaneService).toBe(controlPlaneService);
     expect(result.serverLifecycleGateway).toBe(serverLifecycleGateway);
     expect(result.terminalVncHttpService).not.toBe(terminalVncHttpService);
-    expect(result.adaptiveCardSidePromptService).toBe(adaptiveCardSidePromptService);
+    expect(result.sidePromptService).toBe(sidePromptService);
     expect(result.peerMessageRelayService).toBe(peerMessageRelayService);
 
     expect(authConfig).toEqual({

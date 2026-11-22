@@ -95,8 +95,8 @@ export async function nativePreflight(contract: NativeContract, env: Record<stri
   const fixtures: Record<string, { path: string; repository: string; commit: string; lockSha256: string }> = {};
   for (const key of selectionKeys) if (env[key]) problems.push(`unset ${key}: canonical qualification cannot inherit selection/dependency-root overrides/child mode/options`);
   if (Bun.version !== readFileSync(join(root, 'BUN_VERSION'), 'utf8').trim()) problems.push('Use the repository BUN_VERSION before qualification');
-  const requiredRoots = { DURABLE_ADDONS_ROOT: 'native', DURABLE_CORE_ADDONS_ROOT: 'native', DURABLE_GOAL_ADDON_ROOT: 'native', DURABLE_CONTRACT_ADDONS_ROOT: 'contract' };
-  if (JSON.stringify(Object.entries(contract.roots).sort()) !== JSON.stringify(Object.entries(requiredRoots).sort())) problems.push('Contract must retain all four explicit fixture roots');
+  const requiredRoots = { DURABLE_ADDONS_ROOT: 'native', DURABLE_CORE_ADDONS_ROOT: 'native', DURABLE_GOAL_ADDON_ROOT: 'native', DURABLE_CONTRACT_ADDONS_ROOT: 'contract', DURABLE_AUTORESEARCH_ROOT: 'autoresearch' };
+  if (JSON.stringify(Object.entries(contract.roots).sort()) !== JSON.stringify(Object.entries(requiredRoots).sort())) problems.push('Contract must retain all five explicit fixture roots');
   for (const [key, fixtureName] of Object.entries(requiredRoots)) {
     const pin = contract.fixtures[fixtureName];
     if (!pin || pin.repository !== 'rcarmo/piclaw-addons' || !/^[0-9a-f]{40}$/.test(pin.ref)) {
@@ -117,7 +117,7 @@ export async function nativePreflight(contract: NativeContract, env: Record<stri
       fixtures[key] = { path, repository: pin.repository, commit: pin.ref, lockSha256: digest(join(path, 'bun.lock')) };
     } catch (error) { problems.push(`${key}: ${String(error)}`); }
   }
-  const nativePaths = new Set(Object.entries(fixtures).filter(([key]) => key !== 'DURABLE_CONTRACT_ADDONS_ROOT').map(([, value]) => value.path));
+  const nativePaths = new Set(Object.entries(fixtures).filter(([key]) => requiredRoots[key as keyof typeof requiredRoots] === 'native').map(([, value]) => value.path));
   if (nativePaths.size > 1) problems.push('DURABLE_ADDONS_ROOT, DURABLE_CORE_ADDONS_ROOT and DURABLE_GOAL_ADDON_ROOT must select the same physical native checkout');
   const catalog = env.DURABLE_CATALOG_DEPENDENCIES;
   const expectedCatalog = join(root, contract.catalogDependencies);

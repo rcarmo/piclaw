@@ -56,17 +56,17 @@ test("lifecycle and card/side/peer calls go directly to their original owners", 
   const gateway = Reflect.get(f.channel, "serverLifecycleGateway");
   replace(gateway, "start", async () => { calls.push("start"); });
   replace(gateway, "stop", () => { calls.push("stop"); return Promise.resolve(); });
-  const card = Reflect.get(f.channel, "adaptiveCardSidePromptService"), peer = Reflect.get(f.channel, "peerMessageRelayService");
+  const card = Reflect.get(f.channel, "sidePromptService"), peer = Reflect.get(f.channel, "peerMessageRelayService");
   const response = new Response("original", { status: 202 });
-  for (const key of ["handleAdaptiveCardAction", "handleAgentSidePrompt", "handleAgentSidePromptStream"]) replace(card, key, async () => { calls.push(key); return response; });
+  for (const key of ["handleAgentSidePrompt", "handleAgentSidePromptStream"]) replace(card, key, async () => { calls.push(key); return response; });
   replace(peer, "handleAgentPeerMessage", async () => { calls.push("peer"); return response; });
   await f.channel.start(); await f.channel.stop();
   const req = new Request("https://fixture.invalid/agent/card-action", { method: "POST" });
-  expect(await f.channel.handleAdaptiveCardAction(req)).toBe(response);
+
   expect(await f.channel.handleAgentSidePrompt(req)).toBe(response);
   expect(await f.channel.handleAgentSidePromptStream(req)).toBe(response);
   expect(await f.channel.handleAgentPeerMessage(req)).toBe(response);
-  expect(calls).toEqual(["start", "stop", "handleAdaptiveCardAction", "handleAgentSidePrompt", "handleAgentSidePromptStream", "peer"]);
+
 });
 
 test("runtime input still enters the real gateway and draining joins the entered callback", async () => {

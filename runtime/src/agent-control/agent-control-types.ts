@@ -183,6 +183,8 @@ export type AgentControlCommand =
   | {
       type: "login";
       provider?: string;
+      /** Constructed only by the owned provider surface, never by slash parsing. */
+      interaction?: { step: "step1" | "step1method" | "step2" | "step3"; data: Record<string, unknown> };
       raw: string;
     }
   | {
@@ -284,14 +286,13 @@ export interface AgentControlResult {
   source_chat_jid?: string;
   /** Optional media attachment ids to include with the response message. */
   mediaIds?: number[];
-  /** Optional adaptive card content blocks to include with the response message. */
+  /** Optional structured timeline content blocks to include with the response message. */
   contentBlocks?: unknown[];
   /** Sensitive provider UI data: direct authenticated response only, never timeline content. */
   authPresentation?: {
     expires_at: number;
     events: import("@earendil-works/pi-ai").AuthEvent[];
     prompt: Omit<import("@earendil-works/pi-ai").AuthPrompt, "signal"> | null;
-    action_data: Record<string, string>;
   };
   /** Fresh context indicator payload to broadcast after commands that rewrite context. */
   contextUsage?: {

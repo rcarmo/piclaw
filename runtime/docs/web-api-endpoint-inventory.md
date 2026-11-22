@@ -95,7 +95,7 @@ The route tables below describe single-user guards. “Authenticated” means th
 | POST | `/agent/branch-prune` | `dispatch-agent.ts` | authenticated | yes | `data/agent_branch` | status JSON |
 | POST | `/agent/peer-message` | `dispatch-agent.ts` | authenticated | yes | `data/agent_peer` | status/queued JSON |
 | POST | `/agent/respond` | `dispatch-agent.ts` | authenticated | yes | `data/agent_ui` | `{ status: "ok" }` |
-| POST | `/agent/card-action` | `dispatch-agent.ts` | authenticated | yes | `data/agent_ui` | card action result JSON; recovery cards can resolve held failed runs before forwarding the follow-up prompt |
+| POST | `/agent/a2ui-action` | `dispatch-agent.ts` | authenticated | yes | `data/agent_ui` | revision-bound A2UI action result; ordinary and recovery actions use native input admission prompt |
 | POST | `/agent/side-prompt` | `dispatch-agent.ts` | authenticated | yes | `data/agent_side_prompt` | JSON side-prompt result |
 | POST | `/agent/side-prompt/stream` | `dispatch-agent.ts` | authenticated | yes | `data/agent_side_prompt` | SSE-like streamed response |
 | POST | `/agent/whitelist` | `dispatch-agent.ts` | authenticated | yes | none | deprecated stub returning 404 |
@@ -170,7 +170,7 @@ The web agent surface now follows a stricter rule:
 - `POST /agent/:id/message`
   - normal messages may leave a held failed run when recovery is exhausted and no terminal reply is persisted
   - successful `/model ...` commands sent through this same route now **retry** a held failed run by rewinding to `prevTs` and resuming the chat
-- `POST /agent/card-action`
+- `POST /agent/a2ui-action`
   - recovery-card actions such as **Continue** and **Retry cleanly** first **skip** the held failed run so the recovery follow-up prompt is not blocked behind the unresolved failure marker
 - `GET /agent/status`
   - remains the live in-memory status surface; the held failed-run state itself is durable DB state rather than a separate new endpoint family

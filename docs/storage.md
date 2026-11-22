@@ -80,7 +80,7 @@
 
 Remote Peer state belongs to the installed add-on. The obsolete core `remote_*` tables are removed by `dropObsoleteRemoteInteropSchema`; they are not a current storage API.
 
-Attachment binaries and metadata live in `media`, with message links in `message_media`. Message records use `content_blocks` for structured file/image metadata, Adaptive Cards, and `adaptive_card_submission` receipts; `link_previews` stores preview JSON separately. Token usage rows include `model`, `provider`, and `api` for per-model tracking.
+Attachment binaries and metadata live in `media`, with message links in `message_media`. Message records use `content_blocks` for structured file/image metadata, and A2UI snapshots with revision and receipt metadata; `link_previews` stores preview JSON separately. Token usage rows include `model`, `provider`, and `api` for per-model tracking.
 
 The browser keeps local UI memory that should not become shared backend state out of SQLite. That includes dismissal and seen state for the context compaction affordance. The backend decides whether the underlying context condition currently applies; the browser stores only lightweight local UI state.
 

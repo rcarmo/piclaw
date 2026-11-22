@@ -140,14 +140,14 @@ describe("messages tool extension", () => {
   });
 
   test("search/get include persisted content_blocks payloads", async () => {
-    insertMessage("Message with blocks", { content_blocks: [{ type: "adaptive_card", card_id: "ticket" }] });
+    insertMessage("Message with blocks", { content_blocks: [{ type: "text", text: "ticket" }] });
 
     const { tool } = await getTool();
     const search = await runWithContext(tool, { action: "search", query: "Message with blocks" });
     expect(search.details.count).toBe(1);
     expect(Array.isArray(search.details.results[0].content_blocks)).toBe(true);
     expect(search.details.results[0].content_blocks).toEqual([
-      { type: "adaptive_card", card_id: "ticket" },
+      { type: "text", text: "ticket" },
     ]);
 
     const rowId = search.details.results[0].rowid;
@@ -155,7 +155,7 @@ describe("messages tool extension", () => {
     expect(get.details.count).toBe(1);
     expect(Array.isArray(get.details.messages[0].message.content_blocks)).toBe(true);
     expect(get.details.messages[0].message.content_blocks).toEqual([
-      { type: "adaptive_card", card_id: "ticket" },
+      { type: "text", text: "ticket" },
     ]);
   });
 
@@ -656,7 +656,7 @@ describe("messages tool extension", () => {
 
     setMessagesPostFn(fakePostFn);
     const result = await postMessagesToolMessage(
-      { action: "post", type: "agent", content: "Agent card message", content_blocks: [{ type: "adaptive_card", card_id: "test-abc" }] },
+      { action: "post", type: "agent", content: "Agent structured message", content_blocks: [{ type: "text", text: "test-abc" }] },
       chatJid,
     );
 
@@ -664,8 +664,8 @@ describe("messages tool extension", () => {
     expect(result.details.row_id).toBe(99999);
     expect(calls).toHaveLength(1);
     expect(calls[0].isBot).toBe(true);
-    expect(calls[0].content).toBe("Agent card message");
-    expect(calls[0].contentBlocks).toEqual([{ type: "adaptive_card", card_id: "test-abc" }]);
+    expect(calls[0].content).toBe("Agent structured message");
+    expect(calls[0].contentBlocks).toEqual([{ type: "text", text: "test-abc" }]);
   });
 
   test("post strips forged protected-recovery control intents before broadcast", async () => {

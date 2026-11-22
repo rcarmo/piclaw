@@ -259,8 +259,8 @@ export const TOOL_PREPARATION_MANIFEST: readonly ToolPreparationSpec[] = Object.
     abortExpectation: "may_finish_late",
     protectedFields: ["result.content", "result.details"],
   }),
-  ...rows(["send_adaptive_card", "send_dashboard_widget"], {
-    currentSource: "runtime/src/extensions/send-adaptive-card.ts; runtime/src/extensions/send-dashboard-widget.ts",
+  ...rows(["send_dashboard_widget"], {
+    currentSource: "runtime/src/extensions/send-dashboard-widget.ts",
     effectClass: "mutation",
     replay: "never",
     contextFields: ["chatJid", "operationId"],

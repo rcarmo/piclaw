@@ -41,15 +41,17 @@ async function setup(extraEnv: Record<string, string | undefined> = {}) {
 
   const passkey = (await import(`../../src/agent-control/handlers/passkey.js${token}`)) as typeof import("../../src/agent-control/handlers/passkey.js");
   const totp = (await import(`../../src/agent-control/handlers/totp.js${token}`)) as typeof import("../../src/agent-control/handlers/totp.js");
-  const totpCard = (await import(`../../src/channels/web/auth/totp-card.js`)) as typeof import("../../src/channels/web/auth/totp-card.js");
-
-  return { db, config, passkey, totp, totpCard };
+  return { db, config, passkey, totp };
 }
 
-function extractTotpCardState(result: { contentBlocks?: unknown[] }, totpCard: typeof import("../../src/channels/web/auth/totp-card.js")) {
-  const block = Array.isArray(result.contentBlocks) ? (result.contentBlocks[0] as Record<string, any> | undefined) : undefined;
-  const token = block?.payload?.actions?.[0]?.data?.__totp_token;
-  return typeof token === "string" ? totpCard.parseTotpCardToken(token) : { ok: false as const, error: "missing" as const };
+function expectPrivateTotpSurface(result: { contentBlocks?: unknown[] }, title: string) {
+  const block = result.contentBlocks?.[0];
+  expect(block).toMatchObject({ type: 'a2ui_surface', owner: 'totp', state: 'active', fallback_text: title,
+    surface: { dataModel: {} } });
+  const encoded = JSON.stringify(block);
+  expect(encoded).not.toContain('otpauth:');
+  expect(encoded).not.toContain('base64');
+  expect(encoded).not.toContain('secretHash');
 }
 
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -124,8 +126,8 @@ test("handlePasskey enrol redirects to browser-bound Settings without creating a
   expect(enrol.message).toContain("no enrolment link");
 });
 
-test("handleTotp validates action and returns a single-card setup flow without committing immediately", async () => {
-  const { config, totp, totpCard } = await setup();
+test("handleTotp validates action and returns a protected setup surface without committing immediately", async () => {
+  const { config, totp } = await setup();
 
   const badAction = await totp.handleTotp({} as any, { type: "totp", action: "noop" } as any);
   expect(badAction.status).toBe("error");
@@ -137,26 +139,17 @@ test("handleTotp validates action and returns a single-card setup flow without c
   expect(generated.message).toContain("Nothing is saved until confirmation succeeds");
   expect(config.WEB_RUNTIME_CONFIG.totpSecret).toBe("");
 
-  const parsed = extractTotpCardState(generated, totpCard);
-  expect(parsed.ok).toBe(true);
-  if (parsed.ok) {
-    expect(parsed.state.flow).toBe("setup");
-    expect(parsed.state.secret).not.toBe("");
-  }
+  expectPrivateTotpSurface(generated, 'Set up TOTP');
 });
 
 test("handleTotp reuses the active secret for secondary-device setup and stages reset without committing", async () => {
   const secret = "CURRENTSECRET";
-  const { config, totp, totpCard } = await setup({ PICLAW_WEB_TOTP_SECRET: secret });
+  const { config, totp } = await setup({ PICLAW_WEB_TOTP_SECRET: secret });
 
   const secondary = await totp.handleTotp({} as any, { type: "totp" } as any);
   expect(secondary.status).toBe("success");
-  const secondaryState = extractTotpCardState(secondary, totpCard);
-  expect(secondaryState.ok).toBe(true);
-  if (secondaryState.ok) {
-    expect(secondaryState.state.flow).toBe("secondary");
-    expect(secondaryState.state.secret).toBe(secret);
-  }
+  expectPrivateTotpSurface(secondary, 'Add another TOTP device');
+  expect(JSON.stringify(secondary)).not.toContain(secret);
 
   const missingCode = await totp.handleTotp({} as any, { type: "totp", action: "reset" } as any);
   expect(missingCode.status).toBe("error");
@@ -172,10 +165,7 @@ test("handleTotp reuses the active secret for secondary-device setup and stages 
   expect(reset.message).toContain("Nothing changes until confirmation succeeds");
   expect(config.WEB_RUNTIME_CONFIG.totpSecret).toBe(secret);
 
-  const resetState = extractTotpCardState(reset, totpCard);
-  expect(resetState.ok).toBe(true);
-  if (resetState.ok) {
-    expect(resetState.state.flow).toBe("reset");
-    expect(resetState.state.secret).not.toBe(secret);
-  }
+  expectPrivateTotpSurface(reset, 'Confirm new TOTP secret');
+  expect(JSON.stringify(reset)).not.toContain(secret);
+  expect(JSON.stringify(reset)).not.toContain(code);
 });

@@ -16,21 +16,18 @@ Feature: Classic additional core interaction surfaces
       When I activate enabled Retry or Inject into chat
       Then the supplied retry or inject callback runs
 
-  Rule: Classic Adaptive Cards
-    @ux-extra-002 @classic @adaptive-cards
-    Scenario: Validate the identity of a card submission
-      Given the client is building an Adaptive Card submission
-      Then it requires a non-empty bounded card identifier
-      And a positive safe-integer source-post identifier
-      And a parseable submitted-at timestamp
-      And the supported submission action is Action.Submit
+  Rule: Classic A2UI forms
+    @ux-extra-002 @classic @a2ui
+    Scenario: Validate the identity of a surface action
+      Given the client is building an A2UI v1.0 action
+      Then it uses the stored source post, surface, control and revision
+      And the server rejects values outside the declared context
 
-    @ux-extra-003 @classic @adaptive-cards
-    Scenario: Display a rejected card action
-      Given a rendered card action starts an asynchronous submission
+    @ux-extra-003 @classic @a2ui
+    Scenario: Display a rejected surface action
+      Given a rendered form action starts an asynchronous submission
       When the submission rejects
-      Then the card action path reports the error in its UI notice
-      And it does not present the rejected action as a successful response
+      Then the form reports the error inline and retains the draft
 
   Rule: Classic generated widgets
     @ux-extra-004 @classic @widgets

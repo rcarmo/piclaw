@@ -1,5 +1,6 @@
+import { buildRecoverySurface } from "../../src/channels/web/a2ui/recovery.js";
 import { resolveAcceptedMessageThread } from "./host-message-thread.js";
-import { modelFailureNotice, GoalRequestDenied } from "./host-model-failure.js";
+import { modelFailureNotice, parseModelFailure, GoalRequestDenied } from "./host-model-failure.js";
 import { storeMessageInDatabase } from "../../src/db/messages.js";
 import { getIdentityConfig } from "../../src/core/config.js";
 import { recordMessageUsage } from "../../src/agent-pool/usage.js";
@@ -61,6 +62,8 @@ import { optimizerSettingsApi } from "./token-optimizer-settings.js";
 import { createOptimizerCodemodeTool } from "./optimizer-codemode.js";
 import { createHostFetch } from "./host-fetch.js";
 import { taskModelRequestScope, taskModelHookScope, taskModelToolScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
+import { createHostA2uiTool } from "./host-a2ui-tool.js";
+import { createHostAutoresearch, type AutoresearchNativeExports } from "./host-autoresearch-tool.js";
 import { createHostBuiltinTools } from "./host-builtins.js";
 import { createHostModelTools, nativeToolInstructions } from "./host-model-controls.js";
 import { createHostKeychainTool } from "./host-keychain-tool.js";
@@ -396,6 +399,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       publishedTerminalEvents.add(operationId); pendingTerminalEvents.delete(operationId);
     } catch { pendingTerminalEvents.add(operationId); /* Committed reply remains available on reload. */ }
   };
+  const autoresearch = await qualifyInstalledAddon(catalog, WORKSPACE_DIR, "autoresearch");
   const infrastructure = (await Promise.all((["proxmox", "portainer", "imap"] as const).map(kind => qualifyInstalledAddon(catalog, WORKSPACE_DIR, kind)))).filter(item => item !== undefined);
   let features: ReturnType<typeof createApplicationOptimizerMcp> | undefined;
   let captureRuntime: HostConversationRuntime | undefined;
@@ -457,6 +461,15 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     return () => { authority.assertCurrent();if (captured.delegateModel) assertDelegateModel(captured.delegateModel); };
   };
   let assertDelegateModel: (model: { provider: string; modelId: string }) => void = () => { throw Error("Delegate unavailable"); };
+  const autoresearchHost = autoresearch ? createHostAutoresearch(autoresearch.nativeExports["index.ts"] as unknown as AutoresearchNativeExports, {
+    root, runtime,
+    assertOwner() {
+      assert(); lifetime.signal.throwIfAborted(); autoresearch.assertCurrent();
+      if (getDb() !== root || readAccessConfig().mode !== "single-user") throw Error("Autoresearch host owner unavailable");
+    },
+    assertAttached() { assertAdmission(); if (!terminalBroadcast || !liveChannel || viewsClosing) throw Error("Autoresearch web host unavailable"); },
+    broadcast(type, data) { terminalBroadcast?.(type, data as Record<string, unknown>); },
+  }) : undefined;
   const infrastructureTools = infrastructure.map(qualified => {
     const options = { root, runtime, assertOwner() { assert(); lifetime.signal.throwIfAborted(); qualified.assertCurrent(); } };
     const native = qualified.nativeExports["index.ts"]!;
@@ -699,6 +712,9 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   const receipts = infrastructure.map((qualified, index) => bindInstalledAddon(qualified, {
     tools: [infrastructureTools[index]!], lifecycle: infrastructureLifecycle(qualified), commands: {},
   }));
+  if (autoresearch && autoresearchHost) receipts.push(bindInstalledAddon(autoresearch, {
+    tools: autoresearchHost.tools, lifecycle: { before_agent_start: autoresearchHost.prompt, session_start: autoresearchHost.attach }, commands: {},
+  }));
   try {
     assert(); assertApplicationExtensionCatalogSupported(catalog, codeReview, editableTable, officeViewer, drawio, goal, observability, restic, [...receipts, ...resourceReceipts, ...(remoteReceipt ? [remoteReceipt] : []), ...(regretsReceipt ? [regretsReceipt] : []), ...(codexReceipt ? [codexReceipt] : [])]);
   } catch (error) { closeResources(); throw error; } finally { catalog.runtime.invalidate("Application extension preflight ended"); }
@@ -801,8 +817,8 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     if (!physical || physical.api !== model.api) throw Error('Dream source model changed');
   };
   const instructionsFor = (chatJid?: string) => loadHostInstructions({ cwd: WORKSPACE_DIR, agentDir: getPiclawAgentDir(),
-    projectTrusted: true, additionalSkillPaths: [...settings.getSkillPaths(), ...infrastructure.flatMap(item => [...item.skillPaths]), ...resourceQualifications.flatMap(item => [...item.skillPaths]), ...(regrets?.skillPaths ?? [])],
-    channelAppendix: [nativeToolInstructions, nativeProcessInstructions, keychainInstructions, delegateInstructions, chatJid ? buildChannelSystemPromptAppendix(detectChannel(chatJid), chatJid) ?? "" : "", ...infrastructure.map(infrastructurePrompt)].filter(Boolean).join("\n\n") });
+    projectTrusted: true, additionalSkillPaths: [...settings.getSkillPaths(), ...infrastructure.flatMap(item => [...item.skillPaths]), ...resourceQualifications.flatMap(item => [...item.skillPaths]), ...(regrets?.skillPaths ?? []), ...(autoresearch?.skillPaths ?? [])],
+    channelAppendix: [nativeToolInstructions, nativeProcessInstructions, keychainInstructions, delegateInstructions, chatJid ? buildChannelSystemPromptAppendix(detectChannel(chatJid), chatJid) ?? "" : "", ...infrastructure.map(infrastructurePrompt), chatJid?.startsWith("web:") ? autoresearchHost?.prompt() : ""].filter(Boolean).join("\n\n") });
   const instructionUpgrades = new Map<number, string>();
   // Validate stored choices without opening/writing SDK documents or bundle ports.
   if (root.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='documents'").get()) {
@@ -991,6 +1007,13 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     if (readAccessConfig().mode !== "single-user") throw Error("Host tool permission denied");
   } }, signal: lifetime.signal, shellPath: () => settings.getShellPath(), names: defaultToolNames });
   const builtins = [...tools];
+  tools.push(createHostA2uiTool({ root, runtime,
+    assertOwner() {
+      assert(); lifetime.signal.throwIfAborted();
+      if (readAccessConfig().mode !== 'single-user' || !terminalBroadcast) throw Error('Native A2UI publication unavailable');
+    },
+    broadcast(event, post) { terminalBroadcast?.(event, post); },
+  }));
   processControls = createHostProcessControls({ root, runtime,
     assertOwner() { assert(); if (readAccessConfig().mode !== "single-user") throw Error("Native process control requires single-user policy"); },
     assertHostIdle(input) {
@@ -1026,7 +1049,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     assertCurrent() { assert(); lifetime.signal.throwIfAborted(); if (readAccessConfig().mode !== "single-user") throw Error("Keychain inventory requires single-user policy"); },
     captureSourceGuard: captureSource,
   }));
-  tools.push(...infrastructureTools, ...(codexGroup?.tools ?? []));
+  tools.push(...infrastructureTools, ...(codexGroup?.tools ?? []), ...(autoresearchHost?.tools ?? []));
   if (regretsTool) tools.push(regretsTool);
   if (remoteTool) tools.push(remoteTool);
   tools.push(createHostFetch({ async captureSource(api) {
@@ -1331,6 +1354,8 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
           const content=result.answer ? codex ? await renderCodexAnswer(root,WORKSPACE_DIR,input.chatJid,result.runId,result.answer.text,assert) : result.answer.text
             :modelFailureNotice(status.status==="unanswered"?status.detail:undefined,status.id);
           if(!content.trim())return; // A tool-only turn without its verified exit receipt is not a timeline reply.
+          const failure = status.status === "unanswered" ? parseModelFailure(status.detail) : undefined;
+          const offerRecovery = failure?.phase === "provider" && ["timeout", "transport", "unavailable", "rate_limit"].includes(failure.category);
           const applyGoal=status.status==="done"&&!result.answer?.processExit&&nativeGoalProjection?await nativeGoalProjection(primary,result):undefined;
           const publish = (plan?: ReturnType<NonNullable<typeof goal>["addon"]["summarizeGoalPlan"]>) => admitSqliteWrite(root,()=>{
             assert();if(getDb()!==root)throw Error("Native reply database binding changed");
@@ -1341,7 +1366,8 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
               return prior.rowid; // Preserve original/user-edited history; no record rewrite on ACK repair.
             }
             const rowId=storeMessageInDatabase(root,{id:messageId,chat_jid:input.chatJid,sender:"assistant",sender_name:getIdentityConfig().assistantName,
-              content,timestamp:new Date().toISOString(),is_from_me:true,is_bot_message:true,is_terminal_agent_reply:true,thread_id:threadId});
+              content,timestamp:new Date().toISOString(),is_from_me:true,is_bot_message:true,is_terminal_agent_reply:true,thread_id:threadId,
+              ...(offerRecovery && threadId && readAccessConfig().mode === "single-user" && input.chatJid.startsWith("web:") ? { content_blocks: [buildRecoverySurface()] } : {}) });
             if(applyGoal){
               const check=()=>{
                 assertGoal();if(!root.inTransaction||getDb()!==root)throw Error("Native Goal publication transaction required");
@@ -1558,9 +1584,11 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         assert(); lifetime.signal.throwIfAborted();
         broadcast("extension_ui_widget", { chat_jid: chatJid, key, content, options });
       };
+      autoresearchHost?.attach();
       for (const target of bundle.sessionTargets.list()) drainPending(target.chatJid,true);
     },
     stop() {
+      autoresearchHost?.dispose();
       stopLiveViews();
       bundle.bindInputProjection(undefined);
       terminalBroadcast = undefined; pendingTerminalEvents.clear(); publishedTerminalEvents.clear();
@@ -1571,6 +1599,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       bundle.stop();
     }, close() {
       return closing ??= (async () => {
+      autoresearchHost?.dispose();
       bundle.bindInputProjection(undefined);
       widgetPublisher = undefined; workspaceFileOpener = undefined;
       bundle.stop();
@@ -1602,7 +1631,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     }
     const cleanupFailures: unknown[] = [];
     try { await features?.close(); } catch (cleanup) { cleanupFailures.push(cleanup); }
-    for (const release of [() => terminalLifetime.abort(), () => lifetime.abort(), closeResources, releaseAdminKv,
+    for (const release of [() => terminalLifetime.abort(), () => lifetime.abort(), autoresearchHost?.dispose, closeResources, releaseAdminKv,
       closeInfrastructure, releaseReviewSource, releaseObservabilityConfiguration]) {
       try { release?.(); } catch (cleanup) { cleanupFailures.push(cleanup); }
     }

@@ -15,11 +15,8 @@ describe("public web lifecycle/special entrypoints", () => {
         start: async () => { calls.push("start"); },
         stop: async () => { calls.push("stop"); },
       },
-      adaptiveCardSidePromptService: {
-        handleAdaptiveCardAction: async (req: Request) => {
-          calls.push(`card:${req.method}:${new URL(req.url).pathname}`);
-          return new Response("card", { status: 205 });
-        },
+      sidePromptService: {
+
         handleAgentSidePrompt: async (req: Request) => {
           calls.push(`side:${req.method}:${new URL(req.url).pathname}`);
           return new Response("side", { status: 206 });
@@ -43,12 +40,12 @@ describe("public web lifecycle/special entrypoints", () => {
     try {
       expect(service.server).toBe(server);
       await service.start(); await service.stop();
-      expect((await service.handleAdaptiveCardAction(new Request("https://example.com/agent/card-action", { method: "POST" }))).status).toBe(205);
+
       expect((await service.handleAgentSidePrompt(new Request("https://example.com/agent/side-prompt", { method: "POST" }))).status).toBe(206);
       expect((await service.handleAgentSidePromptStream(new Request("https://example.com/agent/side-prompt/stream", { method: "POST" }))).status).toBe(207);
       expect((await service.handleAgentPeerMessage(new Request("https://example.com/agent/peer-message", { method: "POST" }))).status).toBe(208);
       expect((await service.handleAgentMessage(new Request("https://example.com/agent/default/message", { method: "POST" }), "/agent/default/message")).status).toBe(209);
-      expect(calls).toEqual(["start", "stop", "card:POST:/agent/card-action", "side:POST:/agent/side-prompt", "stream:POST:/agent/side-prompt/stream", "peer:POST:/agent/peer-message", "message:POST:/agent/default/message"]);
+      expect(calls).toEqual(["start", "stop", "side:POST:/agent/side-prompt", "stream:POST:/agent/side-prompt/stream", "peer:POST:/agent/peer-message", "message:POST:/agent/default/message"]);
     } finally { spy.mockRestore(); }
   });
 

@@ -34,7 +34,7 @@ const TOOL_EXTENSION = {
     bun_run: 'bun-runner', exec_batch: 'exec-batch', search_tool_output: 'search-tool-output',
     ssh: 'ssh', proxmox: 'proxmox', portainer: 'portainer', mcp: 'mcp',
     cdp_browser: 'cdp-browser',
-    send_adaptive_card: 'send-adaptive-card', send_dashboard_widget: 'send-dashboard-widget',
+    send_dashboard_widget: 'send-dashboard-widget',
     start_autoresearch: 'autoresearch', stop_autoresearch: 'autoresearch', autoresearch_status: 'autoresearch',
     exit_process: 'exit-process', env: 'env-tools',
 };

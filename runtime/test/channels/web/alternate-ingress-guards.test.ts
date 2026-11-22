@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createTempWorkspace, setEnv } from "../../helpers.js";
 import { WebServerLifecycleGatewayService } from "../../../src/channels/web/server-lifecycle-gateway-service.js";
-import { WebAdaptiveCardSidePromptService } from "../../../src/channels/web/cards/adaptive-card-side-prompt-service.js";
+import { WebSidePromptService } from "../../../src/channels/web/agent/side-prompt-service.js";
 import { handlePasskey } from "../../../src/agent-control/handlers/passkey.js";
 import { handleTotp } from "../../../src/agent-control/handlers/totp.js";
 import { handleLogin, handleLogout } from "../../../src/agent-control/handlers/login.js";
@@ -75,10 +75,10 @@ test("direct provider login/logout deny multi-user modes before runtime or crede
 
 test("direct card and side-prompt services deny before parsing payload or touching source messages/models", async () => {
   // No collaborators: any source lookup, mutation or model call would fail this fixture.
-  const service = new WebAdaptiveCardSidePromptService({} as any);
+  const service = new WebSidePromptService({} as any);
   for (const accessMode of ["family-shared", "isolated-containers"] as const) {
     mode(accessMode);
-    for (const method of ["handleAdaptiveCardAction", "handleAgentSidePrompt", "handleAgentSidePromptStream"] as const) {
+    for (const method of ["handleAgentSidePrompt", "handleAgentSidePromptStream"] as const) {
       const req = new Request("https://family.local/action", { method: "POST", body: "invalid JSON" });
       const response = await service[method](req);
       expect(response.status).toBe(403); expect(req.bodyUsed).toBe(false);

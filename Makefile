@@ -270,7 +270,7 @@ test-coverage: ## Run piclaw tests with coverage
 ci-fast: ## Run host-only fast checks and web build (does not qualify native runtime)
 	bun run ci:fast
 
-ci-native: ## Run required offline native qualification (requires five prepared fixture paths)
+ci-native: ## Run required offline native qualification (requires six prepared fixture paths)
 	bun run ci:native
 
 ci-full: ## Run host-only fast checks followed by required native qualification

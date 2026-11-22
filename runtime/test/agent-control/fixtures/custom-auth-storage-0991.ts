@@ -1,3 +1,4 @@
+import { loginSubmission, loginSurfaceData } from "../login-surface-fixture.js";
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -53,7 +54,7 @@ session.modelRuntime = runtime;
 const control = createNativeControlFixture(session, registry, "web:custom-auth");
 // The fixture supplies only native control ports; provider login, composition,
 // credential storage and refresh are the real public APIs.
-const configure = (data: Record<string, unknown>) => withChatContext("web:custom-auth", "web", () => control.facade.applyControlCommand("web:custom-auth", { type: "login", provider: `__step2 ${JSON.stringify({ provider: "openai-compatible", method: "configure", baseUrl: "https://fixture.invalid/v1", modelId: "synthetic-model", ...data })}`, raw: "/login __step2" }));
+const configure = (data: Record<string, unknown>) => withChatContext("web:custom-auth", "web", () => control.facade.applyControlCommand("web:custom-auth", { ...loginSubmission("step2", { provider: "openai-compatible", method: "configure", baseUrl: "https://fixture.invalid/v1", modelId: "synthetic-model", ...data }) }));
 const modelConfig = () => JSON.parse(readFileSync(modelsPath, "utf8"));
 const backups = () => readdirSync(root).filter(name => name.endsWith(".bak"));
 try {
@@ -176,9 +177,9 @@ try {
       assert.equal(old.contentBlocks, undefined);
     } else assert.equal(old.status, "success");
     const oldCard = old.contentBlocks?.[0] as any;
-    const activation = oldCard?.payload?.actions?.find((action: any) => action.data?.activation_id)?.data;
+    const activation = oldCard ? loginSurfaceData("web:custom-auth", old, "activate") : undefined;
     if (activation) {
-      const replay = await withChatContext("web:custom-auth", "web", () => control.facade.applyControlCommand("web:custom-auth", { type: "login", provider: `__step3 ${JSON.stringify({ ...activation, model: "first" })}`, raw: "/login __step3" }));
+      const replay = await withChatContext("web:custom-auth", "web", () => control.facade.applyControlCommand("web:custom-auth", { ...loginSubmission("step3", { ...activation, model: "first" }) }));
       assert.equal(replay.status, "error");
     }
     assert.equal(current.status, "success");

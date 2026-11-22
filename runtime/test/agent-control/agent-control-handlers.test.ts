@@ -1,3 +1,4 @@
+import { loginSubmission, loginSurfaceData } from "./login-surface-fixture.js";
 /**
  * test/agent-control/agent-control-handlers.test.ts – Tests for command handler dispatch.
  *
@@ -87,9 +88,7 @@ afterEach(() => {
 const registry = createTestModelRegistry([DEFAULT_TEST_MODEL]);
 
 function loginActionData(result: any, method: string): Record<string, unknown> {
-  const action = result.contentBlocks?.[0]?.payload?.actions?.find((entry: any) => entry.data?.method === method);
-  if (!action) throw new Error(`Missing login card action ${method}`);
-  return action.data;
+  return loginSurfaceData('web:default', result, method.replace(/^runtime_/, ''));
 }
 
 const nativeControls: Array<{ dispose(): void }> = [];
@@ -167,25 +166,21 @@ test("login config writes stay inside the overridden pi-agent dir", async () => 
   const runtime = createTestSessionRuntime(session);
 
   const apiKeyStart = await applyControlCommand(runtime as any, loginRegistry, {
-    type: "login",
-    provider: `__step1 ${JSON.stringify({ provider: "openai" })}`,
-    raw: "/login __step1",
+    ...loginSubmission("step1", { provider: "openai" })
   });
   expect(JSON.stringify(apiKeyStart.contentBlocks)).not.toContain('"id":"auth_value"');
   const apiKeyShown = await withPrivateProviderAuthResponse(() => applyControlCommand(runtime as any, loginRegistry, {
-    type: "login", provider: `__step2 ${JSON.stringify(loginActionData(apiKeyStart, "runtime_present"))}`, raw: "/login __step2",
+    ...loginSubmission("step2", loginActionData(apiKeyStart, "runtime_present"))
   }));
   expect(apiKeyShown.authPresentation?.prompt?.type).toBe("secret");
   const apiKeyResult = await applyControlCommand(runtime as any, loginRegistry, {
-    type: "login",
-    provider: `__step2 ${JSON.stringify({ ...loginActionData(apiKeyShown, "runtime_continue"), auth_value: "new-key" })}`,
-    raw: "/login __step2",
+    ...loginSubmission("step2", { ...loginActionData(apiKeyShown, "runtime_continue"), auth_value: "new-key" })
   });
   expect(apiKeyResult.status).toBe("success");
   expect(apiKeyResult.model_label).toBeUndefined();
-  const activationData = (apiKeyResult.contentBlocks?.[0] as any)?.payload?.actions?.[0]?.data;
+  const activationData = loginSurfaceData("web:default", apiKeyResult, "activate");
   const activated = await applyControlCommand(runtime as any, loginRegistry, {
-    type: "login", provider: `__step3 ${JSON.stringify({ ...activationData, model: "gpt-test" })}`, raw: "/login __step3",
+    ...loginSubmission("step3", { ...activationData, model: "gpt-test" })
   });
   expect(activated.model_label).toBe("openai/gpt-test");
   expect(session.model?.provider).toBe("openai");
@@ -200,9 +195,7 @@ test("login config writes stay inside the overridden pi-agent dir", async () => 
     return { aborted: false, errors: new Map() };
   };
   const configureResult = await applyControlCommand(runtime as any, loginRegistry, {
-    type: "login",
-    provider: `__step2 ${JSON.stringify({ provider: "ollama", method: "configure", baseUrl: "http://127.0.0.1:11434/v1", modelId: "llama3:latest", modelIds: "qwen3:latest", contextWindow: "128000" })}`,
-    raw: "/login __step2",
+    ...loginSubmission("step2", { provider: "ollama", method: "configure", baseUrl: "http://127.0.0.1:11434/v1", modelId: "llama3:latest", modelIds: "qwen3:latest", contextWindow: "128000" })
   });
   expect(configureResult.status).toBe("success");
   expect(modelRefreshCalls).toBe(1);
@@ -215,9 +208,7 @@ test("login config writes stay inside the overridden pi-agent dir", async () => 
   expect(modelsJson.providers?.ollama?.models?.map((entry: { id: string }) => entry.id)).toEqual(["llama3:latest", "qwen3:latest"]);
 
   const llamaCppResult = await applyControlCommand(runtime as any, loginRegistry, {
-    type: "login",
-    provider: `__step2 ${JSON.stringify({ provider: "llama-cpp", method: "configure", baseUrl: "http://127.0.0.1:8080/v1", modelId: "local-model", contextWindow: "32768" })}`,
-    raw: "/login __step2",
+    ...loginSubmission("step2", { provider: "llama-cpp", method: "configure", baseUrl: "http://127.0.0.1:8080/v1", modelId: "local-model", contextWindow: "32768" })
   });
   expect(llamaCppResult.status).toBe("success");
   expect(modelRefreshCalls).toBe(2);
@@ -254,15 +245,15 @@ test("provider-owned API-key login supports multiple prompts without direct cred
   const runtime = createTestSessionRuntime(session);
 
   const start = await applyControlCommand(runtime as any, loginRegistry, {
-    type: "login", provider: `__step1 ${JSON.stringify({ provider: "cloudflare-ai-gateway" })}`, raw: "/login __step1",
+    ...loginSubmission("step1", { provider: "cloudflare-ai-gateway" })
   });
   expect(JSON.stringify(start.contentBlocks)).not.toContain("Enter Cloudflare API key");
   const next = await applyControlCommand(runtime as any, loginRegistry, {
-    type: "login", provider: `__step2 ${JSON.stringify({ ...loginActionData(start, "runtime_continue"), auth_value: "secret-key" })}`, raw: "/login __step2",
+    ...loginSubmission("step2", { ...loginActionData(start, "runtime_continue"), auth_value: "secret-key" })
   });
   expect(JSON.stringify(next.contentBlocks)).not.toContain("Enter Cloudflare account ID");
   const done = await applyControlCommand(runtime as any, loginRegistry, {
-    type: "login", provider: `__step2 ${JSON.stringify({ ...loginActionData(next, "runtime_continue"), auth_value: "acct-1" })}`, raw: "/login __step2",
+    ...loginSubmission("step2", { ...loginActionData(next, "runtime_continue"), auth_value: "acct-1" })
   });
   expect(done.status).toBe("success");
   expect(loginRegistry.authStorage.get("cloudflare-ai-gateway")).toMatchObject({ key: "secret-key", env: { CLOUDFLARE_ACCOUNT_ID: "acct-1" } });
@@ -281,16 +272,16 @@ test("provider-owned auth cancellation aborts the runtime flow and clears pendin
   const session = new TestAgentControlSession(ws.workspace, loginRegistry);
   const runtime = createTestSessionRuntime(session);
   const start = await applyControlCommand(runtime as any, loginRegistry, {
-    type: "login", provider: `__step1 ${JSON.stringify({ provider: "openai-codex" })}`, raw: "/login __step1",
+    ...loginSubmission("step1", { provider: "openai-codex" })
   });
   const cancelled = await applyControlCommand(runtime as any, loginRegistry, {
-    type: "login", provider: `__step2 ${JSON.stringify(loginActionData(start, "runtime_cancel"))}`, raw: "/login __step2",
+    ...loginSubmission("step2", loginActionData(start, "runtime_cancel"))
   });
   expect(cancelled.status).toBe("success");
   expect(cancelled.message).toContain("cancelled");
   expect(sawAbort).toBe(true);
   const stale = await applyControlCommand(runtime as any, loginRegistry, {
-    type: "login", provider: `__step2 ${JSON.stringify({ provider: "openai-codex", method: "runtime_check", auth_type: "oauth" })}`, raw: "/login __step2",
+    ...loginSubmission("step2", { provider: "openai-codex", method: "runtime_check", auth_type: "oauth" })
   });
   expect(stale.status).toBe("error");
   expect(stale.message).toContain("No active authentication flow");
@@ -324,24 +315,20 @@ test("login refreshes model registry but requires explicit activation even for o
   const runtime = createTestSessionRuntime(session);
 
   const picker = await applyControlCommand(runtime as any, loginRegistry as any, {
-    type: "login",
-    provider: `__step1 ${JSON.stringify({ provider: "github-copilot" })}`,
-    raw: "/login __step1",
+    ...loginSubmission("step1", { provider: "github-copilot" })
   });
   expect(picker.status).toBe("success");
   const result = await applyControlCommand(runtime as any, loginRegistry as any, {
-    type: "login",
-    provider: `__step1method ${JSON.stringify({ provider: "github-copilot", action: "oauth" })}`,
-    raw: "/login __step1method",
+    ...loginSubmission("step1method", { provider: "github-copilot", action: "oauth" })
   });
 
   expect(result.status).toBe("success");
   expect(loginRegistry.authStorage.get("github-copilot")?.type).toBe("oauth");
   expect(result.model_label).toBeUndefined();
   expect(session.model?.provider).toBe("openai");
-  const activationData = (result.contentBlocks?.[0] as any)?.payload?.actions?.[0]?.data;
+  const activationData = loginSurfaceData("web:default", result, "activate");
   const activated = await applyControlCommand(runtime as any, loginRegistry, {
-    type: "login", provider: `__step3 ${JSON.stringify({ ...activationData, model: "gpt-4.1" })}`, raw: "/login __step3",
+    ...loginSubmission("step3", { ...activationData, model: "gpt-4.1" })
   });
   expect(activated.model_label).toBe("github-copilot/gpt-4.1");
   expect(session.model?.provider).toBe("github-copilot");
@@ -367,21 +354,17 @@ test("provider-owned auth interaction renders select and device-code events", as
   const runtime = createTestSessionRuntime(session);
 
   const start = await applyControlCommand(runtime as any, loginRegistry, {
-    type: "login",
-    provider: `__step1 ${JSON.stringify({ provider: "openai-codex" })}`,
-    raw: "/login __step1",
+    ...loginSubmission("step1", { provider: "openai-codex" })
   });
   expect(JSON.stringify(start.contentBlocks)).not.toContain("Select OpenAI Codex login method");
 
   const next = await applyControlCommand(runtime as any, loginRegistry, {
-    type: "login",
-    provider: `__step2 ${JSON.stringify({ ...loginActionData(start, "runtime_continue"), auth_value: "device_code" })}`,
-    raw: "/login __step2",
+    ...loginSubmission("step2", { ...loginActionData(start, "runtime_continue"), auth_value: "device_code" })
   });
   expect(selectedMethod).toBe("device_code");
   expect(JSON.stringify(next.contentBlocks)).not.toContain("ABCD-EFGH");
   const shown = await withPrivateProviderAuthResponse(() => applyControlCommand(runtime as any, loginRegistry, {
-    type: "login", provider: `__step2 ${JSON.stringify(loginActionData(next, "runtime_present"))}`, raw: "/login __step2",
+    ...loginSubmission("step2", loginActionData(next, "runtime_present"))
   }));
   expect(shown.authPresentation?.events).toContainEqual({ type: "device_code", userCode: "ABCD-EFGH", verificationUri: "https://auth.openai.com/codex/device" });
 });

@@ -4,8 +4,17 @@ import { dedupePosts } from './timeline-utils.js';
 export async function fetchContiguousTimeline(currentPosts, fetchPage, isCurrent = () => true, contiguousThroughId?: number) {
     // Without a verified page boundary, isolated SSE IDs cannot prove a join.
     // Conservatively page through the oldest retained row instead.
-    const cachedIds = (Array.isArray(currentPosts) ? currentPosts : []).map(post => Number(post.id)).filter(id => Number.isFinite(id) && id > 0);
-    const latestCached = contiguousThroughId && contiguousThroughId > 0 ? contiguousThroughId : (cachedIds.length ? Math.min(...cachedIds) : 0);
+    const cached = Array.isArray(currentPosts) ? currentPosts : [];
+    const cachedIds = cached.map(post => Number(post.id)).filter(id => Number.isFinite(id) && id > 0);
+    const verifiedBoundary = contiguousThroughId && contiguousThroughId > 0 ? contiguousThroughId : (cachedIds.length ? Math.min(...cachedIds) : 0);
+    // Missed SSE updates can change a form's revision without creating a new post.
+    // Re-read cached active forms before retaining them after a reconnect.
+    const latestCached = cached.reduce((boundary, post) => {
+        const id = Number(post.id);
+        const blocks = post.data?.content_blocks;
+        return id > 0 && id < boundary && Array.isArray(blocks)
+            && blocks.some(block => block?.type === 'a2ui_surface' && block.state === 'active') ? id : boundary;
+    }, verifiedBoundary);
     let fresh = [], before = null, hasMore = false, joined = !latestCached;
     for (let page = 0; page < 10; page++) {
         const result = await fetchPage(50, before);

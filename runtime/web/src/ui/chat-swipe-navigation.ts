@@ -88,11 +88,7 @@ const INTERACTIVE_SELECTOR = [
   '.attachment-preview-modal',
   '.rename-branch-overlay',
   '.agent-request-modal',
-  '.adaptive-card-container',
-  '.adaptive-card-container input',
-  '.adaptive-card-container textarea',
-  '.adaptive-card-container select',
-  '.adaptive-card-container button',
+  '.a2ui-surface',
 ].join(', ');
 
 /**
