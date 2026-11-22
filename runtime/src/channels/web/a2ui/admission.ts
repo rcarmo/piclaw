@@ -126,6 +126,15 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
   if (block.owner === 'addon' && code === undefined) {
     return invokeAddonA2ui({ req, chatJid, threadId, postId, block, action,
       authorise: () => validate(), assertBinding: binding,
+      assertConsumed() {
+        const current = readSource();
+        const latest = sourceBlock(current);
+        const root = getMessageByRowId(chatJid, threadId);
+        if (!current || current.data?.type !== 'agent_response' || (current.data?.thread_id ?? postId) !== threadId || !root
+          || (root.data?.thread_id != null && root.data.thread_id !== threadId)
+          || !isA2uiSurfaceBlock(latest) || latest.owner !== 'addon' || latest.state !== 'completed' || latest.revision !== revision + 1
+          || JSON.stringify(latest.surface) !== JSON.stringify(block.surface)) throw Error('Add-on action source changed');
+      },
       consume(database) {
         const current = readSource();
         const latest = sourceBlock(current);
