@@ -1,3 +1,4 @@
+import { createLogger } from '../../../utils/logger.js';
 import type { Database } from 'bun:sqlite';
 import type { AgentControlResult } from '../../../agent-control/agent-control-types.js';
 import { commitPrivateProviderAuthResponse, withPrivateProviderAuthResponse } from '../../../agent-control/handlers/login.js';
@@ -8,6 +9,8 @@ import type { WebChannelLike } from '../core/web-channel-contracts.js';
 import { buildA2uiAction, type A2uiAction, type A2uiActionRequest } from './action.js';
 import { resolveLoginSurfaceAction, retireLoginSurface } from './login-surface.js';
 import { isA2uiSurfaceBlock, type A2uiSurfaceBlock } from './surface.js';
+
+const log = createLogger("a2ui.provider-login");
 
 const pending = new Set<string>();
 const headers = { 'Cache-Control': 'private, no-store', Vary: 'Cookie', 'Referrer-Policy': 'no-referrer' };
@@ -62,7 +65,7 @@ export async function handleProviderLoginSurface(options: {
       commitPrivateProviderAuthResponse();
       retireLoginSurface(surfaceId);
       // The write has committed. Browser reconnect can hydrate it if publication fails.
-      try { options.publish(); } catch { /* no sensitive result in logs */ }
+      try { options.publish(); } catch { log.warn("Committed provider surface update could not be broadcast", { operation: "a2ui.login.publish" }); }
       if (result.model_label) await publishModelState(channel, source.chat_jid, result);
       return response;
     });
@@ -72,5 +75,5 @@ export async function handleProviderLoginSurface(options: {
 
 async function publishModelState(channel: WebChannelLike, chatJid: string, result: AgentControlResult) {
   try { await resolveAndBroadcastModelStateForCommand(channel, chatJid, result); }
-  catch { /* Activated model is authoritative even if optional publication fails. */ }
+  catch { log.warn("Activated model could not be broadcast", { operation: "a2ui.login.model_changed" }); }
 }

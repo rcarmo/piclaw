@@ -56,5 +56,5 @@ export function readA2uiLink(action: unknown): string | undefined {
   try {
     const url = new URL(target);
     if ((url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password) return url.href;
-  } catch { /* Not a link in the Classic catalog. */ }
+  } catch { return undefined; }
 }

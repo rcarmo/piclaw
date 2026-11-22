@@ -1,3 +1,4 @@
+import { createLogger } from '../../../utils/logger.js';
 /** In-process add-on A2UI port. A callback is owned by one committed post and never serialised. */
 import { isSingleUserAccess } from '../../../core/config-access.js';
 import { captureHostDatabaseBinding } from '../../../db/connection.js';
@@ -7,6 +8,8 @@ import { stripInternalTags } from '../../../router.js';
 import type { Database } from 'bun:sqlite';
 import type { A2uiAction } from './action.js';
 import { readA2uiLink, type A2uiSurfaceBlock } from './surface.js';
+
+const log = createLogger("a2ui.addon");
 
 export type AddonA2uiAction = (context: {
   chatJid: string; postId: number; threadId: number;
@@ -73,7 +76,7 @@ export async function invokeAddonA2ui(options: {
   try { await admitSqliteWrite(getDb(), () => options.consume(getDb()), check, req.signal, undefined, options.assertBinding); }
   catch { return unavailable(); }
   callbacks.delete(block.surface.surfaceId);
-  try { options.publish(); } catch { /* Hydration still sees the consumed surface. */ }
+  try { options.publish(); } catch { log.warn("Committed add-on surface update could not be broadcast", { operation: "a2ui.addon.consume_publish" }); }
   try {
     await handler({ chatJid, postId, threadId, values: action.context, sendMessage: options.sendMessage });
   } catch {
