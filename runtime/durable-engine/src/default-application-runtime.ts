@@ -1,5 +1,6 @@
+import { buildRecoverySurface } from "../../src/channels/web/a2ui/recovery.js";
 import { resolveAcceptedMessageThread } from "./host-message-thread.js";
-import { modelFailureNotice, GoalRequestDenied } from "./host-model-failure.js";
+import { modelFailureNotice, parseModelFailure, GoalRequestDenied } from "./host-model-failure.js";
 import { storeMessageInDatabase } from "../../src/db/messages.js";
 import { getIdentityConfig } from "../../src/core/config.js";
 import { recordMessageUsage } from "../../src/agent-pool/usage.js";
@@ -1339,6 +1340,8 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
           const content=result.answer ? codex ? await renderCodexAnswer(root,WORKSPACE_DIR,input.chatJid,result.runId,result.answer.text,assert) : result.answer.text
             :modelFailureNotice(status.status==="unanswered"?status.detail:undefined,status.id);
           if(!content.trim())return; // A tool-only turn without its verified exit receipt is not a timeline reply.
+          const failure = status.status === "unanswered" ? parseModelFailure(status.detail) : undefined;
+          const offerRecovery = failure?.phase === "provider" && ["timeout", "transport", "unavailable", "rate_limit"].includes(failure.category);
           const applyGoal=status.status==="done"&&!result.answer?.processExit&&nativeGoalProjection?await nativeGoalProjection(primary,result):undefined;
           const publish = (plan?: ReturnType<NonNullable<typeof goal>["addon"]["summarizeGoalPlan"]>) => admitSqliteWrite(root,()=>{
             assert();if(getDb()!==root)throw Error("Native reply database binding changed");
@@ -1349,7 +1352,8 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
               return prior.rowid; // Preserve original/user-edited history; no record rewrite on ACK repair.
             }
             const rowId=storeMessageInDatabase(root,{id:messageId,chat_jid:input.chatJid,sender:"assistant",sender_name:getIdentityConfig().assistantName,
-              content,timestamp:new Date().toISOString(),is_from_me:true,is_bot_message:true,is_terminal_agent_reply:true,thread_id:threadId});
+              content,timestamp:new Date().toISOString(),is_from_me:true,is_bot_message:true,is_terminal_agent_reply:true,thread_id:threadId,
+              ...(offerRecovery && threadId && readAccessConfig().mode === "single-user" && input.chatJid.startsWith("web:") ? { content_blocks: [buildRecoverySurface()] } : {}) });
             if(applyGoal){
               const check=()=>{
                 assertGoal();if(!root.inTransaction||getDb()!==root)throw Error("Native Goal publication transaction required");

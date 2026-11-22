@@ -32,7 +32,7 @@ export interface A2uiSurfaceBlock {
   revision: number;
   state: "active" | "completed" | "cancelled" | "failed";
   fallback_text: string;
-  owner?: "agent" | "totp" | "login";
+  owner?: "agent" | "totp" | "login" | "addon" | "recovery";
   submit_behavior?: "keep_active";
   last_submission?: { request_id: string; revision: number; digest: string; row_id: number };
 }

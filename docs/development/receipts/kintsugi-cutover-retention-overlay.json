@@ -20,8 +20,8 @@
     {
       "path": "runtime/durable-engine/src/default-application-runtime.ts",
       "beforeSha256": "85de1db072f2c7e3f5280ca93cab21329da6a2ce8f3052e400202ecee97ce2a7",
-      "afterSha256": "989f50a8aaa17d12517492afbe0df8f802aad8c38ac04f8a38e59dd2cff5f950",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Register the owned model-facing keychain metadata inventory and reference-first managed guidance without legacy credential actions. Share the authenticated, scoped model catalogue without changing retention or accounting. Wire the native A2UI Express publisher and revision-bound action ingress without changing historical retention accounting."
+      "afterSha256": "eeecd08ed8e82fd17f0efae4fd4f38bb22d6d74c73543cc9dc0d7bc8d5b413f7",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Register the owned model-facing keychain metadata inventory and reference-first managed guidance without legacy credential actions. Share the authenticated, scoped model catalogue without changing retention or accounting. Wire the native A2UI Express publisher and revision-bound action ingress without changing historical retention accounting. Attach an owned A2UI recovery surface only to classified transient provider failures without changing prior retention accounting."
     },
     {
       "path": "runtime/durable-engine/src/host-models.ts",

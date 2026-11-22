@@ -1,3 +1,4 @@
+import { publishAddonA2ui } from "../channels/web/a2ui/addon.js";
 import { addonLocalContextApi, setAddonLocalContextHost } from "./local-context.js";
 import { getCurrentAddonRegistrationOwner } from "./external-routes.js";
 import { mkdirSync, realpathSync } from "node:fs";
@@ -136,6 +137,7 @@ export interface PiclawRuntimeAddonApi {
   };
   registerStatusPanelProvider: (provider: AddonStatusPanelProvider) => () => void;
   registerAdaptiveCardIntentHandler: (intent: string, handler: AddonAdaptiveCardIntentHandler) => () => void;
+  a2ui: { version: 1; post: typeof publishAddonA2ui };
   enqueueAgentMessage: AddonAgentMessageEnqueuer;
   messaging: PiclawRuntimeMessagingApiV1;
   localContext: typeof addonLocalContextApi;
@@ -365,6 +367,7 @@ export function installAddonRuntimeApi(): PiclawRuntimeAddonApi {
     lifecycle: { version: 1, onShutdown: registerAddonRuntimeShutdownHandler },
     registerStatusPanelProvider: registerAddonStatusPanelProvider,
     registerAdaptiveCardIntentHandler: registerAddonAdaptiveCardIntentHandler,
+    a2ui: { version: 1, post: publishAddonA2ui },
     enqueueAgentMessage: enqueueAgentMessageViaRuntime,
     localContext: addonLocalContextApi,
     messaging: {

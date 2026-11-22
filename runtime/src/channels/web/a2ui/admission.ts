@@ -9,6 +9,8 @@ import { handleAgentMessage } from '../handlers/agent.js';
 import { bindInputRequestAuthority, captureInputTarget, releaseInputRequestAuthority, type ValidateInputAuthority } from '../messaging/input-request-authority.js';
 import { validateA2uiAction } from './action.js';
 import { handleTotpSurfaceAction } from './totp.js';
+import { recoveryPrompt } from './recovery.js';
+import { invokeAddonA2ui } from './addon.js';
 import { handleProviderLoginSurface } from './provider-login.js';
 import { replaceSurfaceBlocks } from './persistence.js';
 import { isA2uiSurfaceBlock } from './surface.js';
@@ -75,7 +77,7 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
   if (threadId !== sourceThread || !root || (root.data?.thread_id != null && root.data.thread_id !== root.id)) return changed();
   const block = sourceBlock(source);
   if (!isA2uiSurfaceBlock(block)) return source.data?.content_blocks?.some(isA2uiSurfaceBlock) ? changed() : json({ error: 'Surface not found.' }, 404);
-  if (block.owner !== 'agent' && (block.state !== 'active' || block.revision !== revision)) return changed();
+  if (block.owner !== 'agent' && block.owner !== 'recovery' && (block.state !== 'active' || block.revision !== revision)) return changed();
   let action: ReturnType<typeof validateA2uiAction>;
   try { action = validateA2uiAction(block.surface, message); }
   catch { return json({ error: 'Invalid surface action.' }, 400); }
@@ -118,7 +120,25 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
       },
     });
   }
-  if (block.owner !== 'agent' || code !== undefined) return json({ error: 'Surface action not authorised.' }, 403);
+  if (block.owner === 'addon' && code === undefined) {
+    return invokeAddonA2ui({ req, chatJid, threadId, postId, block, action,
+      authorise: () => validate(), assertBinding: binding,
+      consume(database) {
+        const current = readSource();
+        const latest = sourceBlock(current);
+        if (!current || current.data?.type !== 'agent_response' || (current.data?.thread_id ?? postId) !== threadId
+          || !isA2uiSurfaceBlock(latest) || latest.owner !== 'addon' || latest.state !== 'active' || latest.revision !== revision
+          || JSON.stringify(latest.surface) !== JSON.stringify(block.surface)) throw Error('Add-on surface changed');
+        replaceSurfaceBlocks(database, chatJid, postId, current.data!.content_blocks!.map(item => item === latest
+          ? { ...latest, state: 'completed', revision: revision + 1 } : item));
+      },
+      publish() { const latest = readSource(); if (latest) channel.interactionBroadcaster.broadcastInteractionUpdated(latest); },
+      sendMessage: (content) => channel.sendMessage(chatJid, content, { threadId }),
+    });
+  }
+  const recovery = block.owner === 'recovery' && source.data.is_terminal_agent_reply === true && Object.keys(action.context).length === 0
+    ? recoveryPrompt(action.name, postId) : undefined;
+  if ((block.owner !== 'agent' && !recovery) || code !== undefined) return json({ error: 'Surface action not authorised.' }, 403);
   const { timestamp: _timestamp, ...submitted } = action;
   const digest = createHash('sha256').update(JSON.stringify(submitted)).digest('hex');
   const duplicate = (latest: unknown) => isA2uiSurfaceBlock(latest) && latest.last_submission?.request_id === requestId
@@ -129,7 +149,7 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
 
   const pathname = '/agent/default/message';
   const fields = Object.entries(action.context).map(([key, value]) => `${key}: ${JSON.stringify(value)}`);
-  const body = JSON.stringify({ content: [`Submitted ${action.name}`, ...fields].join('\n'), thread_id: threadId });
+  const body = JSON.stringify({ content: recovery ?? [`Submitted ${action.name}`, ...fields].join('\n'), thread_id: threadId });
   const forward = new Request(`http://internal${pathname}`, { method: 'POST', signal: req.signal,
     headers: { 'Content-Type': 'application/json' }, body });
   bindInputRequestAuthority(forward, chatJid, body, validate);
@@ -144,7 +164,7 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
         const root = getMessageByRowId(chatJid, threadId);
         if (!current || current.data?.type !== 'agent_response' || (current.data?.thread_id ?? postId) !== threadId || !root
           || (root.data?.thread_id != null && root.data.thread_id !== threadId)
-          || !isA2uiSurfaceBlock(latest) || latest.owner !== 'agent' || latest.state !== 'active' || latest.revision !== revision
+          || !isA2uiSurfaceBlock(latest) || latest.owner !== block.owner || (recovery && current.data?.is_terminal_agent_reply !== true) || latest.state !== 'active' || latest.revision !== revision
           || JSON.stringify(latest.surface) !== JSON.stringify(block.surface)) throw new Error('Surface changed before admission');
         const next = { ...latest, revision: revision + 1,
           state: latest.submit_behavior === 'keep_active' ? 'active' : 'completed',
