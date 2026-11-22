@@ -57,6 +57,16 @@ test.each([
   expect(buildA2uiAction(picker, "submit", new Map([["/when", ""]]), timestamp).action.context.when).toBe("");
 });
 
+test("a modal trigger and content keep their explicitly authored actions", () => {
+  const modal = applyA2uiMessages("modal", compileA2uiExpress(`
+    root = Modal(trigger=show, content=submit);
+    show = Button(Text("Open"), action=Event("open"));
+    submit = Button(Text("Send"), action=Event("send"));
+  `, "modal"))!;
+  expect(buildA2uiAction(modal, 'show', new Map(), timestamp).action.name).toBe('open');
+  expect(buildA2uiAction(modal, 'submit', new Map(), timestamp).action.name).toBe('send');
+});
+
 test("Classic does not accept authority, options, fixed values or undeclared inputs from the action", () => {
   const message = buildA2uiAction(snapshot, "submit", new Map(), timestamp);
   const action = message.action;

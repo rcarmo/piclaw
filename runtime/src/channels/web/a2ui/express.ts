@@ -92,6 +92,7 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
       requireClassic(Array.isArray(component.tabs) && component.tabs.length > 0 && component.tabs.every(tab =>
         record(tab) && allowedKeys(tab, ["title", "child"]) && isId(tab.child)), "invalid tabs");
     }
+    if (name === "Modal") requireClassic(isId(component.trigger) && isId(component.content), "invalid modal references");
     if (name === "Slider") requireClassic(a2uiSliderRange(component as A2uiComponent), "invalid slider interval");
     if (name === "TextField" && component.variant === "obscured") {
       throw new Error("Invalid Classic A2UI: private inputs require a host-owned surface");
@@ -188,6 +189,10 @@ function verifySnapshot(snapshot: A2uiSnapshot): void {
     seen.add(id);
     if (Array.isArray(item.children)) for (const child of item.children) walk(child, depth + 1);
     if (item.component === "Tabs" && Array.isArray(item.tabs)) for (const tab of item.tabs) walk(tab.child, depth + 1);
+    if (item.component === "Modal" && typeof item.trigger === "string" && typeof item.content === "string") {
+      walk(item.trigger, depth + 1);
+      walk(item.content, depth + 1);
+    }
     if (typeof item.child === "string") {
       if (item.component === "Button") requireClassic(components.get(item.child)?.component === "Text", "button labels must be text");
       walk(item.child, depth + 1);

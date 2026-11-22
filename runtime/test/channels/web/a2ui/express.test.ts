@@ -49,6 +49,16 @@ describe("Classic A2UI Express", () => {
     }
   });
 
+  test("validates modal trigger and content as separate parts of the component tree", () => {
+    const source = 'root=Modal(trigger=show, content=details); show=Text("Open"); details=Text("Details");';
+    const snapshot = applyA2uiMessages('modal', compileA2uiExpress(source, 'modal'))!;
+    expect(snapshot.components.find(({id}) => id === 'root')).toEqual({ id:'root', component:'Modal', trigger:'show', content:'details' });
+    for (const invalid of [source.replace('content=details','content=show'), source.replace('trigger=show','trigger=root'),
+      source.replace('content=details','content=missing'), 'root=Button(Text("No action outside a modal"));']) {
+      expect(() => applyA2uiMessages('modal', compileA2uiExpress(invalid, 'modal'))).toThrow();
+    }
+  });
+
   test("applies component and data updates atomically to a rehydrated snapshot, then deletes it", () => {
     const initial = applyA2uiMessages("form-1", compileA2uiExpress(form, "form-1"))!;
     const original = JSON.stringify(initial);

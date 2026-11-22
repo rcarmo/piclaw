@@ -3,6 +3,7 @@ import { html, useCallback, useRef, useState } from '../vendor/preact-htm.js';
 import { a2uiBindingPath, buildA2uiAction, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
 import { a2uiDateTimeDisplay, a2uiDateTimeType } from '../../../src/channels/web/a2ui/date-time.js';
 import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
+import { A2uiModal } from './a2ui-modal.js';
 import { A2uiTabs } from './a2ui-tabs.js';
 import { A2uiTotpDialog, readTotpPresentation, type TotpPresentation } from './a2ui-totp-dialog.js';
 import { a2uiSliderRange, readA2uiLink, type A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
@@ -65,7 +66,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
         }
     }
 
-    function renderComponent(id: unknown, depth: number): unknown {
+    function renderComponent(id: unknown, depth: number, openModal?: (event: Event) => void): unknown {
         const item = typeof id === 'string' ? components.get(id) : undefined;
         if (!item || depth > 24) return null;
         const path = a2uiBindingPath(item.value);
@@ -83,6 +84,15 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 return html`<div key=${id} class=${`a2ui-${direction}`} style=${{ alignItems: align, justifyContent: justify }}>
                     ${Array.isArray(item.children) ? item.children.map(child) : null}</div>`;
             }
+            case 'Modal': {
+                const trigger = typeof item.trigger === 'string' ? components.get(item.trigger) : undefined;
+                if (!trigger) return null;
+                const title = trigger.component === 'Button' && typeof trigger.child === 'string' ? components.get(trigger.child) : trigger;
+                const dialogLabel = text(title?.text) || 'Details';
+                return html`<${A2uiModal} key=${id} label=${dialogLabel} buttonTrigger=${trigger.component === 'Button'}
+                    renderTrigger=${(open: (event: Event) => void) => renderComponent(trigger.id, depth + 1, open)}
+                    renderContent=${() => child(item.content)} />`;
+            }
             case 'Tabs': {
                 if (!Array.isArray(item.tabs)) return null;
                 const tabs = item.tabs.map(tab => ({ child: tab.child, title: text(tab.title) }));
@@ -98,10 +108,16 @@ export function A2uiSurface({ block, source, onSubmit }: {
             case 'Button': {
                 const link = readA2uiLink(item.action);
                 if (link && !disabled) return html`<a key=${id} class="a2ui-button a2ui-button-borderless" href=${link}
+                    aria-haspopup=${openModal ? 'dialog' : undefined} onClick=${openModal}
                     target="_blank" rel="noopener noreferrer">${child(item.child)}</a>`;
                 if (block.owner === 'login' && (id === 'continue' || id === 'check')) return null;
                 return html`<button key=${id} type="button" class=${`a2ui-button a2ui-button-${item.variant || 'default'}`}
-                disabled=${disabled} aria-disabled=${pending || disabled} onClick=${(event: Event) => submit(event, item.id)}>${child(item.child)}</button>`;
+                disabled=${disabled} aria-disabled=${pending || disabled} aria-haspopup=${openModal ? 'dialog' : undefined}
+                onClick=${(event: Event) => {
+                    if (pending || disabled) return;
+                    openModal?.(event);
+                    void submit(event, item.id);
+                }}>${child(item.child)}</button>`;
             }
             case 'TextField': {
                 if (block.owner === 'login' && item.variant === 'obscured') return html`<label key=${id} class="a2ui-field">${label}

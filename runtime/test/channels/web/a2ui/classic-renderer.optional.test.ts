@@ -15,6 +15,7 @@ const source = `
   root = Column([Text("<img src=x onerror=alert(1)>"),
     List(children=[Text("First step"), Text("Second step")], direction="horizontal", align="center"),
     Tabs(tabs=[{title:"Summary",child:summary},{title:"Details",child:details}]),
+    Modal(trigger=show, content=help),
     TextField(label="Note", value=$/note),
     CheckBox(label="Notify", value=$/notify),
     Slider(label="Level", min=0, max=10, steps=5, value=$/level),
@@ -23,6 +24,8 @@ const source = `
     Button(Text("Submit"), variant="primary", action=Event("save", {note:$/note,notify:$/notify,size:$/choice,level:$/level,date:$/date}))]);
   summary = Text("Summary panel");
   details = Text("Details panel");
+  show = Text("Show help");
+  help = Text("Help panel is local");
 `;
 
 for (const engine of [chromium, webkit]) {
@@ -88,6 +91,16 @@ for (const engine of [chromium, webkit]) {
       expect(await details.evaluate(element => element === document.activeElement)).toBe(true);
       expect(await page.getByRole('tabpanel', { name: 'Details' }).textContent()).toBe('Details panel');
       expect(await page.getByRole('tabpanel', { name: 'Summary' }).count()).toBe(0);
+      expect(await page.evaluate(() => (window as any).events)).toHaveLength(0);
+      const show = page.getByRole('button', {name:'Show help'});
+      await show.focus();
+      await page.keyboard.press('Enter');
+      const help = page.getByRole('dialog', { name: 'Show help' });
+      await help.getByText('Help panel is local').waitFor();
+      expect(await help.evaluate(el => el.contains(document.activeElement))).toBe(true);
+      await page.keyboard.press('Escape');
+      await help.waitFor({ state: 'detached' });
+      expect(await show.evaluate(el => el === document.activeElement)).toBe(true);
       expect(await page.evaluate(() => (window as any).events)).toHaveLength(0);
       await field.focus();
       await page.evaluate((block) => (window as any).draw(block), block);
