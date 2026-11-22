@@ -6,7 +6,7 @@ import { DEFAULT_WEB_USER_ID, createWebSession, deleteAllWebSessions, getDb } fr
 import { admitSqliteWrite } from '../../../db/sqlite-async-admission.js';
 import { generateTotpQr } from '../../../utils/totp-qr.js';
 import { randomSessionToken, verifyTotp } from '../auth/auth.js';
-import type { WebChannelLike } from '../core/web-channel-contracts.js';
+import type { WebAuthGateway } from '../auth/auth-gateway.js';
 import { CLASSIC_A2UI_CATALOG, type A2uiSurfaceBlock } from './surface.js';
 
 export type TotpFlow = 'setup' | 'secondary' | 'reset';
@@ -37,10 +37,10 @@ export function stageTotpSurface({ chatJid, flow, candidate, activeSecret, issue
 }
 
 export async function handleTotpSurfaceAction(options: {
-  channel: WebChannelLike; req: Request; chatJid: string; block: A2uiSurfaceBlock; code?: string;
+  gateway: Pick<WebAuthGateway, 'setTotpSecret' | 'createTotpContext'>; req: Request; chatJid: string; block: A2uiSurfaceBlock; code?: string;
   authorise(): void; assertBinding(): void; complete(database: Database, feedback: string): void; publish(): void;
 }): Promise<Response> {
-  const { req, block, code, channel } = options;
+  const { req, block, code, gateway } = options;
   const surfaceId = block.surface.surfaceId;
   const state = pending.get(surfaceId);
   const headers = { 'Cache-Control': 'private, no-store', Vary: 'Cookie', 'Referrer-Policy': 'no-referrer' };
@@ -78,11 +78,11 @@ export async function handleTotpSurfaceAction(options: {
     pending.delete(surfaceId);
     if (rotate) {
       setWebTotpSecret(state.candidate);
-      channel.authGateway.setTotpSecret(state.candidate);
+      gateway.setTotpSecret(state.candidate);
     }
     options.publish();
     return Response.json({ status: 'ok', totp_result: 'success', message: feedback }, { headers: {
-      ...headers, 'Set-Cookie': channel.authGateway.createTotpContext().buildSessionCookie(token, req),
+      ...headers, 'Set-Cookie': gateway.createTotpContext().buildSessionCookie(token, req),
     } });
   } catch {
     return unavailable();

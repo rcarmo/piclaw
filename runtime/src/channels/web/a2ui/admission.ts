@@ -106,7 +106,7 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
   if (block.owner === 'totp') {
     if (action.name !== 'totp-open') return changed();
     if (code !== undefined && (typeof code !== 'string' || !/^\d{6}$/.test(code))) return json({ error: 'Enter a six-digit code.' }, 400);
-    return handleTotpSurfaceAction({ channel, req, chatJid, block, code,
+    return handleTotpSurfaceAction({ gateway: channel.authGateway, req, chatJid, block, code,
       authorise: () => validate(), assertBinding: binding,
       complete(database, feedback) {
         const current = readSource();
