@@ -4,6 +4,7 @@ export const CLASSIC_A2UI_CATALOG = "https://a2ui.org/specification/v1_0/catalog
 export const CLASSIC_A2UI_PROPERTIES = {
   Text: ["text", "variant"],
   Image: ["url", "description", "fit", "variant"],
+  Icon: ["name"],
   AudioPlayer: ["url", "description"],
   Video: ["url", "posterUrl"],
   Row: ["children", "align", "justify"],

@@ -15,10 +15,14 @@ const source = `
   $/date = "2028-02-29";
   $/preview = "/media/42";
   $/unsafe = "javascript:void(0)";
+  $/shape = "M2 2 L8 8";
   root = Column([Text("<img src=x onerror=alert(1)>"),
     List(children=[Text("First step"), Text("Second step")], direction="horizontal", align="center"),
     Tabs(tabs=[{title:"Summary",child:summary},{title:"Details",child:details}]),
     Modal(trigger=show, content=help),
+    Icon(name={svgPath:$/shape}),
+    Icon(name={svgPath:$/unsafe}),
+    Button(Icon(name="check"), action=Event("confirm")),
     Image(url=$/preview, description="Project preview", variant="avatar", fit="cover"),
     Image(url=$/unsafe, description="Unavailable preview"),
     AudioPlayer(url=$/audio, description="Fixture recording"),
@@ -139,6 +143,12 @@ for (const engine of [chromium, webkit]) {
       expect(await preview.evaluate(element => getComputedStyle(element).objectFit)).toBe('cover');
       await page.waitForFunction(() => (document.querySelector('img[alt="Project preview"]') as HTMLImageElement)?.naturalWidth === 8);
       expect(await page.getByText('Unavailable preview').count()).toBe(1);
+      const icons = page.locator('svg.a2ui-icon');
+      expect(await icons.count()).toBe(2);
+      expect(await icons.first().locator('path').getAttribute('d')).toBe('M2 2 L8 8');
+      const checkIcon = page.getByRole('button', { name: 'Check' }).locator('svg');
+      expect(await checkIcon.evaluate(el => el.namespaceURI)).toBe('http://www.w3.org/2000/svg');
+      expect(await checkIcon.locator('path').getAttribute('d')).toBeTruthy();
       expect(audioRequests).toHaveLength(0);
       expect(await page.locator('audio').count()).toBe(0);
       const video = page.locator('.a2ui-surface video');

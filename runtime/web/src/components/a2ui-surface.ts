@@ -3,6 +3,7 @@ import { html, useCallback, useRef, useState } from '../vendor/preact-htm.js';
 import { a2uiBindingPath, buildA2uiAction, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
 import { a2uiDateTimeDisplay, a2uiDateTimeType } from '../../../src/channels/web/a2ui/date-time.js';
 import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
+import { a2uiIconPaths } from './a2ui-icon-paths.js';
 import { A2uiPlayback } from './a2ui-playback.js';
 import { A2uiModal } from './a2ui-modal.js';
 import { A2uiTabs } from './a2ui-tabs.js';
@@ -76,6 +77,13 @@ export function A2uiSurface({ block, source, onSubmit }: {
         const label = text(item.label);
         switch (item.component) {
             case 'Text': return html`<span key=${id} class=${item.variant === 'caption' ? 'a2ui-caption' : ''}>${text(item.text)}</span>`;
+            case 'Icon': {
+                const name = read(item.name);
+                const path = typeof name === 'string' && Object.hasOwn(a2uiIconPaths, name) ? a2uiIconPaths[name]
+                    : name && typeof name === 'object' && Object.hasOwn(name, 'svgPath') ? read((name as { svgPath: unknown }).svgPath) : undefined;
+                if (typeof path !== 'string' || path.length > 4096 || !/^[Mm][MmZzLlHhVvCcSsQqTtAa0-9eE.,+\-\s]+$/.test(path)) return null;
+                return html`<svg key=${id} class="a2ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d=${path}></path></svg>`;
+            }
             case 'Image': {
                 const src = readA2uiImageUrl(read(item.url), window.location.origin);
                 const alt = text(item.description);
@@ -129,12 +137,16 @@ export function A2uiSurface({ block, source, onSubmit }: {
             case 'Divider': return html`<hr key=${id} class=${item.axis === 'vertical' ? 'a2ui-divider-vertical' : ''} />`;
             case 'Button': {
                 const link = readA2uiLink(item.action);
-                if (link && !disabled) return html`<a key=${id} class="a2ui-button a2ui-button-borderless" href=${link}
+                const buttonChild = typeof item.child === 'string' ? components.get(item.child) : undefined;
+                const name = buttonChild?.component === 'Icon' ? read(buttonChild.name) : undefined;
+                const buttonLabel = buttonChild?.component !== 'Icon' ? undefined : typeof name === 'string' && Object.hasOwn(a2uiIconPaths, name)
+                    ? name.replace(/([A-Z])/g, ' $1').replace(/^./, char => char.toUpperCase()) : link ? 'Open link' : 'Action';
+                if (link && !disabled) return html`<a key=${id} class="a2ui-button a2ui-button-borderless" href=${link} aria-label=${buttonLabel}
                     aria-haspopup=${openModal ? 'dialog' : undefined} onClick=${openModal}
                     target="_blank" rel="noopener noreferrer">${child(item.child)}</a>`;
                 if (block.owner === 'login' && (id === 'continue' || id === 'check')) return null;
                 return html`<button key=${id} type="button" class=${`a2ui-button a2ui-button-${item.variant || 'default'}`}
-                disabled=${disabled} aria-disabled=${pending || disabled} aria-haspopup=${openModal ? 'dialog' : undefined}
+                disabled=${disabled} aria-disabled=${pending || disabled} aria-label=${buttonLabel} aria-haspopup=${openModal ? 'dialog' : undefined}
                 onClick=${(event: Event) => {
                     if (pending || disabled) return;
                     openModal?.(event);

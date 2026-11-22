@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { applyA2uiMessages, compileA2uiExpress } from "../../../../src/channels/web/a2ui/express.js";
-import { readA2uiImageUrl } from "../../../../src/channels/web/a2ui/surface.js";
+import { basicCatalog } from '@a2ui/web_core/catalogs/basic/v1';
+import { a2uiIconPaths } from '../../../../web/src/components/a2ui-icon-paths.js';
+import { CLASSIC_A2UI_PROPERTIES, readA2uiImageUrl } from "../../../../src/channels/web/a2ui/surface.js";
 
 const form = `
   # Standard upstream Express, not a Piclaw form parser.
@@ -62,6 +64,21 @@ describe("Classic A2UI Express", () => {
     const snapshot = applyA2uiMessages('media', compileA2uiExpress(source,'media'))!;
     expect(snapshot.components).toContainEqual(expect.objectContaining({component:'AudioPlayer', url:{'@path':'/clip'}, description:'Recording'}));
     expect(snapshot.components).toContainEqual(expect.objectContaining({component:'Video', url:'https://media.test/clip.mp4', posterUrl:'/media/42'}));
+  });
+
+  test('registers every Basic v1 component and has a local vector for every named icon', () => {
+    const definition = basicCatalog.toJson().components as unknown as {
+      Icon: {properties: {name: {oneOf:[{enum: string[]}]}}};
+    };
+    expect(Object.keys(CLASSIC_A2UI_PROPERTIES).sort()).toEqual(Object.keys(definition).sort());
+    expect(Object.keys(a2uiIconPaths).sort()).toEqual([...definition.Icon.properties.name.oneOf[0].enum].sort());
+  });
+
+  test("accepts standard icons, bound SVG paths and icon-only buttons", () => {
+    const source = '$/path="M2 2 L8 8"; root=Column([Icon(name="accountCircle"), Icon(name={svgPath:$/path}), Button(Icon(name="check"), action=Event("ok"))]);';
+    const result = applyA2uiMessages('icons', compileA2uiExpress(source,'icons'))!;
+    expect(result.components.filter(component => component.component === 'Icon').map(component => component.name))
+      .toEqual(['accountCircle', { svgPath: { '@path':'/path' } }, 'check']);
   });
 
   test("resolves tab titles and validates their child graph", () => {

@@ -194,7 +194,10 @@ function verifySnapshot(snapshot: A2uiSnapshot): void {
       walk(item.content, depth + 1);
     }
     if (typeof item.child === "string") {
-      if (item.component === "Button") requireClassic(components.get(item.child)?.component === "Text", "button labels must be text");
+      if (item.component === "Button") {
+        const childKind = components.get(item.child)?.component;
+        requireClassic(childKind === "Text" || childKind === "Icon", "button labels must be text or icons");
+      }
       walk(item.child, depth + 1);
     }
   }
