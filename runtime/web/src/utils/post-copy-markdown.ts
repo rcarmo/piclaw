@@ -1,5 +1,3 @@
-import { buildAdaptiveCardSubmissionFallbackText } from '../ui/adaptive-card-submission.js';
-
 function cleanString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -56,14 +54,8 @@ function buildStructuredBlocksMarkdown(blocks: any[], mediaIds: Array<string | n
       return;
     }
 
-    if ((type === 'adaptive_card' || type === 'a2ui_surface') && cleanString((block as any).fallback_text)) {
+    if (type === 'a2ui_surface' && cleanString((block as any).fallback_text)) {
       sections.push(cleanString((block as any).fallback_text));
-      return;
-    }
-
-    if (type === 'adaptive_card_submission') {
-      const fallback = buildAdaptiveCardSubmissionFallbackText(block as any);
-      if (cleanString(fallback)) sections.push(cleanString(fallback));
       return;
     }
 

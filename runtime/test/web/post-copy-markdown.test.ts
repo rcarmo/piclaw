@@ -47,3 +47,14 @@ test('buildPostMarkdownCopyPayload formats embedded resources as fenced code blo
   expect(payload).toContain('### notes/debug.txt');
   expect(payload).toContain('```\nline one\nline two\n```');
 });
+
+test('copy includes only normal text and current A2UI fallback, not retired card bytes or receipts', () => {
+  const legacy = [
+    { type: 'adaptive_card', fallback_text: 'Private legacy fallback', payload: { secret: 'Legacy hidden body' } },
+    { type: 'adaptive_card_submission', title:'Private legacy receipt', data:{ code:'Legacy code' } },
+  ];
+  const a2ui = { type: 'a2ui_surface', fallback_text: 'Current form summary', surface: { dataModel: { value: 'Current form draft' } } };
+  expect(buildPostMarkdownCopyPayload({ data:{content:'Normal post text',content_blocks:legacy} })).toBe('Normal post text');
+  expect(buildPostMarkdownCopyPayload({ data:{content_blocks:legacy} })).toBe('');
+  expect(buildPostMarkdownCopyPayload({ data:{content_blocks:[...legacy,a2ui]} })).toBe('Current form summary');
+});

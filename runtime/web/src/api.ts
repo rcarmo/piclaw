@@ -665,25 +665,6 @@ export async function respondToAgentRequest(requestId, outcome, chatJid = null) 
     return response.json();
 }
 
-/**
- * Submit an Adaptive Card action back to the web channel.
- */
-export async function submitAdaptiveCardAction(payload, options: { signal?: AbortSignal } = {}) {
-    const response = await fetch(API_BASE + '/agent/card-action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: options.signal,
-    });
-
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Adaptive Card action failed' }));
-        throw new Error(error.error || `HTTP ${response.status}`);
-    }
-
-    return response.json();
-}
-
 export async function streamSidePrompt(prompt, options: ApiOptions = {}) {
     const response = await fetch(API_BASE + '/agent/side-prompt/stream', {
         method: 'POST',

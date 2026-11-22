@@ -45,7 +45,7 @@ for (const engine of [chromium, webkit]) {
           }
           if (window.events.length === 1) throw new Error('Try again');
         };
-        window.draw = (block, readOnly = false) => render(html\`<\${Post} capabilities=\${{cardActions: !readOnly}}
+        window.draw = (block, readOnly = false) => render(html\`<\${Post} capabilities=\${{surfaceActions: !readOnly}}
           post=\${{id:19, chat_jid:"web:test", is_bot_message:true,
             data:{content:"Form fallback",content_blocks:[block],thread_id:3}}} onSubmitA2uiAction=\${submit} />\`, document.body);
       `);
@@ -122,6 +122,16 @@ for (const engine of [chromium, webkit]) {
       expect(await page.getByText('PRIVATEDEVICE').count()).toBe(0);
       const authSubmit = await page.evaluate(() => (window as any).events.at(-1));
       expect(authSubmit).toMatchObject({ private_value: 'synthetic-only-key', revision: 6, message: { action: { context: {} } } });
+      const legacyRequests: string[] = [];
+      page.on('request', request => { if (request.url().includes('adaptivecards')) legacyRequests.push(request.url()); });
+      await page.evaluate(() => (window as any).draw({
+        type: 'adaptive_card', card_id: 'historical-card', state: 'active', schema_version: '1.5', fallback_text: 'Stored legacy payload',
+        payload: {type:'AdaptiveCard', version:'1.5', body:[{type:'TextBlock', text:'Stored legacy payload'}], actions:[{type:'Action.Submit', title:'Old action'}]},
+      }));
+      await page.getByText('Form fallback').waitFor();
+      expect(await page.locator('.post-adaptive-cards').count()).toBe(0);
+      expect(await page.getByRole('button', {name:'Old action'}).count()).toBe(0);
+      expect(legacyRequests).toEqual([]);
       expect(errors).toEqual([]);
     } finally {
       await browser?.close();
