@@ -12,6 +12,9 @@ import { DEFAULT_AGENT_NAME, getAvatarInfo } from '../ui/agent-utils.js';
 import { getAttachmentPreviewKind, getAttachmentPreviewLabel } from '../ui/attachment-preview.js';
 import { extractCardBlocks, renderAdaptiveCard } from '../ui/adaptive-card-renderer.js';
 import { buildAdaptiveCardSubmissionFallbackText, describeAdaptiveCardSubmission, extractAdaptiveCardSubmissionBlocks } from '../ui/adaptive-card-submission.js';
+import { A2uiSurface } from './a2ui-surface.js';
+import { isA2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
+import { submitA2uiAction } from '../api.js';
 import { buildGeneratedWidgetPayload, canRenderGeneratedWidget } from '../ui/generated-widget.js';
 import { disclosureTriangleSvgString, renderDisclosureTriangle } from '../ui/disclosure-triangle.js';
 import { isIOSDevice } from '../ui/app-helpers.js';
@@ -1429,7 +1432,7 @@ function highlightHtml(html, query) {
 /**
  * Single post component
  */
-export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMessage, agentName, agentAvatarUrl, userName, userAvatarUrl, userAvatarBackground, onDelete, isThreadReply, isThreadPrev, isThreadNext, isRemoving, highlightQuery, onFileRef, onOpenWidget, onOpenAttachmentPreview, onSaveAnnotations, onSubmitCardAction, accessory, capabilities = null }) {
+export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMessage, agentName, agentAvatarUrl, userName, userAvatarUrl, userAvatarBackground, onDelete, isThreadReply, isThreadPrev, isThreadNext, isRemoving, highlightQuery, onFileRef, onOpenWidget, onOpenAttachmentPreview, onSaveAnnotations, onSubmitCardAction, onSubmitA2uiAction, accessory, capabilities = null }) {
     const { t } = useTranslation();
     const postCapabilities = capabilities && typeof capabilities === 'object' ? capabilities : {};
     const allowMedia = postCapabilities.media !== false;
@@ -1549,6 +1552,7 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
     };
     const { content: cleanedWithAttachments, attachments } = extractAttachmentRefs(cleanedWithMsgRefs);
     displayContent = cleanedWithAttachments;
+    const a2uiBlocks = allowCards ? blocks.filter(isA2uiSurfaceBlock) : [];
     const directCardBlocks = allowCards ? extractCardBlocks(blocks) : [];
     const submissionBlocks = allowCards ? extractAdaptiveCardSubmissionBlocks(blocks) : [];
     const recoveryMarkerBlocks = extractRecoveryMarkerBlocks(blocks);
@@ -1566,7 +1570,10 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
     const singleSubmissionFallback = submissionBlocks.length === 1
         ? buildAdaptiveCardSubmissionFallbackText(submissionBlocks[0]).trim()
         : '';
+    const a2uiFallback = a2uiBlocks.length === 1 ? a2uiBlocks[0].fallback_text.trim() : '';
     const hideRenderedFallback = (
+        Boolean(a2uiFallback) && displayContent?.trim() === a2uiFallback
+    ) || (
         Boolean(singleCardFallback) && displayContent?.trim() === singleCardFallback
     ) || (
         Boolean(singleSubmissionFallback) && displayContent?.trim() === singleSubmissionFallback
@@ -2001,6 +2008,7 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
         && outcomeMarker?.severity === 'info'
         && !shouldRenderContent
         && mediaIds.length === 0
+        && a2uiBlocks.length === 0
         && directCardBlocks.length === 0
         && submissionBlocks.length === 0
     );
@@ -2213,6 +2221,11 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
                         }}
                     />
                 `}
+                ${a2uiBlocks.map(block => html`<${A2uiSurface}
+                    key=${`${block.surface.surfaceId}:${block.revision}`}
+                    block=${block}
+                    source=${{ post_id: post.id, thread_id: data.thread_id || post.id, chat_jid: post.chat_jid }}
+                    onSubmit=${allowCardActions ? onSubmitA2uiAction ?? submitA2uiAction : undefined} />`)}
                 ${cardBlocks.length > 0 && html`
                     <div ref=${cardContainerRef} class="post-adaptive-cards" />
                 `}

@@ -136,7 +136,10 @@
     "smoke:bedrock-opus5": "bun run runtime/scripts/bedrock-opus5-smoke.ts"
   },
   "dependencies": {
+    "@a2ui/agent": "0.1.0",
+    "@a2ui/web_core": "0.15.0",
     "@e965/xlsx": "0.20.3",
+    "@earendil-works/chord": "1.6.0",
     "@earendil-works/pi-agent-core": "1.6.0",
     "@earendil-works/pi-ai": "1.6.0",
     "@earendil-works/pi-coding-agent": "1.6.0",
@@ -168,8 +171,7 @@
     "sharp": "0.35.5",
     "strip-json-comments": "5.0.3",
     "typebox": "1.4.7",
-    "web-push": "4.0.0",
-    "@earendil-works/chord": "1.6.0"
+    "web-push": "4.0.0"
   },
   "devDependencies": {
     "@assemblyscript/loader": "0.28.20",

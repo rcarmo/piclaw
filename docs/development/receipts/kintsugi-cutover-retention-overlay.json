@@ -20,8 +20,8 @@
     {
       "path": "runtime/durable-engine/src/default-application-runtime.ts",
       "beforeSha256": "85de1db072f2c7e3f5280ca93cab21329da6a2ce8f3052e400202ecee97ce2a7",
-      "afterSha256": "a8f3960da1a159cdde7b95bf56fbb9b73b502ed7f37fc98e36a02f6333f7c3b4",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Register the owned model-facing keychain metadata inventory and reference-first managed guidance without legacy credential actions. Share the authenticated, scoped model catalogue without changing retention or accounting."
+      "afterSha256": "989f50a8aaa17d12517492afbe0df8f802aad8c38ac04f8a38e59dd2cff5f950",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Register the owned model-facing keychain metadata inventory and reference-first managed guidance without legacy credential actions. Share the authenticated, scoped model catalogue without changing retention or accounting. Wire the native A2UI Express publisher and revision-bound action ingress without changing historical retention accounting."
     },
     {
       "path": "runtime/durable-engine/src/host-models.ts",
@@ -56,8 +56,8 @@
     {
       "path": "runtime/src/channels/web/http/dispatch-agent.ts",
       "beforeSha256": "af21c1c0c42fcc3b0d7b3ccc4e18ead534adf90dafe361cc8537a1c3cf544df1",
-      "afterSha256": "31559338352bc039ecb35b2752987bea9cfa7e8c30f8716b02038275dcc85e32",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "1760b32c06f5061f05f7c2dd407ffb4c9c2d780e4ad39d589f9c47434e6b5f29",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Wire the native A2UI Express publisher and revision-bound action ingress without changing historical retention accounting."
     },
     {
       "path": "runtime/src/extensions/index.ts",

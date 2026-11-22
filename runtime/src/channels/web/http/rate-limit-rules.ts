@@ -106,6 +106,7 @@ export function getDataRateLimitRule(method: string, pathname: string): DataRate
   if (method === "POST" && (
     pathname === "/agent/thought/visibility" ||
     pathname === "/agent/respond" ||
+    pathname === "/agent/a2ui-action" ||
     pathname === "/agent/card-action" ||
     pathname === "/agent/tool-abort"
   )) {

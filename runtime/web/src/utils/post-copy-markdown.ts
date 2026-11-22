@@ -56,7 +56,7 @@ function buildStructuredBlocksMarkdown(blocks: any[], mediaIds: Array<string | n
       return;
     }
 
-    if (type === 'adaptive_card' && cleanString((block as any).fallback_text)) {
+    if ((type === 'adaptive_card' || type === 'a2ui_surface') && cleanString((block as any).fallback_text)) {
       sections.push(cleanString((block as any).fallback_text));
       return;
     }

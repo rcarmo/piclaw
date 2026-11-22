@@ -1233,3 +1233,8 @@ export async function savePostAnnotations(postId: number, annotations: unknown[]
         body: JSON.stringify({ annotations }),
     });
 }
+
+/** Submit a revision-bound A2UI event. */
+export function submitA2uiAction(payload: import('../../src/channels/web/a2ui/action.js').A2uiActionRequest) {
+    return request('/agent/a2ui-action', { method: 'POST', body: JSON.stringify(payload) });
+}

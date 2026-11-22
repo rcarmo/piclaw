@@ -2024,3 +2024,42 @@
     border-color: var(--accent-color);
 }
 
+
+/* A2UI timeline surfaces */
+.a2ui-surface {
+    margin: 8px 0;
+    padding: 12px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
+}
+.a2ui-surface *, .a2ui-surface { box-sizing: border-box; }
+.a2ui-row, .a2ui-column, .a2ui-field, .a2ui-checkbox { display: flex; gap: 8px; min-width: 0; }
+.a2ui-row { flex-wrap: wrap; }
+.a2ui-column, .a2ui-field { flex-direction: column; }
+.a2ui-checkbox { align-items: center; }
+.a2ui-caption { color: var(--text-secondary); font-size: var(--font-size-sm); }
+.a2ui-card { border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px; }
+.a2ui-surface hr { border: 0; border-block-start: 1px solid var(--border-color); }
+.a2ui-surface .a2ui-divider-vertical { border-block-start: 0; border-inline-start: 1px solid var(--border-color); margin: 0; }
+.a2ui-field :is(input, textarea, select), .a2ui-button {
+    min-width: 0;
+    min-height: 34px;
+    padding: 7px 10px;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font: inherit;
+}
+.a2ui-checkbox input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent-color); }
+.a2ui-button { align-self: start; cursor: pointer; font-weight: 600; }
+.a2ui-button-primary { color: var(--accent-contrast-text); background: var(--accent-color); border-color: var(--accent-color); }
+.a2ui-button-borderless { color: var(--accent-color); background: transparent; border-color: transparent; }
+.a2ui-surface :focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+.a2ui-button[aria-disabled="true"] { cursor: default; opacity: 0.65; }
+.a2ui-error { margin-block: 8px 0; color: var(--error-color, var(--text-primary)); }

@@ -7,6 +7,8 @@ const INTERNAL_CONTENT_BLOCK_TYPES = new Set([
   "turn_outcome_marker",
   "agent_turn_marker",
   "agent_message_role",
+  "a2ui_surface",
+  "a2ui_submission",
 ]);
 
 const MODEL_FORBIDDEN_CONTENT_BLOCK_TYPES = new Set([
@@ -15,6 +17,8 @@ const MODEL_FORBIDDEN_CONTENT_BLOCK_TYPES = new Set([
   "turn_outcome_marker",
   "agent_turn_marker",
   "agent_message_role",
+  "a2ui_surface",
+  "a2ui_submission",
 ]);
 
 /** Strip agent-owned metadata from public user-controlled content blocks. */

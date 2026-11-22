@@ -61,6 +61,7 @@ import { optimizerSettingsApi } from "./token-optimizer-settings.js";
 import { createOptimizerCodemodeTool } from "./optimizer-codemode.js";
 import { createHostFetch } from "./host-fetch.js";
 import { taskModelRequestScope, taskModelHookScope, taskModelToolScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
+import { createHostA2uiTool } from "./host-a2ui-tool.js";
 import { createHostBuiltinTools } from "./host-builtins.js";
 import { createHostModelTools, nativeToolInstructions } from "./host-model-controls.js";
 import { createHostKeychainTool } from "./host-keychain-tool.js";
@@ -991,6 +992,13 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     if (readAccessConfig().mode !== "single-user") throw Error("Host tool permission denied");
   } }, signal: lifetime.signal, shellPath: () => settings.getShellPath(), names: defaultToolNames });
   const builtins = [...tools];
+  tools.push(createHostA2uiTool({ root, runtime,
+    assertOwner() {
+      assert(); lifetime.signal.throwIfAborted();
+      if (readAccessConfig().mode !== 'single-user' || !terminalBroadcast) throw Error('Native A2UI publication unavailable');
+    },
+    broadcast(event, post) { terminalBroadcast?.(event, post); },
+  }));
   processControls = createHostProcessControls({ root, runtime,
     assertOwner() { assert(); if (readAccessConfig().mode !== "single-user") throw Error("Native process control requires single-user policy"); },
     assertHostIdle(input) {

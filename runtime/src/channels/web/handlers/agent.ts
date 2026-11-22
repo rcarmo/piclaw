@@ -13,6 +13,7 @@ import { captureWebRequestAuthority } from "../auth/auth-gateway.js";
 
 import { getAddonLocalDispatchBlock } from "../../../addons/local-dispatch.js";
 
+import type { StoreWebMessageOptions } from "../messaging/message-store.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
 import { isSingleUserAccess } from "../../../core/config-access.js";
 
@@ -107,7 +108,7 @@ export async function handleAgentMessage(
   pathname: string,
   chatJid: string,
   defaultAgentId: string,
-  post?: { requireReplyThread: boolean; authorise: ValidateInputAuthority },
+  post?: { requireReplyThread: boolean; authorise: ValidateInputAuthority; onAccepted?: StoreWebMessageOptions["acceptSource"] },
 ): Promise<Response> {
   if (!isSingleUserAccess()) return channel.json({ error: "Single-user message admission is required." }, 403);
   let internalAuthority: ReturnType<typeof readInputRequestAuthority>;
@@ -250,7 +251,11 @@ export async function handleAgentMessage(
     try {
       interaction = await admitUserInput(chatJid,content,false,normalized.mediaIds,{
         contentBlocks:normalized.contentBlocks,linkPreviews:normalized.linkPreviews,threadId:normalized.threadId??undefined,
-        screenHint:normalized.screenHint,acceptSource,isSteeringMessage:requestMode==="steer",
+        screenHint:normalized.screenHint,acceptSource: post?.onAccepted ? stored => {
+          const result = acceptSource!(stored);
+          if (result !== undefined) return result;
+          return post.onAccepted!(stored);
+        } : acceptSource,isSteeringMessage:requestMode==="steer",
       },revalidateInputAuthority,req.signal);
     } catch (error) {
       if (req.signal.aborted) return channel.json({error:"Input submission was cancelled before acceptance."},400);
