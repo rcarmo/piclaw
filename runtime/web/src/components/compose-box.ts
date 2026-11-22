@@ -967,6 +967,19 @@ export function QueuedFollowupStack({
     onOpenFilePill,
 }) {
     const { t } = useTranslation();
+    const pending = useRef(new Set<string | number>());
+    const [pendingRows, setPendingRows] = useState(() => new Set<string | number>());
+    const requestSteer = async (item) => {
+        const id = item.row_id;
+        if (pending.current.has(id) || !onInjectQueuedFollowup) return;
+        pending.current.add(id);
+        setPendingRows(new Set(pending.current));
+        try { await onInjectQueuedFollowup(item); }
+        finally {
+            pending.current.delete(id);
+            setPendingRows(new Set(pending.current));
+        }
+    };
     if (!Array.isArray(items) || items.length === 0) return null;
     return html`
         <div class="compose-queue-stack">
@@ -976,8 +989,9 @@ export function QueuedFollowupStack({
                 if (!parsed.text.trim() && parsed.fileRefs.length === 0 && parsed.folderRefs.length === 0 && parsed.messageRefs.length === 0 && parsed.attachmentRefs.length === 0) return null;
                 // Steering is placed before any follow-up, so items move only within their group.
                 const steering = item?.mode === 'steer';
-                const canMoveUp = index > 0 && (items[index - 1]?.mode === 'steer') === steering;
-                const canMoveDown = index < items.length - 1 && (items[index + 1]?.mode === 'steer') === steering;
+                const requesting = pendingRows.has(item.row_id);
+                const canMoveUp = !requesting && index > 0 && (items[index - 1]?.mode === 'steer') === steering;
+                const canMoveDown = !requesting && index < items.length - 1 && (items[index + 1]?.mode === 'steer') === steering;
                 const canReturnToEditor = true;
                 return html`
                     <div class=${`compose-queue-stack-item${steering ? ' is-steering' : ''}`} data-testid="queue-item" data-queue-mode=${steering ? 'steer' : 'followUp'} role="listitem">
@@ -1067,6 +1081,7 @@ export function QueuedFollowupStack({
                                     type="button"
                                     title=${t('compose.editInCompose')}
                                     aria-label=${t('compose.returnToEditor')}
+                                    disabled=${requesting}
                                     onClick=${(e) => { e.stopPropagation(); onReturnQueuedFollowup?.(item); }}
                                 >
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1080,13 +1095,15 @@ export function QueuedFollowupStack({
                                 type="button"
                                 title=${t('compose.injectSteer')}
                                 aria-label=${t('compose.injectSteer')}
-                                onClick=${() => onInjectQueuedFollowup?.(item)}
+                                aria-busy=${requesting ? 'true' : undefined}
+                                disabled=${requesting}
+                                onClick=${() => void requestSteer(item)}
                             >
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M4 20h12a2 2 0 0 0 2-2V8" />
                                     <polyline points="14 12 18 8 22 12" />
                                 </svg>
-                                <span>${t('compose.steer')}</span>
+                                <span>${t(requesting ? 'compose.requestingSteer' : 'compose.steer')}</span>
                             </button>`}
                             <button
                                 class="compose-queue-stack-close-btn queue-remove"
@@ -1094,6 +1111,7 @@ export function QueuedFollowupStack({
                                 type="button"
                                 title=${t('compose.cancelQueued')}
                                 aria-label=${t('compose.cancelQueued')}
+                                disabled=${requesting}
                                 onClick=${() => onRemoveQueuedFollowup?.(item)}
                             >
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -2700,11 +2718,8 @@ export function ComposeBox({
     };
 
     const handleInjectQueuedFollowup = (queuedItem) => {
-        // Queue-item steering is backend-authoritative: the server removes the
-        // queued item and either converts it into steering or immediately sends
-        // it if the active stream already ended. Avoid a second client-side
-        // submit here so removal + steering stay atomic.
-        onInjectQueuedFollowup?.(queuedItem);
+        // Promote the existing SDK item; never submit it as a second input.
+        return onInjectQueuedFollowup?.(queuedItem);
     };
 
     const handleReturnQueuedFollowup = useCallback((queuedItem) => {

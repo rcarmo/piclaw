@@ -63,14 +63,15 @@ test('steering keeps its SDK item visible until actual placement and refreshes o
     removeAgentQueueItem: async () => ({ ok: true }),
   });
 
-  // Still visible, now shown as steering until the SDK places it.
-  expect(followupQueueItems).toEqual([{ row_id: 'r1', content: 'Queued', mode: 'steer' }]);
+  // Still visible as a follow-up until there is a committed steer receipt.
+  expect(followupQueueItems).toEqual([{ row_id: 'r1', content: 'Queued' }]);
   expect(dismissedQueueRowIdsRef.current.has('r1')).toBe(false);
 
   await Promise.resolve();
   await Promise.resolve();
 
   expect(calls).toEqual([['r1', 'chat-a']]);
+  expect(followupQueueItems).toEqual([{ row_id: 'r1', content: 'Queued', mode: 'steer' }]);
   expect(refreshCount).toBe(1);
 });
 
@@ -205,8 +206,8 @@ for (const rejected of [false,true]) test(`steer completion cannot update a diff
  let current=true,resolve!:(value:unknown)=>void,reject!:(error:Error)=>void;
  const pending=new Promise((a,b)=>{resolve=a;reject=b;});let updates=0,refreshes=0,toasts=0;
  handleInjectQueuedFollowupAction({queuedItem:{row_id:1},followupQueueItemsRef:{current:[{row_id:1,content:'A'}]},dismissedQueueRowIdsRef:{current:new Set()},currentChatJid:'chat-a',isCurrent:()=>current,refreshQueueState(){refreshes++;},setFollowupQueueItems(){updates++;},showIntentToast(){toasts++;},steerAgentQueueItem:()=>pending,removeAgentQueueItem:async()=>({})});
- expect(updates).toBe(1);current=false;
+ expect(updates).toBe(0);current=false;
  if(rejected)reject(Error('Late rejection'));else resolve({queued:'steer'});
  await Promise.resolve();await Promise.resolve();await Promise.resolve();
- expect(updates).toBe(1);expect(refreshes).toBe(0);expect(toasts).toBe(0);
+ expect(updates).toBe(0);expect(refreshes).toBe(0);expect(toasts).toBe(0);
 });
