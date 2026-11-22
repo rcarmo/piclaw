@@ -27,35 +27,40 @@ export class OptimizerTaskPayloadSkipped extends Error {}
 export function boundOptimizerHistoryReads(executor: SqliteExecutor): SqliteExecutor {
   return {
     ...executor,
-    async get<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T|undefined> {
+    get<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T|undefined> {
       const budget=optimizerHistoryRead.getStore();
+      // Return the original promise on ordinary SDK reads, with no extra await.
       if (!budget) return executor.get<T>(sql,...params);
-      if (sql!==taskRead) {
-        if (/\b(?:entries|tasks)\b/i.test(sql)) throw Error('Unrecognised optimiser history lookup');
+      return (async()=>{
+        if (sql!==taskRead) {
+          if (/\b(?:entries|tasks)\b/i.test(sql)) throw Error('Unrecognised optimiser history lookup');
+          return executor.get<T>(sql,...params);
+        }
+        const row=await executor.get<{bytes:number}>('SELECT octet_length(record) AS bytes FROM tasks WHERE id = ?',...params);
+        if (!row) return undefined;
+        if (budget === 'id' || !canLoad(budget,row.bytes)) throw new OptimizerTaskPayloadSkipped('Optimiser task payload omitted');
         return executor.get<T>(sql,...params);
-      }
-      const row=await executor.get<{bytes:number}>('SELECT octet_length(record) AS bytes FROM tasks WHERE id = ?',...params);
-      if (!row) return undefined;
-      if (budget === 'id' || !canLoad(budget,row.bytes)) throw new OptimizerTaskPayloadSkipped('Optimiser task payload omitted');
-      return executor.get<T>(sql,...params);
+      })();
     },
-    async all<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T[]> {
+    all<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T[]> {
       const budget=optimizerHistoryRead.getStore();
       if (!budget) return executor.all<T>(sql,...params);
-      if (!entryScan.test(sql)) {
-        if (/\b(?:entries|tasks)\b/i.test(sql)) throw Error('Unrecognised optimiser history scan');
-        return executor.all<T>(sql,...params);
-      }
-      if (budget === 'id') return (await executor.all<{id:number;conversation_id:number}>(
-        sql.replace('SELECT record ','SELECT id, conversation_id '),...params)).map(row=>skippedEntry(row.id,row.conversation_id)) as T[];
-      const metadata=await executor.all<{id:number;conversation_id:number;bytes:number}>(
-        sql.replace('SELECT record ','SELECT id, conversation_id, octet_length(record) AS bytes '),...params);
-      const allowed=metadata.filter(row=>canLoad(budget,row.bytes));
-      const loaded=allowed.length ? await executor.all<{id:number;record:string}>(
-        `SELECT id, record FROM entries WHERE id IN (${allowed.map(()=>'?').join(',')})`,...allowed.map(row=>row.id)) : [];
-      if (loaded.length !== allowed.length) budget.partial=true;
-      const byId=new Map(loaded.map(row=>[row.id,row.record]));
-      return metadata.map(row=>byId.has(row.id) ? {record:byId.get(row.id)!} : skippedEntry(row.id,row.conversation_id)) as T[];
+      return (async()=>{
+        if (!entryScan.test(sql)) {
+          if (/\b(?:entries|tasks)\b/i.test(sql)) throw Error('Unrecognised optimiser history scan');
+          return executor.all<T>(sql,...params);
+        }
+        if (budget === 'id') return (await executor.all<{id:number;conversation_id:number}>(
+          sql.replace('SELECT record ','SELECT id, conversation_id '),...params)).map(row=>skippedEntry(row.id,row.conversation_id)) as T[];
+        const metadata=await executor.all<{id:number;conversation_id:number;bytes:number}>(
+          sql.replace('SELECT record ','SELECT id, conversation_id, octet_length(record) AS bytes '),...params);
+        const allowed=metadata.filter(row=>canLoad(budget,row.bytes));
+        const loaded=allowed.length ? await executor.all<{id:number;record:string}>(
+          `SELECT id, record FROM entries WHERE id IN (${allowed.map(()=>'?').join(',')})`,...allowed.map(row=>row.id)) : [];
+        if (loaded.length !== allowed.length) budget.partial=true;
+        const byId=new Map(loaded.map(row=>[row.id,row.record]));
+        return metadata.map(row=>byId.has(row.id) ? {record:byId.get(row.id)!} : skippedEntry(row.id,row.conversation_id)) as T[];
+      })();
     },
   };
 }
