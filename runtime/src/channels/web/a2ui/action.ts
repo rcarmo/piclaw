@@ -27,8 +27,15 @@ export function a2uiBindingPath(value: unknown): string | undefined {
     ? value["@path"] : undefined;
 }
 
-/** Resolve a validated absolute binding without interpreting strings or following prototypes. */
-export function readA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?: ReadonlyMap<string, unknown>): unknown {
+/** Resolve a projected binding or the template index without interpreting strings. */
+export function readA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?: ReadonlyMap<string, unknown>, instancePath?: string): unknown {
+  if (record(value) && value['@call'] === '@index') {
+    if (!instancePath) return undefined;
+    const index = Number(instancePath.slice(instancePath.lastIndexOf('/') + 1));
+    const offset = record(value.args) ? readA2uiValue(snapshot, value.args.offset, edits, instancePath) : undefined;
+    const computed = index + (typeof offset === 'number' && Number.isFinite(offset) ? offset : 0);
+    return Number.isFinite(computed) ? computed : undefined;
+  }
   const path = a2uiBindingPath(value);
   if (!path) return value;
   if (edits?.has(path)) return edits.get(path);
@@ -99,10 +106,16 @@ export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string,
   const projection = projectA2uiTemplates(source);
   const { snapshot } = projection;
   const event = eventDescriptor(projection, sourceComponentId, instancePath);
-  const context = Object.fromEntries(Object.entries(event.context).map(([key, binding]) => {
+  const contextBindings = Object.entries(event.context);
+  const declaredEdits = new Map<string, unknown>();
+  for (const [, binding] of contextBindings) {
+    const path = a2uiBindingPath(binding);
+    if (path && edits.has(path) && controlForPath(snapshot, path)) declaredEdits.set(path, edits.get(path));
+  }
+  const context = Object.fromEntries(contextBindings.map(([key, binding]) => {
     const path = a2uiBindingPath(binding);
     const control = path ? controlForPath(snapshot, path) : undefined;
-    const value = readA2uiValue(snapshot, binding, control ? edits : undefined) ?? defaultControlValue(control);
+    const value = readA2uiValue(snapshot, binding, declaredEdits, instancePath) ?? defaultControlValue(control);
     if (!isA2uiActionValue(value)) throw new Error("Invalid form value");
     return [key, value];
   }));
@@ -132,18 +145,21 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
     throw new Error("Invalid surface action");
   }
   const boundValues = new Map<string, unknown>();
+  const derived: [unknown, ActionValue][] = [];
   for (const [key, binding] of Object.entries(event.context)) {
     const input = action.context[key];
     const path = a2uiBindingPath(binding);
     const control = path ? controlForPath(snapshot, path) : undefined;
-    if (!Object.hasOwn(action.context, key) || !isA2uiActionValue(input)
-      || (control ? !validControlValue(snapshot, control, input) : !sameValue(input, readA2uiValue(snapshot, binding) ?? null))) {
-      throw new Error("Invalid form value");
-    }
-    if (path) {
+    if (!Object.hasOwn(action.context, key) || !isA2uiActionValue(input)) throw new Error('Invalid form value');
+    if (!path || !control) derived.push([binding, input]);
+    else {
+      if (!validControlValue(snapshot, control, input)) throw new Error('Invalid form value');
       if (boundValues.has(path) && !sameValue(boundValues.get(path), input)) throw new Error("Conflicting form values");
       boundValues.set(path, input);
     }
+  }
+  for (const [binding, input] of derived) {
+    if (!sameValue(input, readA2uiValue(snapshot, binding, boundValues, instancePath) ?? null)) throw new Error('Invalid form value');
   }
   return { surfaceId: snapshot.surfaceId, name: event.name, sourceComponentId: action.sourceComponentId, timestamp: action.timestamp,
     context: Object.fromEntries(Object.keys(event.context).map((key) => [key, (action.context as Record<string, ActionValue>)[key]])) };

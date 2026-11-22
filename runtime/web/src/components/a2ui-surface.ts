@@ -34,11 +34,6 @@ export function A2uiSurface({ block, source, onSubmit }: {
     const privateInput = useRef<HTMLInputElement | null>(null);
     const disabled = block.state !== 'active' || !onSubmit;
     const components = new Map((projection?.snapshot.components ?? []).map(item => [item.id, item]));
-    const read = (value: unknown) => readA2uiValue(snapshot, value, edits);
-    const text = (value: unknown) => {
-        const resolved = read(value);
-        return typeof resolved === 'string' ? resolved : '';
-    };
     function edit(path: string | undefined, value: unknown) {
         if (!path || disabled || inFlight.current) return;
         setEdits((previous: Map<string, unknown>) => new Map(previous).set(path, value));
@@ -78,6 +73,12 @@ export function A2uiSurface({ block, source, onSubmit }: {
     function renderComponent(id: unknown, depth: number, openModal?: (event: Event) => void): unknown {
         const item = typeof id === 'string' ? components.get(id) : undefined;
         if (!item || depth > 24) return null;
+        const instancePath = projection?.instances.get(item.id)?.instancePath;
+        const read = (value: unknown) => readA2uiValue(snapshot, value, edits, instancePath);
+        const text = (value: unknown) => {
+            const resolved = read(value);
+            return typeof resolved === 'string' ? resolved : typeof resolved === 'number' && Number.isFinite(resolved) ? String(resolved) : '';
+        };
         const path = a2uiBindingPath(item.value);
         const locked = disabled || pending || !path;
         const child = (childId: unknown) => renderComponent(childId, depth + 1);

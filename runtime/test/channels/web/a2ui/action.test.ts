@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { buildA2uiAction, validateA2uiAction } from "../../../../src/channels/web/a2ui/action.js";
 import { applyA2uiMessages, compileA2uiExpress } from "../../../../src/channels/web/a2ui/express.js";
+import { CLASSIC_A2UI_CATALOG } from '../../../../src/channels/web/a2ui/surface.js';
 
 const snapshot = applyA2uiMessages("owned-1", compileA2uiExpress(`
   $/choice = ["blue"];
@@ -83,6 +84,30 @@ test('template actions bind relative edits and immutable context to the selected
   for (const forged of [undefined, '/0', '/2', '/01', '/1/0']) expect(() => validateA2uiAction(forms, second, forged)).toThrow();
   expect(() => validateA2uiAction(forms, { ...second, action: { ...second.action, sourceComponentId: ':send:/1' } })).toThrow();
   expect(buildA2uiAction(forms, 'send', drafts, timestamp, '/0').action.context.note).toBe('first draft');
+});
+
+test('the server derives @index from the selected template, including a declared offset edit', () => {
+  const surfaceId = 'indexed';
+  const bound = {'@path':'offset'};
+  const forms = applyA2uiMessages(surfaceId, [{version:'1.0', createSurface:{surfaceId, catalogId:CLASSIC_A2UI_CATALOG,
+    dataModel:{rows:[{offset:1},{offset:4}]}, components:[
+      {id:'root', component:'List', children:{componentId:'row',path:'/rows'}},
+      {id:'row',component:'Row',children:['label','offset','send']},
+      {id:'label',component:'Text',text:{'@call':'@index',args:{offset:1}}},
+      {id:'offset',component:'Slider',label:'Offset',max:10,value:bound},
+      {id:'send',component:'Button',child:'buttonLabel',action:{event:{name:'apply',context:{row:{'@call':'@index',args:{offset:bound}},offset:bound}}}},
+      {id:'buttonLabel',component:'Text',text:'Apply'},
+    ],
+  }}])!;
+  const message = buildA2uiAction(forms, 'send', new Map([['/rows/1/offset', 6]]), timestamp, '/1');
+  expect(message.action.context).toEqual({row:7, offset:6});
+  expect(validateA2uiAction(forms, message, '/1')).toEqual(message.action);
+  expect(() => validateA2uiAction(forms, message, '/0')).toThrow('Invalid form value');
+  const forged = {...message, action:{...message.action, context:{row:15,offset:6}}};
+  expect(() => validateA2uiAction(forms, forged, '/1')).toThrow('Invalid form value');
+  expect(() => applyA2uiMessages('outside', [{ version:'1.0', createSurface:{surfaceId:'outside',catalogId:CLASSIC_A2UI_CATALOG,
+    components:[{id:'root',component:'Text',text:{'@call':'@index'}}],
+  }}])).toThrow(/template/);
 });
 
 test("Classic does not accept authority, options, fixed values or undeclared inputs from the action", () => {

@@ -56,7 +56,7 @@ function checkJson(value: unknown, depth = 0): void {
   const entries = Object.entries(value);
   requireClassic(entries.length <= MAX_COMPONENTS, "object too large");
   for (const [key, item] of entries) {
-    requireClassic(!FORBIDDEN_KEYS.has(key) && (key !== "@call" || item === "openUrl") && key !== "@catalogId", "unsupported key");
+    requireClassic(!FORBIDDEN_KEYS.has(key) && (key !== "@call" || item === "openUrl" || item === "@index") && key !== "@catalogId", "unsupported key");
     if (key === "@path") {
       requireClassic(entries.length === 1, "malformed path binding");
       requireClassic(scopedA2uiPointer(item) !== undefined, "unsupported data binding");
@@ -70,6 +70,18 @@ function containsCall(value: unknown): boolean {
     : record(value) && (Object.hasOwn(value, "@call") || Object.values(value).some(containsCall));
 }
 
+function checkValueCalls(value: unknown): void {
+  if (Array.isArray(value)) return value.forEach(checkValueCalls);
+  if (!record(value)) return;
+  if (Object.hasOwn(value, '@call')) {
+    requireClassic(value['@call'] === '@index' && allowedKeys(value, ['@call', 'args']), 'unsupported function in a value');
+    const args = value.args;
+    requireClassic(args === undefined || (record(args) && allowedKeys(args, ['offset']) && (args.offset === undefined
+      || typeof args.offset === 'number' || (record(args.offset) && (Object.hasOwn(args.offset, '@path') || args.offset['@call'] === '@index')))), 'invalid @index arguments');
+  }
+  Object.values(value).forEach(checkValueCalls);
+}
+
 function checkComponents(value: unknown): asserts value is A2uiComponent[] {
   requireClassic(Array.isArray(value) && value.length <= MAX_COMPONENTS, "too many components");
   const ids = new Set<string>();
@@ -80,7 +92,7 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     requireClassic(allowedKeys(component, ["id", "component", "weight", ...CLASSIC_A2UI_PROPERTIES[name as A2uiComponent["component"]]]), "unsupported component property");
     requireClassic(component.weight === undefined || (typeof component.weight === 'number' && component.weight >= 0), "invalid layout weight");
     for (const [key, value] of Object.entries(component)) {
-      if (key !== "action" || !readA2uiLink(value)) requireClassic(!containsCall(value), "functions are not supported in values");
+      if (key !== "action" || !readA2uiLink(value)) checkValueCalls(value);
     }
     ids.add(component.id);
     if (name === "Row" || name === "Column" || name === "List") {
@@ -104,7 +116,7 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
         && allowedKeys(action.event, ["name", "context"]) && isId(action.event.name), "expected a server event");
       const { context } = action.event;
       requireClassic(context === undefined || (record(context) && Object.entries(context).every(([key, entry]) =>
-        isId(key) && (!entry || typeof entry !== "object" || (record(entry) && Object.hasOwn(entry, "@path"))))), "unsupported event context");
+        isId(key) && (!entry || typeof entry !== "object" || (record(entry) && (Object.hasOwn(entry, "@path") || entry['@call'] === '@index'))))), "unsupported event context");
     }
   }
 }
@@ -187,26 +199,30 @@ function verifySnapshot(snapshot: A2uiSnapshot): void {
   checkComponents(snapshot.components);
   const components = new Map(snapshot.components.map((item) => [item.id, item]));
   const seen = new Set<string>();
-  function walk(id: string, depth: number, canWeight = false): void {
+  function walk(id: string, depth: number, canWeight = false, inTemplate = false): void {
     const item = components.get(id);
     requireClassic(item && !seen.has(id) && depth <= MAX_DEPTH, "expected a bounded component tree");
     seen.add(id);
     requireClassic(item.weight === undefined || canWeight, "layout weight requires a Row or Column parent");
     const weightedChildren = item.component === "Row" || item.component === "Column";
-    if (Array.isArray(item.children)) for (const child of item.children) walk(child, depth + 1, weightedChildren);
+    if (!inTemplate) for (const [key, value] of Object.entries(item)) {
+      if (key !== 'action' || !readA2uiLink(value)) requireClassic(!containsCall(value), '@index requires a template instance');
+    }
+    const childAt = (child: string, weight = false) => walk(child, depth + 1, weight, inTemplate);
+    if (Array.isArray(item.children)) for (const child of item.children) childAt(child, weightedChildren);
     const template = readA2uiTemplate(item.children);
-    if (template) walk(template.componentId, depth + 1, weightedChildren);
-    if (item.component === "Tabs" && Array.isArray(item.tabs)) for (const tab of item.tabs) walk(tab.child, depth + 1);
+    if (template) walk(template.componentId, depth + 1, weightedChildren, true);
+    if (item.component === "Tabs" && Array.isArray(item.tabs)) for (const tab of item.tabs) childAt(tab.child);
     if (item.component === "Modal" && typeof item.trigger === "string" && typeof item.content === "string") {
-      walk(item.trigger, depth + 1);
-      walk(item.content, depth + 1);
+      childAt(item.trigger);
+      childAt(item.content);
     }
     if (typeof item.child === "string") {
       if (item.component === "Button") {
         const childKind = components.get(item.child)?.component;
         requireClassic(childKind === "Text" || childKind === "Icon", "button labels must be text or icons");
       }
-      walk(item.child, depth + 1);
+      childAt(item.child);
     }
   }
   walk("root", 0);

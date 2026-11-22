@@ -273,16 +273,23 @@ for (const engine of [chromium, webkit]) {
       await pointerField.fill('Edited value');
       await page.getByRole('button', {name:'Send escaped value'}).click();
       expect(await page.evaluate(() => (window as any).events.at(-1)?.message.action.context)).toEqual({field:'Edited value'});
-      const repeated = applyA2uiMessages('repeated-browser', compileA2uiExpress(`
+      const repeatId = 'repeated-browser';
+      const authored = applyA2uiMessages(repeatId, compileA2uiExpress(`
         $/groups=[{items:[{label:"First",note:"one"}]},{items:[{label:"Second",note:"two"}]}];
         root=Column(_template($/groups, group));
         group=List(_template($items, item));
-        item=Row([Text($label),TextField(label="Row note",value=$note),submit]);
+        item=Row([Text($label),index,TextField(label="Row note",value=$note),submit]);
+        index=Text("Placeholder");
         submit=Button(Text("Apply row"),action=Event("apply",{label:$label,note:$note}));
-      `, 'repeated-browser'));
+      `, repeatId))!;
+      const repeated = applyA2uiMessages(repeatId, [{version:'1.0',updateComponents:{surfaceId:repeatId,
+        components:[{id:'index',component:'Text',text:{'@call':'@index',args:{offset:1}}}],
+      }}], authored);
       await page.evaluate((block) => (window as any).draw(block), {...block, revision:9, surface:repeated});
       const firstRow = page.getByRole('listitem').filter({hasText:'First'});
       const secondRow = page.getByRole('listitem').filter({hasText:'Second'});
+      expect(await secondRow.getByText('1', {exact:true}).count()).toBe(1);
+      expect(await secondRow.getByText('2', {exact:true}).count()).toBe(0);
       await secondRow.getByLabel('Row note').fill('second draft');
       expect(await firstRow.getByLabel('Row note').inputValue()).toBe('one');
       await secondRow.getByRole('button', {name:'Apply row'}).click();
