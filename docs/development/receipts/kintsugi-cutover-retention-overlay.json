@@ -124,6 +124,12 @@
       "beforeSha256": "60b142469fd02aeb373109ebf275d08e829c4c6b8d630378e8c96c03b01f2f45",
       "afterSha256": "1adf37474310a6b1154e8bfd9371aa7743708479ee9f9d45f1214f7e60acce7b",
       "purpose": "Bind the reviewed integrated runtime-facade source used by the SDK and native model cutover; preserve historical retention disposition and financial accounting unchanged."
+    },
+    {
+      "path": "runtime/src/task-scheduler.ts",
+      "beforeSha256": "e6615515668dd004c6359a74a5155c44d8af432f604aef3a77a182691ebc5ca6",
+      "afterSha256": "fde3f376a3efdd4936537efdc08af5f8775c632c9373fbb2ef8758291bd51539",
+      "purpose": "#1666 carries the settled occurrence notification policy to post-persistence Web Push without restoring any scheduler dispatch or financial usage owner."
     }
   ]
 }

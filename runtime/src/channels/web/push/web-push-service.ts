@@ -56,6 +56,7 @@ export interface SendStoredWebPushNotificationOptions {
   baseDir?: string;
   vapidSubject?: string;
   chatJid?: string;
+  kind?: "scheduled";
   targetDeviceId?: string;
   ttl?: number;
   urgency?: "very-low" | "low" | "normal" | "high";
@@ -295,17 +296,18 @@ function buildReplyNotificationBody(interaction: InteractionRow): string {
   return "You have a new reply.";
 }
 
-export function buildStoredAgentReplyWebPushNotification(interaction: InteractionRow): WebPushNotificationPayload | null {
+export function buildStoredAgentReplyWebPushNotification(interaction: InteractionRow, kind?: "scheduled"): WebPushNotificationPayload | null {
   if (!interaction || typeof interaction !== "object") return null;
   const chatJid = typeof interaction.chat_jid === "string" ? interaction.chat_jid.trim() : "";
   if (!chatJid) return null;
   const rowId = Number(interaction.id);
+  if (kind === "scheduled" && (!Number.isSafeInteger(rowId) || rowId <= 0)) return null;
   const suffix = rowId > 0 ? `#msg-${rowId}` : "";
   return {
-    title: "PiClaw reply",
+    title: kind === "scheduled" ? "PiClaw scheduled result" : "PiClaw reply",
     body: buildReplyNotificationBody(interaction),
     url: `/?chat_jid=${encodeURIComponent(chatJid)}${suffix}`,
-    tag: `piclaw:reply:${encodeURIComponent(chatJid)}`,
+    tag: kind === "scheduled" ? `piclaw:scheduled:${rowId}` : `piclaw:reply:${encodeURIComponent(chatJid)}`,
     sourceLabel: "Web Push",
   };
 }
@@ -314,12 +316,12 @@ export async function sendStoredAgentReplyWebPushNotification(
   interaction: InteractionRow,
   options: SendStoredWebPushNotificationOptions = {},
 ): Promise<StoredWebPushSendResult> {
-  const payload = buildStoredAgentReplyWebPushNotification(interaction);
+  const payload = buildStoredAgentReplyWebPushNotification(interaction, options.kind);
   if (!payload) {
     return { attempted: 0, sent: 0, removed: 0, failed: 0 };
   }
 
-  return await sendStoredWebPushNotificationInternal(payload, {
+  return await sendStoredWebPushNotification(payload, {
     ...options,
     chatJid: typeof interaction.chat_jid === "string" ? interaction.chat_jid.trim() : options.chatJid,
   });

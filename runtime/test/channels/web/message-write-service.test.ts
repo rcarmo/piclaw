@@ -71,6 +71,32 @@ describe("web message write service", () => {
     });
   }
 
+  for (const [source, notifyOnComplete, committed, expected] of [
+    ['scheduled', true, true, 1], ['scheduled', false, true, 0],
+    ['scheduled', undefined, true, 0], ['ipc', true, true, 0], ['scheduled', true, false, 0],
+  ] as const) test(`scheduled push requires committed row and explicit consent: ${source}/${notifyOnComplete}/${committed}`, async () => {
+    const events: string[] = [];
+    const held = Promise.withResolvers<never>();
+    const row = { id: 42, chat_jid: 'web:test', timestamp: 't', data: { content: 'scheduled output', thread_id: 0 } };
+    const service = new WebMessageWriteService(createDeps({
+      admitMessage: async () => { events.push('stored'); return committed ? row : null; },
+      broadcastAgentResponse: () => { events.push('published'); },
+      sendStoredReplyPush: async (interaction, options) => {
+        expect(interaction).toBe(row);
+        expect(options?.kind).toBe('scheduled');
+        expect(row.data.thread_id).toBe(row.id);
+        events.push('push');
+        return held.promise;
+      },
+    }));
+    await expect(service.sendMessage('web:test', 'scheduled output', { source, notifyOnComplete, forceRoot: true })).resolves.toBeUndefined();
+    expect(events).toEqual(['stored', ...(committed ? ['published'] : []), ...(expected ? ['push'] : [])]);
+    if (expected) held.reject(Error('disposable provider failure'));
+    await Bun.sleep(0);
+    expect(events.filter(event => event === 'stored')).toHaveLength(1);
+    expect(events.filter(event => event === 'push')).toHaveLength(expected);
+  });
+
   test("postDashboardWidget delegates through the sendMessage write path", async () => {
     const writes: Array<{ chatJid: string; text: string; blocks: unknown[] | undefined }> = [];
     const service = new WebMessageWriteService(createDeps({

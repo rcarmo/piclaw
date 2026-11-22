@@ -45,6 +45,10 @@ This avoids local/push duplicates on the same device while still letting a swipe
 
 In family mode, subscription and presence records also carry the immutable account ID and current login ID. Presence for one account cannot suppress another account's delivery. Before provider dispatch, the server resolves the reply chat's root owner and rechecks the account, login, mode and root ownership. Invalid recipients are removed in one serialised store update. Family payloads contain only a generic reply notice and the root app URL; conversation text and identifiers remain behind normal browser authentication.
 
+## Scheduled results
+
+A scheduled shell or agent result can send Web Push after PiClaw stores its timeline message. **Notify on complete** controls that push for the scheduled occurrence. Muting leaves the timeline result intact. Each result has its own notification tag and uses the same device and chat presence rules as replies. Scheduled Web Push is single-user only. A push failure cannot change the saved outcome or repeat the task.
+
 ## Presence model
 
 The client publishes lightweight presence updates containing:

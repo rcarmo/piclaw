@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -11,7 +11,7 @@ import {
   sendStoredWebPushNotification
 } from "../../../src/channels/web/push/web-push-service.js";
 import { WebNotificationPresenceService } from "../../../src/channels/web/push/web-notification-presence-service.js";
-import { createTempWorkspace } from "../../helpers.js";
+import { createTempWorkspace, setEnv } from "../../helpers.js";
 
 const tempDirs: string[] = [];
 
@@ -280,6 +280,41 @@ describe("web push service", () => {
       tag: "piclaw:reply:web%3Adefault%3Abranch%3Aabc",
       sourceLabel: "Web Push",
     });
+  });
+
+  test('scheduled results share the presence guard and carry distinct row tags', async () => {
+    const baseDir = createTempPushDir();
+    upsertStoredWebPushSubscription(createSubscription(55, 'foreground'), { baseDir, deviceId: 'foreground' });
+    upsertStoredWebPushSubscription(createSubscription(56, 'away'), { baseDir, deviceId: 'away' });
+    const presenceService = new WebNotificationPresenceService({ now: () => 1000 });
+    presenceService.upsert({ device_id: 'foreground', client_id: 'here', chat_jid: 'web:default', visibility_state: 'visible', has_focus: true }, { nowMs: 1000 });
+    const deliveries: Array<{ endpoint: string; tag: string; url: string }> = [];
+    for (const id of [131, 132]) {
+      const stats = await sendStoredAgentReplyWebPushNotification({ id, chat_jid: 'web:default', timestamp: 't', data: { content: 'Reminder' } }, {
+        baseDir, presenceService, kind: 'scheduled', sendNotification: async (subscription, payload) => {
+          const { tag, url } = JSON.parse(payload);
+          deliveries.push({ endpoint: subscription.endpoint, tag, url });
+        },
+      });
+      expect(stats).toEqual({ attempted: 1, sent: 1, removed: 0, failed: 0 });
+    }
+    expect(deliveries).toEqual([131, 132].map(id => ({ endpoint: 'https://push.example.test/device/56', tag: `piclaw:scheduled:${id}`, url: `/?chat_jid=web%3Adefault#msg-${id}` })));
+  });
+
+  test('no scheduled result payload is dispatched in family mode', async () => {
+    const baseDir = createTempPushDir();
+    upsertStoredWebPushSubscription(createSubscription(57), { baseDir });
+    const ws = createTempWorkspace('scheduled-push-family-');
+    const restore = setEnv({ PICLAW_WORKSPACE: ws.workspace });
+    try {
+      mkdirSync(join(ws.workspace, '.piclaw'));
+      writeFileSync(join(ws.workspace, '.piclaw/config.json'), JSON.stringify({ domains: { access: { mode: 'family' } } }));
+      const stats = await sendStoredAgentReplyWebPushNotification({ id: 133, chat_jid: 'web:default', timestamp: 't', data: { content: 'Private' } }, {
+        baseDir, kind: 'scheduled', sendNotification: async () => { throw Error('family delivery must not run'); },
+      });
+      expect(stats).toEqual({ attempted: 0, sent: 0, removed: 0, failed: 0 });
+      expect(listStoredWebPushSubscriptions(baseDir)).toHaveLength(1);
+    } finally { restore(); ws.cleanup(); }
   });
 
   test("sends a reply notification built from a stored interaction", async () => {
