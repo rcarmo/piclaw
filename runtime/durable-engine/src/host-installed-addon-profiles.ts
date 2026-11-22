@@ -1,6 +1,82 @@
 // Candidate source pins; regenerate after native owners freeze their sources.
 // Backend TS is conservatively pinned in full; browser/vendor assets are not execution proof.
 export const installedAddonProfiles = {
+  "autoresearch": {
+    "label": "Autoresearch",
+    "name": "@rcarmo/piclaw-addon-autoresearch",
+    "version": "0.1.6",
+    "entry": "index.ts",
+    "files": {
+      "compat.ts": "41f5cfeb1417d2f9a99aa9146f5b36006bdf34caa4955337207ff7ac63f69467",
+      "compat/tool-call-summary.ts": "a3b717a0538e5fae5e8572b02e289d5b799574ba9bff51b63a6bb29ff5772051",
+      "index.ts": "8f31212ea8a2a23ba9ad443ba5187d3968d74656968ab3bf22a7f85e2f16af96",
+      "launch-surface.ts": "c40e3855d555b76e5d919bb129989480445d667a3ea6494d6f816a834a4b9dde",
+      "launcher.ts": "9bd8bf85a74e00e74a1d439847ba76311404f105fb1b642b70ceeb23e08dc9af",
+      "package.json": "85cd80ebe3e5c1796f238313af41fbadad7241729c78121dc1446eab8fe09e35",
+      "runtime.ts": "2416d68d892223a397a69383cd52eb8051ecc440d43a9d75d0f473aa5563a16b",
+      "skills/autoresearch-create/SKILL.md": "bd7670248964f24bba9ead4576296ed68910283d5f690b636cdeb7c97bc125de",
+      "summary.ts": "1a89deb102c39392529e54424c456e565c7aa0816ec5fe16c6569afdb1df5a53",
+      "supervisor.ts": "b2e445092ee6f65ad3a0126d61770ec1b39c40dda219306509e11c78f2f3f274",
+      "vendor/autoresearch/extensions/pi-autoresearch/index.ts": "60efc6c957b7de9e596bf2a43041404e9acf55581208d5b2cd88d9579677aec9",
+      "vendor/autoresearch/skills/autoresearch-create/SKILL.md": "adac43e612726d3a563bcb4a94c84652f639afff6f2629f0552f0840fb36ee9d",
+      "workdir.ts": "b92cc5decb1cf99d92b49430d28823f5b9094dc6c61a2d8250de5d6ed7a179c3"
+    },
+    "shadows": [
+      "compat.js",
+      "compat.json",
+      "compat/index.js",
+      "compat/package.json",
+      "compat/tool-call-summary.js",
+      "compat/tool-call-summary.json",
+      "compat/tool-call-summary/index.js",
+      "compat/tool-call-summary/package.json",
+      "index.js",
+      "index.json",
+      "index/index.js",
+      "index/package.json",
+      "launch-surface.js",
+      "launch-surface.json",
+      "launch-surface/index.js",
+      "launch-surface/package.json",
+      "launcher.js",
+      "launcher.json",
+      "launcher/index.js",
+      "launcher/package.json",
+      "runtime.js",
+      "runtime.json",
+      "runtime/index.js",
+      "runtime/package.json",
+      "summary.js",
+      "summary.json",
+      "summary/index.js",
+      "summary/package.json",
+      "supervisor.js",
+      "supervisor.json",
+      "supervisor/index.js",
+      "supervisor/package.json",
+      "vendor/autoresearch/extensions/pi-autoresearch/index.js",
+      "vendor/autoresearch/extensions/pi-autoresearch/index.json",
+      "vendor/autoresearch/extensions/pi-autoresearch/index/index.js",
+      "vendor/autoresearch/extensions/pi-autoresearch/index/package.json",
+      "workdir.js",
+      "workdir.json",
+      "workdir/index.js",
+      "workdir/package.json"
+    ],
+    "routes": [],
+    "configActions": [],
+    "skillPaths": [
+      "skills/autoresearch-create"
+    ],
+    "nativeExports": {
+      "index.ts": [
+        "getAutoresearchPrompt",
+        "createAutoresearchToolDefinitions",
+        "bindNativeAutoresearchObserver"
+      ]
+    },
+    "requiresNativeBinding": true
+  },
   "proxmox": {
     "label": "proxmox",
     "name": "@rcarmo/piclaw-addon-proxmox",
