@@ -1,6 +1,6 @@
 # A2UI Express templates for Classic
 
-For each example, pass the DSL to `send_a2ui` in `express` and the quoted summary in `fallback`. Do not include the fences. Use Markdown if the tool is unavailable or the interaction is clearer without controls.
+Pass each Express example to `send_a2ui` in `express` and use the quoted summary as `fallback`. The last example takes `messages` instead. Do not include fences. Use Markdown if the tool is unavailable or the interaction is clearer without controls.
 
 ## Approve, revise or decline
 
@@ -50,6 +50,54 @@ root = Column([
     Button(Text("Close form"), action=Event("cancel"))
   ])
 ])
+```
+
+## Choose a row using v1.0 messages
+
+Fallback: “Choose North or South.” Pass the array as `messages`, without `express`. The relative bindings read from the selected row. The action includes the row's one-based position, structured context and a short user-facing description.
+
+```json
+[
+  {
+    "version": "1.0",
+    "createSurface": {
+      "surfaceId": "urn:example:region-picker",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+      "dataModel": {
+        "regions": [
+          {"label": "North", "description": "Chose North"},
+          {"label": "South", "description": "Chose South"}
+        ]
+      }
+    }
+  },
+  {
+    "version": "1.0",
+    "updateComponents": {
+      "surfaceId": "urn:example:region-picker",
+      "components": [
+        {"id": "root", "component": "List", "children": {"componentId": "pick", "path": "/regions"}},
+        {
+          "id": "pick",
+          "component": "Button",
+          "child": "row_label",
+          "action": {
+            "event": {
+              "name": "choose_region",
+              "userMessage": {"@path": "description"},
+              "context": {
+                "region": {"@path": "label"},
+                "position": {"@call": "@index", "args": {"offset": 1}},
+                "source": {"section": "handoff", "tags": ["region"]}
+              }
+            }
+          }
+        },
+        {"id": "row_label", "component": "Text", "text": {"@path": "label"}}
+      ]
+    }
+  }
+]
 ```
 
 Show progress or a result in ordinary timeline text when there is nothing for the user to do. Do not build an interactive receipt just to acknowledge a submission: the action already creates a normal user reply.

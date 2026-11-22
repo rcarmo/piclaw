@@ -286,7 +286,8 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 return html`<div key=${id} role="list" ...${aria} class=${`a2ui-list ${direction}`} style=${{ alignItems: align }}>
                     ${Array.isArray(item.children) && item.children.map(childId => html`<div key=${childId} role="listitem">${child(childId)}</div>`)}</div>`;
             }
-            case 'Divider': return html`<hr key=${id} ...${aria} class=${item.axis === 'vertical' ? 'a2ui-divider-vertical' : ''} />`;
+            case 'Divider': return html`<hr key=${id} ...${aria} aria-orientation=${item.axis==='vertical' ? 'vertical' : undefined}
+                class=${item.axis==='vertical' ? 'a2ui-divider-vertical' : ''} />`;
             case 'Button': {
                 const buttonContent = () => renderComponent(item.child, depth + 1, undefined, true);
                 const isLink = readA2uiLinkTarget(item.action) !== undefined;
@@ -316,6 +317,14 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 const value = text(item.value);
                 const placeholder = text(item.placeholder);
                 const onInput = (event: Event) => edit(item.id, path, (event.currentTarget as HTMLInputElement).value);
+                if (item.variant==='obscured') {
+                    const noticeId=`${errorId}-mask`;
+                    return checked(html`<div key=${id} class="a2ui-field">
+                        <label class="a2ui-field">${label}<input type="password" autocomplete="off" ...${aria} aria-describedby=${noticeId}
+                            disabled=${locked} value=${value} placeholder=${placeholder} maxLength="4096" onInput=${onInput} /></label>
+                        <span id=${noticeId} class="a2ui-caption">Masked on screen only. Do not enter passwords or keys; this value can be sent to the agent and saved in chat.</span>
+                    </div>`);
+                }
                 return checked(html`<label key=${id} class="a2ui-field">${label}${item.variant === 'longText'
                     ? html`<textarea ...${aria} disabled=${locked} value=${value} placeholder=${placeholder} maxLength="4096" onInput=${onInput}></textarea>`
                     : html`<input type=${item.variant === 'number' ? 'number' : 'text'} ...${aria} disabled=${locked} value=${value}

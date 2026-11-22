@@ -11,7 +11,7 @@ Prefer bare [A2UI Express](https://a2ui.org/) in `express`, without Markdown fen
 
 For wire features the Express parser cannot express, pass `messages` instead of `express`. Start with a v1.0 `createSurface` using the [Basic Catalogue](https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json), and use the same draft `surfaceId` throughout the batch. You can send the model and components in later updates. Classic shows the fallback until `root` arrives, then fills in child components as their definitions arrive. Use the returned surface ID, post ID and current revision to update or delete the surface.
 
-If `createSurface` omits `catalogId`, each component must name the Basic Catalogue in `@catalogId`, and each non-system function call must name it in `catalogId`. The system index (`{"@call":"@index","args":{"offset":1}}`) needs no catalogue and is available inside repeated template items.
+If `createSurface` omits `catalogId`, each component must name the Basic Catalogue in `@catalogId`, and each non-system function call must name it in `catalogId`. Use identifiers such as `row_label` for component IDs and function argument names. The system index (`{"@call":"@index","args":{"offset":1}}`) needs no catalogue and is available inside repeated template items.
 
 ```express
 $/topic = "";
@@ -31,12 +31,12 @@ root = Column([
 - Use absolute bindings like `$/topic` for shared values. `List`, `Row` and `Column` can repeat a component with `_template($/rows, row)`. In the repeated component, `$label` reads `label` from that row. Include only the expected fields in the button's `Event` context.
 - `ChoicePicker` binds a list of selected option values: initialise it with `[]` or `["value"]`. Use `displayStyle="chips"` for compact choices and `filterable=true` for a search field.
 - `Event("cancel")` closes an agent form without submitting values. A normal event submits a new user input in the original thread. Set `keep_active` only when repeated submissions are useful.
-- Use `openUrl("https://example.com/docs")` or `openUrl($/url)` for a link that opens on click. The resolved target must be an HTTP(S) URL without credentials. Basic Catalogue functions can format labels and validate inputs. Custom functions, embedded HTML and remote catalogues are unsupported.
+- Use `openUrl("https://example.com/docs")` or `openUrl($/url)` for a link that opens on click. The resolved target must be an HTTP(S) URL without credentials. Use Basic Catalogue functions to format values. For wire components, add `@checks` with a condition binding or function and an optional fallback message. Use `@accessibility.label` or `description` when the visible label does not explain the control. A remote function needs a trusted host registration; the default host provides none. Classic does not fetch catalogues or render embedded HTML.
 - Set `createSurface.sendDataModel: true` only when the agent needs the full model on each message. Classic includes valid drafts for the current surface revision, even if a control was not named in the event context. Only the owning agent gets that metadata. Closing a form with `cancel` submits nothing.
-- Never request keys, tokens, OTPs or other credentials in an agent form. Built-in auth flows have separate private controls.
+- `TextField` with `variant="obscured"` only masks the display. Its value can be sent to the agent and saved in chat. Never request keys, tokens, OTPs or other credentials in an agent form. Built-in auth flows use separate private controls.
 - To edit, supply the post ID and current revision returned by the tool. For a component update, start with `surface("returned-surface-id", update=true)`; for a data update, assign the path. To remove it, use `deleteSurface("returned-surface-id")` with the post ID and revision.
 
-Use [these templates](templates.md) for an approval, a choice, a reference link or a repeatable form.
+Use [these templates](templates.md) for an approval, a choice, a reference link, a repeatable form or a v1.0 wire example.
 
 Prompt pattern: “If `send_a2ui` is available in this Classic thread, ask this one question as a small form with readable fallback text. Submit only the fields needed to answer it. Otherwise ask in plain text.”
 

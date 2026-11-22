@@ -554,6 +554,35 @@ for (const engine of [chromium, webkit]) {
       await panel.getByText('Unable to reconstruct this form').waitFor();
       await integrity;
       expect(reports.at(-1)).toMatchObject({surface_id:displayId,revision:15,message:{version:'1.0',error:{code:'INTEGRITY_ERROR',surfaceId:displayId}}});
+      const maskId='mask-basic';
+      const mask=applyA2uiMessages(maskId,[{version:'1.0',createSurface:{surfaceId:maskId,catalogId:basicCatalogue,sendDataModel:true,
+        dataModel:{entry:''},components:[
+          {id:'root',component:'Column',children:['field','row','send']},
+          {id:'field',component:'TextField',label:'Masked answer',value:{'@path':'/entry'},variant:'obscured'},
+          {id:'row',component:'Row',children:['left','separator','right']},
+          {id:'left',component:'Text',text:'Left'},
+          {id:'separator',component:'Divider',axis:'vertical','@accessibility':{label:'Section separator'}},
+          {id:'right',component:'Text',text:'Right'},
+          {id:'send',component:'Button',child:'send_label',action:{event:{name:'sendMasked',context:{entry:{'@path':'/entry'}}}}},
+          {id:'send_label',component:'Text',text:'Send masked answer'},
+        ],
+      }}],undefined,true)!;
+      await page.evaluate(item=>(window as any).draw(item),{...block,owner:'agent',revision:18,surface:mask});
+      const masked=page.getByLabel('Masked answer',{exact:true});
+      expect(await masked.getAttribute('type')).toBe('password');
+      expect(await masked.getAttribute('autocomplete')).toBe('off');
+      expect(await masked.getAttribute('aria-describedby')).toBeTruthy();
+      const guidance=await masked.evaluate(field=>document.getElementById(field.getAttribute('aria-describedby')!)?.textContent);
+      expect(guidance).toBe('Masked on screen only. Do not enter passwords or keys; this value can be sent to the agent and saved in chat.');
+      expect(await page.getByRole('separator',{name:'Section separator'}).getAttribute('aria-orientation')).toBe('vertical');
+      await masked.fill('ordinary answer');
+      const maskQuery=await query('web:test');
+      expect(maskQuery.a2ui_drafts).toContainEqual({surface_id:maskId,revision:18,edits:[{component_id:'field',value:'ordinary answer'}]});
+      expect(maskQuery).not.toHaveProperty('private_value');
+      await page.getByRole('button',{name:'Send masked answer'}).click();
+      const maskAction=await page.evaluate(()=>(window as any).events.at(-1));
+      expect(maskAction.message.action.context).toEqual({entry:'ordinary answer'});
+      expect(maskAction).not.toHaveProperty('private_value');
       const legacyRequests: string[] = [];
       page.on('request', request => { if (request.url().includes('adaptivecards')) legacyRequests.push(request.url()); });
       await page.evaluate(() => (window as any).draw({

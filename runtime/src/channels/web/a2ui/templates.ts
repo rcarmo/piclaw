@@ -1,4 +1,5 @@
 import { absoluteA2uiPointer, readA2uiPath, scopedA2uiPointer } from './data-path.js';
+import { mapA2uiActionExpressions } from './function-call.js';
 import type { A2uiComponent, A2uiSnapshot } from './surface.js';
 
 export function readA2uiTemplate(value: unknown): { componentId: string; path: string } | undefined {
@@ -52,8 +53,9 @@ export function projectA2uiTemplates(snapshot: A2uiSnapshot) {
     const instanceId = a2uiInstanceId(id, instancePath);
     if (!definition || depth > 24 || instances.size >= 384 || instances.has(instanceId)) throw Error('Invalid or oversized A2UI template tree');
     instances.set(instanceId, { id, scope, instancePath });
-    const { '@metadata': _opaqueMetadata, ...properties } = definition;
-    const component: A2uiComponent = { ...scopeBindings(properties, scope) as A2uiComponent, id: instanceId };
+    const { '@metadata': _opaqueMetadata, action, ...properties } = definition;
+    const component: A2uiComponent = {...scopeBindings(properties,scope) as A2uiComponent,id:instanceId,
+      ...(action===undefined ? {} : {action:mapA2uiActionExpressions(action,part=>scopeBindings(part,scope))})};
     projected.push(component);
     const child = (reference: string) => walk(reference, depth + 1, scope, instancePath);
     const template = readA2uiTemplate(definition.children);

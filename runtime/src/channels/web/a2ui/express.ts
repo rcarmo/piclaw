@@ -7,7 +7,7 @@ import { basicCatalog } from "@a2ui/web_core/catalogs/basic/v1";
 import { DataModel } from '@a2ui/web_core/state';
 import { MessageProcessor } from '@a2ui/web_core/processing';
 import { CLASSIC_A2UI_FUNCTIONS, isClassicValueFunction } from "./functions.js";
-import { isClassicFunctionName, readClassicActionFunction } from './function-call.js';
+import { isA2uiContextExpression, isClassicEntityName, isClassicFunctionName, mapA2uiActionExpressions, readClassicActionFunction } from './function-call.js';
 import { absoluteA2uiPointer, scopedA2uiPointer } from "./data-path.js";
 import { ClassicA2uiValidationError } from './protocol-errors.js';
 import { a2uiChildReferences, projectA2uiTemplates, readA2uiTemplate } from "./templates.js";
@@ -89,6 +89,10 @@ function containsCall(value: unknown, name?: string): boolean {
     || Object.values(value).some(item => containsCall(item, name)));
 }
 
+function checkArgumentNames(args: unknown) {
+  requireClassic(args===undefined || (record(args) && Object.keys(args).every(isClassicEntityName)), 'invalid function arguments');
+}
+
 function checkValueCalls(value: unknown, allowRemote = false): void {
   if (Array.isArray(value)) return value.forEach(item=>checkValueCalls(item,allowRemote));
   if (!record(value)) return;
@@ -102,7 +106,7 @@ function checkValueCalls(value: unknown, allowRemote = false): void {
       && allowedKeys(value, ['@call', 'args', 'catalogId'])
       && (value.catalogId === undefined || (name !== '@index' && value.catalogId === CLASSIC_A2UI_CATALOG)), 'unsupported function in a value');
     const args = value.args;
-    requireClassic(args === undefined || record(args), 'invalid function arguments');
+    checkArgumentNames(args);
     if (name === '@index' && record(args)) requireClassic(allowedKeys(args, ['offset']) && (args.offset === undefined
       || typeof args.offset === 'number' || (record(args.offset) && (Object.hasOwn(args.offset, '@path') || isClassicValueFunction(args.offset['@call'])
         || (allowRemote && isClassicFunctionName(args.offset['@call']))))), 'invalid @index arguments');
@@ -112,10 +116,11 @@ function checkValueCalls(value: unknown, allowRemote = false): void {
 
 function checkComponents(value: unknown): asserts value is A2uiComponent[] {
   requireClassic(Array.isArray(value) && value.length <= MAX_COMPONENTS, 'too many components', '/components');
+  const componentId=(id:unknown): id is string => isClassicEntityName(id) && !FORBIDDEN_KEYS.has(id);
   const ids = new Set<string>();
   for (const [index, component] of value.entries()) {
     const path = `/components/${index}`;
-    requireClassic(record(component) && isId(component.id) && !ids.has(component.id), 'invalid or duplicate component id', `${path}/id`);
+    requireClassic(record(component) && componentId(component.id) && !ids.has(component.id), 'invalid or duplicate component id', `${path}/id`);
     const name = component.component;
     requireClassic(typeof name === 'string' && Object.hasOwn(CLASSIC_A2UI_PROPERTIES, name), 'unsupported component', `${path}/component`);
     requireClassic(component['@catalogId']===undefined || component['@catalogId']===CLASSIC_A2UI_CATALOG,
@@ -133,23 +138,26 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     for (const [key, value] of Object.entries(component)) {
       if (key === '@metadata') continue;
       const call = key === 'action' ? readClassicActionFunction(value) : undefined;
-      const target = key === 'action' ? readA2uiLinkTarget(value) : undefined;
-      if (call) checkValueCalls(call.args,call.name!=='openUrl');
-      else checkValueCalls(target === undefined ? value : target,key!=='action' || (record(value) && record(value.event)));
+      if (call) {
+        checkArgumentNames(call.args);
+        checkValueCalls(call.args,call.name!=='openUrl');
+      } else if (key==='action') {
+        mapA2uiActionExpressions(value,part=>{ checkValueCalls(part,true); return part; });
+      } else checkValueCalls(value,true);
     }
     ids.add(component.id);
     if (name === "Row" || name === "Column" || name === "List") {
       const template = readA2uiTemplate(component.children);
-      requireClassic((Array.isArray(component.children) && component.children.every(isId)) ||
-        (template && isId(template.componentId) && scopedA2uiPointer(template.path) !== undefined), "invalid child list or template");
+      requireClassic((Array.isArray(component.children) && component.children.every(componentId)) ||
+        (template && componentId(template.componentId) && scopedA2uiPointer(template.path) !== undefined), "invalid child list or template");
     }
     if (name === "Tabs") {
       requireClassic(Array.isArray(component.tabs) && component.tabs.length > 0 && component.tabs.every(tab =>
-        record(tab) && allowedKeys(tab, ["title", "child"]) && isId(tab.child)), "invalid tabs");
+        record(tab) && allowedKeys(tab, ["title", "child"]) && componentId(tab.child)), "invalid tabs");
     }
-    if (name === "Modal") requireClassic(isId(component.trigger) && isId(component.content), "invalid modal references");
+    if (name === "Modal") requireClassic(componentId(component.trigger) && componentId(component.content), "invalid modal references");
+    if (name === 'Button' || name === 'Card') requireClassic(componentId(component.child),'invalid child reference',`${path}/child`);
     if (name === "Slider") requireClassic(a2uiSliderRange(component as A2uiComponent), "invalid slider interval");
-    requireClassic(name !== 'TextField' || component.variant !== 'obscured', 'private inputs require a host-owned surface', `${path}/variant`);
     if (name === "Button") {
       const { action } = component;
       const target = readA2uiLinkTarget(action);
@@ -166,7 +174,9 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
       requireClassic(record(action) && allowedKeys(action, ["event"]) && record(action.event)
         && allowedKeys(action.event, ["name", "context", "userMessage"]) && isId(action.event.name), "expected a server event");
       const { context } = action.event;
-      requireClassic(context === undefined || (record(context) && Object.keys(context).every(isId)), 'unsupported event context');
+      requireClassic(context===undefined || (record(context) && Object.keys(context).every(isId)
+        && Object.values(context).every(value=>!record(value) || isA2uiContextExpression(value)
+          || Object.keys(value).every(key=>!/^@([^@]|$)/.test(key)))), 'unsupported event context');
     }
   }
 }
@@ -183,7 +193,7 @@ export function compileA2uiExpress(source: string, surfaceId: string): unknown[]
     if ("([{".includes(token)) requireClassic(++depth <= MAX_DEPTH, "Express source too deeply nested");
     else if (")]}".includes(token)) depth--;
   }
-  return projectComponentEnvelope(new ExpressParser(catalog, surfaceId, "1.0").compile(source),true);
+  return projectComponentEnvelope(new ExpressParser(catalog,surfaceId,'1.0').compile(source),'wire');
 }
 
 const surfaceOperations = ["createSurface", "updateComponents", "updateDataModel", "deleteSurface"] as const;
@@ -209,19 +219,31 @@ export function bindA2uiDraftId(messages: readonly unknown[], surfaceId: string)
   });
 }
 
-/** Adapt @-prefixed component descriptors at the installed SDK boundary only. */
-function projectComponentEnvelope(messages: readonly unknown[], canonical = false): unknown[] {
+type EventLiterals = Map<string,Record<string,unknown>>;
+
+/** Adapt @-prefixed descriptors and isolate structured literals from the SDK's recursive expression scan. */
+function projectComponentEnvelope(messages:readonly unknown[], destination:'wire' | EventLiterals): unknown[] {
   return structuredClone(messages).map(message => {
     if (!record(message)) return message;
     const body = message.createSurface ?? message.updateComponents;
     if (record(body) && Array.isArray(body.components)) {
       for (const item of body.components) if (record(item)) {
         for (const key of ['catalogId','accessibility','checks','metadata'] as const) {
-          const [from,to]=canonical ? [key,`@${key}`] : [`@${key}`,key];
+          const [from,to]=destination==='wire' ? [key,`@${key}`] : [`@${key}`,key];
           if (Object.hasOwn(item,from)) {
             item[to]=item[from];
             delete item[from];
           }
+        }
+        if (destination!=='wire' && typeof item.id==='string') {
+          destination.delete(item.id); // Component updates replace definitions, including prior literals.
+          const event=record(item.action) ? item.action.event : undefined;
+          if (!record(event) || !record(event.context)) continue;
+          const literals=Object.entries(event.context).filter(([,value])=>
+            Array.isArray(value) || (record(value) && !isA2uiContextExpression(value)));
+          if (!literals.length) continue;
+          destination.set(item.id,Object.fromEntries(literals));
+          for (const [key] of literals) event.context[key]='';
         }
       }
     }
@@ -236,6 +258,7 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
   checkJson(messages);
   requireClassic(encoder.encode(JSON.stringify(messages)).length <= MAX_SURFACE_BYTES, "batch too large");
   const state = progressive ? RendererState.of(new ClassicWireProcessor([catalog])) : new RendererState([catalog]);
+  const eventLiterals: EventLiterals=new Map();
   if (previous) {
     requireClassic(previous.surfaceId === surfaceId, "snapshot belongs to another surface");
     // Validate the rehydrated snapshot too and detach the SDK's mutable data model from it.
@@ -243,7 +266,7 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
     const { progressive: _hostFlag, components, ...body } = previous;
     const restored = state.apply(projectComponentEnvelope([{ version: "1.0", createSurface: {
       ...body, ...(components.length ? { components } : {}),
-    } }]));
+    } }],eventLiterals));
     if (!progressive) state.checkTopology(restored);
   }
 
@@ -277,7 +300,7 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
       }
     }
   }
-  const touched = state.apply(projectComponentEnvelope(messages));
+  const touched = state.apply(projectComponentEnvelope(messages,eventLiterals));
   if (!progressive) state.checkTopology(touched);
   if (!exists) return null;
 
@@ -289,7 +312,13 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
     ...(result.sendDataModel ? { sendDataModel: true } : {}),
     ...(result.metadata === undefined ? {} : { metadata: result.metadata }),
     components: Array.from(result.componentsModel.values, ({ id, type, properties, metadata }) => {
-      const { accessibility, checks, ...rest } = properties;
+      const {accessibility,checks,...rest}=properties;
+      const literals=eventLiterals.get(id);
+      const action=rest.action;
+      if (literals && record(action) && record(action.event)) {
+        const event=action.event, context=event.context;
+        if (record(context)) rest.action={...action,event:{...event,context:{...context,...literals}}};
+      }
       return { ...rest, id, component: type, ...(result.defaultCatalog ? {} : { '@catalogId': CLASSIC_A2UI_CATALOG }), ...(accessibility === undefined ? {} : { '@accessibility': accessibility }),
         ...(checks === undefined ? {} : { '@checks': checks }), ...(metadata === undefined ? {} : { '@metadata': metadata }) } as A2uiComponent;
     }),
@@ -350,7 +379,10 @@ function verifySnapshot(snapshot: A2uiSnapshot): void {
     seen.add(id);
     requireClassic(item.weight === undefined || canWeight, 'layout weight requires a Row or Column parent', `${componentPaths.get(id)}/weight`, 'UNALLOWED_PARENT');
     if (!inTemplate) for (const [key, value] of Object.entries(item)) {
-      if (key !== 'metadata' && key !== '@metadata') requireClassic(!containsCall(value, '@index'), '@index requires a template instance');
+      if (key==='@metadata') continue;
+      const check=(part:unknown)=>{ requireClassic(!containsCall(part,'@index'),'@index requires a template instance'); return part; };
+      if (key==='action') mapA2uiActionExpressions(value,check);
+      else check(value);
     }
     if (item.component === 'Button' && typeof item.child === 'string') {
       const childKind = components.get(item.child)?.component;

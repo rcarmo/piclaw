@@ -1,6 +1,6 @@
 import '../../../helpers.ts';
 import { expect, test } from 'bun:test';
-import { applyA2uiMessages, bindA2uiDraftId } from '../../../../src/channels/web/a2ui/express.js';
+import { applyA2uiMessages, bindA2uiDraftId, compileA2uiExpress } from '../../../../src/channels/web/a2ui/express.js';
 import { CLASSIC_A2UI_AGENT_CAPABILITIES, CLASSIC_A2UI_RENDERER_CAPABILITIES } from '../../../../src/channels/web/a2ui/capabilities.js';
 import { buildA2uiAction, validateA2uiAction } from '../../../../src/channels/web/a2ui/action.js';
 import type { A2uiSnapshot } from '../../../../src/channels/web/a2ui/surface.js';
@@ -98,6 +98,64 @@ test('model data is inert JSON even when its keys resemble v1.0 expressions', ()
   const malformed={version:'1.0',updateComponents:{surfaceId,components:[{id:'title',component:'Text',text:literal}]}};
   expect(validate(malformed)).toBe(false);
   expect(()=>applyA2uiMessages(surfaceId,[malformed],next,true)).toThrow();
+});
+
+test('structured event literals stay inert beside relative expressions in a template', () => {
+  const surfaceId='literal-context';
+  const literal={config:[{'@call':'@index'},{'@path':'not an expression','@call':'arbitrary data'}]};
+  const array=[{'@path':'relative name'}];
+  const alias={path:'literal relative name'};
+  const create={version:'1.0',createSurface:{surfaceId,catalogId:'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json',
+    dataModel:{items:[{label:'First'},{label:'Second'}]},components:[
+      {id:'root',component:'List',children:{componentId:'submit',path:'/items'}},
+      {id:'submit',component:'Button',child:'label',action:{event:{name:'save',context:{literal,array,alias,name:{'@path':'label'}}}}},
+      {id:'label',component:'Text',text:'Save'},
+    ],
+  }};
+  const validate=basic('agent_to_renderer.json');
+  expect(validate(create),JSON.stringify(validate.errors)).toBe(true);
+  const created=applyA2uiMessages(surfaceId,[create],undefined,true)!;
+  const surface=applyA2uiMessages(surfaceId,[{version:'1.0',updateDataModel:{surfaceId,path:'/items/1/label',value:'Edited'}}],created)!;
+  const message=buildA2uiAction(surface,'submit',new Map(),'2026-06-02T08:57:23Z','/1');
+  expect(basic('renderer_to_agent.json')(message)).toBe(true);
+  expect(validateA2uiAction(surface,message,'/1').context).toEqual({alias,array,literal,name:'Edited'});
+  const replacement={...create.createSurface.components[1],action:{event:{name:'updated',context:{kept:true}}}};
+  const next=applyA2uiMessages(surfaceId,[{version:'1.0',updateComponents:{surfaceId,components:[replacement]}}],surface)!;
+  expect(buildA2uiAction(next,'submit',new Map(),'2026-06-02T08:57:23Z','/1').action.context).toEqual({kept:true});
+});
+
+test('component IDs and function parameter names use the catalogues’ UAX #31 grammar', () => {
+  const surfaceId='urn:example:unicode-components';
+  const catalogId='https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json';
+  const create=(id:string,args:Record<string,unknown>={label:'hello'})=>({version:'1.0',createSurface:{surfaceId,catalogId,components:[
+    {id:'root',component:'Column',children:[id]},
+    {id,component:'Text',text:{'@call':'lookUp',args}},
+  ]}});
+  expect(applyA2uiMessages(surfaceId,[create('名簿_٢')],undefined,true)?.components[1].id).toBe('名簿_٢');
+  for (const id of ['1stItem','submit-form','a.b','two words','suffix\n']) {
+    expect(()=>applyA2uiMessages(surfaceId,[create(id)],undefined,true)).toThrow();
+  }
+  expect(()=>applyA2uiMessages(surfaceId,[create('ordinary',{ 'invalid-arg':'hello' })],undefined,true)).toThrow();
+  const dangling={version:'1.0',createSurface:{surfaceId,catalogId,components:[{id:'root',component:'Card',child:'1stItem'}]}};
+  expect(()=>applyA2uiMessages(surfaceId,[dangling],undefined,true)).toThrow();
+});
+
+test('shipped Classic authoring examples compile and the wire example submits the selected row', async () => {
+  const skill=(name:string)=>Bun.file(new URL(`../../../../../skel/.pi/skills/a2ui-express-authoring/${name}`,import.meta.url)).text();
+  const docs=[await skill('SKILL.md'),await skill('templates.md')].join('\n');
+  const examples=[...docs.matchAll(/```express\n([\s\S]*?)\n```/g)];
+  expect(examples).toHaveLength(5);
+  for (const [,express] of examples) expect(applyA2uiMessages('example',compileA2uiExpress(express,'example'))?.components.length).toBeGreaterThan(0);
+  const [,json]=/```json\n([\s\S]*?)\n```/.exec(docs)!;
+  const messages=JSON.parse(json) as unknown[];
+  const validate=basic('agent_to_renderer.json');
+  for (const message of messages) expect(validate(message),JSON.stringify(validate.errors)).toBe(true);
+  const surface=applyA2uiMessages('example',bindA2uiDraftId(messages,'example'),undefined,true)!;
+  const action=buildA2uiAction(surface,'pick',new Map(),'2026-06-02T08:57:23Z','/1');
+  expect(basic('renderer_to_agent.json')(action)).toBe(true);
+  expect(validateA2uiAction(surface,action,'/1')).toMatchObject({name:'choose_region',userMessage:'Chose South',
+    context:{region:'South',position:2,source:{section:'handoff',tags:['region']}},
+  });
 });
 
 test('Classic discovery and renderer offer match the pinned schemas', () => {
