@@ -57,8 +57,8 @@ export async function publishAgentA2ui(options: {
     if (prior) {
       const current = lookup(params.post_id!);
       if (!current || JSON.stringify(current.surface) !== JSON.stringify(prior.surface)) throw new Error('Surface has changed');
-      const blocks = next ? current.blocks.map(block => block === current.surface ? next : block)
-        : current.blocks.filter(block => block !== current.surface);
+      const blocks = current.blocks.map(block => block === current.surface
+        ? next ?? { type: "a2ui_surface_removed", revision } : block);
       replaceSurfaceBlocks(root, chatJid, params.post_id!, blocks);
       return params.post_id!;
     }

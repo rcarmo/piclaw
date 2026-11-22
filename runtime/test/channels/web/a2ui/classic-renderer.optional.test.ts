@@ -122,6 +122,12 @@ for (const engine of [chromium, webkit]) {
       expect(await page.getByText('PRIVATEDEVICE').count()).toBe(0);
       const authSubmit = await page.evaluate(() => (window as any).events.at(-1));
       expect(authSubmit).toMatchObject({ private_value: 'synthetic-only-key', revision: 6, message: { action: { context: {} } } });
+      const docs = { ...block, revision: 7, surface: applyA2uiMessages('docs-link',
+        compileA2uiExpress('root = Button(Text("Docs"), action=openUrl("https://example.test/docs"))', 'docs-link')) };
+      await page.evaluate((block) => (window as any).draw(block), docs);
+      const link = page.getByRole('link', { name: 'Docs' });
+      expect(await link.getAttribute('href')).toBe('https://example.test/docs');
+      expect(await link.getAttribute('rel')).toBe('noopener noreferrer');
       const legacyRequests: string[] = [];
       page.on('request', request => { if (request.url().includes('adaptivecards')) legacyRequests.push(request.url()); });
       await page.evaluate(() => (window as any).draw({

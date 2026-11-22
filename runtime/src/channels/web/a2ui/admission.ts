@@ -1,3 +1,6 @@
+import type { Database } from 'bun:sqlite';
+import { getDb } from '../../../db.js';
+import { admitSqliteWrite } from '../../../db/sqlite-async-admission.js';
 /** Authenticated, revision-bound admission of ordinary A2UI actions. */
 import { createHash } from 'node:crypto';
 import { isSingleUserAccess } from '../../../core/config-access.js';
@@ -147,6 +150,31 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
   if (duplicate(block)) return accepted();
   if (block.state !== 'active' || block.revision !== revision) return changed();
 
+  const settle = (database: Database, rowId?: number) => {
+    const current = readSource();
+    const latest = sourceBlock(current);
+    const root = getMessageByRowId(chatJid, threadId);
+    if (!current || current.data?.type !== 'agent_response' || (current.data?.thread_id ?? postId) !== threadId || !root
+      || (root.data?.thread_id != null && root.data.thread_id !== threadId)
+      || !isA2uiSurfaceBlock(latest) || latest.owner !== block.owner || (recovery && current.data?.is_terminal_agent_reply !== true) || latest.state !== 'active' || latest.revision !== revision
+      || JSON.stringify(latest.surface) !== JSON.stringify(block.surface)) throw new Error('Surface changed before admission');
+    const next = { ...latest, revision: revision + 1,
+      state: rowId === undefined ? 'cancelled' : latest.submit_behavior === 'keep_active' ? 'active' : 'completed',
+      last_submission: { request_id: requestId, revision, digest, ...(rowId !== undefined ? { row_id: rowId } : {}) } };
+    const blocks = current.data?.content_blocks?.map(item => item === latest ? next : item);
+    // Write only structured content; never rewrite the source's clamped display text or its media.
+    replaceSurfaceBlocks(database, chatJid, postId, blocks!);
+  };
+  if (block.owner === 'agent' && action.name === 'cancel') {
+    if (Object.keys(action.context).length) return json({ error: 'Cancel must not submit form values.' }, 400);
+    const database = getDb();
+    try { await admitSqliteWrite(database, () => settle(database), validate, req.signal, undefined, binding); }
+    catch { return duplicate(sourceBlock(readSource())) ? accepted() : changed(); }
+    const updated = readSource();
+    if (updated) channel.interactionBroadcaster.broadcastInteractionUpdated(updated);
+    return json({ status: 'cancelled' }, 200);
+  }
+
   const pathname = '/agent/default/message';
   const fields = Object.entries(action.context).map(([key, value]) => `${key}: ${JSON.stringify(value)}`);
   const body = JSON.stringify({ content: recovery ?? [`Submitted ${action.name}`, ...fields].join('\n'), thread_id: threadId });
@@ -158,21 +186,7 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
     response = await handleAgentMessage(channel, forward, pathname, chatJid, 'default', {
       requireReplyThread: true,
       authorise: () => {},
-      onAccepted: ({ database, rowId }) => {
-        const current = readSource();
-        const latest = sourceBlock(current);
-        const root = getMessageByRowId(chatJid, threadId);
-        if (!current || current.data?.type !== 'agent_response' || (current.data?.thread_id ?? postId) !== threadId || !root
-          || (root.data?.thread_id != null && root.data.thread_id !== threadId)
-          || !isA2uiSurfaceBlock(latest) || latest.owner !== block.owner || (recovery && current.data?.is_terminal_agent_reply !== true) || latest.state !== 'active' || latest.revision !== revision
-          || JSON.stringify(latest.surface) !== JSON.stringify(block.surface)) throw new Error('Surface changed before admission');
-        const next = { ...latest, revision: revision + 1,
-          state: latest.submit_behavior === 'keep_active' ? 'active' : 'completed',
-          last_submission: { request_id: requestId, revision, digest, row_id: rowId } };
-        const blocks = current.data?.content_blocks?.map(item => item === latest ? next : item);
-        // Write only structured content; never rewrite the source's clamped display text or its media.
-        replaceSurfaceBlocks(database, chatJid, postId, blocks!);
-      },
+      onAccepted: ({ database, rowId }) => settle(database, rowId),
     });
   } finally { releaseInputRequestAuthority(forward); }
   binding();

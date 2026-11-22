@@ -286,7 +286,7 @@ export interface AgentControlResult {
   source_chat_jid?: string;
   /** Optional media attachment ids to include with the response message. */
   mediaIds?: number[];
-  /** Optional adaptive card content blocks to include with the response message. */
+  /** Optional structured timeline content blocks to include with the response message. */
   contentBlocks?: unknown[];
   /** Sensitive provider UI data: direct authenticated response only, never timeline content. */
   authPresentation?: {

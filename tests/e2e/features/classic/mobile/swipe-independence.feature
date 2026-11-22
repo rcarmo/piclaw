@@ -24,7 +24,7 @@ Feature: Classic session swipe target rules
       | editor pane container        |
       | terminal content or dock     |
       | attachment preview modal     |
-      | Adaptive Card controls       |
+      | A2UI form controls       |
       | model or session popup       |
 
   @ux-mobile-003

@@ -57,7 +57,6 @@ test("plain import covers config module init branches with isolated argv and env
         terminalEnabled: "on",
         vncAllowDirect: "off",
       },
-      debugCardSubmissions: "off",
       sessionMaxSizeMb: "64",
       sessionAutoRotate: "true",
     });
@@ -148,7 +147,6 @@ test("plain import covers config module init branches with isolated argv and env
       sanitizeSvgFences: true,
       vncAllowDirect: false,
       vncTargetsRaw: "",
-      debugCardSubmissions: false,
       trustProxy: true,
       composeUploadLimitMb: 256,
       workspaceUploadLimitMb: 256,

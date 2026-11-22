@@ -50,38 +50,38 @@
     {
       "path": "runtime/src/channels/web/core/web-channel-contracts.ts",
       "beforeSha256": "6addeb6df3f99944d7b3f8048e8f35b1b69c8e3fdd24712d43c5d1a86c5876d7",
-      "afterSha256": "5e84a24d97d35510383ae0da0c33b610f568d5b8e1a40220f614a2031fd29ff1",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Expose the existing auth gateway rotation sink to the private A2UI TOTP handler; no retention changes."
+      "afterSha256": "266c7a514f9c51e23f9e7444e0b4b9f9a409f8cc2ab46c9cc2f0c99b9c4d5b86",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Expose the existing auth gateway rotation sink to the private A2UI TOTP handler; no retention changes. Remove the legacy Adaptive Cards boundary after migration to A2UI Express; historical retention accounting is unchanged."
     },
     {
       "path": "runtime/src/channels/web/http/dispatch-agent.ts",
       "beforeSha256": "af21c1c0c42fcc3b0d7b3ccc4e18ead534adf90dafe361cc8537a1c3cf544df1",
-      "afterSha256": "1760b32c06f5061f05f7c2dd407ffb4c9c2d780e4ad39d589f9c47434e6b5f29",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Wire the native A2UI Express publisher and revision-bound action ingress without changing historical retention accounting."
+      "afterSha256": "99f37967b1e9fe7141dfa90d84d46fae587bd27a8f6ae48f403fdb32e2516314",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Wire the native A2UI Express publisher and revision-bound action ingress without changing historical retention accounting. Remove the legacy Adaptive Cards boundary after migration to A2UI Express; historical retention accounting is unchanged."
     },
     {
       "path": "runtime/src/extensions/index.ts",
       "beforeSha256": "08b491d3c83eeb439ce3bf5a8dfc310038a78e1330ed5a90c8870c342018b61a",
-      "afterSha256": "220e47f7c0ec31546c85aa6ba53c569ba38eee2ea7e22694c31d72e723b8d300",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Remove the unreachable legacy result-sanitization hook."
+      "afterSha256": "610b3eeba948ec0d5c7de6c676a0459de52de48a5ceae882675e8047e0dda535",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Remove the unreachable legacy result-sanitization hook. Remove the legacy Adaptive Cards boundary after migration to A2UI Express; historical retention accounting is unchanged."
     },
     {
       "path": "runtime/src/extensions/tool-capabilities.ts",
       "beforeSha256": "61c5d8b1d5736ea618642509ee730597dada7f49de1f342c29e765e0bf5948b1",
-      "afterSha256": "ddf9afbab50ebb9cba9f65a09fe20c0bcc8e43fc11de67c0d70b9d14864e8ff3",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Classify keychain discovery as read-only and stop advising agents to store or delete credentials through it."
+      "afterSha256": "fe8c72057ff2278b2c84194f2b03f3af1f07d18b243fd53ae9781d55529a95c9",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Classify keychain discovery as read-only and stop advising agents to store or delete credentials through it. Remove the legacy Adaptive Cards boundary after migration to A2UI Express; historical retention accounting is unchanged."
     },
     {
       "path": "runtime/src/service-effects/tool-preparation/manifest.ts",
       "beforeSha256": "3243d4482c27f6eaa1dd3c7eb5dc3ce205d575085d775d8d1f2b92f196b04fb7",
-      "afterSha256": "5c5884c3d5e44f482c3094f8716aa84fc017088b7f82a91018f5652d2fd8035d",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Record the metadata query and mark the free-form filter and results protected; retain historic plaintext field protection."
+      "afterSha256": "86ffbb8ec412a70add0c1dad1c7c8ca9611903a0d5441972cf67f52fd1fd56cd",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Record the metadata query and mark the free-form filter and results protected; retain historic plaintext field protection. Remove the legacy Adaptive Cards boundary after migration to A2UI Express; historical retention accounting is unchanged."
     },
     {
       "path": "runtime/src/service-effects/tool-preparation/policy.ts",
       "beforeSha256": "7e7cee875d878bd7c27d2a57d54ede5c2a4f9466a7c3d2f53efe848d548a42c2",
-      "afterSha256": "0e08d5cff22b7087a5b11309899e57a6b8e4e674f7456ea7cdaba28922d9821f",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Keep keychain inventory queries non-replayable under owned credential scope without granting service mutation authority."
+      "afterSha256": "b8cf71357463da7259edfecd8db2a2ef500536b6f5fe666db7bbd623921763a5",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Keep keychain inventory queries non-replayable under owned credential scope without granting service mutation authority. Remove the legacy Adaptive Cards boundary after migration to A2UI Express; historical retention accounting is unchanged."
     },
     {
       "path": "runtime/web/src/components/settings-dialog.ts",
@@ -92,8 +92,8 @@
     {
       "path": "runtime/web/src/dev/settings-widget-fixture.ts",
       "beforeSha256": "ad4d62fbdd108af040affde18a82d011fcbb4b09122d57a14869972f55bb2978",
-      "afterSha256": "685cfb9bb9863e42645f07627cbe253dcc7eb7f3385341867db544dbe9f3338b",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Use the global optimiser configuration shape in the disposable Settings fixture."
+      "afterSha256": "dac57f6a7aa36c7be44be9a5b616763cb7e04dfea278ce5718914dd91a39ce04",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Use the global optimiser configuration shape in the disposable Settings fixture. Remove the legacy Adaptive Cards boundary after migration to A2UI Express; historical retention accounting is unchanged."
     },
     {
       "path": "runtime/web/static/classic/css/settings.css",
@@ -104,8 +104,8 @@
     {
       "path": "docs/tools-and-skills.md",
       "beforeSha256": "5e3212ee821b5c1f83ddbc3535ebb924c3316133a4cfa9397a70f5ad97fc69f9",
-      "afterSha256": "03a0de544aa82f0b8af8507963093a50fffe34a5ace65a4cdbd29543d530deb8",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Document the read-only agent discovery surface and direct users to Settings for credential management. Document native inline image budgets and text-only projection."
+      "afterSha256": "1c06a0b8549249e738232704459b07cecd51b1af8d2e8c0f38b8d3935d2dd2f4",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Document the read-only agent discovery surface and direct users to Settings for credential management. Document native inline image budgets and text-only projection. Remove the legacy Adaptive Cards boundary after migration to A2UI Express; historical retention accounting is unchanged."
     },
     {
       "path": "runtime/scripts/schema-ownership.json",
@@ -116,8 +116,8 @@
     {
       "path": "docs/architecture.md",
       "beforeSha256": "de7e9d4d570ad1d7ab85b09deb243b5b825ddb16cb8b30de55a78c0404c7b236",
-      "afterSha256": "7c8e1d1be9b4bd8d2dae8cd4e4e0e617c7f7e9af0b244cd679258ec47536e090",
-      "purpose": "Distinguish the native metadata-only inventory from the retained legacy adapter and remove the always-loaded claim."
+      "afterSha256": "ecefd5f6acd7533d1101687245337485c93c546e4422ca4e85aedf33a70609ad",
+      "purpose": "Distinguish the native metadata-only inventory from the retained legacy adapter and remove the always-loaded claim. Remove the legacy Adaptive Cards boundary after migration to A2UI Express; historical retention accounting is unchanged."
     },
     {
       "path": "runtime/src/agent-pool/runtime-facade.ts",

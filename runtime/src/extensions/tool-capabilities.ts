@@ -71,7 +71,7 @@ export const TOOLSETS: ToolsetDefinition[] = [
   {
     name: "ui",
     description: "PiClaw web UI posting tools and cross-session relay.",
-    toolNames: ["send_adaptive_card", "send_dashboard_widget", "chat"],
+    toolNames: ["send_a2ui", "send_dashboard_widget", "chat"],
   },
   {
     name: "experiments",
@@ -578,13 +578,13 @@ const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
   },
 
   // ui
-  send_adaptive_card: {
+  send_a2ui: {
     kind: "mutating",
     weight: "lightweight",
     recommend: rec({
       domains: ["ui", "cards"],
       verbs: ["send", "post", "show"],
-      nouns: ["adaptive card", "card", "form"],
+      nouns: ["a2ui", "surface", "form"],
     }),
   },
   send_dashboard_widget: {

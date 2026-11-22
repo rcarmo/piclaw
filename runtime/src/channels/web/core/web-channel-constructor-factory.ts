@@ -6,11 +6,10 @@ import {
   getWebRuntimeConfig,
   getWebServerConfig,
 } from "../../../core/config.js";
-import { handleAgentMessage as handleAgentMessageRequest } from "../handlers/agent.js";
 import {
-  WebAdaptiveCardSidePromptService,
-  type WebAdaptiveCardSidePromptServiceOptions,
-} from "../cards/adaptive-card-side-prompt-service.js";
+  WebSidePromptService,
+  type WebSidePromptServiceOptions,
+} from "../agent/side-prompt-service.js";
 import {
   createWebAgentControlPlaneService,
   type WebAgentControlPlaneService,
@@ -108,7 +107,6 @@ export interface WebChannelConstructorFactoryOptions extends WebChannelConstruct
     internalSecret?: string;
     sessionTtl: number;
     terminalEnabled: boolean;
-    debugCardSubmissions?: boolean;
     totpWindow?: number;
   };
 }
@@ -124,7 +122,7 @@ export interface WebChannelConstructorFactoryResult {
   controlPlaneService: WebAgentControlPlaneService;
   serverLifecycleGateway: WebServerLifecycleGatewayService;
   terminalVncHttpService: WebTerminalVncHttpServiceSurface;
-  adaptiveCardSidePromptService: WebAdaptiveCardSidePromptService;
+  sidePromptService: WebSidePromptService;
   peerMessageRelayService: WebAgentPeerMessageRelayService;
 }
 
@@ -159,7 +157,7 @@ export interface WebChannelConstructorFactoryDeps {
     channel: WebTerminalVncHttpChannel,
     configs: { webRuntimeConfig: WebChannelConstructorFactoryOptions["webRuntimeConfig"] },
   ): WebTerminalVncHttpService;
-  createAdaptiveCardSidePromptService(options: WebAdaptiveCardSidePromptServiceOptions): WebAdaptiveCardSidePromptService;
+  createSidePromptService(options: WebSidePromptServiceOptions): WebSidePromptService;
   createPeerMessageRelayService(
     channel: WebChannelConstructorFactoryChannel,
     defaults: { defaultAgentId: string },
@@ -182,7 +180,7 @@ const defaultDeps: WebChannelConstructorFactoryDeps = {
     createWebAgentControlPlaneService(channel as unknown as Parameters<typeof createWebAgentControlPlaneService>[0], defaults),
   createServerLifecycleGateway: (channel, configs) => createWebServerLifecycleGateway(channel, configs),
   createTerminalVncHttpService: (channel, configs) => createWebTerminalVncHttpService(channel, configs),
-  createAdaptiveCardSidePromptService: (options) => new WebAdaptiveCardSidePromptService(options),
+  createSidePromptService: (options) => new WebSidePromptService(options),
   createPeerMessageRelayService: (channel, defaults) =>
     createWebAgentPeerMessageRelayService(channel as unknown as WebAgentPeerMessageRelayChannelLike, defaults),
   getDb,
@@ -321,25 +319,10 @@ export function createWebChannelConstructorFactory(
     },
   };
 
-  const adaptiveCardSidePromptService = deps.createAdaptiveCardSidePromptService({
+  const sidePromptService = deps.createSidePromptService({
     defaultChatJid: options.defaultChatJid,
-    defaultAgentId: options.defaultAgentId,
     json: (payload, status = 200) => channel.json(payload, status),
-    webRuntimeConfig: options.webRuntimeConfig,
     agentPool: channel.agentPool,
-    authGateway,
-    interactionBroadcaster,
-    sendMessage: (chatJid, text, sendOptions) => channel.sendMessage(chatJid, text, sendOptions),
-    broadcastEvent: (eventType, data) => channel.broadcastEvent(eventType, data),
-    forwardAgentMessage: async (req, pathname, chatJid, agentId) => {
-      return await handleAgentMessageRequest(
-        channel as unknown as WebChannelLike,
-        req,
-        pathname,
-        chatJid,
-        agentId,
-      );
-    },
   });
 
   const peerMessageRelayService = deps.createPeerMessageRelayService(channel, {
@@ -357,7 +340,7 @@ export function createWebChannelConstructorFactory(
     controlPlaneService,
     serverLifecycleGateway,
     terminalVncHttpService,
-    adaptiveCardSidePromptService,
+    sidePromptService,
     peerMessageRelayService,
   };
 }

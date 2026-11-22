@@ -95,7 +95,6 @@ type ExportMessage = {
   content: string | null;
   timestamp: string;
   is_bot_message: number;
-  content_blocks: string | null;
   media?: Array<{
     id: number;
     filename: string | null;
@@ -139,7 +138,7 @@ function queryExportMessages(
     : "ORDER BY rowid ASC";
 
   const rows = db.prepare(
-    `SELECT rowid, sender, sender_name, content, timestamp, is_bot_message, content_blocks
+    `SELECT rowid, sender, sender_name, content, timestamp, is_bot_message
      FROM messages
      WHERE ${where.join(" AND ")}
      ${order}`,

@@ -26,11 +26,28 @@ Declare runtime entries in the package manifest:
 `load` has two values:
 
 - `"startup"` loads after Piclaw has started its WebChannel and wired the runtime messaging handlers, before chat warmup and crash recovery resume work. Use it for chat transports and other process-wide services that must exist before the first agent session.
-- `"lazy"` loads when a status panel, config action or Adaptive Card intent first needs runtime contributions. It is the default when `load` is omitted and preserves existing add-on behaviour.
+- `"lazy"` loads when a status panel or config action first needs runtime contributions. It is the default when `load` is omitted and preserves existing add-on behaviour.
 
 Piclaw applies the same package-entry policy to `pi.extensions`, `pi.web.entries` and `pi.runtime.entries`. Each declaration must be a non-empty relative string that resolves to a regular file inside both the lexical package directory and its realpath. Package-directory symlinks and file symlinks that stay inside the resolved package are supported. Absolute paths, traversal, missing files, directories and symlink escapes are ignored. Package roots are processed deterministically; declaration order and duplicate entries within each field are preserved.
 
 Runtime entry registration lasts for the Piclaw process. Installing or uninstalling an add-on requires the normal Piclaw restart; the process rebuilds the registry from currently installed packages.
+
+## A2UI add-on API v1
+
+Use `globalThis.__piclaw_runtime?.a2ui` for interactive surfaces in Classic. Check `version === 1` before calling the API.
+
+```ts
+await a2ui.post({
+  chatJid,
+  fallback: "Approve this choice.",
+  express: 'root = Button(Text("Approve"), action=Event("approve"))',
+  actions: { approve: async ({ sendMessage }) => sendMessage("Approved.") },
+}, signal);
+```
+
+`post` resolves to the committed source post ID. Each callback belongs to that source post and expires after ten minutes or on restart. The callback receives validated `values`, `chatJid`, `postId`, `threadId` and a thread-bound `sendMessage`. Piclaw consumes the surface before invoking the callback. A failed response does not grant permission to replay the effect. Ask for a new surface after checking the action's status.
+
+The old Adaptive Card intent hook is removed. Do not post raw interactive content blocks through `postMessage`.
 
 ## Messaging API v1
 

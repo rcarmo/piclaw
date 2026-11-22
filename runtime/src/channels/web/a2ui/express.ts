@@ -7,7 +7,7 @@ import {
   type AgentToRendererMessage,
 } from "@a2ui/agent";
 import { basicCatalog } from "@a2ui/web_core/catalogs/basic/v1";
-import { CLASSIC_A2UI_CATALOG, CLASSIC_A2UI_PROPERTIES, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
+import { CLASSIC_A2UI_CATALOG, CLASSIC_A2UI_PROPERTIES, readA2uiLink, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
 
 const MAX_SOURCE_BYTES = 16_384;
 const MAX_SURFACE_BYTES = 32_768;
@@ -17,7 +17,7 @@ const MAX_DEPTH = 24;
 const ID = /^[\p{ID_Start}\p{ID_Continue}_-][\p{ID_Continue}_.-]{0,127}$/u;
 const FORBIDDEN_KEYS = new Set(["__proto__", "prototype", "constructor"]);
 const encoder = new TextEncoder();
-const catalog = new FunctionPruningTransformer([]).transform(
+const catalog = new FunctionPruningTransformer(["openUrl"]).transform(
   new ComponentPruningTransformer(Object.keys(CLASSIC_A2UI_PROPERTIES)).transform(basicCatalog),
 );
 
@@ -59,13 +59,18 @@ function checkJson(value: unknown, depth = 0): void {
   const entries = Object.entries(value);
   requireClassic(entries.length <= MAX_COMPONENTS, "object too large");
   for (const [key, item] of entries) {
-    requireClassic(!FORBIDDEN_KEYS.has(key) && key !== "@call" && key !== "@catalogId", "unsupported key");
+    requireClassic(!FORBIDDEN_KEYS.has(key) && (key !== "@call" || item === "openUrl") && key !== "@catalogId", "unsupported key");
     if (key === "@path") {
       requireClassic(entries.length === 1, "malformed path binding");
       checkPath(item);
     }
     checkJson(item, depth + 1);
   }
+}
+
+function containsCall(value: unknown): boolean {
+  return Array.isArray(value) ? value.some(containsCall)
+    : record(value) && (Object.hasOwn(value, "@call") || Object.values(value).some(containsCall));
 }
 
 function checkComponents(value: unknown): asserts value is A2uiComponent[] {
@@ -76,6 +81,9 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     const name = component.component;
     requireClassic(typeof name === "string" && Object.hasOwn(CLASSIC_A2UI_PROPERTIES, name), "unsupported component");
     requireClassic(allowedKeys(component, ["id", "component", ...CLASSIC_A2UI_PROPERTIES[name as A2uiComponent["component"]]]), "unsupported component property");
+    for (const [key, value] of Object.entries(component)) {
+      if (key !== "action" || !readA2uiLink(value)) requireClassic(!containsCall(value), "functions are not supported in values");
+    }
     ids.add(component.id);
     if (name === "Row" || name === "Column") {
       requireClassic(Array.isArray(component.children) && component.children.every(isId), "only fixed child lists are supported");
@@ -85,6 +93,7 @@ function checkComponents(value: unknown): asserts value is A2uiComponent[] {
     }
     if (name === "Button") {
       const { action } = component;
+      if (readA2uiLink(action)) continue;
       requireClassic(record(action) && allowedKeys(action, ["event"]) && record(action.event)
         && allowedKeys(action.event, ["name", "context"]) && isId(action.event.name), "expected a server event");
       const { context } = action.event;
@@ -164,6 +173,7 @@ function verifySnapshot(snapshot: A2uiSnapshot): void {
   checkJson(snapshot);
   requireClassic(snapshot.catalogId === CLASSIC_A2UI_CATALOG && record(snapshot.dataModel)
     && encoder.encode(JSON.stringify(snapshot)).length <= MAX_SURFACE_BYTES, "invalid snapshot or snapshot too large");
+  requireClassic(!containsCall(snapshot.dataModel), "functions are not supported in data models");
   checkComponents(snapshot.components);
   const components = new Map(snapshot.components.map((item) => [item.id, item]));
   const seen = new Set<string>();

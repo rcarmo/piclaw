@@ -57,7 +57,7 @@ docker run -d \
 | ファイルの操作 | ワークスペースのファイルブラウザー、アップロード、CodeMirror エディター、シェルツール、切り離し可能な xterm.js ターミナル |
 | 結果の確認 | CSV/TSV テーブル、PDF、画像、動画、コードのビューアー、VNC リモート画面ペイン |
 | 次回も作業を継続 | スケジュールタスク、検索可能なチャット履歴、ファイルベースの [Dream メモリー](docs/dream-memory.md) |
-| ワークフローの拡張 | スキル、[MCP サーバー](docs/mcp.md)、ブラウザー自動化、画像処理、Adaptive Cards、対話型の図表や成果物 |
+| ワークフローの拡張 | スキル、[MCP サーバー](docs/mcp.md)、ブラウザー自動化、画像処理、A2UI surfaces、対話型の図表や成果物 |
 
 [Web UI ガイド](docs/web-ui.md#chat-and-status-surfaces)と[ツール・スキルのリファレンス](docs/tools-and-skills.md)に操作方法とコマンドを記載しています。ローカルモデルの設定は [llama.cpp](docs/llama-cpp.md) を参照してください。Azure での画像生成には [Azure OpenAI/Foundry の設定](docs/azure/azure-openai-extension.md)が必要です。
 

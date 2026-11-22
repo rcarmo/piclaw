@@ -42,7 +42,7 @@ describe("Classic A2UI Express", () => {
   test.each([
     'not even express',
     'root = Image("https://example.com/x")',
-    'root = Button(Text("Go"), action=openUrl("https://example.com"))',
+    'root = Button(Text("Go"), action=openUrl("javascript:alert(1)"))',
     'surface("form-1", sendDataModel=true); root = Text("Hello")',
     'surface("other"); root = Text("Wrong surface")',
     'root = Text("One"); surface("other"); root = Text("Two")',
@@ -64,4 +64,16 @@ describe("Classic A2UI Express", () => {
     expect(() => applyA2uiMessages("form-1", [{ version: "1.0", callFunction: { surfaceId: "form-1" } }], initial)).toThrow();
     expect(() => applyA2uiMessages("form-1", [{ version: "1.0", updateComponents: { surfaceId: "form-1", components: [{ id: "root", component: "Column", children: ["root"] }] } }], initial)).toThrow();
   });
+});
+
+test('allows a static HTTP(S) browser link, not a remote call or an expression URL', () => {
+  const link = 'root = Button(Text("Docs"), action=openUrl("https://example.com/docs"))';
+  expect(applyA2uiMessages('docs', compileA2uiExpress(link,'docs'))?.components[0]).toMatchObject({
+    action: { functionCall: { '@call': 'openUrl', args: { url: 'https://example.com/docs' } } },
+  });
+  for (const source of [
+    '$/target = "https://example.com"; root = Button(Text("Docs"), action=openUrl($/target))',
+    'root = Button(Text("Docs"), action=openUrl("https://user:password@example.com"))',
+    'root = Text(openUrl("https://example.com"))',
+  ]) expect(() => applyA2uiMessages('docs', compileA2uiExpress(source,'docs'))).toThrow();
 });

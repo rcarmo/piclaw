@@ -3,7 +3,7 @@ import { html, useCallback, useRef, useState } from '../vendor/preact-htm.js';
 import { a2uiBindingPath, buildA2uiAction, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
 import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
 import { A2uiTotpDialog, readTotpPresentation, type TotpPresentation } from './a2ui-totp-dialog.js';
-import type { A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
+import { readA2uiLink, type A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
 
 type Submit = (request: A2uiActionRequest, options?: { signal?: AbortSignal }) => Promise<unknown>;
 
@@ -82,10 +82,14 @@ export function A2uiSurface({ block, source, onSubmit }: {
                     ${Array.isArray(item.children) ? item.children.map(child) : null}</div>`;
             }
             case 'Divider': return html`<hr key=${id} class=${item.axis === 'vertical' ? 'a2ui-divider-vertical' : ''} />`;
-            case 'Button':
+            case 'Button': {
+                const link = readA2uiLink(item.action);
+                if (link && !disabled) return html`<a key=${id} class="a2ui-button a2ui-button-borderless" href=${link}
+                    target="_blank" rel="noopener noreferrer">${child(item.child)}</a>`;
                 if (block.owner === 'login' && (id === 'continue' || id === 'check')) return null;
                 return html`<button key=${id} type="button" class=${`a2ui-button a2ui-button-${item.variant || 'default'}`}
                 disabled=${disabled} aria-disabled=${pending || disabled} onClick=${(event: Event) => submit(event, item.id)}>${child(item.child)}</button>`;
+            }
             case 'TextField': {
                 if (block.owner === 'login' && item.variant === 'obscured') return html`<label key=${id} class="a2ui-field">${label}
                     <input ref=${privateInput} disabled=${disabled || pending} type="password" autocomplete="off" maxlength="4096" placeholder=${text(item.placeholder)} />

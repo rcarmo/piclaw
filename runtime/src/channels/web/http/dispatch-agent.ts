@@ -310,11 +310,6 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     handle: (channel, req) => channel.handleAgentRespond(req),
   },
   {
-    method: "POST",
-    path: "/agent/card-action",
-    handle: (channel, req) => channel.handleAdaptiveCardAction(req),
-  },
-  {
     method: "GET",
     path: "/agent/push/vapid-public-key",
     handle: () => handleWebPushVapidPublicKey(),

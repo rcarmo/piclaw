@@ -155,15 +155,6 @@ KaTeX powers host-side math rendering. Its WOFF2 fonts are vendored under `/stat
 </script>
 ```
 
-## Adaptive Cards 3.0.6
-
-**Size:** 331 KiB (minified IIFE)
-**Path:** `/static/common/js/vendor/adaptivecards.min.js`
-**Global:** `AdaptiveCards`
-**License:** MIT
-
-This is the browser renderer used by Piclaw's structured timeline cards. Extension authors should normally post cards through `send_adaptive_card` rather than rendering the SDK in a dashboard widget; the static bundle is documented here for host UI maintenance and specialized pane use.
-
 ## Widget bridge
 
 All interactive widgets get `window.piclawWidget` automatically:
@@ -249,7 +240,7 @@ cd runtime
 bun run scripts/build-vendored-dependency.ts --manifest vendor-manifests/preact-htm.json
 ```
 
-Bundles not included in `build:vendor`, such as Adaptive Cards, can use the same command with their own manifest. Commit the source/manifest change, generated asset, and regenerated metadata together. `runtime/test/scripts/runtime-vendors.test.ts` covers reproducible builds and browser globals for the Preact/HTM, Marked, and KaTeX bundles.
+Bundles not included in `build:vendor` can use the same command with their own manifest. Commit the source/manifest change, generated asset, and regenerated metadata together. `runtime/test/scripts/runtime-vendors.test.ts` covers reproducible builds and browser globals for the Preact/HTM, Marked, and KaTeX bundles.
 
 ## Vendored fonts
 

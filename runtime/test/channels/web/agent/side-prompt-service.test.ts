@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  WebAdaptiveCardSidePromptService,
-  type WebAdaptiveCardSidePromptServiceOptions,
-} from "../../../../src/channels/web/cards/adaptive-card-side-prompt-service.js";
+  WebSidePromptService,
+  type WebSidePromptServiceOptions,
+} from "../../../../src/channels/web/agent/side-prompt-service.js";
 
 function json(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
@@ -22,24 +22,14 @@ function createRequest(path: string, init: RequestInit = {}): Request {
   });
 }
 
-function createFixture(overrides: Partial<WebAdaptiveCardSidePromptServiceOptions> = {}) {
+function createFixture(overrides: Partial<WebSidePromptServiceOptions> = {}) {
   const state = {
-    sentMessages: [] as Array<{ chatJid: string; text: string; options?: unknown }>,
-    broadcastEvents: [] as Array<{ eventType: string; data: unknown }>,
-    skipFailedCalls: [] as string[],
     sidePromptCalls: [] as Array<{ chatJid: string; prompt: string; options?: Record<string, unknown> }>,
   };
 
-  const options: WebAdaptiveCardSidePromptServiceOptions = {
+  const options: WebSidePromptServiceOptions = {
     defaultChatJid: "web:default",
-    defaultAgentId: "default",
     json,
-    webRuntimeConfig: {
-      debugCardSubmissions: false,
-      sessionTtl: 3600,
-      totpSecret: "",
-      totpWindow: 1,
-    },
     agentPool: {
       runSidePrompt: async (chatJid, prompt, options) => {
         state.sidePromptCalls.push({
@@ -56,134 +46,16 @@ function createFixture(overrides: Partial<WebAdaptiveCardSidePromptServiceOption
         };
       },
     },
-    authGateway: {
-      setTotpSecret: () => {},
-      createTotpContext: () => ({
-        buildSessionCookie: () => "piclaw_session=test",
-      }),
-    },
-    interactionBroadcaster: {
-      broadcastInteractionUpdated: () => {},
-    },
-    sendMessage: async (chatJid, text, options) => {
-      state.sentMessages.push({ chatJid, text, options });
-    },
-    broadcastEvent: (eventType, data) => {
-      state.broadcastEvents.push({ eventType, data });
-    },
-    skipFailedOnModelSwitch: (chatJid) => {
-      state.skipFailedCalls.push(chatJid);
-    },
-    forwardAgentMessage: async () => new Response(JSON.stringify({ status: "ok" }), { status: 201 }),
     ...overrides,
   };
 
   return {
     state,
-    service: new WebAdaptiveCardSidePromptService(options),
+    service: new WebSidePromptService(options),
   };
 }
 
-describe("Web adaptive-card/side-prompt service", () => {
-  test("preserves adaptive-card validation and client-handled open-url responses", async () => {
-    const fixture = createFixture();
-
-    const openUrlResponse = await fixture.service.handleAdaptiveCardAction(createRequest("/agent/card-action", {
-      method: "POST",
-      body: JSON.stringify({
-        post_id: 7,
-        card_id: "card-7",
-        action: {
-          type: "Action.OpenUrl",
-          url: "https://example.com/runbook",
-        },
-      }),
-    }));
-    expect(openUrlResponse.status).toBe(200);
-    expect(await openUrlResponse.json()).toEqual({
-      status: "ok",
-      handled: "client",
-      action_type: "Action.OpenUrl",
-      url: "https://example.com/runbook",
-    });
-
-    const unsupportedResponse = await fixture.service.handleAdaptiveCardAction(createRequest("/agent/card-action", {
-      method: "POST",
-      body: JSON.stringify({
-        post_id: 7,
-        card_id: "card-7",
-        action: {
-          type: "Action.Fly",
-        },
-      }),
-    }));
-    expect(unsupportedResponse.status).toBe(400);
-    expect(await unsupportedResponse.json()).toEqual({ error: "Unsupported action type: Action.Fly" });
-  });
-
-  test("routes adaptive-card submissions back to the source post chat when chat_jid is missing or wrong", async () => {
-    process.env.PICLAW_DB_IN_MEMORY = "1";
-    const db = await import("../../../../src/db.js");
-    db.initDatabase();
-    db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors;");
-
-    const sourcePostId = db.storeMessage({
-      id: "card-source-1",
-      chat_jid: "web:branch",
-      sender: "agent",
-      sender_name: "Agent",
-      content: "Card host",
-      timestamp: new Date().toISOString(),
-      is_from_me: true,
-      is_bot_message: true,
-      content_blocks: [
-        {
-          type: "adaptive_card",
-          card_id: "card-branch",
-          state: "active",
-          submit_behavior: "keep_active",
-          payload: {
-            type: "AdaptiveCard",
-            version: "1.5",
-            body: [],
-            actions: [{ type: "Action.Submit", title: "Go", data: { intent: "generic" } }],
-          },
-        },
-      ],
-    });
-
-    const forwardCalls: Array<{ chatJid: string; pathname: string }> = [];
-    const fixture = createFixture({
-      forwardAgentMessage: async (_req, pathname, chatJid) => {
-        forwardCalls.push({ chatJid, pathname });
-        return new Response(JSON.stringify({ status: "ok", id: 999 }), { status: 201 });
-      },
-    });
-
-    const missingChatRes = await fixture.service.handleAdaptiveCardAction(createRequest("/agent/card-action", {
-      method: "POST",
-      body: JSON.stringify({
-        post_id: sourcePostId,
-        card_id: "card-branch",
-        action: { type: "Action.Submit", title: "Go", data: { intent: "generic" } },
-      }),
-    }));
-    expect(missingChatRes.status).toBe(201);
-    expect(forwardCalls[0]?.chatJid).toBe("web:branch");
-
-    const wrongChatRes = await fixture.service.handleAdaptiveCardAction(createRequest("/agent/card-action", {
-      method: "POST",
-      body: JSON.stringify({
-        post_id: sourcePostId,
-        chat_jid: "web:default",
-        card_id: "card-branch",
-        action: { type: "Action.Submit", title: "Go", data: { intent: "generic" } },
-      }),
-    }));
-    expect(wrongChatRes.status).toBe(201);
-    expect(forwardCalls[1]?.chatJid).toBe("web:branch");
-  });
-
+describe("Web side-prompt service", () => {
   test("delegates parsed side-prompt payloads and maps error results to 502", async () => {
     const fixture = createFixture();
 

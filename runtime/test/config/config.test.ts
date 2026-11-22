@@ -407,7 +407,6 @@ test("config and env fallback chains handle booleans and session settings", () =
         terminalEnabled: true,
         trustProxy: true,
       },
-      debugCardSubmissions: false,
       sessionMaxSizeMb: 8,
       sessionAutoRotate: true,
     });
@@ -424,7 +423,6 @@ test("config and env fallback chains handle booleans and session settings", () =
         PICLAW_VNC_ALLOW_DIRECT: undefined,
         PICLAW_WEB_VNC_TARGETS: undefined,
         PICLAW_VNC_TARGETS: undefined,
-        PICLAW_DEBUG_CARD_SUBMISSIONS: "yes",
         PICLAW_SESSION_AUTO_ROTATE: "off",
       },
     });
@@ -444,7 +442,6 @@ test("config and env fallback chains handle booleans and session settings", () =
       sanitizeSvgFences: true,
       vncAllowDirect: process.platform === "linux" || process.platform === "darwin" || process.platform === "win32",
       vncTargetsRaw: "",
-      debugCardSubmissions: true,
       trustProxy: false,
       composeUploadLimitMb: 256,
       workspaceUploadLimitMb: 256,
@@ -689,7 +686,6 @@ test("web runtime config getter groups auth/session/proxy settings", () => {
         vncAllowDirect: false,
         trustProxy: true,
       },
-      debugCardSubmissions: false,
     });
     const snapshot = loadConfigInSubprocess(ws, [
       "WEB_RUNTIME_CONFIG",
@@ -708,7 +704,6 @@ test("web runtime config getter groups auth/session/proxy settings", () => {
         PICLAW_VNC_TARGETS: undefined,
         PICLAW_WEB_COMPOSE_UPLOAD_LIMIT_MB: undefined,
         PICLAW_WEB_WORKSPACE_UPLOAD_LIMIT_MB: undefined,
-        PICLAW_DEBUG_CARD_SUBMISSIONS: "yes",
       },
     });
     expect(snapshot["same:getWebRuntimeConfig:WEB_RUNTIME_CONFIG"]).toBe(true);
@@ -728,7 +723,6 @@ test("web runtime config getter groups auth/session/proxy settings", () => {
       sanitizeSvgFences: true,
       vncAllowDirect: false,
       vncTargetsRaw: "",
-      debugCardSubmissions: true,
       trustProxy: false,
       composeUploadLimitMb: 256,
       workspaceUploadLimitMb: 256,
@@ -799,7 +793,6 @@ test("in-process module init handles deprecated env warnings, argv parsing, and 
           PICLAW_VNC_TARGETS: undefined,
           PICLAW_WEB_COMPOSE_UPLOAD_LIMIT_MB: undefined,
           PICLAW_WEB_WORKSPACE_UPLOAD_LIMIT_MB: undefined,
-          PICLAW_DEBUG_CARD_SUBMISSIONS: "off",
           PICLAW_SESSION_MAX_SIZE_MB: "64",
           PICLAW_SESSION_AUTO_ROTATE: "on",
           PICLAW_AGENT_TIMEOUT: "120000",
@@ -844,7 +837,6 @@ test("in-process module init handles deprecated env warnings, argv parsing, and 
       sanitizeSvgFences: true,
       vncAllowDirect: true,
       vncTargetsRaw: "",
-      debugCardSubmissions: false,
       trustProxy: false,
       composeUploadLimitMb: 256,
       workspaceUploadLimitMb: 256,

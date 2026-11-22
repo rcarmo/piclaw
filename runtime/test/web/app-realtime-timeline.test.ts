@@ -79,3 +79,14 @@ test('acknowledgements do not contaminate another chat, filtered view or queued 
   for(const extra of [{queued:'followup'},{queued:'steer'},{ui_only:true}])expect(appendAcknowledgedTimelinePost(existing,{...response,...extra},'web:a',{})).toBe(existing);
   for(const id of [null,0,-1,'41',NaN])expect(appendAcknowledgedTimelinePost(existing,{user_message:{id,chat_jid:'web:a'}},'web:a',{})).toBe(existing);
 });
+
+test('late A2UI snapshots cannot roll back a newer revision or restore a deleted surface', () => {
+  const make = (revision: number, type = 'a2ui_surface') => ({ id: 7, data: { content_blocks: [{ type, revision }] } });
+  const active = [make(2)];
+  expect(replaceTimelinePostById(active, make(1))).toBe(active);
+  const deleted = make(3, 'a2ui_surface_removed');
+  const latest = replaceTimelinePostById(active, deleted)!;
+  expect(latest).toEqual([deleted]);
+  expect(replaceTimelinePostById(latest, make(2))).toBe(latest);
+  expect(replaceTimelinePostById(latest, { id: 7, data: {content_blocks:[]} })).toBe(latest);
+});

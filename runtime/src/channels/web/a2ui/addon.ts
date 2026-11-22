@@ -6,7 +6,7 @@ import { admitSqliteWrite } from '../../../db/sqlite-async-admission.js';
 import { stripInternalTags } from '../../../router.js';
 import type { Database } from 'bun:sqlite';
 import type { A2uiAction } from './action.js';
-import type { A2uiSurfaceBlock } from './surface.js';
+import { readA2uiLink, type A2uiSurfaceBlock } from './surface.js';
 
 export type AddonA2uiAction = (context: {
   chatJid: string; postId: number; threadId: number;
@@ -42,7 +42,7 @@ export async function publishAddonA2ui(input: {
   const surface = applyA2uiMessages(id, compileA2uiExpress(express, id));
   if (!surface) throw Error('Expected a new surface');
   for (const item of surface.components) {
-    if (item.component !== 'Button') continue;
+    if (item.component !== 'Button' || readA2uiLink(item.action)) continue;
     const name = (item.action as {event:{name:string}}).event.name;
     if (!actions.has(name)) throw Error('Every add-on event needs an owning callback');
   }

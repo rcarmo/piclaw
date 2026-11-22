@@ -190,7 +190,6 @@ export interface WebRuntimeConfig {
   sanitizeSvgFences: boolean;
   vncAllowDirect: boolean;
   vncTargetsRaw: string;
-  debugCardSubmissions: boolean;
   trustProxy: boolean;
 }
 
@@ -226,7 +225,6 @@ const legacyWebVncTargets = pickString(piclawConfig, ["webVncTargets"]);
 const legacyWebComposeUploadLimitMb = pickNumber(piclawConfig, ["webComposeUploadLimitMb", "composeUploadLimitMb"]);
 const legacyWebWorkspaceUploadLimitMb = pickNumber(piclawConfig, ["webWorkspaceUploadLimitMb", "workspaceUploadLimitMb"]);
 const legacyWebTrustProxy = pickBoolean(piclawConfig, ["trustProxy", "PICLAW_TRUST_PROXY"]);
-const debugCards = pickBoolean(piclawConfig, ["debugCardSubmissions", "PICLAW_DEBUG_CARD_SUBMISSIONS"]);
 
 function getWebOrdinaryDomainConfigOptions(): DomainConfigRuntimeOptions {
   const options = getDomainConfigOptions();
@@ -251,7 +249,6 @@ type WebOrdinaryDomainConfig = Pick<
   | "notificationDebugLabels"
   | "sanitizeSvgFences"
   | "vncAllowDirect"
-  | "debugCardSubmissions"
   | "trustProxy"
 > & {
   idleTimeout: number;
@@ -291,7 +288,6 @@ const webOrdinaryDomainSchema = registerDomainConfig<WebOrdinaryDomainConfig>({
       { envKey: "PICLAW_WEB_VNC_TARGETS", replacement: "domains.web.vncTargets", removalVersion: "3.0.0" },
       { envKey: "PICLAW_VNC_TARGETS", replacement: "domains.web.vncTargets", removalVersion: "3.0.0" },
     ] }),
-    debugCardSubmissions: boolField({ key: "debugCardSubmissions", owner: "web", defaultValue: debugCards ?? false, persistence: "json-config", precedence: ["compat-env", "persisted", "default"], secretClass: "none", compatibilityEnv: [{ envKey: "PICLAW_DEBUG_CARD_SUBMISSIONS", replacement: "domains.web.debugCardSubmissions", removalVersion: "3.0.0" }] }),
     trustProxy: boolField({ key: "trustProxy", owner: "web", defaultValue: configTrustProxy ?? legacyWebTrustProxy ?? false, persistence: "json-config", precedence: ["compat-env", "persisted", "default"], secretClass: "none", compatibilityEnv: [{ envKey: "PICLAW_TRUST_PROXY", replacement: "domains.web.trustProxy", removalVersion: "3.0.0" }] }),
     contentMaxChars: integerField({ key: "contentMaxChars", owner: "web", defaultValue: 262_144, min: 1, bounds: "positive integer characters", persistence: "json-config", precedence: ["compat-env", "persisted", "default"], secretClass: "none", compatibilityEnv: [{ envKey: "PICLAW_WEB_MAX_CONTENT_CHARS", replacement: "domains.web.contentMaxChars", removalVersion: "3.0.0", parse: (raw) => Number.parseInt(raw, 10), skipInvalid: true }] }),
     contentPreviewChars: integerField({ key: "contentPreviewChars", owner: "web", defaultValue: 16_000, min: 1, bounds: "positive integer characters; capped at contentMaxChars when consumed", persistence: "json-config", precedence: ["compat-env", "persisted", "default"], secretClass: "none", compatibilityEnv: [{ envKey: "PICLAW_WEB_PREVIEW_CHARS", replacement: "domains.web.contentPreviewChars", removalVersion: "3.0.0", parse: (raw) => Number.parseInt(raw, 10), skipInvalid: true }] }),
@@ -353,7 +349,6 @@ export const WEB_RUNTIME_CONFIG: WebRuntimeConfig = Object.seal({
   sanitizeSvgFences: WEB_ORDINARY_DOMAIN_CONFIG.sanitizeSvgFences,
   vncAllowDirect: WEB_ORDINARY_DOMAIN_CONFIG.vncAllowDirect,
   vncTargetsRaw: WEB_ORDINARY_DOMAIN_CONFIG.vncTargets,
-  debugCardSubmissions: WEB_ORDINARY_DOMAIN_CONFIG.debugCardSubmissions,
   trustProxy: WEB_ORDINARY_DOMAIN_CONFIG.trustProxy,
 });
 

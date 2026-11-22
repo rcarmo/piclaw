@@ -52,7 +52,7 @@ These rules apply to core UI, add-ons and generated interactive surfaces. Visual
 
 - thought and draft panels during streaming
 - live steering and queued follow-ups
-- Adaptive Cards with persisted submissions
+- A2UI Express forms with revision-bound submissions
 - `/btw` side conversations
 - file attachments, link previews, and threaded turns
 - syntax-highlighted previews for common text/code attachments

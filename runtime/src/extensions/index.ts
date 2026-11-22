@@ -14,7 +14,6 @@
  *   - scheduledTasks: /tasks and /scheduled commands for task listing.
  *   - workspaceSearch: search_workspace tool for FTS over workspace files.
  *   - dreamMaintenance: /dream memory-consolidation slash command.
- *   - sendAdaptiveCard: send_adaptive_card for agent-owned Adaptive Card posting.
  *   - sendDashboardWidget: send_dashboard_widget for posting the built-in live dashboard widget.
  *   - chatTool: chat for cross-session agent-to-agent messaging.
  *   - openWorkspaceFile: open_workspace_file for browser-side editor tab/popout launches.
@@ -42,7 +41,6 @@ import { createMemorySearchExtension } from "./memory-search.js";
 import { workspaceMemoryBootstrap } from "./workspace-memory-bootstrap.js";
 import { dreamMaintenance } from "./dream-maintenance.js";
 import { uiThemeExtension } from "./ui-theme.js";
-import { sendAdaptiveCard } from "./send-adaptive-card.js";
 import { sendDashboardWidget } from "./send-dashboard-widget.js";
 import { chatTool } from "./chat-tool.js";
 import { chatProjectTool } from "./chat-project.js";
@@ -78,7 +76,6 @@ export function createBuiltinExtensionFactories(options?: {
     workspaceMemoryBootstrap,
     dreamMaintenance,
     uiThemeExtension,
-    sendAdaptiveCard,
     sendDashboardWidget,
     chatTool,
     chatProjectTool,

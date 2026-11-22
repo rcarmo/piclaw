@@ -1,10 +1,11 @@
+import { handleA2uiAction } from "../../../src/channels/web/a2ui/admission.js";
 import "../../helpers.ts";
 
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 
 import { WebAgentPeerMessageRelayService } from "../../../src/channels/web/agent/agent-peer-message-relay-service.js";
-import { WebAdaptiveCardSidePromptService } from "../../../src/channels/web/cards/adaptive-card-side-prompt-service.js";
+import { WebSidePromptService } from "../../../src/channels/web/agent/side-prompt-service.js";
 import { WebAgentControlPlaneService } from "../../../src/channels/web/agent/agent-control-plane-service.js";
 import { handleAgentMessage } from "../../../src/channels/web/handlers/agent.ts";
 import {
@@ -261,15 +262,15 @@ function autoresearchDismissCases(rand: () => number): PayloadSpec {
   ]);
 }
 
-function adaptiveCardCases(rand: () => number): PayloadSpec {
+function a2uiActionCases(rand: () => number): PayloadSpec {
   return pick(rand, [
-    { payloadClass: "invalid-json-syntax", bodyText: "{", expectedError: "Invalid JSON" },
-    { payloadClass: "json-null", bodyText: "null", expectedError: "JSON body must be an object" },
-    { payloadClass: "missing-post-id", bodyText: JSON.stringify({ card_id: "card-1", action: { type: "Action.Submit" } }), expectedError: "Missing or invalid post_id" },
-    { payloadClass: "invalid-post-id", bodyText: JSON.stringify({ post_id: "nan", card_id: "card-1", action: { type: "Action.Submit" } }), expectedError: "Missing or invalid post_id" },
-    { payloadClass: "missing-card-id", bodyText: JSON.stringify({ post_id: 1, action: { type: "Action.Submit" } }), expectedError: "Missing or invalid card_id" },
-    { payloadClass: "missing-action-type", bodyText: JSON.stringify({ post_id: 1, card_id: "card-1", action: {} }), expectedError: "Missing or invalid action.type" },
-    { payloadClass: "unsupported-action-type", bodyText: JSON.stringify({ post_id: 1, card_id: "card-1", action: { type: "Action.Fly" } }), expectedError: "Unsupported action type: Action.Fly" },
+    { payloadClass: "invalid-json-syntax", bodyText: "{", expectedError: "Invalid or oversized surface action." },
+    { payloadClass: "json-null", bodyText: "null", expectedError: "Invalid surface action." },
+    { payloadClass: "missing-post-id", bodyText: JSON.stringify({ chat_jid: "web:default" }), expectedError: "Invalid surface action." },
+    { payloadClass: "invalid-post-id", bodyText: JSON.stringify({ chat_jid: "web:default", post_id: "nan", thread_id: 1, revision: 1, request_id: "fixture", message: {} }), expectedError: "Invalid surface action." },
+    { payloadClass: "invalid-revision", bodyText: JSON.stringify({ chat_jid: "web:default", post_id: 1, thread_id: 1, revision: -1, request_id: "fixture", message: {} }), expectedError: "Invalid surface action." },
+    { payloadClass: "missing-action", bodyText: JSON.stringify({ chat_jid: "web:default", post_id: 1, thread_id: 1, revision: 1, request_id: "00000000000000000000000000000000", message: {} }), expectedError: "Invalid surface action." },
+    { payloadClass: "unexpected-key", bodyText: JSON.stringify({ chat_jid: "web:default", post_id: 1, thread_id: 1, revision: 1, request_id: "fixture", message: {}, extra: true }), expectedError: "Invalid surface action." },
   ]);
 }
 
@@ -419,7 +420,7 @@ function buildAuditCase(caseId: number, seed: number): AuditCase {
       payloadClass: spec.payloadClass,
       requestBody: spec.bodyText,
       expectedError: spec.expectedError,
-      execute: async () => new WebAdaptiveCardSidePromptService({ json: jsonResponse } as any)
+      execute: async () => new WebSidePromptService({ json: jsonResponse } as any)
         .handleAgentSidePrompt(createRequest("/agent/side-prompt", spec.bodyText)),
     };
   }
@@ -431,7 +432,7 @@ function buildAuditCase(caseId: number, seed: number): AuditCase {
       payloadClass: spec.payloadClass,
       requestBody: spec.bodyText,
       expectedError: spec.expectedError,
-      execute: async () => new WebAdaptiveCardSidePromptService({ json: jsonResponse } as any)
+      execute: async () => new WebSidePromptService({ json: jsonResponse } as any)
         .handleAgentSidePromptStream(createRequest("/agent/side-prompt/stream", spec.bodyText)),
     };
   }
@@ -462,14 +463,13 @@ function buildAuditCase(caseId: number, seed: number): AuditCase {
     };
   }
 
-  const spec = adaptiveCardCases(rand);
+  const spec = a2uiActionCases(rand);
   return {
-    route: "/agent/card-action",
+    route: "/agent/a2ui-action",
     payloadClass: spec.payloadClass,
     requestBody: spec.bodyText,
     expectedError: spec.expectedError,
-    execute: async () => new WebAdaptiveCardSidePromptService({ json: jsonResponse } as any)
-      .handleAdaptiveCardAction(createRequest("/agent/card-action", spec.bodyText)),
+    execute: async () => handleA2uiAction({ json: jsonResponse } as any, createRequest("/agent/a2ui-action", spec.bodyText)),
   };
 }
 
@@ -501,7 +501,7 @@ function buildExpectedRouteFamilies(): string[] {
     "/agent/side-prompt/stream",
     "/agent/autoresearch/stop",
     "/agent/autoresearch/dismiss",
-    "/agent/card-action",
+    "/agent/a2ui-action",
   ];
 }
 
@@ -574,15 +574,15 @@ function buildCorpusManifest(): CorpusManifestEntry[] {
       payloadClasses: ["invalid-json-syntax", "json-array", "json-null"],
     },
     {
-      route: "/agent/card-action",
+      route: "/agent/a2ui-action",
       payloadClasses: [
         "invalid-json-syntax",
         "json-null",
         "missing-post-id",
         "invalid-post-id",
-        "missing-card-id",
-        "missing-action-type",
-        "unsupported-action-type",
+        "invalid-revision",
+        "missing-action",
+        "unexpected-key",
       ],
     },
   ];

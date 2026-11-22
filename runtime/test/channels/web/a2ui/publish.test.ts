@@ -21,12 +21,12 @@ test('publishes and edits only an agent-owned surface in its accepted chat/threa
   expect(read().data?.content_blocks?.[0]).toMatchObject({ revision:2, surface:{dataModel:{name:'Updated'}} });
   await expect(publishAgentA2ui(options, patch)).rejects.toThrow();
   expect((await publishAgentA2ui(options, {...patch, revision:2, express:`deleteSurface("${surfaceId}")`})).deleted).toBe(true);
-  expect(read().data?.content_blocks ?? []).toHaveLength(0);
+  expect(read().data?.content_blocks).toEqual([{type:"a2ui_surface_removed",revision:3}]);
   expect(read().data?.content).toBe('Name form');
 });
 
 test('generic content-block APIs cannot install host or agent surface authority', () => {
-  const blocks = [{type:'a2ui_surface', owner:'agent'}, {type:'a2ui_surface', owner:'login'}, {type:'a2ui_submission'}, {type:'text', text:'OK'}];
+  const blocks = [{type:'a2ui_surface', owner:'agent'}, {type:'a2ui_surface', owner:'login'}, {type:'a2ui_surface_removed'}, {type:'text', text:'OK'}];
   expect(sanitizeModelPostedContentBlocks(blocks)).toEqual([blocks[3]]);
   expect(sanitizePublicInboundContentBlocks(blocks)).toEqual([blocks[3]]);
 });
