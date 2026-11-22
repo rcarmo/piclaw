@@ -19,7 +19,6 @@ describe("built-in extension hook determinism", () => {
       "runtimeScripts",
       "workspaceSearch",
       "workspaceMemoryBootstrap",
-      "sendAdaptiveCard",
       "sendDashboardWidget",
       "chatTool",
       "sessionControl",
@@ -36,6 +35,7 @@ describe("built-in extension hook determinism", () => {
     expect(audit.final_system_prompt).toContain("## Workspace search");
     expect(audit.final_system_prompt).toContain("## Workspace memory bootstrap");
     expect(audit.final_system_prompt).toContain("## Dashboard widget posting");
+    expect(audit.final_system_prompt).not.toContain("send_adaptive_card");
     expect(audit.context_messages).toEqual([
       {
         role: "user",
