@@ -7,6 +7,7 @@ import {
   type AgentToRendererMessage,
 } from "@a2ui/agent";
 import { basicCatalog } from "@a2ui/web_core/catalogs/basic/v1";
+import { absoluteA2uiPointer } from "./data-path.js";
 import { CLASSIC_A2UI_CATALOG, CLASSIC_A2UI_PROPERTIES, a2uiSliderRange, readA2uiLink, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
 
 const MAX_SOURCE_BYTES = 16_384;
@@ -39,12 +40,7 @@ function allowedKeys(value: Record<string, unknown>, keys: readonly string[]): b
 }
 
 function checkPath(value: unknown, allowRoot = false): void {
-  if (allowRoot && value === "/") return;
-  requireClassic(typeof value === "string" && value.length <= 256 && value.startsWith("/"), "expected an absolute data path");
-  const segments = value.slice(1).split("/");
-  requireClassic(segments.length <= MAX_DEPTH && segments.every((segment) =>
-    /^[A-Za-z0-9_-]+$/.test(segment) && !FORBIDDEN_KEYS.has(segment)
-    && (!/^\d+$/.test(segment) || Number(segment) < MAX_COMPONENTS)), "unsupported data path");
+  requireClassic(absoluteA2uiPointer(value, allowRoot), "unsupported data path");
 }
 
 function checkJson(value: unknown, depth = 0): void {
@@ -155,7 +151,10 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
     } else {
       requireClassic(exists, "surface does not exist");
       if (operation === "updateComponents") checkComponents(body.components);
-      if (operation === "updateDataModel" && body.path !== undefined) checkPath(body.path, true);
+      if (operation === "updateDataModel") {
+        requireClassic(allowedKeys(body, ["surfaceId", "path", "value"]) && Object.hasOwn(body, "value"), "invalid data update");
+        if (body.path !== undefined) checkPath(body.path, true);
+      }
       if (operation === "deleteSurface") {
         requireClassic(previous && index === messages.length - 1, "delete must finish an existing surface's batch");
         exists = false;
@@ -170,7 +169,8 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
     surfaceId,
     catalogId: CLASSIC_A2UI_CATALOG,
     components: Array.from(result.componentsModel.values, ({ id, type, properties }) => ({ ...properties, id, component: type } as A2uiComponent)),
-    dataModel: result.dataModel.get("/"),
+    // SDK deletion leaves an empty array slot; persisted JSON represents it as null without shifting indices.
+    dataModel: JSON.parse(JSON.stringify(result.dataModel.get("/"))),
   };
   verifySnapshot(snapshot);
   return snapshot;

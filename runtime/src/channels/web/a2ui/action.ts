@@ -1,4 +1,5 @@
 /** Classic's subset of the v1.0 action message. Owning a post is a separate server check. */
+import { absoluteA2uiPointer } from "./data-path.js";
 import { a2uiDateTimeType, validA2uiDateTime } from "./date-time.js";
 import { a2uiSliderRange, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
 
@@ -29,10 +30,12 @@ export function a2uiBindingPath(value: unknown): string | undefined {
 export function readA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?: ReadonlyMap<string, unknown>): unknown {
   const path = a2uiBindingPath(value);
   if (!path) return value;
+  const keys = absoluteA2uiPointer(path);
+  if (!keys) return undefined;
   if (edits?.has(path)) return edits.get(path);
   let current: unknown = snapshot.dataModel;
-  for (const key of path.slice(1).split("/")) {
-    if ((!record(current) && !Array.isArray(current)) || !Object.hasOwn(current, key)) return undefined;
+  for (const key of keys) {
+    if ((!record(current) && !Array.isArray(current)) || (Array.isArray(current) && !/^\d+$/.test(key)) || !Object.hasOwn(current, key)) return undefined;
     current = (current as Record<string, unknown>)[key];
   }
   return current;

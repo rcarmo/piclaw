@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { applyA2uiMessages, compileA2uiExpress } from "../../../../src/channels/web/a2ui/express.js";
 import { basicCatalog } from '@a2ui/web_core/catalogs/basic/v1';
 import { a2uiIconPaths } from '../../../../web/src/components/a2ui-icon-paths.js';
+import { readA2uiValue } from '../../../../src/channels/web/a2ui/action.js';
 import { CLASSIC_A2UI_PROPERTIES, readA2uiImageUrl } from "../../../../src/channels/web/a2ui/surface.js";
 
 const form = `
@@ -142,11 +143,37 @@ describe("Classic A2UI Express", () => {
     expect(() => applyA2uiMessages("form-1", compileA2uiExpress(source, "form-1"))).toThrow();
   });
 
+  test('uses the same escaped JSON Pointer for updates and reads', () => {
+    const surfaceId = 'pointer';
+    const original = applyA2uiMessages(surfaceId, [{ version:'1.0', createSurface: {
+      surfaceId, catalogId:'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json',
+      components:[{id:'root',component:'Text',text:{'@path':'/a~1b/~0note label'}}],
+      dataModel:{'a/b':{'~note label':'First'}, values:['A','B','C']},
+    }}])!;
+    const update = (path: string | undefined, value: unknown) => ({ version:'1.0', updateDataModel: {
+      surfaceId, ...(path === undefined ? {} : {path}), value,
+    }});
+    const binding = {'@path':'/a~1b/~0note label'};
+    expect(readA2uiValue(original, binding)).toBe('First');
+    const changed = applyA2uiMessages(surfaceId, [update('/a~1b/~0note label','Second'), update('/values/1',null)], original)!;
+    expect(readA2uiValue(changed, binding)).toBe('Second');
+    expect(changed.dataModel.values).toEqual(['A',null,'C']);
+    const hydrated = JSON.parse(JSON.stringify(changed));
+    const removed = applyA2uiMessages(surfaceId, [update('/a~1b/~0note label',null)], hydrated)!;
+    expect(removed.dataModel['a/b']).toEqual({});
+    expect(readA2uiValue(removed, binding)).toBeUndefined();
+    expect(readA2uiValue(original, binding)).toBe('First');
+    expect(applyA2uiMessages(surfaceId, [update(undefined, { kept:true })], removed)?.dataModel).toEqual({kept:true});
+    expect(applyA2uiMessages(surfaceId, [update('/',null)], removed)?.dataModel).toEqual({});
+    expect(() => applyA2uiMessages(surfaceId, [{ version:'1.0', updateDataModel:{surfaceId, path:'/values'} }], original)).toThrow();
+    expect(() => applyA2uiMessages(surfaceId, [update('/bad~2token','blocked')], original)).toThrow();
+  });
+
   test("bounds direct wire input before applying it", () => {
     const messages = compileA2uiExpress(form, "form-1");
     const initial = applyA2uiMessages("form-1", messages)!;
     expect(() => applyA2uiMessages("form-1", [...messages, ...messages])).toThrow();
-    for (const path of ["/form/__proto__", "/form/constructor", "/form/~1prototype", "/9999999"]) {
+    for (const path of ["/form/__proto__", "/form/constructor", "/form/prototype", "/9999999"]) {
       expect(() => applyA2uiMessages("form-1", [{ version: "1.0", updateDataModel: { surfaceId: "form-1", path, value: 1 } }], initial)).toThrow();
     }
     expect(() => applyA2uiMessages("form-1", [{ version: "1.0", callFunction: { surfaceId: "form-1" } }], initial)).toThrow();

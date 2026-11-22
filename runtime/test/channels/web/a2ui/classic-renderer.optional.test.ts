@@ -259,6 +259,20 @@ for (const engine of [chromium, webkit]) {
       const link = page.getByRole('link', { name: 'Docs' });
       expect(await link.getAttribute('href')).toBe('https://example.test/docs');
       expect(await link.getAttribute('rel')).toBe('noopener noreferrer');
+      const pointerId = 'pointer-browser';
+      const binding = { '@path': '/a~1b/~0label text' };
+      const pointerSurface = applyA2uiMessages(pointerId, [{ version:'1.0', createSurface:{
+        surfaceId:pointerId, catalogId:'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json',
+        components:[{id:'root',component:'Column',children:['field','send']}, {id:'field',component:'TextField',label:'Escaped field',value:binding},
+          {id:'send',component:'Button',child:'label',action:{event:{name:'send',context:{field:binding}}}}, {id:'label',component:'Text',text:'Send escaped value'}],
+        dataModel:{'a/b':{'~label text':'Stored value'}},
+      }}]);
+      await page.evaluate((block) => (window as any).draw(block), {...block, revision: 8, surface:pointerSurface});
+      const pointerField = page.getByLabel('Escaped field');
+      expect(await pointerField.inputValue()).toBe('Stored value');
+      await pointerField.fill('Edited value');
+      await page.getByRole('button', {name:'Send escaped value'}).click();
+      expect(await page.evaluate(() => (window as any).events.at(-1)?.message.action.context)).toEqual({field:'Edited value'});
       const legacyRequests: string[] = [];
       page.on('request', request => { if (request.url().includes('adaptivecards')) legacyRequests.push(request.url()); });
       await page.evaluate(() => (window as any).draw({
