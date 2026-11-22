@@ -1,6 +1,6 @@
 import { AgentFunctionResponseMessageSchema, type ErrorMessage } from '@a2ui/web_core/v1_0';
 import { readClassicFunctionCall } from '../../../src/channels/web/a2ui/function-call.js';
-import { a2uiBindingPath, evaluateClassicLocalFunction, isClassicValueFunction, readA2uiValue } from '../../../src/channels/web/a2ui/functions.js';
+import { A2uiExpressionFailure, A2UI_LOCAL_EXPRESSION_ERROR, a2uiBindingPath, evaluateA2uiValue, evaluateClassicLocalFunction, isClassicValueFunction } from '../../../src/channels/web/a2ui/functions.js';
 import { A2UI_RPC_RECEIPT_TTL_MS, a2uiRpcArgumentKey, boundedRpcJson, MAX_RPC_VALUE } from '../../../src/channels/web/a2ui/rpc-json.js';
 import type { A2uiSnapshot } from '../../../src/channels/web/a2ui/surface.js';
 import { postA2uiRendererError, requestA2uiAgentFunction } from '../api.js';
@@ -23,7 +23,7 @@ function record(value: unknown): value is Record<string,unknown> {
     return !!value && typeof value==='object' && !Array.isArray(value);
 }
 
-class AgentEvaluationError extends Error {}
+class AgentEvaluationError extends A2uiExpressionFailure {}
 
 export async function reportA2uiRendererError(context: Pick<A2uiFunctionContext,'source'|'snapshot'|'signal'>, error: ErrorMessage['error']) {
     if (context.signal.aborted) return;
@@ -59,7 +59,7 @@ async function invokeAgent(context: A2uiFunctionContext, name: string, catalogId
 /** Resolve arguments in order and invoke the correct owner. Returned JSON is never executed. */
 export async function evaluateA2uiFunction(value: unknown, context: A2uiFunctionContext): Promise<unknown> {
     const {snapshot,edits,instance,signal,memo}=context;
-    const read=(part:unknown)=>readA2uiValue(snapshot,part,edits,instance.instancePath,instance.scope);
+    const read=(part:unknown)=>evaluateA2uiValue(snapshot,part,edits,instance.instancePath,instance.scope);
     let remaining=256;
     async function resolve(input: unknown, depth: number): Promise<unknown> {
         signal.throwIfAborted();
@@ -99,8 +99,9 @@ export async function evaluateA2uiFunction(value: unknown, context: A2uiFunction
     }
     try { return await resolve(value,0); }
     catch (error) {
-        if (!(error instanceof AgentEvaluationError) && !signal.aborted)
-            await reportA2uiRendererError(context,{code:context.action ? 'EXECUTION_ERROR' : 'EXPRESSION_ERROR',surfaceId:snapshot.surfaceId,message:'The renderer could not evaluate the function.'});
-        throw error;
+        if (error instanceof AgentEvaluationError) throw error;
+        signal.throwIfAborted();
+        await reportA2uiRendererError(context,{code:context.action ? 'EXECUTION_ERROR' : 'EXPRESSION_ERROR',surfaceId:snapshot.surfaceId,message:A2UI_LOCAL_EXPRESSION_ERROR});
+        throw new A2uiExpressionFailure(A2UI_LOCAL_EXPRESSION_ERROR);
     }
 }

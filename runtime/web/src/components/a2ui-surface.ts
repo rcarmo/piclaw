@@ -5,7 +5,7 @@ import { a2uiRendererContext } from '../ui/a2ui-renderer-peer.js';
 import { evaluateA2uiFunction, reportA2uiRendererError } from '../ui/a2ui-agent-function.js';
 import { useA2uiValueFunctions } from '../ui/use-a2ui-value-functions.js';
 import { readClassicActionFunction, readClassicFunctionCall } from '../../../src/channels/web/a2ui/function-call.js';
-import { coerceA2uiBoolean, hasA2uiAgentFunction, type A2uiRemoteValueResolver } from '../../../src/channels/web/a2ui/functions.js';
+import { A2uiExpressionFailure, A2UI_LOCAL_EXPRESSION_ERROR, coerceA2uiBoolean, hasA2uiAgentFunction, type A2uiRemoteValueResolver } from '../../../src/channels/web/a2ui/functions.js';
 import { a2uiActionEvaluationSite, a2uiRpcArgumentKey } from '../../../src/channels/web/a2ui/rpc-json.js';
 import { checkA2uiComponent } from '../../../src/channels/web/a2ui/checks.js';
 import { a2uiDraftsFor, discardOldA2uiDraft, readA2uiDraft, rememberA2uiDraftEdit, subscribeA2uiDraft } from '../ui/a2ui-drafts.js';
@@ -60,7 +60,6 @@ export function A2uiSurface({ block, source, onSubmit }: {
     const privateInput = useRef<HTMLInputElement | null>(null);
     const disabled = block.state !== 'active' || !onSubmit;
     const valueFunctions = useA2uiValueFunctions(projection,edits,{...source,revision:block.revision},!disabled && block.owner==='agent');
-    const resolveRemote: A2uiRemoteValueResolver = (catalogId,name,args)=>valueFunctions.receipts?.get(a2uiRpcArgumentKey(catalogId,name,args))?.value;
     const components = new Map((projection?.snapshot.components ?? []).map(item => [item.id, item]));
     const functionLifetime = useRef<AbortController | null>(null);
     const invalidProjection = !projection;
@@ -143,7 +142,16 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 used.add(receipt.id);
                 return receipt.value;
             };
-            const message = buildA2uiAction(block.surface,instance.id,edits,new Date().toISOString(),instance.instancePath,selfDraft?.edits,undefined,resolveForEvent,resolveDerived);
+            let message: ReturnType<typeof buildA2uiAction>;
+            try {
+                message=buildA2uiAction(block.surface,instance.id,edits,new Date().toISOString(),instance.instancePath,selfDraft?.edits,undefined,resolveForEvent,resolveDerived);
+            } catch (error) {
+                const lifetime=functionLifetime.current;
+                if (error instanceof A2uiExpressionFailure && lifetime && error.message===A2UI_LOCAL_EXPRESSION_ERROR)
+                    await reportA2uiRendererError({source:{...source,revision:block.revision},snapshot,signal:lifetime.signal},
+                        {code:'EXECUTION_ERROR',surfaceId,message:error.message});
+                throw error;
+            }
             const rpc_receipts=[...used].sort();
             const rpc_derived_receipts=Object.fromEntries([...settledSites].map(([site,items])=>[site,items.map(item=>item.id)]));
             const key = JSON.stringify([componentId,message.action.context,message.action.userMessage,currentDrafts,rpc_receipts,rpc_derived_receipts]);
@@ -176,8 +184,13 @@ export function A2uiSurface({ block, source, onSubmit }: {
         const item = typeof id === 'string' ? components.get(id) : undefined;
         if (!item || depth > 24) return null;
         const instance = projection?.instances.get(item.id);
-        const read = (value: unknown) => value && typeof value==='object' && valueFunctions.expressions.has(value)
-            ? valueFunctions.values?.get(value) : readA2uiValue(snapshot,value,edits,instance?.instancePath,instance?.scope);
+        const read = (value: unknown) => {
+            if (value && typeof value==='object') {
+                if (valueFunctions.expressions.has(value)) return valueFunctions.values?.get(value);
+                if (valueFunctions.localResults.values.has(value)) return valueFunctions.localResults.values.get(value);
+            }
+            return readA2uiValue(snapshot,value,edits,instance?.instancePath,instance?.scope);
+        };
         const text = (value: unknown) => {
             const resolved = read(value);
             return typeof resolved === 'string' ? resolved : typeof resolved === 'number' && Number.isFinite(resolved) ? String(resolved) : '';
@@ -189,7 +202,13 @@ export function A2uiSurface({ block, source, onSubmit }: {
         const rules=Array.isArray(item['@checks']) ? item['@checks'] : [];
         const settledRules=rules.filter(rule=>!rule?.condition || !valueFunctions.expressions.has(rule.condition) || valueFunctions.values?.has(rule.condition));
         const checksPending=settledRules.length!==rules.length && !disabled;
-        const findings=checkA2uiComponent(snapshot,checksPending ? {...item,'@checks':settledRules} : item,edits,instance,resolveRemote);
+        const findings=checkA2uiComponent(checksPending ? {...item,'@checks':settledRules} : item,condition=>{
+            if (condition && typeof condition==='object') {
+                const failure=valueFunctions.localResults.failures.get(condition) ?? valueFunctions.failures?.get(condition);
+                if (failure) throw new A2uiExpressionFailure(failure);
+            }
+            return read(condition);
+        });
         const invalid = findings.some(finding => finding.severity === 'error');
         const errorId = `${checkPrefix}-${encodeURIComponent(item.id)}`;
         const aria = { ...a2uiAria(item['@accessibility'], read), ...(invalid ? {'aria-invalid':'true', 'aria-errormessage':errorId} : {}) };

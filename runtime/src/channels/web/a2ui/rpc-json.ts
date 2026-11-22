@@ -1,8 +1,14 @@
+import type { RendererFunctionResponseMessage } from '@a2ui/web_core/v1_0';
 import type { CanonicalJsonValue } from '../../../service-effects/contracts/common.js';
 import type { A2uiMetadata } from './surface.js';
 
 export const MAX_RPC_VALUE = 16 * 1024;
 export const A2UI_RPC_RECEIPT_TTL_MS = 60_000;
+
+export function malformedRendererInvocation(functionCallId: string) {
+  return {version:'1.0',error:{code:'INVALID_FUNCTION_CALL',functionCallId,message:'The renderer rejected a malformed invocation.'}} as const;
+}
+export type RendererReplyMessage = RendererFunctionResponseMessage | ReturnType<typeof malformedRendererInvocation>;
 
 function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);

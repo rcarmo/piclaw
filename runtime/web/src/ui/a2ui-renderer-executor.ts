@@ -1,8 +1,8 @@
 import { CallRendererFunctionMessageSchema, type RendererFunctionResponseMessage } from '@a2ui/web_core/v1_0';
 import { readA2uiDraft } from './a2ui-drafts.js';
 import { CLASSIC_A2UI_CATALOG, isA2uiSurfaceBlock, type A2uiSnapshot } from '../../../src/channels/web/a2ui/surface.js';
-import { boundedRpcJson, MAX_RPC_VALUE } from '../../../src/channels/web/a2ui/rpc-json.js';
-import { isClassicValueFunction, readA2uiValue } from '../../../src/channels/web/a2ui/functions.js';
+import { boundedRpcJson, malformedRendererInvocation, MAX_RPC_VALUE, type RendererReplyMessage } from '../../../src/channels/web/a2ui/rpc-json.js';
+import { evaluateA2uiValue, isClassicValueFunction } from '../../../src/channels/web/a2ui/functions.js';
 
 export interface RendererCallOptions {
     chatJid: string;
@@ -42,17 +42,17 @@ function errorReply(functionCallId: string, code: string, message: string): Rend
 }
 
 /** Browser execution uses registered functions only and never supplies user activation. */
-export async function runRendererCall(raw: unknown, options: RendererCallOptions, signal: AbortSignal): Promise<RendererFunctionResponseMessage | undefined> {
+export async function runRendererCall(raw: unknown, options: RendererCallOptions, signal: AbortSignal): Promise<RendererReplyMessage | undefined> {
     if (!record(raw) || !record(raw.message) || !record(raw.message.callRendererFunction)) return;
     const rawId=raw.message.callRendererFunction.functionCallId;
     if (typeof rawId!=='string' || !rawId || rawId.length>128 || /[\x00-\x1f\x7f]/.test(rawId)) return;
     const invalid = (message:string) => errorReply(rawId,'INVALID_FUNCTION_CALL',message);
     let envelope: ReturnType<typeof boundedRpcJson>;
     try { envelope=boundedRpcJson(raw.message); }
-    catch { return invalid('Malformed renderer call.'); }
-    if (new TextEncoder().encode(JSON.stringify(envelope)).length>MAX_RPC_VALUE) return invalid('Malformed renderer call.');
+    catch { return malformedRendererInvocation(rawId); }
+    if (new TextEncoder().encode(JSON.stringify(envelope)).length>MAX_RPC_VALUE) return malformedRendererInvocation(rawId);
     const parsed=CallRendererFunctionMessageSchema.safeParse(envelope);
-    if (!parsed.success) return invalid('Malformed renderer call.');
+    if (!parsed.success || !parsed.data.callRendererFunction.callFunction.catalogId) return malformedRendererInvocation(rawId);
     const { surfaceId,callFunction } = parsed.data.callRendererFunction;
     if (callFunction['@call']==='@index') return errorReply(rawId,'EXECUTION_ERROR','@index requires a template instance.');
     // The Basic Catalogue does not grant agent invocation; openUrl is never registered here.
@@ -81,15 +81,18 @@ export async function runRendererCall(raw: unknown, options: RendererCallOptions
             const name=value['@call'];
             if (name==='@index' || !isClassicValueFunction(name) || (value.catalogId ?? context.catalogId)!==CLASSIC_A2UI_CATALOG)
                 throw Error('Unsupported argument expression');
-            return readA2uiValue(context,value,edits);
+            return evaluateA2uiValue(context,value,edits);
         }
         if (Object.hasOwn(value,'@path')) {
             if (Object.keys(value).length!==1 || typeof value['@path']!=='string') throw Error('Invalid argument binding');
-            return readA2uiValue(context,value,edits);
+            return evaluateA2uiValue(context,value,edits);
         }
         return Object.fromEntries(Object.entries(value).map(([key,item])=>[key,resolve(item)]));
     };
-    const args=implementation.parseArgs(Object.fromEntries(Object.entries(callFunction.args ?? {}).map(([key,value])=>[key,resolve(value)])));
+    let resolved: Record<string,unknown>;
+    try { resolved=Object.fromEntries(Object.entries(callFunction.args ?? {}).map(([key,value])=>[key,resolve(value)])); }
+    catch { return invalid('The renderer function arguments could not be resolved.'); }
+    const args=implementation.parseArgs(resolved);
     if (args===undefined) return invalid('The renderer function arguments are invalid.');
     signal.throwIfAborted();
     const value=await implementation.execute(args,signal);

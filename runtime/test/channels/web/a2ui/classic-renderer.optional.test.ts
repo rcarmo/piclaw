@@ -517,6 +517,36 @@ for (const engine of [chromium, webkit]) {
         rpc_derived_receipts:{'context:summary':[sites[0].message.callAgentFunction.functionCallId],userMessage:[sites[1].message.callAgentFunction.functionCallId]},
         message:{action:{name:'verified',userMessage:'Fresh summary',context:{value:'ready',summary:'Fresh summary'}}},
       });
+      const localId='local-expression-errors';
+      const badFormat={'@call':'formatNumber',args:{value:{'@path':'/number'}}};
+      const brokenLocal=applyA2uiMessages(localId,[{version:'1.0',createSurface:{surfaceId:localId,catalogId:basicCatalogue,
+        dataModel:{number:'not numeric'},components:[
+          {id:'root',component:'Column',children:['sibling','value','empty','event','checked']},
+          {id:'sibling',component:'Text',text:'Sibling stays mounted'},
+          {id:'value',component:'Text',text:badFormat,'@accessibility':{label:'Formatted number'}},
+          {id:'empty',component:'Text',text:{'@path':'/absent'},'@accessibility':{label:'Missing binding'}},
+          {id:'event',component:'Button',child:'send',action:{event:{name:'rejectDerived',context:{number:badFormat}}}},
+          {id:'send',component:'Text',text:'Submit with broken expression'},
+          {id:'checked',component:'TextField',label:'Checked field',value:'', '@checks':[{condition:badFormat}]},
+        ],
+      }}],undefined,true)!;
+      const localReports=reports.length;
+      const eventCount=await page.evaluate(()=>(window as any).events.length);
+      await page.evaluate((item)=>(window as any).draw(item),{...block,owner:'agent',revision:17,surface:brokenLocal});
+      await panel.getByText('Sibling stays mounted').waitFor();
+      expect(await panel.getByRole('group',{name:'Formatted number'}).textContent()).toBe('');
+      expect(await panel.getByRole('group',{name:'Missing binding'}).textContent()).toBe('');
+      await panel.getByRole('status').getByText('The renderer could not evaluate the function.').waitFor({timeout:2500});
+      const waitForError=(code:string)=>page.waitForRequest(req=>req.url().endsWith('/agent/a2ui-error') && req.postDataJSON()?.message?.error?.code===code);
+      const failedAction=waitForError('EXECUTION_ERROR');
+      await panel.getByRole('button',{name:'Submit with broken expression'}).click();
+      await failedAction;
+      await panel.getByRole('alert').getByText('The renderer could not evaluate the function.').waitFor();
+      expect(await page.evaluate(()=>(window as any).events.length)).toBe(eventCount);
+      expect(reports.slice(localReports)).toEqual(['EXPRESSION_ERROR','EXECUTION_ERROR'].map(code=>({
+        chat_jid:'web:test',post_id:19,thread_id:3,revision:17,surface_id:localId,
+        message:{version:'1.0',error:{code,surfaceId:localId,message:'The renderer could not evaluate the function.'}},
+      })));
       const integrity = page.waitForResponse(response=>response.url().endsWith('/agent/a2ui-error') && response.status()===204);
       await page.evaluate((item)=>(window as any).draw(item),{...block,owner:'agent',revision:15,
         surface:{...display,components:[{id:'root',component:'Column',children:['root']}]},fallback_text:'Unable to reconstruct this form',

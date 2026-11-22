@@ -1,5 +1,5 @@
 /** Classic's subset of the v1.0 action message. Owning a post is a separate server check. */
-import { a2uiBindingPath, hasA2uiAgentFunction, readA2uiValue, type A2uiRemoteValueResolver } from "./functions.js";
+import { a2uiBindingPath, evaluateA2uiValue, hasA2uiAgentFunction, readA2uiValue, type A2uiRemoteValueResolver } from "./functions.js";
 export { a2uiBindingPath, readA2uiValue } from "./functions.js";
 import { checkA2uiComponent } from "./checks.js";
 import { a2uiInstanceId, projectA2uiTemplates } from "./templates.js";
@@ -110,9 +110,7 @@ export type A2uiDerivedResolver = (site:string)=>A2uiRemoteValueResolver | undef
 
 function readActionValue(snapshot: A2uiSnapshot, descriptor: unknown, edits: ReadonlyMap<string,unknown>, instancePath: string | undefined,
   scope: string, remote?: A2uiRemoteValueResolver): unknown {
-  const value=readA2uiValue(snapshot,descriptor,edits,instancePath,scope,remote);
-  if (value===undefined && hasA2uiAgentFunction(descriptor)) throw Error('The agent did not resolve an action value.');
-  return value;
+  return evaluateA2uiValue(snapshot,descriptor,edits,instancePath,scope,remote);
 }
 
 function resolveUserMessage(snapshot: A2uiSnapshot, descriptor: unknown, edits: ReadonlyMap<string, unknown>, instancePath: string | undefined, scope: string, remote?: A2uiRemoteValueResolver): string | undefined {
@@ -234,7 +232,8 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
         || !validA2uiDateTime(type,boundValues.get(path),lower,upper)) throw Error('Invalid form value');
     }
     if (component !== event.source && (path === undefined || !submittedPaths.has(path))) continue;
-    const error = checkA2uiComponent(snapshot,component,boundValues,instance,resolveRemote).find(finding => finding.severity === 'error');
+    const error = checkA2uiComponent(component,condition=>evaluateA2uiValue(snapshot,condition,boundValues,instance?.instancePath,instance?.scope,resolveRemote))
+      .find(finding=>finding.severity==='error');
     if (error) throw new Error(error.message);
   }
   const userMessage = resolveUserMessage(snapshot,event.userMessage,boundValues,instancePath,event.scope,resolveDerived?.('userMessage'));

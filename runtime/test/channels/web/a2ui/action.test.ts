@@ -224,7 +224,7 @@ test('check messages fall back only when the condition supplies no message', () 
       {condition:not(true),message:"Boolean fallback"}
     ]);
   `,'check-messages'))!;
-  expect(checkA2uiComponent(form,form.components[0])).toEqual([
+  expect(checkA2uiComponent(form.components[0],condition=>readA2uiValue(form,condition))).toEqual([
     {message:'This field is required.',severity:'error'},
     {message:'Specific guidance',severity:'warning'},
     {message:'No details',severity:'error'},

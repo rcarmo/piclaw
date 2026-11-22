@@ -313,6 +313,16 @@ applicationTest('packed Autoresearch binds the native tool and consumes a later 
      await issue('Try an obsolete surface revision',{...peerOffer,thread_id:form.thread_id});
      await waitFor(() => settled(form.thread_id).total===4 || undefined,'obsolete renderer RPC did not settle');
      assert.equal(toolReply().rendererFunctionResponse.error.code,'INVALID_FUNCTION_CALL');
+     const functionCallId='native-malformed-delivery';
+     rendererToolArgs={message:{...rendererCall,callRendererFunction:{...rendererCall.callRendererFunction,functionCallId}}};
+     const failed=await issue('Report a malformed renderer invocation',peerOffer);
+     assert.deepEqual(await peer.frame('a2ui_call'),{message:rendererToolArgs.message});
+     const report={chat_jid:chat,renderer_peer:lease,message:{version:'1.0',error:{code:'INVALID_FUNCTION_CALL',functionCallId,message:'Untrusted renderer text'}}};
+     assert.equal((await request('/agent/a2ui-renderer-reply',{...report,renderer_peer:otherLease})).status,409);
+     assert.equal((await request('/agent/a2ui-renderer-reply',report)).status,204);
+     await waitFor(()=>settled(failed.thread_id).total || undefined,'malformed renderer diagnostic did not settle');
+     assert.equal(latestToolError,true);
+     assert.deepEqual(toolReply(),{version:'1.0',error:{code:'INVALID_FUNCTION_CALL',functionCallId,message:'The renderer rejected a malformed invocation.'}});
    } finally { await Promise.allSettled([activePeer?.cancel(),secondaryPeer?.cancel()]); }
    console.log('Packed Autoresearch starts in the default SDK host; authenticated action starts the synthetic process once after the model turn, with bound status and stop.');
   } finally {await backend?.close();await channel?.stop();await base.queue.shutdown();await pool?.shutdown();await closeDatabase();lock.release();}

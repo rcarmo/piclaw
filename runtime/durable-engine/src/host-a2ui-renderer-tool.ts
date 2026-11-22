@@ -15,7 +15,7 @@ import { resolveAcceptedMessageThread } from './host-message-thread.js';
 export function createHostA2uiRendererTool(options: Omit<Parameters<typeof createHostA2uiTool>[0], 'broadcast'> & {renderer: RendererRpcBroker}) {
   return defineTool({
     name:A2UI_RENDERER_TOOL,
-    description:'Send one A2UI v1.0 callRendererFunction message to the renderer for this turn. Only offered catalogues are available. For a surface call, include its post_id and current revision. Returns a correlated rendererFunctionResponse. Basic Catalogue functions cannot be called remotely.',
+    description:'Send one A2UI v1.0 callRendererFunction message to the renderer for this turn. Only offered catalogues are available. For a surface call, include its post_id and current revision. Returns a correlated rendererFunctionResponse or invocation error. Basic Catalogue functions cannot be called remotely.',
     parameters:Type.Object({message:Type.Record(Type.String(),Type.Unknown()),post_id:Type.Optional(Type.Integer({minimum:1})),
       revision:Type.Optional(Type.Integer({minimum:1}))},{additionalProperties:false}),
     callers:['model'],replay:'unsafe',
@@ -66,7 +66,7 @@ export function createHostA2uiRendererTool(options: Omit<Parameters<typeof creat
       checkTurn();
       const encoded=metadata ? JSON.stringify(metadata) : undefined;
       if (encoded && Buffer.byteLength(encoded)>MAX_A2UI_METADATA_BYTES) throw Error('A2UI renderer reply metadata is too large');
-      return {isError:!!response.rendererFunctionResponse.error,output:[{type:'text' as const,text:JSON.stringify(response)}],
+      return {isError:'error' in response || !!response.rendererFunctionResponse.error,output:[{type:'text' as const,text:JSON.stringify(response)}],
         ...(encoded ? {details:{[A2UI_PRIVATE_REPLY_METADATA]:encoded}} : {}),
       };
     },

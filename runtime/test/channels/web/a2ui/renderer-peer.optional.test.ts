@@ -83,14 +83,19 @@ for (const engine of [chromium,webkit]) {
           if(payload.a2ui_drafts!==undefined) transmittedLocalDraft=true;
           if(payload.content==='ready') return Response.json({connected:true,catalogues:selection.catalogues});
           const mode=payload.content;
-          const hasSurface=mode==='bound'||mode==='computed'||mode==='stale';
+          const hasSurface=mode==='bound'||mode==='computed'||mode==='stale'||mode==='bad-arg';
           const packet:RendererRpcPacket={message:{version:'1.0',callRendererFunction:{functionCallId:mode,
             ...(hasSurface ? {surfaceId} : {}),callFunction:mode==='blocked'
               ? {'@call':'openUrl',catalogId:CLASSIC_A2UI_CATALOG,args:{url:'https://example.invalid/forbidden'}}
               : mode==='illegal-result' ? {'@call':'invalidValue',catalogId:catalogue}
               : {'@call':'inspectLabel',catalogId:catalogue,args:{label:mode==='computed'
-                ? {'@call':'formatString',args:{value:'Current: ${/title}'}} : {'@path':'/title'}}},
+                ? {'@call':'formatString',args:{value:'Current: ${/title}'}}
+                : mode==='bad-arg' ? {'@call':'formatNumber',args:{value:{'@path':'/title'}}} : {'@path':'/title'}}},
           }},...(hasSurface ? {source:{post_id,thread_id,revision:mode==='stale'?revision-1:revision}} : {})};
+          if (mode==='malformed') {
+            // Inject an envelope fault below the agent-side schema gate.
+            Reflect.deleteProperty(packet.message.callRendererFunction.callFunction,'catalogId');
+          }
           return Response.json((await renderer.invoke(selection.hash,chatJid,17,packet,()=>{})).message);
         }
         return new Response('<!doctype html><html><body><script type="module" src="/fixture.js"></script></body></html>',
@@ -116,9 +121,10 @@ for (const engine of [chromium,webkit]) {
       expect(await call('computed')).toEqual({version:'1.0',rendererFunctionResponse:{functionCallId:'computed',value:'Current: Browser draft'}});
       expect(transmittedLocalDraft).toBe(false);
       expect(await call('unbound')).toEqual({version:'1.0',rendererFunctionResponse:{functionCallId:'unbound',value:'empty root'}});
-      for(const denied of ['stale','blocked']) expect(await call(denied)).toMatchObject({version:'1.0',
+      for(const denied of ['stale','blocked','bad-arg']) expect(await call(denied)).toMatchObject({version:'1.0',
         rendererFunctionResponse:{functionCallId:denied,error:{code:'INVALID_FUNCTION_CALL'}}});
       expect(await call('illegal-result')).toMatchObject({rendererFunctionResponse:{functionCallId:'illegal-result',error:{code:'EXECUTION_ERROR'}}});
+      expect(await call('malformed')).toEqual({version:'1.0',error:{code:'INVALID_FUNCTION_CALL',functionCallId:'malformed',message:'The renderer rejected a malformed invocation.'}});
       expect(page.context().pages()).toHaveLength(1);
       dropFirstPeer.abort();
       for(let attempt=0;attempt<60 && peerHashes.size<2;attempt++) { await call('ready'); await Bun.sleep(100); }

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { CallRendererFunctionMessage, RendererFunctionResponseMessage } from '@a2ui/web_core/v1_0';
+import type { RendererReplyMessage } from './rpc-json.js';
 import type { A2uiRendererDataModel } from './input-metadata.js';
 
 export interface RendererPeerScope {
@@ -14,13 +15,13 @@ export interface RendererRpcPacket {
 }
 
 export interface RendererRpcResult {
-  message: RendererFunctionResponseMessage;
+  message: RendererReplyMessage;
   metadata?: {a2uiRendererDataModel: A2uiRendererDataModel};
 }
 
 type Pending = {
   assertCurrent: () => void;
-  finish: (reply: RendererFunctionResponseMessage, metadata?: RendererRpcResult['metadata']) => void;
+  finish: (reply: RendererReplyMessage, metadata?: RendererRpcResult['metadata']) => void;
 };
 type Peer = RendererPeerScope & {
   assertCurrent: () => void;
@@ -84,7 +85,7 @@ export class RendererRpcBroker {
     signal?.throwIfAborted();
     peer.used.add(id);
     return new Promise(resolve => {
-      const finish = (reply: RendererFunctionResponseMessage, metadata?: RendererRpcResult['metadata']) => {
+      const finish = (reply: RendererReplyMessage, metadata?: RendererRpcResult['metadata']) => {
         peer.pending.delete(id);
         clearTimeout(timer);
         signal?.removeEventListener('abort',onAbort);
@@ -99,10 +100,10 @@ export class RendererRpcBroker {
     });
   }
 
-  reply(lease: unknown, scope: RendererPeerScope, message: RendererFunctionResponseMessage, project?: () => RendererRpcResult['metadata']): boolean {
+  reply(lease: unknown, scope: RendererPeerScope, message: RendererReplyMessage, project?: () => RendererRpcResult['metadata']): boolean {
     const key = this.bind(lease,scope);
     if (!key) return false;
-    const id = message.rendererFunctionResponse.functionCallId;
+    const id = 'error' in message ? message.error.functionCallId : message.rendererFunctionResponse.functionCallId;
     const pending = this.peers.get(key)?.pending.get(id);
     if (!pending) return false;
     try { pending.assertCurrent(); }

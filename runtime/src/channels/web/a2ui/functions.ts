@@ -51,6 +51,8 @@ export function evaluateClassicLocalFunction(name: string, args: Record<string, 
 }
 
 export type A2uiRemoteValueResolver = (catalogId: string, name: string, args: Record<string, unknown>) => unknown;
+export const A2UI_LOCAL_EXPRESSION_ERROR = 'The renderer could not evaluate the function.';
+export class A2uiExpressionFailure extends Error {}
 
 /** Detect RPC expressions in the admitted syntax, never in a resolved value. */
 export function hasA2uiAgentFunction(value: unknown): boolean {
@@ -62,7 +64,7 @@ export function hasA2uiAgentFunction(value: unknown): boolean {
 }
 
 /** Shared, bounded evaluation. A resolver may only look up already settled results. */
-export function readA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?: ReadonlyMap<string, unknown>, instancePath?: string, scope = '/', resolveRemote?: A2uiRemoteValueResolver): unknown {
+export function evaluateA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?: ReadonlyMap<string, unknown>, instancePath?: string, scope = '/', resolveRemote?: A2uiRemoteValueResolver): unknown {
   let remaining = 256;
   function evaluate(input: unknown, depth: number, argument = false): unknown {
     if (--remaining < 0 || depth > 24) throw Error('A2UI expression limit exceeded');
@@ -79,16 +81,29 @@ export function readA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?: Re
       const call=readClassicFunctionCall(isClassicValueFunction(input['@call']) ? localExpression : input);
       if (!call || call.name==='openUrl') throw Error('Invalid A2UI value function');
       const args = Object.fromEntries(Object.entries(call.args ?? {}).map(([key,arg])=>[key,evaluate(arg,depth+1,true)]));
-      if (isClassicValueFunction(call.name)) return evaluateClassicLocalFunction(call.name,args,instancePath,part=>evaluate(part,depth+1,true));
+      if (isClassicValueFunction(call.name)) {
+        const result=evaluateClassicLocalFunction(call.name,args,instancePath,part=>evaluate(part,depth+1,true));
+        if (result===undefined) throw Error('Missing local function result');
+        return result;
+      }
       const catalogId=call.catalogId ?? snapshot.catalogId;
       const resolved=catalogId && resolveRemote ? resolveRemote(catalogId,call.name,args) : undefined;
-      if (resolved===undefined) throw Error('Unresolved A2UI agent function');
+      if (resolved===undefined) throw new A2uiExpressionFailure('The agent did not resolve an action value.');
       return resolved;
     }
     if (argument && Array.isArray(input)) return input.map(item => evaluate(item, depth + 1, true));
     if (argument && record(input)) return Object.fromEntries(Object.entries(input).map(([key, item]) => [key, evaluate(item, depth + 1, true)]));
     return input;
   }
-  try { return evaluate(value, 0); }
+  try { return evaluate(value,0); }
+  catch (error) {
+    if (error instanceof A2uiExpressionFailure) throw error;
+    throw new A2uiExpressionFailure(A2UI_LOCAL_EXPRESSION_ERROR);
+  }
+}
+
+/** Read a value in surfaces that use a silent fallback, such as stored history. */
+export function readA2uiValue(...args: Parameters<typeof evaluateA2uiValue>): unknown {
+  try { return evaluateA2uiValue(...args); }
   catch { return undefined; }
 }

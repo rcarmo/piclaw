@@ -9,7 +9,7 @@ import { captureInputTarget } from '../messaging/input-request-authority.js';
 import { readA2uiCatalogueOffer } from './capabilities.js';
 import { parseA2uiDrafts, type A2uiDraftPatch } from './drafts.js';
 import { prepareA2uiDraftProjection, readA2uiRendererDataModel, readA2uiSurfaceOwner, type AcceptedRendererPeer } from './input-metadata.js';
-import { a2uiActionEvaluationSite, boundedRpcJson, MAX_RPC_VALUE } from './rpc-json.js';
+import { a2uiActionEvaluationSite, boundedRpcJson, malformedRendererInvocation, MAX_RPC_VALUE, type RendererReplyMessage } from './rpc-json.js';
 import { A2UI_ERROR_TEXT, enqueueA2uiRendererError } from './renderer-errors.js';
 import { absoluteA2uiPointer } from './data-path.js';
 import { isA2uiSurfaceBlock } from './surface.js';
@@ -109,10 +109,19 @@ export async function handleA2uiRendererReply(channel: WebChannelLike, req: Requ
     if (!record(body) || Object.keys(body).some(key=>!['chat_jid','renderer_peer','message','a2ui_drafts'].includes(key))
       || !isWebChat(body.chat_jid) || typeof body.renderer_peer !== 'string')
       throw Error('Malformed renderer response');
-    const message = RendererFunctionResponseMessageSchema.parse(body.message);
-    const reply = message.rendererFunctionResponse;
-    if (!validCallId(reply.functionCallId) || Buffer.byteLength(JSON.stringify(boundedRpcJson(reply))) > MAX_RPC_VALUE)
-      throw Error('Invalid renderer response');
+    let message: RendererReplyMessage;
+    if (record(body.message) && Object.hasOwn(body.message,'error')) {
+      const {error}=ErrorMessageSchema.parse(body.message);
+      if (error.code!=='INVALID_FUNCTION_CALL' || !('functionCallId' in error) || typeof error.functionCallId!=='string'
+        || !validCallId(error.functionCallId) || Object.keys(error).length!==3 || !error.message || error.message.length>1024)
+        throw Error('Invalid renderer invocation diagnostic');
+      message=malformedRendererInvocation(error.functionCallId);
+    } else {
+      message=RendererFunctionResponseMessageSchema.parse(body.message);
+      const reply=message.rendererFunctionResponse;
+      if (!validCallId(reply.functionCallId) || Buffer.byteLength(JSON.stringify(boundedRpcJson(reply))) > MAX_RPC_VALUE)
+        throw Error('Invalid renderer response');
+    }
     const patches=parseA2uiDrafts(body.a2ui_drafts);
     const draftSurface=patches?.length ? await prepareA2uiDraftProjection(patches) : undefined;
     const chatJid=body.chat_jid;

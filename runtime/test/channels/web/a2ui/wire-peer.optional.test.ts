@@ -137,6 +137,19 @@ socketTest('independent v1.0 peer exchanges canonical envelopes and private meta
     const otherReply = reply(second.renderer_peer,'second-call');
     expect((await send('/agent/a2ui-renderer-reply',otherReply,'second')).status).toBe(204);
     expect(await (await other).json()).toEqual({message:otherReply.message,metadata:{a2uiRendererDataModel:model}});
+
+    const malformed = invoke(first.renderer_peer,'malformed-delivery','first');
+    expect((await first.next('a2ui_call')).message.callRendererFunction.functionCallId).toBe('malformed-delivery');
+    const error = {version:'1.0',error:{code:'INVALID_FUNCTION_CALL',functionCallId:'malformed-delivery',message:'Untrusted diagnostic text'}};
+    expect(validateToAgent(error)).toBe(true);
+    const report = {chat_jid,renderer_peer:first.renderer_peer,message:error};
+    expect((await send('/agent/a2ui-renderer-reply',report,'second')).status).toBe(409);
+    expect((await send('/agent/a2ui-renderer-reply',{...report,message:{...error,error:{...error.error,surfaceId:post.surfaceId}}},'first')).status).toBe(400);
+    expect((await send('/agent/a2ui-renderer-reply',report,'first')).status).toBe(204);
+    expect(await (await malformed).json()).toEqual({message:{...error,error:{...error.error,message:'The renderer rejected a malformed invocation.'}},
+      metadata:{a2uiRendererDataModel:model},
+    });
+    expect((await send('/agent/a2ui-renderer-reply',report,'first')).status).toBe(409);
   } finally {
     first?.close();
     second?.close();

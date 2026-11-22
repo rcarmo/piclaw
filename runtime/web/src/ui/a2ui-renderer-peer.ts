@@ -1,10 +1,10 @@
-import type { RendererFunctionResponseMessage } from '@a2ui/web_core/v1_0';
+import type { RendererReplyMessage } from '../../../src/channels/web/a2ui/rpc-json.js';
 import type { RendererCallOptions } from './a2ui-renderer-executor.js';
 import { CLASSIC_A2UI_RENDERER_CAPABILITIES, type ClassicA2uiRendererCapabilities } from '../../../src/channels/web/a2ui/capabilities.js';
 import { CLASSIC_A2UI_CATALOG } from '../../../src/channels/web/a2ui/surface.js';
 
 type Options = RendererCallOptions & {
-    reply: (body: {chat_jid:string;renderer_peer:string;message:RendererFunctionResponseMessage}, signal: AbortSignal) => Promise<unknown>;
+    reply: (body: {chat_jid:string;renderer_peer:string;message:RendererReplyMessage}, signal: AbortSignal) => Promise<unknown>;
     onLost?: () => void;
 };
 type PeerOffer = {lease:string;capabilities:ClassicA2uiRendererCapabilities};
@@ -62,7 +62,7 @@ export function openA2uiRendererPeer(options: Options): () => void {
         if (typeof id!=='string' || !id || id.length>128 || seen.has(id) || seen.size>=1024) return;
         seen.add(id);
         void (async()=>{
-            let message: RendererFunctionResponseMessage | undefined;
+            let message: RendererReplyMessage | undefined;
             try { message=await (await import('./a2ui-renderer-executor.js')).runRendererCall(raw,options,lifetime.signal); }
             catch { message={version:'1.0',rendererFunctionResponse:{functionCallId:id,error:{code:'EXECUTION_ERROR',message:'The renderer could not complete the request.'}}}; }
             if (!message || lifetime.signal.aborted || connected.get(chatJid)!==accepted) return;
