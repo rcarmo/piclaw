@@ -467,7 +467,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
         work.acceptSourceInTransaction(input, connection);
         if (renderer && chat.startsWith('web:')) {
           const conversationId = scope.conversationId;
-          const data = readA2uiRendererDataModel(root, chat, conversationId, renderer.editedSurface);
+          const data = readA2uiRendererDataModel(root, chat, conversationId, renderer);
           storeA2uiInputMetadata(root, { chatJid: chat, sourceId: message.id, conversationId }, data);
         }
         checkInput();

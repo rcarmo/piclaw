@@ -1,5 +1,7 @@
 import type { Database } from 'bun:sqlite';
-import { isA2uiSurfaceBlock, type A2uiSnapshot } from './surface.js';
+import { isA2uiSurfaceBlock, type A2uiSnapshot, type A2uiSurfaceBlock } from './surface.js';
+import { validateA2uiDraftEdits } from './action.js';
+import { InvalidA2uiDraftError, type A2uiDraftPatch } from './drafts.js';
 
 export interface A2uiRendererDataModel {
   version: '1.0';
@@ -10,7 +12,21 @@ type Recipient = { chatJid: string; sourceId: string; conversationId: number };
 
 /** Internal acceptance context. Browser-written data must be validated against stored controls first. */
 export interface A2uiRendererInput {
+  submittedSurfaceId?: string;
   editedSurface?: A2uiSnapshot;
+  draftSurface?: (block: A2uiSurfaceBlock) => A2uiSnapshot | undefined;
+}
+
+/** Prepare once outside the SQL admission transaction; resolve controls against its committed revision. */
+export async function prepareA2uiDraftProjection(patches: A2uiDraftPatch[]): Promise<A2uiRendererInput['draftSurface']> {
+  const { applyA2uiControlEdits } = await import('./express.js');
+  const drafts = new Map(patches.map(patch => [patch.surface_id, patch]));
+  return block => {
+    const patch = drafts.get(block.surface.surfaceId);
+    if (!patch || patch.revision !== block.revision) return;
+    try { return applyA2uiControlEdits(block.surface, validateA2uiDraftEdits(block.surface, patch.edits)); }
+    catch { throw new InvalidA2uiDraftError(); }
+  };
 }
 
 export function reserveA2uiModelSync(database: Database, chatJid: string, messageId: string, conversationId: number): void {
@@ -33,7 +49,7 @@ export function releaseA2uiModelSync(database: Database, chatJid: string, messag
 }
 
 /** Collect active agent-owned models for the exact native conversation, not from the browser. */
-export function readA2uiRendererDataModel(database: Database, chatJid: string, conversationId: number, edited?: A2uiSnapshot): A2uiRendererDataModel {
+export function readA2uiRendererDataModel(database: Database, chatJid: string, conversationId: number, input?: A2uiRendererInput): A2uiRendererDataModel {
   const rows = database.query(`SELECT m.id, m.content_blocks FROM a2ui_synced_surfaces s JOIN messages m
     ON m.id=s.message_id AND m.chat_jid=s.chat_jid WHERE s.chat_jid=? AND s.conversation_id=? AND m.is_bot_message=1
     AND json_valid(m.content_blocks) ORDER BY m.id`).all(chatJid,conversationId) as {id: string; content_blocks: string}[];
@@ -42,9 +58,10 @@ export function readA2uiRendererDataModel(database: Database, chatJid: string, c
     const blocks: unknown = JSON.parse(row.content_blocks);
     const block = Array.isArray(blocks) ? blocks.find(isA2uiSurfaceBlock) : undefined;
     if (block?.owner !== 'agent' || block.state !== 'active' || !block.surface.sendDataModel || row.id !== `a2ui:${block.surface.surfaceId}`) continue;
-    const surface = edited?.surfaceId === block.surface.surfaceId ? edited : block.surface;
+    const surface = input?.editedSurface?.surfaceId === block.surface.surfaceId ? input.editedSurface : input?.draftSurface?.(block) ?? block.surface;
     surfaces[surface.surfaceId] = surface.dataModel;
   }
+  if (input?.submittedSurfaceId && !Object.hasOwn(surfaces, input.submittedSurfaceId)) throw new InvalidA2uiDraftError();
   return { version: '1.0', surfaces };
 }
 

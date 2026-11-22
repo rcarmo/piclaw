@@ -16,6 +16,7 @@ export interface AgentMessagePayload {
   /** Internal trusted relay hint: persist a visible timeline row when a steer is queued. */
   persist_steer?: boolean;
   content_blocks?: unknown[];
+  a2ui_drafts?: unknown;
   link_previews?: unknown[];
   screen_hint?: string;
   client_context?: {

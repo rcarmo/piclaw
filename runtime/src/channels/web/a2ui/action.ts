@@ -5,8 +5,10 @@ import { checkA2uiComponent } from "./checks.js";
 import { a2uiInstanceId, projectA2uiTemplates } from "./templates.js";
 import { a2uiDateTimeType, validA2uiDateTime } from "./date-time.js";
 import { a2uiSliderRange, type A2uiComponent, type A2uiSnapshot } from "./surface.js";
+import type { A2uiDraftEdit, A2uiDraftPatch } from './drafts.js';
 
-type ActionValue = string | number | boolean | null | string[];
+export type A2uiActionValue = string | number | boolean | null | string[];
+type ActionValue = A2uiActionValue;
 export interface A2uiAction {
   surfaceId: string;
   sourceComponentId: string;
@@ -80,6 +82,24 @@ function validControlValue(snapshot: A2uiSnapshot, control: A2uiComponent, value
   return typeof value === "string" && (control.variant !== "number" || value === "" || /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value));
 }
 
+function resolveDraftEdits(projection: Projection, drafts: readonly A2uiDraftEdit[]): Map<string, unknown> {
+  const values = new Map<string, unknown>();
+  for (const draft of drafts) {
+    const id = a2uiInstanceId(draft.component_id, draft.instance_path);
+    const identity = projection.instances.get(id);
+    const control = projection.snapshot.components.find(item => item.id === id);
+    const path = control && isInput(control) ? a2uiBindingPath(control.value) : undefined;
+    if (!control || !path || identity?.id !== draft.component_id || identity.instancePath !== draft.instance_path || values.has(path)
+      || !validControlValue(projection.snapshot, control, draft.value)) throw Error('Invalid draft control');
+    values.set(path, draft.value);
+  }
+  return values;
+}
+
+export function validateA2uiDraftEdits(snapshot: A2uiSnapshot, drafts: readonly A2uiDraftEdit[]): Map<string, unknown> {
+  return resolveDraftEdits(projectA2uiTemplates(snapshot), drafts);
+}
+
 function defaultControlValue(component: A2uiComponent | undefined): ActionValue {
   if (component?.component === "CheckBox") return false;
   if (component?.component === "ChoicePicker") return [];
@@ -96,12 +116,12 @@ function resolveUserMessage(snapshot: A2uiSnapshot, descriptor: unknown, edits: 
 }
 
 /** Send only context declared by this button. Neither edits nor snapshot leave the browser wholesale. */
-export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string, edits: ReadonlyMap<string, unknown>, timestamp: string, instancePath?: string): A2uiActionMessage {
+export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string, edits: ReadonlyMap<string, unknown>, timestamp: string, instancePath?: string, drafts: readonly A2uiDraftEdit[] = []): A2uiActionMessage {
   const projection = projectA2uiTemplates(source);
   const { snapshot } = projection;
   const event = eventDescriptor(projection, sourceComponentId, instancePath);
   const contextBindings = Object.entries(event.context);
-  const declaredEdits = new Map<string, unknown>();
+  const declaredEdits = resolveDraftEdits(projection, drafts);
   for (const [, binding] of contextBindings) {
     const path = a2uiBindingPath(binding);
     const control = path ? controlForPath(snapshot, path) : undefined;
@@ -119,7 +139,7 @@ export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string,
     surfaceId: snapshot.surfaceId, sourceComponentId, name: event.name, timestamp, context,
     ...(userMessage === undefined ? {} : {userMessage}),
   } };
-  validateProjectedA2uiAction(projection, message, instancePath);
+  validateProjectedA2uiAction(projection, message, instancePath, drafts);
   return message;
 }
 
@@ -128,11 +148,11 @@ export function validateA2uiAction(source: A2uiSnapshot, payload: unknown, insta
   return validateA2uiActionWithEdits(source, payload, instancePath).action;
 }
 
-export function validateA2uiActionWithEdits(source: A2uiSnapshot, payload: unknown, instancePath?: string) {
-  return validateProjectedA2uiAction(projectA2uiTemplates(source), payload, instancePath);
+export function validateA2uiActionWithEdits(source: A2uiSnapshot, payload: unknown, instancePath?: string, drafts?: readonly A2uiDraftEdit[]) {
+  return validateProjectedA2uiAction(projectA2uiTemplates(source), payload, instancePath, drafts);
 }
 
-function validateProjectedA2uiAction(projection: Projection, payload: unknown, instancePath?: string): { action: A2uiAction; edits: ReadonlyMap<string, unknown> } {
+function validateProjectedA2uiAction(projection: Projection, payload: unknown, instancePath?: string, drafts: readonly A2uiDraftEdit[] = []): { action: A2uiAction; edits: ReadonlyMap<string, unknown> } {
   const { snapshot } = projection;
   if (!record(payload) || payload.version !== "1.0" || Object.keys(payload).length !== 2 || !record(payload.action)) {
     throw new Error("Invalid surface action");
@@ -145,7 +165,8 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
   if (event.name !== action.name || Object.keys(event.context).length !== Object.keys(action.context).length) {
     throw new Error("Invalid surface action");
   }
-  const boundValues = new Map<string, unknown>();
+  const boundValues = resolveDraftEdits(projection, drafts);
+  const submittedPaths = new Set<string>();
   const derived: [unknown, ActionValue][] = [];
   for (const [key, binding] of Object.entries(event.context)) {
     const input = action.context[key];
@@ -157,6 +178,7 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
       if (!validControlValue(snapshot, control, input)) throw new Error('Invalid form value');
       if (boundValues.has(path) && !sameValue(boundValues.get(path), input)) throw new Error("Conflicting form values");
       boundValues.set(path, input);
+      submittedPaths.add(path);
     }
   }
   for (const [binding, input] of derived) {
@@ -164,7 +186,7 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
   }
   for (const component of snapshot.components) {
     const path = isInput(component) ? a2uiBindingPath(component.value) : undefined;
-    if (component !== event.source && (path === undefined || !boundValues.has(path))) continue;
+    if (component !== event.source && (path === undefined || !submittedPaths.has(path))) continue;
     const error = checkA2uiComponent(snapshot, component, boundValues, projection.instances.get(component.id)).find(finding => finding.severity === 'error');
     if (error) throw new Error(error.message);
   }
@@ -185,6 +207,7 @@ export interface A2uiActionRequest {
   request_id: string;
   message: A2uiActionMessage;
   instance_path?: string;
+  a2ui_drafts?: A2uiDraftPatch[];
   private_code?: string;
   private_value?: string;
 }

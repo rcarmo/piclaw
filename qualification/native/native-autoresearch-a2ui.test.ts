@@ -73,8 +73,9 @@ applicationTest('packed Autoresearch binds the native tool and consumes a later 
   let latestUserInput = '';
   const syncedForm = {fallback:'Native model sync form',keep_active:true,messages:[{version:'1.0',createSurface:{surfaceId:'draft',
     catalogId:CLASSIC_A2UI_CATALOG,sendDataModel:true,dataModel:{name:'Initial',other:'Metadata seed'},components:[
-      {id:'root',component:'Column',children:['name','submit']},
+      {id:'root',component:'Column',children:['name','memo','submit']},
       {id:'name',component:'TextField',label:'Name',value:{'@path':'/name'}},
+      {id:'memo',component:'TextField',label:'Memo',value:{'@path':'/other'}},
       {id:'submit',component:'Button',child:'label',action:{event:{name:'saveName',context:{name:{'@path':'/name'}}}}},
       {id:'label',component:'Text',text:'Save'},
     ],
@@ -112,7 +113,7 @@ applicationTest('packed Autoresearch binds the native tool and consumes a later 
    await initializeWebAddonMessagingRuntime(pool, channel);
    assert.deepEqual(readFileSync(log,'utf8').trim().split('\n'),['list-sessions']);
    const request=(route:string,body:unknown,headers:Record<string,string>={})=>channel!.handleRequest(new Request('https://fixture'+route,{method:'POST',headers:{'content-type':'application/json',origin:'https://fixture',cookie,...headers},body:JSON.stringify(body)}));
-   const issue=async(content:string)=>{const response=await request('/agent/default/message',{content});assert.equal(response.status,201);return await response.json() as { thread_id:number };};
+   const issue=async(content:string,extra:Record<string,unknown>={})=>{const response=await request('/agent/default/message',{content,...extra});assert.equal(response.status,201);return await response.json() as { thread_id:number };};
    const chat='web:default';
    const launch=await issue('Launch picker');
    const lookup=db.query<{rowid:number;thread_id:number},[string]>('SELECT rowid,thread_id FROM messages WHERE content=?');
@@ -148,21 +149,27 @@ applicationTest('packed Autoresearch binds the native tool and consumes a later 
    await waitFor(() => settled(form.thread_id).total || undefined, 'sync publication did not settle');
    const syncBlock=getMessageByRowId(chat,syncPost.rowid)!.data.content_blocks!.find(isA2uiSurfaceBlock)!;
    assert(syncBlock.surface.sendDataModel);
-   const modelFor = (name:string) => JSON.stringify({a2uiRendererDataModel:{version:'1.0',surfaces:{[syncBlock.surface.surfaceId]:{name,other:'Metadata seed'}}}});
+   const modelFor = (name:string, other='Metadata seed') => JSON.stringify({a2uiRendererDataModel:{version:'1.0',surfaces:{[syncBlock.surface.surfaceId]:{name,other}}}});
    expectedTool='none';
-   const plain=await issue('Ordinary renderer message');
+   const drafts = (revision: number) => [{surface_id:syncBlock.surface.surfaceId,revision,edits:[{component_id:'name',value:'Unsaved browser draft'}]}];
+   const plain=await issue('Ordinary renderer message',{a2ui_drafts:drafts(1)});
    await waitFor(() => settled(plain.thread_id).total || undefined, 'ordinary turn did not settle');
-   assert.equal(latestUserInput,`Ordinary renderer message\n\nA2UI renderer metadata:\n${modelFor('Initial')}`);
+   assert.equal(latestUserInput,`Ordinary renderer message\n\nA2UI renderer metadata:\n${modelFor('Unsaved browser draft')}`);
+   assert(lookup.get('Ordinary renderer message'));
+   const forged = [{...drafts(1)[0]!,edits:[{component_id:'label',value:'Not an input'}]}];
+   assert.equal((await request('/agent/default/message',{content:'Reject forged draft',a2ui_drafts:forged})).status,400);
+   assert.equal(lookup.get('Reject forged draft'),null);
    const syncedAction={chat_jid:chat,post_id:syncPost.rowid,thread_id:form.thread_id,revision:1,request_id:crypto.randomUUID(),
-     message:buildA2uiAction(syncBlock.surface,'submit',new Map([['/name','Edited']]),new Date().toISOString())};
+     message:buildA2uiAction(syncBlock.surface,'submit',new Map([['/name','Edited']]),new Date().toISOString()),
+     a2ui_drafts:[{...drafts(1)[0]!,edits:[{component_id:'memo',value:'Action-only model edit'}]}]};
    assert.equal((await request('/agent/a2ui-action',syncedAction)).status,201);
    assert.equal((await request('/agent/a2ui-action',syncedAction)).status,200);
    await waitFor(() => settled(form.thread_id).total===2 || undefined, 'synced action did not settle');
-   assert.equal(latestUserInput,`Submitted saveName\nname: "Edited"\n\nA2UI renderer metadata:\n${modelFor('Edited')}`);
+   assert.equal(latestUserInput,`Submitted saveName\nname: "Edited"\n\nA2UI renderer metadata:\n${modelFor('Edited','Action-only model edit')}`);
    assert(lookup.get('Submitted saveName\nname: "Edited"'));
-   const after=await issue('Read latest model');
+   const after=await issue('Read latest model',{a2ui_drafts:drafts(1)});
    await waitFor(() => settled(after.thread_id).total || undefined, 'model query did not settle');
-   assert.equal(latestUserInput,`Read latest model\n\nA2UI renderer metadata:\n${modelFor('Edited')}`);
+   assert.equal(latestUserInput,`Read latest model\n\nA2UI renderer metadata:\n${modelFor('Edited','Action-only model edit')}`);
    console.log('Packed Autoresearch starts in the default SDK host; authenticated action starts the synthetic process once after the model turn, with bound status and stop.');
   } finally {await backend?.close();await channel?.stop();await base.queue.shutdown();await pool?.shutdown();await closeDatabase();lock.release();}
 

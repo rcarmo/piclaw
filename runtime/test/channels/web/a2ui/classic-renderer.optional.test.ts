@@ -74,6 +74,8 @@ for (const engine of [chromium, webkit]) {
       await Bun.write(entry, `
         import { html, render } from ${JSON.stringify(join(web, "src/vendor/preact-htm.js"))};
         import { Post } from ${JSON.stringify(join(web, "src/components/post.ts"))};
+        import { sendAgentMessage } from ${JSON.stringify(join(web, 'src/api.ts'))};
+        window.sendDraftQuery = chat => sendAgentMessage('default', 'Query current model', null, [], null, chat);
         window.events = [];
         const submit = async (payload) => {
           window.events.push(payload);
@@ -97,8 +99,9 @@ for (const engine of [chromium, webkit]) {
       `);
       const build = await Bun.build({ entrypoints: [entry], outdir: scratch, target: "browser", format: "esm" });
       expect(build.success).toBe(true);
-      server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(req) {
+      server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
         const { pathname } = new URL(req.url);
+        if (pathname === '/agent/default/message') return Response.json(await req.json());
         if (pathname === '/media/42') return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="green"/></svg>', {headers:{'Content-Type':'image/svg+xml'}});
         if (pathname === "/fixture.js") return new Response(Bun.file(join(scratch, "fixture.js")));
         if (pathname === '/marked.js') return new Response(Bun.file(join(web, 'static/common/js/marked.min.js')), {headers:{'Content-Type':'text/javascript'}});
@@ -358,6 +361,30 @@ for (const engine of [chromium, webkit]) {
       await panel.getByRole('button',{name:'Confirm stage'}).click();
       expect(await page.evaluate(() => (window as any).events.at(-1))).toMatchObject({revision:4,
         message:{action:{surfaceId:stagedId,sourceComponentId:'send',name:'confirmStage'}}});
+      const syncedId = 'synced-browser';
+      const synced = {...block, owner:'agent', revision:10, surface:applyA2uiMessages(syncedId, compileA2uiExpress(`
+        surface("synced-browser", sendDataModel=true);
+        $/memo="Initial";
+        root=Column([memo,Button(Text("Send draft"),action=Event("syncDraft"))]);
+        memo=TextField(label="Draft memo",value=$/memo);
+      `, syncedId))!};
+      await page.evaluate((item) => (window as any).draw(item), synced);
+      await page.getByRole('textbox',{name:'Draft memo'}).fill('Unsubmitted draft');
+      const expectedDraft = {surface_id:syncedId,revision:10,edits:[{component_id:'memo',value:'Unsubmitted draft'}]};
+      const query = (chat: string) => page.evaluate(jid => (window as any).sendDraftQuery(jid), chat);
+      expect(await query('web:test')).toMatchObject({content:'Query current model',a2ui_drafts:[expectedDraft]});
+      expect(await query('web:other')).not.toHaveProperty('a2ui_drafts');
+      await page.evaluate((item) => (window as any).draw(item), block);
+      await page.evaluate((item) => (window as any).draw(item), synced);
+      expect(await page.getByRole('textbox',{name:'Draft memo'}).inputValue()).toBe('Unsubmitted draft');
+      await page.evaluate((item) => (window as any).draw(item), {...synced,revision:11});
+      expect(await page.getByRole('textbox',{name:'Draft memo'}).inputValue()).toBe('Initial');
+      expect(await query('web:test')).not.toHaveProperty('a2ui_drafts');
+      await page.getByRole('textbox',{name:'Draft memo'}).fill('Action draft');
+      await page.getByRole('button',{name:'Send draft'}).click();
+      expect(await page.evaluate(() => (window as any).events.at(-1))).toMatchObject({revision:11,
+        a2ui_drafts:[{...expectedDraft, revision:11, edits:[{component_id:'memo',value:'Action draft'}]}],
+        message:{action:{name:'syncDraft',context:{}}}});
       const legacyRequests: string[] = [];
       page.on('request', request => { if (request.url().includes('adaptivecards')) legacyRequests.push(request.url()); });
       await page.evaluate(() => (window as any).draw({

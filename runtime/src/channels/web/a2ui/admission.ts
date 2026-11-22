@@ -12,6 +12,7 @@ import { handleAgentMessage } from '../handlers/agent.js';
 import { bindInputRequestAuthority, captureInputTarget, releaseInputRequestAuthority, type ValidateInputAuthority } from '../messaging/input-request-authority.js';
 import { validateA2uiActionWithEdits, type A2uiAction } from './action.js';
 import { releaseA2uiModelSync } from './input-metadata.js';
+import { MAX_A2UI_DRAFT_BYTES, parseA2uiDrafts } from './drafts.js';
 import { handleTotpSurfaceAction } from './totp.js';
 import { recoveryPrompt } from './recovery.js';
 import { invokeAddonA2ui } from './addon.js';
@@ -34,9 +35,17 @@ async function readBody(req: Request): Promise<unknown> {
   try {
     for (;;) {
       const { value, done } = await reader.read();
-      if (done) return JSON.parse(body + decoder.decode());
+      if (done) {
+        const result = JSON.parse(body + decoder.decode());
+        if (length > 32 * 1024) {
+          if (!record(result) || !Object.hasOwn(result, 'a2ui_drafts')) throw Error('Action too large');
+          const { a2ui_drafts: _drafts, ...action } = result;
+          if (Buffer.byteLength(JSON.stringify(action)) > 32 * 1024) throw Error('Action too large');
+        }
+        return result;
+      }
       length += value.length;
-      if (length > 32 * 1024) throw new Error('Action too large');
+      if (length > 32 * 1024 + MAX_A2UI_DRAFT_BYTES) throw new Error('Action too large');
       body += decoder.decode(value, { stream: true });
     }
   } finally {
@@ -55,7 +64,7 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
   catch { return json({ error: 'Surface action not authorised.' }, 403); }
   try { payload = await readBody(req); }
   catch { return json({ error: 'Invalid or oversized surface action.' }, 400); }
-  if (!record(payload) || Object.keys(payload).length !== 6 + Number(Object.hasOwn(payload, 'private_code')) + Number(Object.hasOwn(payload, 'private_value')) + Number(Object.hasOwn(payload, 'instance_path'))) return json({ error: 'Invalid surface action.' }, 400);
+  if (!record(payload) || Object.keys(payload).length !== 6 + Number(Object.hasOwn(payload, 'private_code')) + Number(Object.hasOwn(payload, 'private_value')) + Number(Object.hasOwn(payload, 'instance_path')) + Number(Object.hasOwn(payload, 'a2ui_drafts'))) return json({ error: 'Invalid surface action.' }, 400);
   const { chat_jid: chatJid, post_id: postId, thread_id: threadId, revision, request_id: requestId, message, instance_path: instancePath, private_code: code, private_value: privateValue } = payload;
   if (typeof chatJid !== 'string' || !chatJid.startsWith('web:') || chatJid.length > 240
     || typeof postId !== 'number' || !Number.isSafeInteger(postId) || postId < 1
@@ -63,7 +72,11 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
     || typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 1
     || typeof requestId !== 'string' || !requestIdentity.test(requestId) || !record(message) || !record(message.action)
     || typeof message.action.surfaceId !== 'string'
+    || typeof message.action.timestamp !== 'string' || message.action.timestamp.length > 35 || !Number.isFinite(Date.parse(message.action.timestamp))
     || (instancePath !== undefined && (typeof instancePath !== 'string' || !/^(?:\/(?:0|[1-9][0-9]?)){1,24}$/.test(instancePath)))) return json({ error: 'Invalid surface action.' }, 400);
+  let drafts: ReturnType<typeof parseA2uiDrafts>;
+  try { drafts = parseA2uiDrafts(payload.a2ui_drafts); }
+  catch { return json({ error: 'Invalid A2UI draft.' }, 400); }
   const surfaceId = message.action.surfaceId;
   const readSource = () => getMessageByRowId(chatJid, postId);
   function sourceBlock(row: ReturnType<typeof readSource>) {
@@ -83,8 +96,20 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
   const block = sourceBlock(source);
   if (!isA2uiSurfaceBlock(block)) return source.data?.content_blocks?.some(isA2uiSurfaceBlock) ? changed() : json({ error: 'Surface not found.' }, 404);
   if (block.owner !== 'agent' && block.owner !== 'recovery' && (block.state !== 'active' || block.revision !== revision)) return changed();
+  if (drafts?.length && (block.owner !== 'agent' || message.action.name === 'cancel')) return json({ error: 'Unexpected A2UI draft.' }, 400);
+  const selfDraft = drafts?.find(patch => patch.surface_id === surfaceId);
+  if (selfDraft && (!block.surface.sendDataModel || selfDraft.revision !== revision)) return changed();
+  // A committed model edit may hide or remove the original template occurrence. Match
+  // an exact synced retry before re-resolving that occurrence against the new revision.
+  const replayDigest = block.owner === 'agent' && (block.surface.sendDataModel || drafts?.length) && code === undefined && privateValue === undefined
+    ? createHash('sha256').update(JSON.stringify(['a2ui-draft-action', { ...message, action: { ...message.action, timestamp: undefined } }, instancePath, drafts])).digest('hex')
+    : undefined;
+  const matchesReceipt = (latest: unknown, digest: string | undefined) => digest !== undefined && isA2uiSurfaceBlock(latest)
+    && latest.last_submission?.request_id === requestId && latest.last_submission.revision === revision && latest.last_submission.digest === digest;
+  const accepted = () => json({ status: 'accepted', duplicate: true }, 200);
+  if (matchesReceipt(block, replayDigest)) return accepted();
   let action: A2uiAction, edits: ReadonlyMap<string, unknown>;
-  try { ({ action, edits } = validateA2uiActionWithEdits(block.surface, message, instancePath)); }
+  try { ({ action, edits } = validateA2uiActionWithEdits(block.surface, message, instancePath, selfDraft?.edits)); }
   catch { return json({ error: 'Invalid surface action.' }, 400); }
   if (block.owner === 'login') {
     if (code !== undefined) return json({ error: 'Unexpected private authentication input.' }, 400);
@@ -152,12 +177,11 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
   }
   const recovery = block.owner === 'recovery' && source.data.is_terminal_agent_reply === true && Object.keys(action.context).length === 0
     ? recoveryPrompt(action.name, postId) : undefined;
-  if ((block.owner !== 'agent' && !recovery) || code !== undefined) return json({ error: 'Surface action not authorised.' }, 403);
+  if ((block.owner !== 'agent' && !recovery) || code !== undefined || privateValue !== undefined) return json({ error: 'Surface action not authorised.' }, 403);
   const { timestamp: _timestamp, ...submitted } = action;
-  const digest = createHash('sha256').update(JSON.stringify({ ...submitted, instancePath })).digest('hex');
-  const duplicate = (latest: unknown) => isA2uiSurfaceBlock(latest) && latest.last_submission?.request_id === requestId
-    && latest.last_submission.revision === revision && latest.last_submission.digest === digest;
-  const accepted = () => json({ status: 'accepted', duplicate: true }, 200);
+  const legacyDigest = createHash('sha256').update(JSON.stringify({ ...submitted, instancePath })).digest('hex');
+  const digest = replayDigest ?? legacyDigest;
+  const duplicate = (latest: unknown) => matchesReceipt(latest, digest) || (!drafts?.length && matchesReceipt(latest, legacyDigest));
   if (duplicate(block)) return accepted();
   if (block.state !== 'active' || block.revision !== revision) return changed();
 
@@ -197,7 +221,8 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
   const pathname = '/agent/default/message';
   const fields = Object.entries(action.context).map(([key, value]) => `${key}: ${JSON.stringify(value)}`);
   const description = action.userMessage ? [action.userMessage] : [];
-  const body = JSON.stringify({ content: recovery ?? [`Submitted ${action.name}`, ...description, ...fields].join('\n'), thread_id: threadId });
+  const body = JSON.stringify({ content: recovery ?? [`Submitted ${action.name}`, ...description, ...fields].join('\n'), thread_id: threadId,
+    a2ui_drafts: drafts?.filter(patch => patch !== selfDraft) });
   const forward = new Request(`http://internal${pathname}`, { method: 'POST', signal: req.signal,
     headers: { 'Content-Type': 'application/json' }, body });
   bindInputRequestAuthority(forward, chatJid, body, validate);
@@ -206,7 +231,7 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
     response = await handleAgentMessage(channel, forward, pathname, chatJid, 'default', {
       requireReplyThread: true,
       authorise: () => {},
-      editedA2uiSurface: editedSurface,
+      a2uiSubmission: block.owner === 'agent' && block.surface.sendDataModel ? { submittedSurfaceId: surfaceId, editedSurface } : undefined,
       onAccepted: ({ database, rowId }) => settle(database, rowId),
     });
   } finally { releaseInputRequestAuthority(forward); }

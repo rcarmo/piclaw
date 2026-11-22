@@ -17,6 +17,7 @@ async function fixture(options: { keep?: boolean; cancel?: boolean; template?: A
   let surface = options.template ?? (options.cancel ? applyA2uiMessages("form", compileA2uiExpress('root = Button(Text("Cancel"), action=Event("cancel"))', "form"))! : snapshot);
   initDatabase();
   let dispatch = 0;
+  let recipientId = 31;
   const updates: number[] = [];
   const admit: WebChannelLike['admitMessage'] = (chatJid, content, isBot, mediaIds, opts, authority, signal) =>
     admitWebMessage({} as any, { chatJid, agentId: 'default', agentName: 'Pi', content, isBot, mediaIds }, opts, authority, signal);
@@ -27,9 +28,9 @@ async function fixture(options: { keep?: boolean; cancel?: boolean; template?: A
     interactionBroadcaster: { broadcastInteractionUpdated: (row: {id: number}) => updates.push(row.id) },
     getInputSourceAdmission: (chatJid: string): ReturnType<NonNullable<WebChannelLike['getInputSourceAdmission']>> => (stored, renderer) => {
       if (!options.sync || !renderer) return;
-      const conversationId = 31;
+      const conversationId = recipientId;
       storeA2uiInputMetadata(stored.database, {chatJid,sourceId:stored.message.id,conversationId},
-        readA2uiRendererDataModel(stored.database,chatJid,conversationId,renderer.editedSurface));
+        readA2uiRendererDataModel(stored.database,chatJid,conversationId,renderer));
     },
     dispatchAcceptedInput: async () => ({ submission_id: ++dispatch, queued: false }),
     admitMessage: admit,
@@ -50,7 +51,7 @@ async function fixture(options: { keep?: boolean; cancel?: boolean; template?: A
   const payload: A2uiActionRequest = { chat_jid: chat, post_id: source.id, thread_id: root.id, revision: 1, instance_path,
     request_id: crypto.randomUUID(), message: buildA2uiAction(surface, options.cancel ? 'root' : 'submit', new Map([['/value', 'hello']]), new Date().toISOString(), instance_path) };
   const send = (data = payload) => handleA2uiAction(channel, new Request('http://test/agent/a2ui-action', { method: 'POST', body: JSON.stringify(data) }));
-  return { channel, payload, send, updates, dispatch: () => dispatch };
+  return { channel, payload, send, updates, dispatch: () => dispatch, routeTo(id: number) { recipientId = id; } };
 }
 
 test('a stored agent surface submits once to its own source thread even on concurrent retries', async () => {
@@ -69,6 +70,11 @@ test('a stored agent surface submits once to its own source thread even on concu
 
 test('a synced submission preserves the full updated model only in the owning agent input', async () => {
   const f = await fixture({sync:true});
+  f.routeTo(32);
+  expect((await f.send()).status).toBe(400);
+  expect(f.dispatch()).toBe(0);
+  expect(getMessageByRowId(chat,f.payload.post_id)?.data?.content_blocks?.[0]).toMatchObject({state:'active',revision:1});
+  f.routeTo(31);
   const replies = await Promise.all([f.send(), f.send()]);
   expect(replies.map(response => response.status).sort()).toEqual([200,201]);
   expect(f.dispatch()).toBe(1);
@@ -104,6 +110,33 @@ test('repeated buttons are admitted from a real instance and cannot share a retr
   expect((await f.send({...f.payload, instance_path:'/0'})).status).toBe(409);
   expect(getDb().query('SELECT content FROM messages WHERE chat_jid=? AND thread_id=? AND content LIKE ?')
     .get(chat, f.payload.thread_id, 'Submitted save%')).toEqual({content:'Submitted save\nSaved selected row\nlabel: "same"'});
+  expect(f.dispatch()).toBe(1);
+});
+
+test('draft sync validates component occurrences and deduplicates an action that removes its own row', async () => {
+  const surfaceId = 'shrink-template';
+  const template = applyA2uiMessages(surfaceId, compileA2uiExpress(`
+    $/rows = ["First","Second"];
+    root = Column([selection, List(_template($/rows, submit))]);
+    selection = ChoicePicker(label="Rows",variant="multipleSelection",value=$/rows,
+      options=[{label:"First",value:"First"},{label:"Second",value:"Second"}]);
+    submit = Button(Text("Save row"),action=Event("updateRows"));
+  `, surfaceId))!;
+  const f = await fixture({template,sync:true,keep:true});
+  const draft = { surface_id:f.payload.message.action.surfaceId, revision:f.payload.revision,
+    edits:[{component_id:'selection',value:['First']}] };
+  for (const edit of [{component_id:'selection',instance_path:'/1',value:['First']},
+    {component_id:'submit',instance_path:'/1',value:['First']}, {component_id:'selection',value:['Unlisted']},
+    {component_id:'selection',value:['First'],path:'/rows'}]) {
+    expect((await f.send({...f.payload,a2ui_drafts:[{...draft,edits:[edit]}]})).status).toBe(400);
+  }
+  expect(f.dispatch()).toBe(0);
+  const request = {...f.payload,a2ui_drafts:[draft]};
+  expect((await f.send(request)).status).toBe(201);
+  expect(getMessageByRowId(chat,f.payload.post_id)?.data?.content_blocks?.[0])
+    .toMatchObject({revision:2,surface:{dataModel:{rows:['First']}}});
+  expect((await f.send(request)).status).toBe(200);
+  expect((await f.send({...request,a2ui_drafts:[{...draft,edits:[{component_id:'selection',value:['Second']}]}]})).ok).toBe(false);
   expect(f.dispatch()).toBe(1);
 });
 

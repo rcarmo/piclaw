@@ -32,7 +32,7 @@ root = Column([
 - `ChoicePicker` binds a list of selected option values: initialise it with `[]` or `["value"]`. Use `displayStyle="chips"` for compact choices and `filterable=true` for a search field.
 - `Event("cancel")` closes an agent form without submitting values. A normal event submits a new user input in the original thread. Set `keep_active` only when repeated submissions are useful.
 - Use `openUrl("https://example.com/docs")` or `openUrl($/url)` for a link that opens on click. The resolved target must be an HTTP(S) URL without credentials. Basic Catalogue functions can format labels and validate inputs. Custom functions, embedded HTML and remote catalogues are unsupported.
-- Set `createSurface.sendDataModel: true` only when the agent needs the full model on each message. Sync includes validated submitted values; unsubmitted browser drafts stay local.
+- Set `createSurface.sendDataModel: true` only when the agent needs the full model on each message. Classic includes valid drafts for the current surface revision, even if a control was not named in the event context. Only the owning agent gets that metadata. Closing a form with `cancel` submits nothing.
 - Never request keys, tokens, OTPs or other credentials in an agent form. Built-in auth flows have separate private controls.
 - To edit, supply the post ID and current revision returned by the tool. For a component update, start with `surface("returned-surface-id", update=true)`; for a data update, assign the path. To remove it, use `deleteSurface("returned-surface-id")` with the post ID and revision.
 

@@ -14,7 +14,8 @@ import { captureWebRequestAuthority } from "../auth/auth-gateway.js";
 import { getAddonLocalDispatchBlock } from "../../../addons/local-dispatch.js";
 
 import type { StoreWebMessageOptions } from "../messaging/message-store.js";
-import type { A2uiRendererInput } from '../a2ui/input-metadata.js';
+import { prepareA2uiDraftProjection, type A2uiRendererInput } from '../a2ui/input-metadata.js';
+import { InvalidA2uiDraftError, parseA2uiDrafts } from '../a2ui/drafts.js';
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
 import { isSingleUserAccess } from "../../../core/config-access.js";
 
@@ -110,7 +111,7 @@ export async function handleAgentMessage(
   chatJid: string,
   defaultAgentId: string,
   post?: { requireReplyThread: boolean; authorise: ValidateInputAuthority; onAccepted?: StoreWebMessageOptions["acceptSource"];
-    editedA2uiSurface?: A2uiRendererInput['editedSurface'] },
+    a2uiSubmission?: Pick<A2uiRendererInput, 'submittedSurfaceId' | 'editedSurface'> },
 ): Promise<Response> {
   if (!isSingleUserAccess()) return channel.json({ error: "Single-user message admission is required." }, 403);
   let internalAuthority: ReturnType<typeof readInputRequestAuthority>;
@@ -254,16 +255,20 @@ export async function handleAgentMessage(
   if (ordinaryInput && (!mentionTarget || mentionTarget.chat_jid===chatJid)) {
     let interaction: InteractionRow | null;
     try {
+      const drafts = parseA2uiDrafts(parsed.payload.a2ui_drafts);
+      const draftSurface = drafts?.length ? await prepareA2uiDraftProjection(drafts) : undefined;
+      if (draftSurface) revalidateInputAuthority('verify');
       interaction = await admitUserInput(chatJid,content,false,normalized.mediaIds,{
         contentBlocks:normalized.contentBlocks,linkPreviews:normalized.linkPreviews,threadId:normalized.threadId??undefined,
         screenHint:normalized.screenHint,acceptSource: stored => {
-          const result = acceptSource!(stored, { editedSurface: post?.editedA2uiSurface });
+          const result = acceptSource!(stored, { ...post?.a2uiSubmission, draftSurface });
           if (result !== undefined) return result;
           return post?.onAccepted?.(stored);
         },isSteeringMessage:requestMode==="steer",
       },revalidateInputAuthority,req.signal);
     } catch (error) {
       if (req.signal.aborted) return channel.json({error:"Input submission was cancelled before acceptance."},400);
+      if (error instanceof InvalidA2uiDraftError) return channel.json({error:error.message},400);
       return channel.json({error:"Message admission could not be confirmed."},503);
     }
     if (!interaction) return channel.json({error:"Failed to store message"},500);

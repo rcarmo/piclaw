@@ -1,7 +1,8 @@
 /** Render the admitted A2UI catalog in Classic's Preact timeline. */
-import { html, useCallback, useMemo, useRef, useState } from '../vendor/preact-htm.js';
-import { a2uiBindingPath, buildA2uiAction, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
+import { html, useCallback, useLayoutEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
+import { a2uiBindingPath, buildA2uiAction, isA2uiActionValue, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
 import { checkA2uiComponent } from '../../../src/channels/web/a2ui/checks.js';
+import { a2uiDraftsFor, discardOldA2uiDraft, readA2uiDraft, rememberA2uiDraftEdit, subscribeA2uiDraft } from '../ui/a2ui-drafts.js';
 import { projectA2uiTemplates } from '../../../src/channels/web/a2ui/templates.js';
 import { a2uiDateTimeDisplay, a2uiDateTimeType } from '../../../src/channels/web/a2ui/date-time.js';
 import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
@@ -29,7 +30,18 @@ export function A2uiSurface({ block, source, onSubmit }: {
     }, [block.surface]);
     const snapshot = projection?.snapshot ?? block.surface;
     const [checkPrefix] = useState(() => `a2ui-check-${++nextCheckPrefix}`);
-    const [edits, setEdits] = useState(new Map<string, unknown>());
+    const syncDraft = block.owner === 'agent' && block.surface.sendDataModel === true && !!onSubmit;
+    const { chat_jid: chat } = source;
+    const {surfaceId} = block.surface;
+    const [edits, setEdits] = useState(() => new Map<string, unknown>(syncDraft
+        ? Array.from(readA2uiDraft(chat, surfaceId, block.revision) ?? [], ([path, edit]) => [path, edit.value]) : []));
+    useLayoutEffect(() => {
+        if (!syncDraft) return;
+        discardOldA2uiDraft(chat, surfaceId, block.revision);
+        return subscribeA2uiDraft(chat, surfaceId, (revision, draft) => {
+            if (revision === block.revision) setEdits(new Map(Array.from(draft, ([path, edit]) => [path, edit.value])));
+        });
+    }, [syncDraft, chat, surfaceId, block.revision]);
     const [pending, setPending] = useState(false);
     const [error, setError] = useState('');
     const [totp, setTotp] = useState<{ presentation: TotpPresentation; request: A2uiActionRequest } | null>(null);
@@ -39,9 +51,13 @@ export function A2uiSurface({ block, source, onSubmit }: {
     const privateInput = useRef<HTMLInputElement | null>(null);
     const disabled = block.state !== 'active' || !onSubmit;
     const components = new Map((projection?.snapshot.components ?? []).map(item => [item.id, item]));
-    function edit(path: string | undefined, value: unknown) {
+    function edit(id: string, path: string | undefined, value: unknown) {
         if (!path || disabled || inFlight.current) return;
-        setEdits((previous: Map<string, unknown>) => new Map(previous).set(path, value));
+        const instance = projection?.instances.get(id);
+        if (syncDraft && instance && isA2uiActionValue(value)) rememberA2uiDraftEdit(chat, surfaceId, block.revision, path, {
+            component_id: instance.id, ...(instance.instancePath ? { instance_path: instance.instancePath } : {}), value,
+        });
+        else setEdits((previous: Map<string, unknown>) => new Map(previous).set(path, value));
         setError('');
     }
     async function submit(event: Event, componentId: string) {
@@ -52,10 +68,15 @@ export function A2uiSurface({ block, source, onSubmit }: {
         setPending(true);
         setError('');
         try {
-            const message = buildA2uiAction(block.surface, instance.id, edits, new Date().toISOString(), instance.instancePath);
-            const key = JSON.stringify([componentId, message.action.context]);
+            const action = components.get(componentId)?.action as {event?: {name?: string}} | undefined;
+            const drafts = block.owner === 'agent' && action?.event?.name !== 'cancel' ? a2uiDraftsFor(chat) : undefined;
+            const selfDraft = syncDraft ? drafts?.find(draft => draft.surface_id === surfaceId && draft.revision === block.revision) : undefined;
+            const currentDrafts = drafts?.filter(draft => draft.surface_id !== surfaceId || draft === selfDraft);
+            const message = buildA2uiAction(block.surface, instance.id, edits, new Date().toISOString(), instance.instancePath, selfDraft?.edits);
+            const key = JSON.stringify([componentId, message.action.context, message.action.userMessage, currentDrafts]);
             if (!lastAttempt.current || lastAttempt.current.key !== key) {
-                lastAttempt.current = { key, request: { ...source, revision: block.revision, request_id: Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''), message, ...(instance.instancePath ? { instance_path: instance.instancePath } : {}) } };
+                lastAttempt.current = { key, request: { ...source, revision: block.revision, request_id: Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''), message,
+                    ...(instance.instancePath ? { instance_path: instance.instancePath } : {}), ...(currentDrafts?.length ? { a2ui_drafts: currentDrafts } : {}) } };
             }
             const request = lastAttempt.current.request;
             const value = block.owner === 'login' && componentId === 'save' ? privateInput.current?.value : undefined;
@@ -193,7 +214,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 </label>`);
                 const value = text(item.value);
                 const placeholder = text(item.placeholder);
-                const onInput = (event: Event) => edit(path, (event.currentTarget as HTMLInputElement).value);
+                const onInput = (event: Event) => edit(item.id, path, (event.currentTarget as HTMLInputElement).value);
                 return checked(html`<label key=${id} class="a2ui-field">${label}${item.variant === 'longText'
                     ? html`<textarea ...${aria} disabled=${locked} value=${value} placeholder=${placeholder} maxLength="4096" onInput=${onInput}></textarea>`
                     : html`<input type=${item.variant === 'number' ? 'number' : 'text'} ...${aria} disabled=${locked} value=${value}
@@ -208,7 +229,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 return checked(html`<label key=${id} class="a2ui-field">${label}
                     <input type=${type} aria-label=${label || (type === 'datetime-local' ? 'Date and time' : type === 'date' ? 'Date' : 'Time')} ...${aria}
                         disabled=${locked} min=${min} max=${max} step=${type === 'date' ? undefined : 'any'} value=${value}
-                        onChange=${(event: Event) => edit(path, (event.currentTarget as HTMLInputElement).value)} />
+                        onChange=${(event: Event) => edit(item.id, path, (event.currentTarget as HTMLInputElement).value)} />
                 </label>`);
             }
             case 'Slider': {
@@ -218,11 +239,11 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 return checked(html`<label key=${id} class="a2ui-field">${label}
                     <input type="range" aria-label=${label || 'Value'} ...${aria} disabled=${locked} min=${range.min} max=${range.max}
                         step=${range.step ?? 'any'} value=${typeof value === 'number' ? value : range.min}
-                        onInput=${(event: Event) => edit(path, (event.currentTarget as HTMLInputElement).valueAsNumber)} />
+                        onInput=${(event: Event) => edit(item.id, path, (event.currentTarget as HTMLInputElement).valueAsNumber)} />
                 </label>`);
             }
             case 'CheckBox': return checked(html`<label key=${id} class="a2ui-checkbox"><input type="checkbox" ...${aria} disabled=${locked}
-                checked=${read(item.value) === true} onChange=${(event: Event) => edit(path, (event.currentTarget as HTMLInputElement).checked)} />${label}</label>`);
+                checked=${read(item.value) === true} onChange=${(event: Event) => edit(item.id, path, (event.currentTarget as HTMLInputElement).checked)} />${label}</label>`);
             case 'ChoicePicker': {
                 const selected = read(item.value);
                 const choices = Array.isArray(selected) ? selected : [];
@@ -231,11 +252,11 @@ export function A2uiSurface({ block, source, onSubmit }: {
                     const options = Array.isArray(item.options) ? item.options.map(option => ({ value: option.value, label: text(option.label) })) : [];
                     return checked(html`<${A2uiChoicePicker} key=${id} label=${label} aria=${aria} options=${options} selected=${choices} multiple=${multiple}
                         chips=${item.displayStyle === 'chips'} filterable=${item.filterable === true} disabled=${locked}
-                        onChange=${(value: string[]) => edit(path, value)} />`);
+                        onChange=${(value: string[]) => edit(item.id, path, value)} />`);
                 }
                 return checked(html`<label key=${id} class="a2ui-field">${label}
                     <select multiple=${multiple} disabled=${locked} aria-label=${label || 'Choose an option'} ...${aria}
-                        value=${multiple ? undefined : choices[0] ?? ''} onChange=${(event: Event) => edit(path,
+                        value=${multiple ? undefined : choices[0] ?? ''} onChange=${(event: Event) => edit(item.id, path,
                             Array.from((event.currentTarget as HTMLSelectElement).selectedOptions, option => option.value).filter(Boolean))}>
                         ${!multiple && html`<option value="">Select an option</option>`}
                         ${Array.isArray(item.options) && item.options.map(option => html`<option key=${option.value} value=${option.value}
