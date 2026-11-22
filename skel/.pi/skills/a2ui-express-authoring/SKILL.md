@@ -5,9 +5,11 @@ description: Show a small interactive form, decision or set of links in the curr
 
 # A2UI Express in Classic
 
-Use `send_a2ui` for small, conversation-owned forms. Use normal Markdown for prose, simple lists and non-web users. The tool accepts bare [A2UI Express](https://a2ui.org/) source, not JSON, Markdown fences or `<a2ui>` tags. Provide a short `fallback` that makes sense without the form.
+Use `send_a2ui` for small forms in the current Classic thread. Only use it when the tool is available and controls are clearer than prose. Otherwise, ask the same question in Markdown or in the channel's text format. Do not ask the model to emit raw content blocks.
 
-```text
+The tool accepts bare [A2UI Express](https://a2ui.org/) source, without JSON wrappers, Markdown fences or `<a2ui>` tags. Provide a short `fallback` that makes sense without the form.
+
+```express
 $/topic = "";
 $/notify = false;
 root = Column([
@@ -28,4 +30,8 @@ root = Column([
 - Never request keys, tokens, OTPs or other credentials in an agent form. Built-in auth flows have separate private controls.
 - To edit, supply the post ID and current revision returned by the tool. For a component update, start with `surface("returned-surface-id", update=true)`; for a data update, assign the path. To remove it, use `deleteSurface("returned-surface-id")` with the post ID and revision.
 
-Adaptive Cards have been retired. Old posts keep their ordinary text, with no live card controls.
+Use [these templates](templates.md) for an approval, a choice, a reference link or a repeatable form.
+
+Prompt pattern: “If `send_a2ui` is available in this Classic thread, ask this one question as a small form with readable fallback text. Submit only the fields needed to answer it. Otherwise ask in plain text.”
+
+Adaptive Cards have been retired. Rewrite old authoring prompts to call `send_a2ui` with Express source. Old posts keep their ordinary text; their controls cannot be used.
