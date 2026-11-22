@@ -37,6 +37,26 @@ test("a Slider submits a number within the stored range and step grid", () => {
   }
 });
 
+test.each([
+  { flags:'enableDate=true', initial:'2028-02-29', min:'2028-02-01', max:'2028-03-01', edit:'2028-03-01', invalid:['2028-02-30', '2028-01-31', '2028-03-02', '12:30'] },
+  { flags:'enableTime=true', initial:'09:30:00Z', min:'09:00:00', max:'16:00:00', edit:'09:15', invalid:['09:00:60', '08:59', '16:00:00.001', '2028-01-31'] },
+  { flags:'enableDate=true, enableTime=true', initial:'2028-02-29T12:00:00+05:30', min:'2028-02-29T09:00:00+05:30', max:'2028-02-29T18:00:00+05:30', edit:'2028-02-29T12:30', invalid:['2028-02-29T25:00', '2028-02-28T12:30', '2028-02-29', '2028-02-29T12:30+24:00'] },
+])("DateTimeInput validates and submits ISO values for $flags", ({flags, initial, min, max, edit, invalid}) => {
+  const picker = applyA2uiMessages("when", compileA2uiExpress(`
+    $/when = ${JSON.stringify(initial)};
+    $/earliest = ${JSON.stringify(min)};
+    root = Column([DateTimeInput(label="When", ${flags}, min=$/earliest, max=${JSON.stringify(max)}, value=$/when), submit]);
+    submit = Button(Text("Send"), action=Event("send", {when:$/when}));
+  `, "when"))!;
+  expect(buildA2uiAction(picker, "submit", new Map(), timestamp).action.context.when).toBe(initial);
+  const message = buildA2uiAction(picker, "submit", new Map([["/when", edit]]), timestamp);
+  expect(message.action.context.when).toBe(edit);
+  for (const when of [...invalid, 123]) {
+    expect(() => validateA2uiAction(picker, { ...message, action: { ...message.action, context: { when } } })).toThrow();
+  }
+  expect(buildA2uiAction(picker, "submit", new Map([["/when", ""]]), timestamp).action.context.when).toBe("");
+});
+
 test("Classic does not accept authority, options, fixed values or undeclared inputs from the action", () => {
   const message = buildA2uiAction(snapshot, "submit", new Map(), timestamp);
   const action = message.action;

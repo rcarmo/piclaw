@@ -1,6 +1,7 @@
 /** Render the admitted A2UI catalog in Classic's Preact timeline. */
 import { html, useCallback, useRef, useState } from '../vendor/preact-htm.js';
 import { a2uiBindingPath, buildA2uiAction, readA2uiValue, type A2uiActionRequest } from '../../../src/channels/web/a2ui/action.js';
+import { a2uiDateTimeDisplay, a2uiDateTimeType } from '../../../src/channels/web/a2ui/date-time.js';
 import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
 import { A2uiTotpDialog, readTotpPresentation, type TotpPresentation } from './a2ui-totp-dialog.js';
 import { a2uiSliderRange, readA2uiLink, type A2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
@@ -107,6 +108,18 @@ export function A2uiSurface({ block, source, onSubmit }: {
                     ? html`<textarea disabled=${locked} value=${value} placeholder=${placeholder} maxLength="4096" onInput=${onInput}></textarea>`
                     : html`<input type=${item.variant === 'number' ? 'number' : 'text'} disabled=${locked} value=${value}
                         placeholder=${placeholder} maxLength="4096" onInput=${onInput} />`}</label>`;
+            }
+            case 'DateTimeInput': {
+                const type = a2uiDateTimeType(item);
+                if (!type) return null;
+                const value = a2uiDateTimeDisplay(read(item.value), type) ?? '';
+                const min = a2uiDateTimeDisplay(readA2uiValue(snapshot, item.min), type);
+                const max = a2uiDateTimeDisplay(readA2uiValue(snapshot, item.max), type);
+                return html`<label key=${id} class="a2ui-field">${label}
+                    <input type=${type} aria-label=${label || (type === 'datetime-local' ? 'Date and time' : type === 'date' ? 'Date' : 'Time')}
+                        disabled=${locked} min=${min} max=${max} step=${type === 'date' ? undefined : 'any'} value=${value}
+                        onChange=${(event: Event) => edit(path, (event.currentTarget as HTMLInputElement).value)} />
+                </label>`;
             }
             case 'Slider': {
                 const range = a2uiSliderRange(item);

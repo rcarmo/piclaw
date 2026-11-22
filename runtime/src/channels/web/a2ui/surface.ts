@@ -13,6 +13,7 @@ export const CLASSIC_A2UI_PROPERTIES = {
   CheckBox: ["label", "value"],
   ChoicePicker: ["label", "value", "options", "variant"],
   Slider: ["label", "value", "min", "max", "steps"],
+  DateTimeInput: ["label", "value", "enableDate", "enableTime", "min", "max"],
 } as const;
 
 export type A2uiComponent = Record<string, unknown> & {
