@@ -44,8 +44,8 @@
     {
       "path": "runtime/src/channels/web/agent/agent-status.ts",
       "beforeSha256": "c026d4d88df92c0cb9c3ab4c1fe6758e9f08f89b102139085eee1d042b1b449e",
-      "afterSha256": "9232ebe67f9507188937d9861ae743f3795ed629cddefe57d9f87bd34be6a02c",
-      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit."
+      "afterSha256": "b80453f8099b633b5d89510a54896095d29c0c51ae19e0891225dc86767d5be0",
+      "purpose": "SDK optimiser/outbound MCP and manual-selection cutover; retain the historical financial-removal disposition and accounting without new deletion credit. Project the existing last-message timestamp for archived branches so the Classic sidebar can sort these sessions without returning archived replies."
     },
     {
       "path": "runtime/src/channels/web/core/web-channel-contracts.ts",

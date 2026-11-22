@@ -1,3 +1,5 @@
+import { compareSessionActivity } from './session-activity.js';
+
 export interface ComposeSessionSwitcherKeyEventLike {
   isComposing?: boolean;
   ctrlKey?: boolean;
@@ -151,7 +153,7 @@ export function groupSessionPickerChats<T extends Record<string, any>>(
     buckets.get(section)!.push(chat);
   }
   return (["current", "active", "pinned", "tree", "other", "archived"] as SessionPickerSectionKey[])
-    .map(key => ({ key, label: SECTION_LABELS[key], items: buckets.get(key)! }))
+    .map(key => ({ key, label: SECTION_LABELS[key], items: buckets.get(key)!.sort(compareSessionActivity) }))
     .filter(section => section.items.length > 0);
 }
 

@@ -117,6 +117,28 @@ optionalBrowserTest("desktop session picker has stable geometry, one-line header
   } finally { await page.close(); }
 });
 
+optionalBrowserTest('activity refresh reorders a picker group without changing the highlighted session', async () => {
+  const page = await openPicker(1280, 800);
+  try {
+    const pinnedByKeyboard = 'web:root-0:branch:1', moreRecent = 'web:root-1:branch:8';
+    const id = (jid: string) => `compose-session-option-${encodeURIComponent(jid)}`;
+    const options = page.getByRole('option'), list = page.getByRole('listbox');
+    const activity = (second: string) => page.evaluate(detail => window.dispatchEvent(new CustomEvent('fixture-session-activity', { detail })), {
+      [pinnedByKeyboard]: '2026-11-02T00:00:00Z', [moreRecent]: second,
+    });
+    await activity('2026-11-01T00:00:00Z');
+    expect(await options.nth(1).getAttribute('id')).toBe(id(pinnedByKeyboard));
+    await page.keyboard.press('ArrowDown');
+    expect(await list.getAttribute('aria-activedescendant')).toBe(id(pinnedByKeyboard));
+    await activity('2026-11-03T00:00:00Z');
+    await page.waitForFunction(expected => document.querySelectorAll('[role="option"]')[1]?.id === expected, id(moreRecent));
+    expect(await options.nth(2).getAttribute('id')).toBe(id(pinnedByKeyboard));
+    expect(await list.getAttribute('aria-activedescendant')).toBe(id(pinnedByKeyboard));
+    await page.keyboard.press('Enter');
+    expect(await page.locator('#session-picker-action').textContent()).toBe(`switch:${pinnedByKeyboard}`);
+  } finally { await page.close(); }
+});
+
 optionalBrowserTest("tablet picker pages through results and Escape restores trigger focus", async () => {
   const page = await openPicker(820, 700);
   try {

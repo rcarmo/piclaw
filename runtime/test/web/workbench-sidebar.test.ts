@@ -35,6 +35,33 @@ test('sessions pane groups like the compose picker and leaves archived sessions 
   ]);
 });
 
+test('sessions stay in their groups and are sorted by newest activity within each group', () => {
+  const make = (name: string, last_activity_at: string | null, root = `web:${name}`, is_active = false) => ({
+    chat_jid: `web:${name}`, agent_name: name, root_chat_jid: root, last_activity_at, is_active,
+  });
+  const older = '2026-11-01T12:00:00Z', newer = '2026-11-01T09:00:00-05:00';
+  const rows = [
+    make('current', older),
+    make('active-old', older, 'web:active-old', true), make('active-z-new', newer, 'web:active-z-new', true),
+    make('pinned-old', older), make('pinned-z-new', newer),
+    make('tree-old', older, 'web:current'), make('tree-z-new', newer, 'web:current'),
+    make('aaa-unseen', null), make('bbb-invalid', 'not a time'),
+    make('other-z-tied', older), make('other-a-tied', older), make('other-new', newer),
+  ];
+  const snapshot = structuredClone(rows);
+  const pinned = ['web:pinned-old', 'web:pinned-z-new', 'web:active-old'];
+  const sections = () => buildSessionsSidebarSections(rows, 'web:current', pinned)
+    .map(({ key, items }) => [key, items.map(chat => chat.agent_name)]);
+  expect(sections()).toEqual([
+    ['current', ['current']], ['active', ['active-z-new', 'active-old']], ['pinned', ['pinned-z-new', 'pinned-old']],
+    ['tree', ['tree-z-new', 'tree-old']], ['other', ['other-new', 'other-a-tied', 'other-z-tied', 'aaa-unseen', 'bbb-invalid']],
+  ]);
+  expect(selectSessionsPreviewTargets(rows, 'web:current', 1)).toEqual(['web:active-z-new']);
+  expect(rows).toEqual(snapshot);
+  rows.find(chat => chat.agent_name === 'pinned-old')!.last_activity_at = '2026-11-01T15:00:00Z';
+  expect(sections()[2]).toEqual(['pinned', ['pinned-old', 'pinned-z-new']]);
+});
+
 test('sessions pane search uses the picker search document', () => {
   const sections = buildSessionsSidebarSections(chats, 'web:default', [], 'prox');
   expect(sections.flatMap((section) => section.items.map((chat) => chat.chat_jid))).toEqual(['web:proxmox']);
@@ -68,12 +95,14 @@ test('the Explorer view is selected when the workspace starts open', () => {
   expect(resolveInitialWorkbenchView(false)).toBe('sessions');
 });
 
-test('archived sessions are listed separately, newest first, and follow the search', () => {
+test('archived sessions use latest message activity, then archive date for rows without activity', () => {
   const rows = [
     ...chats,
     { chat_jid: 'web:older', agent_name: 'older', archived_at: '2026-10-01T00:00:00Z' },
+    { chat_jid: 'web:archived-first', agent_name: 'first', archived_at: '2026-10-03T00:00:00Z', last_activity_at: '2026-10-02T00:00:00Z' },
+    { chat_jid: 'web:archived-last', agent_name: 'last', archived_at: '2026-10-04T00:00:00Z', last_activity_at: '2026-10-01T00:00:00Z' },
   ];
-  expect(buildArchivedSessions(rows, 'web:default').map((chat) => chat.chat_jid)).toEqual(['web:old', 'web:older']);
+  expect(buildArchivedSessions(rows, 'web:default').map((chat) => chat.chat_jid)).toEqual(['web:archived-first', 'web:archived-last', 'web:old', 'web:older']);
   expect(buildArchivedSessions(rows, 'web:default', 'older').map((chat) => chat.chat_jid)).toEqual(['web:older']);
 });
 

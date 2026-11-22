@@ -33,6 +33,7 @@ import { buildChatWindowUrl } from '../ui/chat-window.js';
 import { matchesKeyboardShortcutAction } from '../ui/keyboard-shortcuts.js';
 import {
   cleanSessionPreviewText,
+  compareSessionActivity,
   formatSessionActivityAge,
   formatSessionActivityStatus,
   isNewTabSessionClick,
@@ -87,18 +88,16 @@ export function readStoredSessionsWidth(): number {
   return clampSessionsWidth(getLocalStorageItem(SESSIONS_WIDTH_STORAGE_KEY) ?? SESSIONS_DEFAULT_WIDTH);
 }
 
-/** Sidebar sections: the same groups as the compose session picker, without archived sessions. */
-/** Archived sessions, newest first, filtered with the same search as the other sections. */
+/** Archived sessions share activity ordering, with archive date as a tie-break. */
 export function buildArchivedSessions(activeChatAgents, currentChatJid, query = '') {
   const archived = resolveSessionPopupChats(activeChatAgents, currentChatJid).filter((chat) => chat?.archived_at);
-  return filterSessionPickerChats(archived, query)
-    .sort((a, b) => String(b.archived_at).localeCompare(String(a.archived_at)));
+  return filterSessionPickerChats(archived, query).sort(compareSessionActivity);
 }
 
+/** Use the picker's groups and order; archived rows have a separate disclosure. */
 export function buildSessionsSidebarSections(activeChatAgents, currentChatJid, pinnedChatJids, query = '') {
   const chats = resolveSessionPopupChats(activeChatAgents, currentChatJid).filter((chat) => !chat?.archived_at);
-  return groupSessionPickerChats(filterSessionPickerChats(chats, query), currentChatJid, pinnedChatJids)
-    .filter((section) => section.key !== 'archived');
+  return groupSessionPickerChats(filterSessionPickerChats(chats, query), currentChatJid, pinnedChatJids);
 }
 
 /** Plain /agent/status for one chat: status, data, draft and thought only. */
@@ -150,6 +149,7 @@ export function resolveSessionRowContext(chat, fetched): { percent: number; labe
 export function selectSessionsPreviewTargets(activeChatAgents, currentChatJid, limit = SESSIONS_PREVIEW_LIMIT): string[] {
   return resolveSessionPopupChats(activeChatAgents, currentChatJid)
     .filter((chat) => chat?.is_active && !chat?.archived_at && chat.chat_jid !== currentChatJid)
+    .sort(compareSessionActivity)
     .map((chat) => chat.chat_jid)
     .slice(0, limit);
 }

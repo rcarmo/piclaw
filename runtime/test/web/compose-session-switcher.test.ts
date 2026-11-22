@@ -106,6 +106,19 @@ test('session picker grouping puts active sessions straight after the current on
   expect(new Set(orderedChatJids).size).toBe(chats.length);
 });
 
+test('session picker sorts by recency within groups, leaving unknown activity last', () => {
+  const ordered = [
+    ...chats,
+    { ...chats[1], chat_jid: 'web:busy-new', last_activity_at: '2026-11-02T00:00:00Z' },
+    { ...chats[3], chat_jid: 'web:other-new', last_activity_at: '2026-11-01T00:00:00Z' },
+    { ...chats[4], chat_jid: 'web:archive-new', archived_at: '2026-08-05T00:00:00Z', last_activity_at: '2026-08-04T00:00:00Z' },
+  ];
+  expect(groupSessionPickerChats(ordered, 'web:root').map(({ key, items }) => [key, items.map(chat => chat.chat_jid)])).toEqual([
+    ['current', ['web:root']], ['active', ['web:busy-new', 'web:root:branch:a']], ['tree', ['web:root:branch:b']],
+    ['other', ['web:other-new', 'web:other']], ['archived', ['web:archive-new', 'web:archived']],
+  ]);
+});
+
 test('session picker navigation supports arrows, home/end, and paging', () => {
   expect(moveSessionPickerIndex(0, 20, 'ArrowDown')).toBe(1);
   expect(moveSessionPickerIndex(0, 20, 'ArrowUp')).toBe(19);
