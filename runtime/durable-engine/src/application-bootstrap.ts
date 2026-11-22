@@ -31,6 +31,7 @@ import { createHostController, type HostControllerOptions } from "./host-control
 import { createHostDurableBindings, createInputHandoffCompletion } from "./host-bindings.js";
 import { prepareHostSchema } from "./host-schema.js";
 import { readApplicationMessagePayload } from "./accepted-payload-recovery.js";
+import { projectA2uiAgentInput, readA2uiRendererDataModel, storeA2uiInputMetadata } from '../../src/channels/web/a2ui/input-metadata.js';
 import { value, effect, sealed } from "./host-effects.js";
 import { hashScheduledLeaseToken } from "../../src/service-effects/current-piclaw/scheduled-run-values.js";
 import type { ScheduledRunLease } from "../../src/service-effects/contracts/scheduled-run-store.js";
@@ -308,7 +309,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
         const scope = scopeFor(source.chatJid);
         if (!operation || !scope) throw Error("Missing recovered operation");
         return { claimed: { source, operation }, branchId: scope.branchId,
-          requestId: binding?.requestId ?? (pendingSideOperation ? source.sourceId : `queued-steer:${source.sourceId}`), content: await content(source.payloadRef, (source.kind === "scheduled_agent" || source.kind === "internal") && binding ? binding : source) };
+          requestId: binding?.requestId ?? (pendingSideOperation ? source.sourceId : `queued-steer:${source.sourceId}`), content: await content(source.payloadRef, binding ?? source) };
       } },
     }, context);
     const activeController = controller;
@@ -355,9 +356,10 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       if (previous && !isNativeMessageInput(previous)) throw Error("Existing host input cannot be resubmitted");
       if (!previous && (source.state!=="pending" || !/^application:pi-durable(?::|$)/.test(source.provenanceRef))) throw Error("Unsubmitted native source required");
       const requestId = `message:${rowId}:${messageId}`;
+      const content = projectA2uiAgentInput(root, { chatJid: chat, sourceId: messageId, conversationId: scope.conversationId }, row.content);
       const input: AcceptedInput = Object.freeze({incarnation:r.incarnation,conversationId:scope.conversationId as ConversationId,
         chatJid:chat,branchId:scope.branchId,operationId:`native-message:${scope.conversationId}:${source.sourceSeq}`,sourceSeq:source.sourceSeq,
-        sourceId:messageId,payloadRef:source.payloadRef,requestId,requestHash:hashCanonicalRequest({type:"input",requestId,content:row.content})});
+        sourceId:messageId,payloadRef:source.payloadRef,requestId,requestHash:hashCanonicalRequest({type:"input",requestId,content})});
       // Priority intervention does not wait for an idle prompt's optional optimiser tool pick.
       if (whenBusy !== "steer") await config.preparePrompt?.(scope.conversationId as ConversationId, row.content);
       assertLive();
@@ -440,8 +442,10 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
     const getInputSourceAdmission = (chat: string, provenanceRef="application:pi-durable"): ReturnType<NonNullable<WebChannelOpts["getInputSourceAdmission"]>> => {
       const current = () => { const binding = routeIndex.get(chat); return binding && lookup(chat, binding.branchId); };
       assert(); if (!current()) throw Error("Unbound application conversation");
-      return ({ message, rowId, database: connection }) => {
-        assert(); if (!current()) throw Error("Unbound application conversation");
+      return ({ message, rowId, database: connection }, renderer) => {
+        assert();
+        const scope = routeIndex.get(chat);
+        if (!scope || !current()) throw Error("Unbound application conversation");
         if (connection !== root || !root.inTransaction) throw Error("Root admission transaction required");
         if (message.chat_jid !== chat) throw Error("Input admission chat mismatch");
         const stored = root.query("SELECT id, chat_jid, is_bot_message FROM messages WHERE rowid=?").get(rowId) as { id: string; chat_jid: string; is_bot_message: number } | null;
@@ -461,6 +465,11 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
         };
         checkInput();
         work.acceptSourceInTransaction(input, connection);
+        if (renderer && chat.startsWith('web:')) {
+          const conversationId = scope.conversationId;
+          const data = readA2uiRendererDataModel(root, chat, conversationId, renderer.editedSurface);
+          storeA2uiInputMetadata(root, { chatJid: chat, sourceId: message.id, conversationId }, data);
+        }
         checkInput();
         assert();
       };

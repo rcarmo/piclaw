@@ -21,7 +21,7 @@ import { createDefaultApplicationRuntime } from '../../runtime/durable-engine/sr
 import { ModelRuntime } from '../../node_modules/@earendil-works/pi-coding-agent/dist/index.js';
 import { createAssistantMessageEventStream } from '../../node_modules/@earendil-works/pi-ai';
 import { buildA2uiAction } from '../../runtime/src/channels/web/a2ui/action.ts';
-import { isA2uiSurfaceBlock } from '../../runtime/src/channels/web/a2ui/surface.ts';
+import { CLASSIC_A2UI_CATALOG, isA2uiSurfaceBlock } from '../../runtime/src/channels/web/a2ui/surface.ts';
 
 const applicationTest = isolatedApplicationTest(import.meta.url);
 
@@ -70,14 +70,28 @@ applicationTest('packed Autoresearch binds the native tool and consumes a later 
   const models=await ModelRuntime.create({credentials,modelsPath:null,modelsStore:{read:async()=>undefined,write:async()=>{},delete:async()=>{}},allowModelNetwork:false,refreshOnCreate:false});
   const results=new Map<string,string>();
   let expectedTool='start_autoresearch';
+  let latestUserInput = '';
+  const syncedForm = {fallback:'Native model sync form',keep_active:true,messages:[{version:'1.0',createSurface:{surfaceId:'draft',
+    catalogId:CLASSIC_A2UI_CATALOG,sendDataModel:true,dataModel:{name:'Initial',other:'Metadata seed'},components:[
+      {id:'root',component:'Column',children:['name','submit']},
+      {id:'name',component:'TextField',label:'Name',value:{'@path':'/name'}},
+      {id:'submit',component:'Button',child:'label',action:{event:{name:'saveName',context:{name:{'@path':'/name'}}}}},
+      {id:'label',component:'Text',text:'Save'},
+    ],
+  }}]};
   type StreamArgs = Parameters<Parameters<typeof models.registerNativeProvider>[0]["streamSimple"]>;
   const run = (physical: StreamArgs[0], transcript: StreamArgs[1]) => {
    const sequence=transcript.messages, from=sequence.findLastIndex(m=>m.role==='user');
    const name=expectedTool;
+   const user = sequence[from];
+   if (user?.role === 'user') latestUserInput = typeof user.content === 'string' ? user.content : user.content.filter(part => part.type === 'text').map(part => part.text).join('\n');
    const tool=sequence.slice(from+1).find(m=>m.role==='toolResult'&&m.toolName===name);
    if(tool) results.set(name,JSON.stringify(tool.content));
-   const body:AssistantMessage["content"]=tool?[{type:'text',text:`Fixture returned ${name}`}]:[{type:'toolCall',id:`fixture-${name}`,name,arguments:name==='start_autoresearch'?{project_dir:project,prompt:'Synthetic trial',max_iterations:2}: name==='stop_autoresearch'?{generate_report:false}:{}}];
-   const reason = tool ? 'stop' : 'toolUse';
+   const stop = tool || name === 'none';
+   const body:AssistantMessage["content"]=stop?[{type:'text',text:`Fixture returned ${name}`}]:[{type:'toolCall',id:`fixture-${name}`,name,
+     arguments:name==='start_autoresearch'?{project_dir:project,prompt:'Synthetic trial',max_iterations:2}:
+       name==='stop_autoresearch'?{generate_report:false}:name==='send_a2ui'?syncedForm:{}}];
+   const reason = stop ? 'stop' : 'toolUse';
    const message:AssistantMessage={role:'assistant',api:physical.api,provider:physical.provider,model:physical.id,timestamp:Date.now(),content:body,stopReason:reason,usage:{input:5,output:2,cacheRead:0,cacheWrite:0,totalTokens:7,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}};
    const out=createAssistantMessageEventStream();out.push({type:'done',reason,message});out.end(message);return out;
   };
@@ -122,10 +136,33 @@ applicationTest('packed Autoresearch binds the native tool and consumes a later 
    await waitFor(()=>results.get('autoresearch_status'),'status tool did not return');
    assert(results.get('autoresearch_status')!.includes('Status: running'));
    await waitFor(()=>db.query('SELECT rowid FROM messages WHERE is_terminal_agent_reply=1 AND thread_id=?').get(status.thread_id),'status turn did not settle');
-   expectedTool='stop_autoresearch'; await issue('Stop experiment');
+   expectedTool='stop_autoresearch'; const stopped=await issue('Stop experiment');
    await waitFor(()=>results.get('stop_autoresearch'),'stop tool did not return');
    assert(results.get('stop_autoresearch')!.includes('stopped'));
    assert(!existsSync(state));
+   const settled = (thread: number) => db.query('SELECT count(*) AS total FROM messages WHERE is_terminal_agent_reply=1 AND thread_id=?').get(thread) as {total:number};
+   await waitFor(() => settled(stopped.thread_id).total || undefined, 'stop turn did not settle');
+   expectedTool='send_a2ui';
+   const form=await issue('Create synced form');
+   const syncPost=await waitFor(() => lookup.get(syncedForm.fallback), 'sync form did not publish');
+   await waitFor(() => settled(form.thread_id).total || undefined, 'sync publication did not settle');
+   const syncBlock=getMessageByRowId(chat,syncPost.rowid)!.data.content_blocks!.find(isA2uiSurfaceBlock)!;
+   assert(syncBlock.surface.sendDataModel);
+   const modelFor = (name:string) => JSON.stringify({a2uiRendererDataModel:{version:'1.0',surfaces:{[syncBlock.surface.surfaceId]:{name,other:'Metadata seed'}}}});
+   expectedTool='none';
+   const plain=await issue('Ordinary renderer message');
+   await waitFor(() => settled(plain.thread_id).total || undefined, 'ordinary turn did not settle');
+   assert.equal(latestUserInput,`Ordinary renderer message\n\nA2UI renderer metadata:\n${modelFor('Initial')}`);
+   const syncedAction={chat_jid:chat,post_id:syncPost.rowid,thread_id:form.thread_id,revision:1,request_id:crypto.randomUUID(),
+     message:buildA2uiAction(syncBlock.surface,'submit',new Map([['/name','Edited']]),new Date().toISOString())};
+   assert.equal((await request('/agent/a2ui-action',syncedAction)).status,201);
+   assert.equal((await request('/agent/a2ui-action',syncedAction)).status,200);
+   await waitFor(() => settled(form.thread_id).total===2 || undefined, 'synced action did not settle');
+   assert.equal(latestUserInput,`Submitted saveName\nname: "Edited"\n\nA2UI renderer metadata:\n${modelFor('Edited')}`);
+   assert(lookup.get('Submitted saveName\nname: "Edited"'));
+   const after=await issue('Read latest model');
+   await waitFor(() => settled(after.thread_id).total || undefined, 'model query did not settle');
+   assert.equal(latestUserInput,`Read latest model\n\nA2UI renderer metadata:\n${modelFor('Edited')}`);
    console.log('Packed Autoresearch starts in the default SDK host; authenticated action starts the synthetic process once after the model turn, with bound status and stop.');
   } finally {await backend?.close();await channel?.stop();await base.queue.shutdown();await pool?.shutdown();await closeDatabase();lock.release();}
 

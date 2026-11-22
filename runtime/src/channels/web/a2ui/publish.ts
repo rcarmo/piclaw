@@ -7,6 +7,7 @@ import { getMessageByRowIdFromDatabase, storeMessageInDatabase } from '../../../
 import { admitSqliteWrite } from '../../../db/sqlite-async-admission.js';
 import { stripInternalTags } from '../../../router.js';
 import { replaceSurfaceBlocks } from './persistence.js';
+import { ownsA2uiModelSync, releaseA2uiModelSync, reserveA2uiModelSync } from './input-metadata.js';
 import { isA2uiSurfaceBlock, type A2uiSurfaceBlock } from './surface.js';
 
 export const a2uiToolParameters = Type.Object({
@@ -23,11 +24,12 @@ export const a2uiToolParameters = Type.Object({
 export async function publishAgentA2ui(options: {
   root: Database;
   chatJid: string;
+  conversationId?: number;
   thread: () => number;
   authorise: () => void;
   signal?: AbortSignal;
 }, params: Static<typeof a2uiToolParameters>) {
-  const { root, chatJid, authorise, signal } = options;
+  const { root, chatJid, conversationId, authorise, signal } = options;
   const assertBinding = captureHostDatabaseBinding(root);
   const check = () => { assertBinding(); authorise(); signal?.throwIfAborted(); };
   check();
@@ -53,6 +55,9 @@ export async function publishAgentA2ui(options: {
   const messages = params.express !== undefined ? compileA2uiExpress(params.express, surfaceId)
     : editing ? params.messages! : bindA2uiDraftId(params.messages!, surfaceId);
   const surface = applyA2uiMessages(surfaceId, messages, prior?.surface.surface, params.messages !== undefined);
+  if (surface?.sendDataModel && (conversationId === undefined || !Number.isSafeInteger(conversationId) || conversationId < 1))
+    throw new Error('Model sync requires an owning agent conversation');
+  const messageId = `a2ui:${surfaceId}`;
   const revision = (prior?.surface.revision ?? 0) + 1;
   const rowId = await admitSqliteWrite(root, () => {
     if (options.thread() !== threadId) throw new Error('Surface thread changed');
@@ -63,16 +68,20 @@ export async function publishAgentA2ui(options: {
     if (prior) {
       const current = lookup(params.post_id!);
       if (!current || JSON.stringify(current.surface) !== JSON.stringify(prior.surface)) throw new Error('Surface has changed');
+      if (current.surface.surface.sendDataModel && !ownsA2uiModelSync(root, chatJid, messageId, conversationId))
+        throw new Error('Model sync belongs to another agent conversation');
       const blocks = current.blocks.map(block => block === current.surface
         ? next ?? { type: "a2ui_surface_removed", revision } : block);
       replaceSurfaceBlocks(root, chatJid, params.post_id!, blocks);
+      if (!next && current.surface.surface.sendDataModel) releaseA2uiModelSync(root, chatJid, messageId);
       return params.post_id!;
     }
     if (!next) throw new Error('Missing new surface');
-    const row = storeMessageInDatabase(root, { id: `a2ui:${surfaceId}`, chat_jid: chatJid, thread_id: threadId,
+    const row = storeMessageInDatabase(root, { id: messageId, chat_jid: chatJid, thread_id: threadId,
       sender: 'assistant', sender_name: getIdentityConfig().assistantName, is_from_me: true, is_bot_message: true,
       timestamp: new Date().toISOString(), content: fallback, content_blocks: [next] });
     if (row <= 0) throw new Error('Could not store surface');
+    if (next.surface.sendDataModel) reserveA2uiModelSync(root, chatJid, messageId, conversationId!);
     return row;
   }, check, signal, undefined, assertBinding);
   return { rowId, surfaceId, revision, deleted: !surface, created: !editing };

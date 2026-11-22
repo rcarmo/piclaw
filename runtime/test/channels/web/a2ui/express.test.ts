@@ -132,7 +132,7 @@ describe("Classic A2UI Express", () => {
     'not even express',
     'root = Image(url="https://example.com/x", fit="invalid")',
     'root = Button(Text("Go"), action=openUrl("javascript:alert(1)"))',
-    'surface("form-1", sendDataModel=true); root = Text("Hello")',
+    'surface("form-1", sendDataModel="yes"); root = Text("Hello")',
     'surface("other"); root = Text("Wrong surface")',
     'root = Text("One"); surface("other"); root = Text("Two")',
     'root = Column([missing])',
@@ -141,6 +141,14 @@ describe("Classic A2UI Express", () => {
     `root = Text("${"x".repeat(32_768)}")`,
   ])("rejects invalid or unsupported authoring: %.60s", (source) => {
     expect(() => applyA2uiMessages("form-1", compileA2uiExpress(source, "form-1"))).toThrow();
+  });
+
+  test('retains Express data-model opt-in when applying wire updates', () => {
+    const surfaceId = 'form-1';
+    const initial = applyA2uiMessages(surfaceId, compileA2uiExpress('surface("form-1", sendDataModel=true); root = Text("Hello")', surfaceId))!;
+    expect(initial.sendDataModel).toBe(true);
+    expect(applyA2uiMessages(surfaceId, [{version:'1.0',updateDataModel:{surfaceId,value:{edited:true}}}], initial))
+      .toMatchObject({sendDataModel:true,dataModel:{edited:true}});
   });
 
   test('preserves canonical accessibility descriptors through component updates and JSON rehydration', () => {

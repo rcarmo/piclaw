@@ -3,6 +3,8 @@ import { expect, test } from 'bun:test';
 import { getDb, getMessageByRowId, initDatabase } from '../../../../src/db.js';
 import { admitWebMessage } from '../../../../src/channels/web/messaging/message-store.js';
 import { handleA2uiAction } from '../../../../src/channels/web/a2ui/admission.js';
+import { publishAgentA2ui } from '../../../../src/channels/web/a2ui/publish.js';
+import { projectA2uiAgentInput, readA2uiRendererDataModel, storeA2uiInputMetadata } from '../../../../src/channels/web/a2ui/input-metadata.js';
 import { applyA2uiMessages, compileA2uiExpress } from '../../../../src/channels/web/a2ui/express.js';
 import { buildA2uiAction, type A2uiActionRequest } from '../../../../src/channels/web/a2ui/action.js';
 import type { A2uiSnapshot } from '../../../../src/channels/web/a2ui/surface.js';
@@ -11,8 +13,8 @@ import type { WebChannelLike } from '../../../../src/channels/web/core/web-chann
 const chat = 'web:a2ui-test';
 const snapshot = applyA2uiMessages('form', compileA2uiExpress('$/value = ""; root = Column([TextField(label="Note",value=$/value), submit]); submit = Button(Text("Save"),action=Event("save", {note:$/value}))', 'form'))!;
 
-async function fixture(options: { keep?: boolean; cancel?: boolean; template?: A2uiSnapshot } = {}) {
-  const surface = options.template ?? (options.cancel ? applyA2uiMessages("form", compileA2uiExpress('root = Button(Text("Cancel"), action=Event("cancel"))', "form"))! : snapshot);
+async function fixture(options: { keep?: boolean; cancel?: boolean; template?: A2uiSnapshot; sync?: boolean } = {}) {
+  let surface = options.template ?? (options.cancel ? applyA2uiMessages("form", compileA2uiExpress('root = Button(Text("Cancel"), action=Event("cancel"))', "form"))! : snapshot);
   initDatabase();
   let dispatch = 0;
   const updates: number[] = [];
@@ -23,12 +25,25 @@ async function fixture(options: { keep?: boolean; cancel?: boolean; template?: A
     agentPool: {},
     broadcastEvent: () => {},
     interactionBroadcaster: { broadcastInteractionUpdated: (row: {id: number}) => updates.push(row.id) },
-    getInputSourceAdmission: () => () => {},
+    getInputSourceAdmission: (chatJid: string): ReturnType<NonNullable<WebChannelLike['getInputSourceAdmission']>> => (stored, renderer) => {
+      if (!options.sync || !renderer) return;
+      const conversationId = 31;
+      storeA2uiInputMetadata(stored.database, {chatJid,sourceId:stored.message.id,conversationId},
+        readA2uiRendererDataModel(stored.database,chatJid,conversationId,renderer.editedSurface));
+    },
     dispatchAcceptedInput: async () => ({ submission_id: ++dispatch, queued: false }),
     admitMessage: admit,
   } as unknown as WebChannelLike;
   const root = (await admit(chat, 'Form thread', false, [], {}))!;
-  const source = (await admit(chat, 'Form fallback', true, [], { threadId: root.id, contentBlocks: [{
+  const source = options.sync ? await (async () => {
+    const sync = await publishAgentA2ui({root:getDb(),chatJid:chat,conversationId:31,thread:() => root.id,authorise:() => {}}, {
+      fallback:'Synced form',keep_active:options.keep,messages:[{version:'1.0',createSurface:{...surface,sendDataModel:true,
+        dataModel:{...surface.dataModel,onlyInModel:'Full model'}}}],
+    });
+    const post = getMessageByRowId(chat,sync.rowId)!;
+    surface = (post.data!.content_blocks![0] as {surface:A2uiSnapshot}).surface;
+    return post;
+  })() : (await admit(chat, 'Form fallback', true, [], { threadId: root.id, contentBlocks: [{
     type: 'a2ui_surface', revision: 1, state: 'active', fallback_text: 'Form fallback', owner: 'agent', surface, ...(options.keep ? {submit_behavior:'keep_active'} : {}),
   }] }))!;
   const instance_path = options.template ? '/1' : undefined;
@@ -50,6 +65,26 @@ test('a stored agent surface submits once to its own source thread even on concu
   expect(accepted[0]).toMatchObject({ content: expect.stringContaining('hello'), thread_id: f.payload.thread_id });
   expect(f.updates).toEqual([f.payload.post_id]);
   expect((await f.send({ ...f.payload, request_id: crypto.randomUUID() })).status).toBe(409);
+});
+
+test('a synced submission preserves the full updated model only in the owning agent input', async () => {
+  const f = await fixture({sync:true});
+  const replies = await Promise.all([f.send(), f.send()]);
+  expect(replies.map(response => response.status).sort()).toEqual([200,201]);
+  expect(f.dispatch()).toBe(1);
+  const stored = getMessageByRowId(chat,f.payload.post_id)!;
+  const block = stored.data?.content_blocks?.[0];
+  expect(block).toMatchObject({state:'completed',revision:2,surface:{dataModel:{value:'hello',onlyInModel:'Full model'}}});
+  const {row_id: rowId} = (block as {last_submission:{row_id:number}}).last_submission;
+  const source = getDb().query('SELECT id,content,content_blocks FROM messages WHERE rowid=?').get(rowId) as
+    {id:string;content:string;content_blocks:string | null};
+  expect(source.content).toBe('Submitted save\nnote: "hello"');
+  expect(source.content_blocks).toBeNull();
+  const recipient = {chatJid:chat,sourceId:source.id,conversationId:31};
+  const metadata = {a2uiRendererDataModel:{version:'1.0',surfaces:{[f.payload.message.action.surfaceId]:{value:'hello',onlyInModel:'Full model'}}}};
+  expect(projectA2uiAgentInput(getDb(),recipient,source.content)).toContain(JSON.stringify(metadata));
+  expect(projectA2uiAgentInput(getDb(),{...recipient,conversationId:32},source.content)).toBe(source.content);
+  expect(readA2uiRendererDataModel(getDb(),chat,31).surfaces).toEqual({});
 });
 
 test('repeated buttons are admitted from a real instance and cannot share a retry identity', async () => {

@@ -7,6 +7,7 @@ import {
   type AgentToRendererMessage,
 } from "@a2ui/agent";
 import { basicCatalog } from "@a2ui/web_core/catalogs/basic/v1";
+import { DataModel } from '@a2ui/web_core/state';
 import { CLASSIC_A2UI_FUNCTIONS, isClassicValueFunction } from "./functions.js";
 import { absoluteA2uiPointer, scopedA2uiPointer } from "./data-path.js";
 import { a2uiChildReferences, projectA2uiTemplates, readA2uiTemplate } from "./templates.js";
@@ -229,7 +230,7 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
     if (operation === "createSurface") {
       requireClassic(!exists && index === 0 && (body.catalogId === undefined || body.catalogId === CLASSIC_A2UI_CATALOG)
         && allowedKeys(body, ["surfaceId", "catalogId", "components", "dataModel", "sendDataModel", "metadata"])
-        && (body.sendDataModel === undefined || body.sendDataModel === false), "unsupported surface creation");
+        && (body.sendDataModel === undefined || typeof body.sendDataModel === 'boolean'), "unsupported surface creation");
       checkMetadata(body.metadata);
       if (body.components !== undefined) checkComponents(body.components);
       exists = true;
@@ -255,6 +256,7 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
     surfaceId,
     ...(result.defaultCatalog ? { catalogId: CLASSIC_A2UI_CATALOG } : {}),
     ...(progressive ? { progressive: true } : {}),
+    ...(result.sendDataModel ? { sendDataModel: true } : {}),
     ...(result.metadata === undefined ? {} : { metadata: result.metadata }),
     components: Array.from(result.componentsModel.values, ({ id, type, properties, metadata }) => {
       const { accessibility, checks, ...rest } = properties;
@@ -266,6 +268,19 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
   };
   verifySnapshot(snapshot);
   return snapshot;
+}
+
+/** Apply already validated control edits; use the same pointer and size policy as wire updates. */
+export function applyA2uiControlEdits(snapshot: A2uiSnapshot, edits: ReadonlyMap<string, unknown>): A2uiSnapshot {
+  if (!edits.size) return snapshot;
+  const model = new DataModel(structuredClone(snapshot.dataModel));
+  for (const [path, value] of edits) {
+    requireClassic(absoluteA2uiPointer(path), 'invalid control binding');
+    model.set(path, value, true);
+  }
+  const updated: A2uiSnapshot = { ...snapshot, dataModel: JSON.parse(JSON.stringify(model.get('/'))) };
+  verifySnapshot(updated);
+  return updated;
 }
 
 function verifySnapshot(snapshot: A2uiSnapshot): void {

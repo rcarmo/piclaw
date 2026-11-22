@@ -30,7 +30,7 @@ export function createHostA2uiTool(options: {
         authority.assertCurrent();
         runtime.assertCapturedSourceCurrent(captured.inputs);
       };
-      const result = await publishAgentA2ui({ root: options.root, chatJid, signal: context.abortSignal, authorise: check,
+      const result = await publishAgentA2ui({ root: options.root, chatJid, conversationId: api.conversationId, signal: context.abortSignal, authorise: check,
         thread: () => {
           const thread = resolveAcceptedMessageThread(options.root, primary);
           if (!thread) throw new Error('Foreground web thread required');

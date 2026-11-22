@@ -2,6 +2,7 @@ import '../../../helpers.ts';
 import { expect, test } from 'bun:test';
 import { getDb, getMessageByRowId, initDatabase, storeMessage } from '../../../../src/db.js';
 import { publishAgentA2ui } from '../../../../src/channels/web/a2ui/publish.js';
+import { readA2uiRendererDataModel } from '../../../../src/channels/web/a2ui/input-metadata.js';
 import { sanitizeModelPostedContentBlocks, sanitizePublicInboundContentBlocks } from '../../../../src/channels/web/messaging/content-block-safety.js';
 
 test('publishes and edits only an agent-owned surface in its accepted chat/thread', async () => {
@@ -97,6 +98,29 @@ test('resolves only explicit known catalogues on a surface with no default', asy
   const block = getMessageByRowId(chatJid,rowId)?.data?.content_blocks?.[0];
   expect(block).toMatchObject({revision:2,surface:{components:[{...component,'@catalogId':basic,text:'Updated text'}]}});
   expect(block).not.toHaveProperty('surface.catalogId');
+});
+
+test('wire model sync requires an exact owning conversation and stops on deletion', async () => {
+  initDatabase();
+  const chatJid = 'web:model-sync';
+  const root = getDb();
+  const threadId = storeMessage({id:'sync-thread',chat_jid:chatJid,sender:'user',content:'Show a synced form',timestamp:new Date().toISOString(),is_from_me:false});
+  const scope = { root, chatJid, conversationId:23, authorise:() => {}, thread:() => threadId };
+  const draft = (sendDataModel: boolean) => ({fallback:'Form',messages:[{version:'1.0',createSurface:{surfaceId:'draft',
+    sendDataModel,dataModel:{name:'First'},catalogId:'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json'}}]});
+  await expect(publishAgentA2ui({...scope,conversationId:undefined},draft(true))).rejects.toThrow();
+  await publishAgentA2ui(scope,draft(false));
+  const synced = await publishAgentA2ui(scope,draft(true));
+  const read = (chat = chatJid, recipient = 23) => readA2uiRendererDataModel(root,chat,recipient);
+  expect(read()).toEqual({version:'1.0',surfaces:{[synced.surfaceId]:{name:'First'}}});
+  expect(read(chatJid,24).surfaces).toEqual({});
+  expect(read('web:other',23).surfaces).toEqual({});
+  const update = {post_id:synced.rowId,revision:1,messages:[{version:'1.0',updateDataModel:{surfaceId:synced.surfaceId,path:'/name',value:'Second'}}]};
+  await expect(publishAgentA2ui({...scope,conversationId:24},update)).rejects.toThrow();
+  await publishAgentA2ui(scope,update);
+  expect(read().surfaces).toEqual({[synced.surfaceId]:{name:'Second'}});
+  await publishAgentA2ui(scope,{post_id:synced.rowId,revision:2,messages:[{version:'1.0',deleteSurface:{surfaceId:synced.surfaceId}}]});
+  expect(read().surfaces).toEqual({});
 });
 
 test('generic content-block APIs cannot install host or agent surface authority', () => {

@@ -48,6 +48,7 @@ export interface A2uiSnapshot {
   components: A2uiComponent[];
   dataModel: Record<string, unknown>;
   metadata?: A2uiMetadata;
+  sendDataModel?: true;
   /** Host-owned flag for raw wire publication, not an A2UI message field. */
   progressive?: true;
 }

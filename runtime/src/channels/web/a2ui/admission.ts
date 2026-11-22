@@ -10,7 +10,8 @@ import { captureWebRequestAuthority } from '../auth/auth-gateway.js';
 import type { WebChannelLike } from '../core/web-channel-contracts.js';
 import { handleAgentMessage } from '../handlers/agent.js';
 import { bindInputRequestAuthority, captureInputTarget, releaseInputRequestAuthority, type ValidateInputAuthority } from '../messaging/input-request-authority.js';
-import { validateA2uiAction } from './action.js';
+import { validateA2uiActionWithEdits, type A2uiAction } from './action.js';
+import { releaseA2uiModelSync } from './input-metadata.js';
 import { handleTotpSurfaceAction } from './totp.js';
 import { recoveryPrompt } from './recovery.js';
 import { invokeAddonA2ui } from './addon.js';
@@ -82,8 +83,8 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
   const block = sourceBlock(source);
   if (!isA2uiSurfaceBlock(block)) return source.data?.content_blocks?.some(isA2uiSurfaceBlock) ? changed() : json({ error: 'Surface not found.' }, 404);
   if (block.owner !== 'agent' && block.owner !== 'recovery' && (block.state !== 'active' || block.revision !== revision)) return changed();
-  let action: ReturnType<typeof validateA2uiAction>;
-  try { action = validateA2uiAction(block.surface, message, instancePath); }
+  let action: A2uiAction, edits: ReadonlyMap<string, unknown>;
+  try { ({ action, edits } = validateA2uiActionWithEdits(block.surface, message, instancePath)); }
   catch { return json({ error: 'Invalid surface action.' }, 400); }
   if (block.owner === 'login') {
     if (code !== undefined) return json({ error: 'Unexpected private authentication input.' }, 400);
@@ -160,6 +161,13 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
   if (duplicate(block)) return accepted();
   if (block.state !== 'active' || block.revision !== revision) return changed();
 
+  let editedSurface: typeof block.surface | undefined;
+  if (block.owner === 'agent' && block.surface.sendDataModel && action.name !== 'cancel' && edits.size) {
+    try {
+      const { applyA2uiControlEdits } = await import('./express.js');
+      editedSurface = applyA2uiControlEdits(block.surface, edits);
+    } catch { return json({ error: 'Invalid surface model update.' }, 400); }
+  }
   const settle = (database: Database, rowId?: number) => {
     const current = readSource();
     const latest = sourceBlock(current);
@@ -168,12 +176,13 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
       || (root.data?.thread_id != null && root.data.thread_id !== threadId)
       || !isA2uiSurfaceBlock(latest) || latest.owner !== block.owner || (recovery && current.data?.is_terminal_agent_reply !== true) || latest.state !== 'active' || latest.revision !== revision
       || JSON.stringify(latest.surface) !== JSON.stringify(block.surface)) throw new Error('Surface changed before admission');
-    const next = { ...latest, revision: revision + 1,
+    const next = { ...latest, surface: editedSurface ?? latest.surface, revision: revision + 1,
       state: rowId === undefined ? 'cancelled' : latest.submit_behavior === 'keep_active' ? 'active' : 'completed',
       last_submission: { request_id: requestId, revision, digest, ...(rowId !== undefined ? { row_id: rowId } : {}) } };
     const blocks = current.data?.content_blocks?.map(item => item === latest ? next : item);
     // Write only structured content; never rewrite the source's clamped display text or its media.
     replaceSurfaceBlocks(database, chatJid, postId, blocks!);
+    if (next.surface.sendDataModel && next.state !== 'active') releaseA2uiModelSync(database, chatJid, `a2ui:${surfaceId}`);
   };
   if (block.owner === 'agent' && action.name === 'cancel') {
     if (Object.keys(action.context).length) return json({ error: 'Cancel must not submit form values.' }, 400);
@@ -197,6 +206,7 @@ export async function handleA2uiAction(channel: WebChannelLike, req: Request): P
     response = await handleAgentMessage(channel, forward, pathname, chatJid, 'default', {
       requireReplyThread: true,
       authorise: () => {},
+      editedA2uiSurface: editedSurface,
       onAccepted: ({ database, rowId }) => settle(database, rowId),
     });
   } finally { releaseInputRequestAuthority(forward); }

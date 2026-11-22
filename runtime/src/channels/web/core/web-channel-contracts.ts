@@ -20,6 +20,7 @@ import type { WebauthnAuthContext } from "../auth/webauthn-auth.js";
 import type { WebauthnEnrolPageContext } from "../auth/webauthn-enrol-page.js";
 import type { getAddonApiHealthSnapshot } from "../../../addons/addon-api-health.js";
 import type { StoreWebMessageOptions } from "../messaging/message-store.js";
+import type { A2uiRendererInput } from '../a2ui/input-metadata.js';
 
 export interface TokenUsageCounterSummary {
   input_tokens: number;
@@ -131,7 +132,8 @@ export interface WebChannelLike
   /** Read-only compatibility check from the active native source policy. */
   inspectAddonInstall?(name: string, version?: string, directory?: string): { supportedVersion: string; problem?: string } | undefined;
   /** Trusted SQL-only source acceptance; never selected from request fields. */
-  getInputSourceAdmission?(chatJid: string): StoreWebMessageOptions["acceptSource"];
+  getInputSourceAdmission?(chatJid: string): ((stored: Parameters<NonNullable<StoreWebMessageOptions['acceptSource']>>[0],
+    renderer?: A2uiRendererInput) => void) | undefined;
   /** Reconcile existing native sources only; never scan/replay historical chat rows. */
   resumeNativeInputs?(chatJid?: string): void;
   handlePlanRequest?(request: Request, chatJid: string, assertCurrent: () => void): Promise<Response>;

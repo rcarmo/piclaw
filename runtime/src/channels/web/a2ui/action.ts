@@ -125,10 +125,14 @@ export function buildA2uiAction(source: A2uiSnapshot, sourceComponentId: string,
 
 /** Re-resolve authority and field constraints from the stored descriptor, not browser declarations. */
 export function validateA2uiAction(source: A2uiSnapshot, payload: unknown, instancePath?: string): A2uiAction {
+  return validateA2uiActionWithEdits(source, payload, instancePath).action;
+}
+
+export function validateA2uiActionWithEdits(source: A2uiSnapshot, payload: unknown, instancePath?: string) {
   return validateProjectedA2uiAction(projectA2uiTemplates(source), payload, instancePath);
 }
 
-function validateProjectedA2uiAction(projection: Projection, payload: unknown, instancePath?: string): A2uiAction {
+function validateProjectedA2uiAction(projection: Projection, payload: unknown, instancePath?: string): { action: A2uiAction; edits: ReadonlyMap<string, unknown> } {
   const { snapshot } = projection;
   if (!record(payload) || payload.version !== "1.0" || Object.keys(payload).length !== 2 || !record(payload.action)) {
     throw new Error("Invalid surface action");
@@ -166,8 +170,10 @@ function validateProjectedA2uiAction(projection: Projection, payload: unknown, i
   }
   const userMessage = resolveUserMessage(snapshot, event.userMessage, boundValues, instancePath, event.scope);
   if (userMessage !== action.userMessage) throw new Error('Invalid action description');
-  return { surfaceId: snapshot.surfaceId, name: event.name, sourceComponentId: action.sourceComponentId, timestamp: action.timestamp,
-    ...(userMessage === undefined ? {} : {userMessage}), context: Object.fromEntries(Object.keys(event.context).map((key) => [key, (action.context as Record<string, ActionValue>)[key]])) };
+  return { edits: boundValues, action: {
+    surfaceId: snapshot.surfaceId, name: event.name, sourceComponentId: action.sourceComponentId, timestamp: action.timestamp,
+    ...(userMessage === undefined ? {} : {userMessage}), context: Object.fromEntries(Object.keys(event.context).map((key) => [key, (action.context as Record<string, ActionValue>)[key]])),
+  } };
 }
 
 /** Piclaw transport metadata is not part of the A2UI protocol message. */

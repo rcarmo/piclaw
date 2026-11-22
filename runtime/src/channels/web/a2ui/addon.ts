@@ -63,7 +63,7 @@ async function publishBoundAddonA2ui(input: AddonA2uiInput, scope: PublicationSc
   const id = crypto.randomUUID();
   const { compileA2uiExpress, applyA2uiMessages } = await import('./express.js');
   const surface = applyA2uiMessages(id, compileA2uiExpress(express, id));
-  if (!surface) throw Error('Expected a new surface');
+  if (!surface || surface.sendDataModel) throw Error('Expected a new add-on surface without agent model sync');
   for (const item of surface.components) {
     if (item.component !== 'Button' || readA2uiLinkTarget(item.action) !== undefined) continue;
     const name = (item.action as {event:{name:string}}).event.name;
