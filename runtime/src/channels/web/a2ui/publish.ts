@@ -84,7 +84,8 @@ export async function publishAgentA2ui(options: {
       if (!next && current.surface.surface.sendDataModel) releaseA2uiModelSync(root, chatJid, messageId);
       return params.post_id!;
     }
-    if (!next) throw new Error('Missing new surface');
+    // A freshly created surface deleted in the same batch never reaches the timeline.
+    if (!next) return null;
     const row = storeMessageInDatabase(root, { id: messageId, chat_jid: chatJid, thread_id: threadId,
       sender: 'assistant', sender_name: getIdentityConfig().assistantName, is_from_me: true, is_bot_message: true,
       timestamp: new Date().toISOString(), content: fallback, content_blocks: [next] });
@@ -92,5 +93,5 @@ export async function publishAgentA2ui(options: {
     if (conversationId !== undefined) bindA2uiSurfaceOwner(root, chatJid, messageId, conversationId, next.surface.sendDataModel === true);
     return row;
   }, check, signal, undefined, assertBinding);
-  return { rowId, surfaceId, revision, deleted: !surface, created: !editing };
+  return { rowId, surfaceId, revision, deleted: !surface, created: rowId !== null && !editing };
 }

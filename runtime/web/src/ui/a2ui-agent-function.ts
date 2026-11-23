@@ -1,5 +1,5 @@
 import { AgentFunctionResponseMessageSchema, type ErrorMessage } from '@a2ui/web_core/v1_0';
-import { readClassicFunctionCall } from '../../../src/channels/web/a2ui/function-call.js';
+import { a2uiLiteralKey, readClassicFunctionCall } from '../../../src/channels/web/a2ui/function-call.js';
 import { A2uiExpressionFailure, A2UI_LOCAL_EXPRESSION_ERROR, a2uiBindingPath, evaluateA2uiValue, evaluateClassicLocalFunction, isClassicValueFunction } from '../../../src/channels/web/a2ui/functions.js';
 import { A2UI_RPC_RECEIPT_TTL_MS, a2uiRpcArgumentKey, boundedRpcJson, MAX_RPC_VALUE } from '../../../src/channels/web/a2ui/rpc-json.js';
 import type { A2uiSnapshot } from '../../../src/channels/web/a2ui/surface.js';
@@ -69,7 +69,9 @@ export async function evaluateA2uiFunction(value: unknown, context: A2uiFunction
         if (call) {
             const catalogId=call.catalogId ?? snapshot.catalogId;
             if (call.name==='openUrl' || (call.name!=='@index' && !catalogId)) throw Error('The function has no available catalogue.');
-            const args=await resolve(call.args ?? {},depth+1) as Record<string,unknown>;
+            const entries: [string,unknown][]=[];
+            for (const [key,item] of Object.entries(call.args ?? {})) entries.push([key,await resolve(item,depth+1)]);
+            const args=Object.fromEntries(entries);
             if (isClassicValueFunction(call.name)) {
                 const result=evaluateClassicLocalFunction(call.name,args,instance.instancePath,read);
                 if (result===undefined) throw Error('The renderer could not evaluate the function.');
@@ -85,6 +87,7 @@ export async function evaluateA2uiFunction(value: unknown, context: A2uiFunction
             memo?.set(fingerprint,pending);
             return pending;
         }
+        if (record(input) && (Object.hasOwn(input,'@call') || Object.hasOwn(input,'@path'))) throw Error('Invalid A2UI expression');
         if (Array.isArray(input)) {
             const items: unknown[]=[];
             for (const item of input) items.push(await resolve(item,depth+1));
@@ -92,7 +95,7 @@ export async function evaluateA2uiFunction(value: unknown, context: A2uiFunction
         }
         if (record(input)) {
             const entries: [string,unknown][]=[];
-            for (const [key,item] of Object.entries(input)) entries.push([key,await resolve(item,depth+1)]);
+            for (const [key,item] of Object.entries(input)) entries.push([a2uiLiteralKey(key),await resolve(item,depth+1)]);
             return Object.fromEntries(entries);
         }
         return input;

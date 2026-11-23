@@ -36,6 +36,7 @@ for (const engine of [chromium,webkit]) {
         const catalog = {id:${JSON.stringify(catalogue)},protocolVersion:'1.0',functions:{
           inspectLabel:{allowedCallers:'rendererOrAgent',parseArgs:parse(z.object({label:z.string().nullish()}).strict()),
             execute:({label}) => label ?? 'empty root'},
+          inspectData:{allowedCallers:'rendererOrAgent',parseArgs:parse(z.object({data:z.record(z.string(),z.string())}).strict()),execute:({data})=>data},
           invalidValue:{allowedCallers:'agentOnly',parseArgs:parse(z.object({}).strict()),execute:() => new Map()},
         }};
         const chat = ${JSON.stringify(chatJid)};
@@ -87,6 +88,7 @@ for (const engine of [chromium,webkit]) {
           const packet:RendererRpcPacket={message:{version:'1.0',callRendererFunction:{functionCallId:mode,
             ...(hasSurface ? {surfaceId} : {}),callFunction:mode==='blocked'
               ? {'@call':'openUrl',catalogId:CLASSIC_A2UI_CATALOG,args:{url:'https://example.invalid/forbidden'}}
+              : mode==='literal-args' ? {'@call':'inspectData',catalogId:catalogue,args:{data:{'@@call':'literal','@@type':'custom'}}}
               : mode==='illegal-result' ? {'@call':'invalidValue',catalogId:catalogue}
               : {'@call':'inspectLabel',catalogId:catalogue,args:{label:mode==='computed'
                 ? {'@call':'formatString',args:{value:'Current: ${/title}'}}
@@ -120,6 +122,7 @@ for (const engine of [chromium,webkit]) {
       expect(await call('bound')).toEqual({version:'1.0',rendererFunctionResponse:{functionCallId:'bound',value:'Browser draft'}});
       expect(await call('computed')).toEqual({version:'1.0',rendererFunctionResponse:{functionCallId:'computed',value:'Current: Browser draft'}});
       expect(transmittedLocalDraft).toBe(false);
+      expect(await call('literal-args')).toEqual({version:'1.0',rendererFunctionResponse:{functionCallId:'literal-args',value:{'@call':'literal','@type':'custom'}}});
       expect(await call('unbound')).toEqual({version:'1.0',rendererFunctionResponse:{functionCallId:'unbound',value:'empty root'}});
       for(const denied of ['stale','blocked','bad-arg']) expect(await call(denied)).toMatchObject({version:'1.0',
         rendererFunctionResponse:{functionCallId:denied,error:{code:'INVALID_FUNCTION_CALL'}}});

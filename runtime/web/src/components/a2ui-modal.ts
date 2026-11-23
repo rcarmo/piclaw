@@ -1,9 +1,10 @@
 import { html, useLayoutEffect, useRef, useState } from '../vendor/preact-htm.js';
 import type { A2uiAria } from './a2ui-accessibility.js';
 
-export function A2uiModal({ label, aria, buttonTrigger, renderTrigger, renderContent }: {
+export function A2uiModal({ label, aria, hidden, buttonTrigger, renderTrigger, renderContent }: {
     label: string;
     aria: A2uiAria;
+    hidden: boolean;
     buttonTrigger: boolean;
     renderTrigger: (open: (event: Event) => void) => unknown;
     renderContent: () => unknown;
@@ -17,23 +18,27 @@ export function A2uiModal({ label, aria, buttonTrigger, renderTrigger, renderCon
         setOpen(true);
     }
     function dismiss() { setOpen(false); }
+    const visible=open && !hidden;
     useLayoutEffect(() => {
-        if (!open) return;
+        if (hidden && open) dismiss();
+    },[hidden,open]);
+    useLayoutEffect(() => {
+        if (!visible) return;
         const element = dialog.current!;
         element.showModal();
         return () => {
             if (element.open) element.close();
             if (trigger.current?.isConnected) trigger.current.focus({ preventScroll: true });
         };
-    }, [open]);
-    return html`<div class="a2ui-modal" aria-hidden=${aria['aria-hidden']}>
+    }, [visible]);
+    return html`<div class="a2ui-modal" inert=${aria.inert} aria-hidden=${aria['aria-hidden']}>
         ${buttonTrigger ? renderTrigger(show) : html`<div role="button" tabIndex=${0} aria-haspopup="dialog" class="a2ui-modal-trigger"
             onClick=${show} onKeyDown=${(event: KeyboardEvent) => {
                 if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
                 event.preventDefault();
                 show(event);
             }}>${renderTrigger(show)}</div>`}
-        ${open && html`<dialog ref=${dialog} class="a2ui-surface a2ui-modal-dialog" data-no-session-dashboard-shortcut=""
+        ${visible && html`<dialog ref=${dialog} class="a2ui-surface a2ui-modal-dialog" data-no-session-dashboard-shortcut=""
             aria-label=${label} ...${aria} onCancel=${(event: Event) => { event.preventDefault(); dismiss(); }}
             onClick=${(event: MouseEvent) => {
                 if (event.target !== dialog.current) return;

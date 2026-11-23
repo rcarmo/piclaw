@@ -65,6 +65,7 @@ for (const engine of [chromium, webkit]) {
     const rpcRequests: {chat_jid:string;post_id:number;thread_id:number;revision:number;evaluation_site?:string;message:CallAgentFunctionMessage}[] = [];
     const reports: unknown[] = [];
     const delayedRpc = Promise.withResolvers<void>();
+    const videoFixture = Promise.withResolvers<void>();
     const displayRpc = Promise.withResolvers<void>();
     const audioOrigin = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(req) {
       audioRequests.push(req.headers.get('cookie'));
@@ -135,6 +136,8 @@ for (const engine of [chromium, webkit]) {
           if (callFunction['@call']==='broken') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId:'wrong',value:'cannot be accepted'}});
           return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,value:null}});
         }
+        if (pathname === '/media/501' || pathname === '/media/502') return new Response(null,{status:404});
+        if (pathname === '/media/43') { await videoFixture.promise; return new Response(null,{status:404}); }
         if (pathname === '/media/42') return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="green"/></svg>', {headers:{'Content-Type':'image/svg+xml'}});
         if (scripts.has(pathname.slice(1))) return new Response(Bun.file(join(scratch, pathname.slice(1))));
         if (pathname === '/marked.js') return new Response(Bun.file(join(web, 'static/common/js/marked.min.js')), {headers:{'Content-Type':'text/javascript'}});
@@ -213,6 +216,8 @@ for (const engine of [chromium, webkit]) {
       const video = page.locator('.a2ui-surface video');
       expect(await video.getAttribute('poster')).toBe('/media/42');
       expect(await video.evaluate(el => (el as HTMLVideoElement).controls && !(el as HTMLVideoElement).autoplay)).toBe(true);
+      videoFixture.resolve();
+      await page.getByText('Video unavailable',{exact:true}).waitFor();
       await page.context().addCookies([{ name: 'media_fixture', value: 'synthetic', url: audioOrigin.url.origin }]);
       await page.getByRole('button', { name: 'Load external audio' }).click();
       const audio = page.locator('audio[aria-label="Fixture recording"]');
@@ -431,7 +436,7 @@ for (const engine of [chromium, webkit]) {
         {id:'rows',component:'List',children:{componentId:'row',path:'/rows'}},
         {id:'row',component:'Row',children:['field','call']},
         {id:'field',component:'TextField',label:'Item',value:{'@path':'name'}},
-        {id:'call',component:'Button',child:'callLabel',action:{functionCall:{'@call':'verifyItem',args:{label:{'@path':'name'},index:{'@call':'@index'}}}}},
+        {id:'call',component:'Button',child:'callLabel',action:{functionCall:{'@call':'verifyItem',args:{label:{'@path':'name'},index:{'@call':'@index'},payload:{'@@type':'row','@@call':'literal'}}}}},
         {id:'callLabel',component:'Text',text:'Verify item'},
         {id:'invalid',component:'Button',child:'invalidLabel',action:{functionCall:{'@call':'broken'}}},
         {id:'invalidLabel',component:'Text',text:'Try invalid response'},
@@ -453,7 +458,7 @@ for (const engine of [chromium, webkit]) {
       await page.locator('.a2ui-surface[aria-busy="true"]').waitFor({state:'detached'});
       expect(rpcRequests).toHaveLength(2);
       for (const request of rpcRequests) expect(request).toMatchObject({post_id:19,thread_id:3,revision:12,chat_jid:'web:test',message:{version:'1.0',callAgentFunction:{surfaceId:rpcId,
-        callFunction:{'@call':'verifyItem',catalogId:basicCatalogue,args:{label:'Second draft',index:1}},
+        callFunction:{'@call':'verifyItem',catalogId:basicCatalogue,args:{label:'Second draft',index:1,payload:{'@type':'row','@call':'literal'}}},
       }}});
       expect(rpcRequests[1].message.callAgentFunction.functionCallId).not.toBe(rpcRequests[0].message.callAgentFunction.functionCallId);
       await panel.getByRole('button',{name:'Try invalid response'}).click();
@@ -655,6 +660,32 @@ for (const engine of [chromium, webkit]) {
       await page.evaluate(item=>(window as any).draw(item),{...block,owner:'agent',revision:20,surface:icon});
       expect(await panel.getByRole('img',{name:'Authored shape'}).locator('path').getAttribute('d')).toBe('M1 1 L10 10');
       expect(await panel.getByRole('img',{name:'Inert model shape'}).count()).toBe(0);
+      const hiddenId='hidden-keyboard';
+      const hidden=applyA2uiMessages(hiddenId,[{version:'1.0',createSurface:{surfaceId:hiddenId,catalogId:basicCatalogue,
+        dataModel:{show:false,toggle:false,name:''},components:[
+          {id:'root',component:'Column',children:['start','group','direct','next','image','audio']},
+          {id:'start',component:'CheckBox',label:'Start here',value:{'@path':'/toggle'}},
+          {id:'group',component:'Column',children:['field'],'@accessibility':{hidden:{'@call':'not',args:{value:{'@path':'/show'}}}}},
+          {id:'field',component:'TextField',label:'Hidden field',value:{'@path':'/name'}},
+          {id:'direct',component:'CheckBox',label:'Hidden checkbox',value:{'@path':'/toggle'},'@accessibility':{hidden:true}},
+          {id:'next',component:'CheckBox',label:'Visible next',value:{'@path':'/show'}},
+          {id:'image',component:'Image',url:'/media/501',description:'Missing image'},
+          {id:'audio',component:'AudioPlayer',url:'/media/502',description:'Missing recording'},
+        ],
+      }}],undefined,true)!;
+      await page.evaluate(item=>(window as any).draw(item),{...block,owner:'agent',revision:22,surface:hidden});
+      await panel.getByRole('checkbox',{name:'Start here'}).focus();
+      await page.keyboard.press('Tab');
+      expect(await page.evaluate(()=>document.activeElement?.closest('label')?.textContent?.trim())).toBe('Visible next');
+      await panel.getByRole('checkbox',{name:'Visible next'}).check();
+      await panel.getByRole('textbox',{name:'Hidden field'}).focus();
+      await page.keyboard.press('Tab');
+      expect(await page.evaluate(()=>document.activeElement?.closest('label')?.textContent?.trim())).toBe('Visible next');
+      await panel.getByText('Image unavailable: Missing image',{exact:true}).waitFor();
+      await panel.getByText('Audio unavailable: Missing recording',{exact:true}).waitFor();
+      expect(await panel.getByRole('checkbox',{name:'Visible next'}).isVisible()).toBe(true);
+      await panel.getByRole('button',{name:'Retry image'}).click();
+      await panel.getByText('Image unavailable: Missing image',{exact:true}).waitFor();
       const legacyRequests: string[] = [];
       page.on('request', request => { if (request.url().includes('adaptivecards')) legacyRequests.push(request.url()); });
       await page.evaluate(() => (window as any).draw({
@@ -670,7 +701,7 @@ for (const engine of [chromium, webkit]) {
       delayedRpc.resolve();
       displayRpc.resolve();
       await browser?.close();
-      server?.stop(true);
+      videoFixture.resolve(); server?.stop(true);
       audioOrigin.stop(true);
       await rm(scratch, { recursive: true, force: true });
     }

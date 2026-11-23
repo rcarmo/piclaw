@@ -1,6 +1,6 @@
 import { coerceA2uiBoolean } from '../../../src/channels/web/a2ui/functions.js';
 
-export type A2uiAria = Partial<Record<'aria-label' | 'aria-description' | 'aria-live' | 'aria-hidden', string>>;
+export type A2uiAria = Partial<Record<'aria-label' | 'aria-description' | 'aria-live' | 'aria-hidden', string>> & { inert?: true };
 
 /** Project only the v1.0 accessibility fields, not arbitrary DOM attributes. */
 export function a2uiAria(descriptor: unknown, read: (value: unknown) => unknown): A2uiAria {

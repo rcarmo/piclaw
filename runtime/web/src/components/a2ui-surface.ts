@@ -16,7 +16,7 @@ import { presentProviderAuth } from '../ui/provider-auth-presentation.js';
 import { a2uiIconPaths } from './a2ui-icon-paths.js';
 import { a2uiAria } from './a2ui-accessibility.js';
 import { A2uiChoicePicker } from './a2ui-choice-picker.js';
-import { A2uiPlayback } from './a2ui-playback.js';
+import { A2uiImage, A2uiPlayback } from './a2ui-playback.js';
 import { A2uiModal } from './a2ui-modal.js';
 import { renderA2uiText } from './a2ui-text.js';
 import { A2uiTabs } from './a2ui-tabs.js';
@@ -63,6 +63,16 @@ export function A2uiSurface({ block, source, onSubmit }: {
     const disabled = block.state !== 'active' || !onSubmit;
     const valueFunctions = useA2uiValueFunctions(projection,NO_EDITS,{...source,revision:block.revision},!disabled && block.owner==='agent');
     const components = new Map((projection?.snapshot.components ?? []).map(item => [item.id, item]));
+    const section = useRef<HTMLElement | null>(null);
+    const lastFocus = useRef<HTMLElement | null>(null);
+    useLayoutEffect(() => {
+        const node=lastFocus.current, root=section.current;
+        if (root && node && root.contains(node) && node.closest('[inert]')
+            && (document.activeElement===node || document.activeElement===document.body)) {
+            lastFocus.current=null;
+            root.focus({preventScroll:true});
+        }
+    });
     const functionLifetime = useRef<AbortController | null>(null);
     const invalidProjection = !projection;
     useLayoutEffect(() => {
@@ -194,7 +204,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
         }
     }
 
-    function renderComponent(id: unknown, depth: number, openModal?: (event: Event) => void, inlineText = false): unknown {
+    function renderComponent(id: unknown, depth: number, openModal?: (event: Event) => void, inlineText = false, ancestorHidden = false): unknown {
         const item = typeof id === 'string' ? components.get(id) : undefined;
         if (!item || depth > 24) return null;
         const instance = projection?.instances.get(item.id);
@@ -211,7 +221,6 @@ export function A2uiSurface({ block, source, onSubmit }: {
         };
         const path = a2uiBindingPath(item.value);
         const locked = disabled || pending || !path;
-        const child = (childId: unknown) => renderComponent(childId, depth + 1);
         const label = text(item.label);
         const rules=Array.isArray(item['@checks']) ? item['@checks'] : [];
         const settledRules=rules.filter(rule=>!rule?.condition || !valueFunctions.expressions.has(rule.condition) || valueFunctions.values?.has(rule.condition));
@@ -225,9 +234,13 @@ export function A2uiSurface({ block, source, onSubmit }: {
         });
         const invalid = findings.some(finding => finding.severity === 'error');
         const errorId = `${checkPrefix}-${encodeURIComponent(item.id)}`;
-        const aria = { ...a2uiAria(item['@accessibility'], read), ...(invalid ? {'aria-invalid':'true', 'aria-errormessage':errorId} : {}) };
+        const accessibility=a2uiAria(item['@accessibility'],read);
+        const inert=accessibility['aria-hidden']==='true' ? true : undefined;
+        const hidden=ancestorHidden || inert===true;
+        const child=(childId:unknown)=>renderComponent(childId,depth+1,undefined,false,hidden);
+        const aria = { ...accessibility,inert, ...(invalid ? {'aria-invalid':'true', 'aria-errormessage':errorId} : {}) };
         const checked = (control: unknown) => Array.isArray(item['@checks']) && item['@checks'].length ? html`
-            <div class="a2ui-checked" key=${id}>${control}
+            <div class="a2ui-checked" key=${id} inert=${inert}>${control}
                 <div id=${errorId} role="status">${findings.map((finding, index) => html`
                     <p key=${index} class=${finding.severity === 'error' ? 'a2ui-error' : 'a2ui-caption'}>${finding.message}</p>`)}</div>
             </div>` : control;
@@ -254,8 +267,7 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 const size = typeof item.variant === 'string' && ['icon', 'avatar', 'smallFeature', 'mediumFeature', 'largeFeature', 'header'].includes(item.variant)
                     ? item.variant : 'mediumFeature';
                 const fit = item.fit === 'scaleDown' ? 'scale-down' : item.fit === 'cover' || item.fit === 'contain' || item.fit === 'none' ? item.fit : 'fill';
-                return html`<img key=${id} class=${`a2ui-image a2ui-image-${size}`} src=${src} alt=${alt} ...${aria}
-                    loading="lazy" decoding="async" referrerpolicy="no-referrer" style=${{ objectFit: fit }} />`;
+                return html`<${A2uiImage} key=${JSON.stringify([id,src])} src=${src} alt=${alt} aria=${aria} size=${size} fit=${fit} />`;
             }
             case 'AudioPlayer':
             case 'Video': {
@@ -287,8 +299,8 @@ export function A2uiSurface({ block, source, onSubmit }: {
                 if (!trigger) return null;
                 const title = trigger.component === 'Button' && typeof trigger.child === 'string' ? components.get(trigger.child) : trigger;
                 const dialogLabel = text(title?.text) || 'Details';
-                return html`<${A2uiModal} key=${id} label=${dialogLabel} aria=${aria} buttonTrigger=${trigger.component === 'Button'}
-                    renderTrigger=${(open: (event: Event) => void) => renderComponent(trigger.id, depth + 1, open)}
+                return html`<${A2uiModal} key=${id} label=${dialogLabel} aria=${aria} hidden=${hidden} buttonTrigger=${trigger.component === 'Button'}
+                    renderTrigger=${(open: (event: Event) => void) => renderComponent(trigger.id,depth+1,open,false,hidden)}
                     renderContent=${() => child(item.content)} />`;
             }
             case 'Tabs': {
@@ -392,7 +404,9 @@ export function A2uiSurface({ block, source, onSubmit }: {
             default: return null;
         }
     }
-    return html`<section class="a2ui-surface" data-no-session-dashboard-shortcut="" aria-busy=${pending || valueFunctions.busy} onClick=${(event: Event) => event.stopPropagation()}>
+    return html`<section ref=${section} tabIndex=${-1} onFocusIn=${(e:FocusEvent)=>{lastFocus.current=e.target as HTMLElement;}}
+        onFocusOut=${(e:FocusEvent)=>{if (e.relatedTarget && !section.current?.contains(e.relatedTarget as Node)) lastFocus.current=null;}}
+        class="a2ui-surface" data-no-session-dashboard-shortcut="" aria-busy=${pending || valueFunctions.busy} onClick=${(event: Event) => event.stopPropagation()}>
         ${renderComponent('root', 0) || block.fallback_text}
         ${totp && !disabled && html`<${A2uiTotpDialog} presentation=${totp.presentation} dismiss=${dismissTotp}
             confirm=${async (code: string) => {

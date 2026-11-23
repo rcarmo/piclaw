@@ -4,7 +4,7 @@ import { isSignal, peekValue } from '@a2ui/web_core/reactivity';
 import type { DataContext } from '@a2ui/web_core/resolution';
 import { readA2uiPath, scopedA2uiPointer } from './data-path.js';
 import { CLASSIC_A2UI_CATALOG, type A2uiSnapshot } from './surface.js';
-import { readClassicFunctionCall } from './function-call.js';
+import { a2uiLiteralKey, readClassicFunctionCall } from './function-call.js';
 
 const pureFunctions = BASIC_FUNCTIONS.filter(fn => fn.name !== '@index' && fn.name !== 'openUrl' && !fn.requiresUserActivation);
 const pureNames = new Set(pureFunctions.map(fn => fn.name));
@@ -92,7 +92,7 @@ export function evaluateA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?
       return resolved;
     }
     if (argument && Array.isArray(input)) return input.map(item => evaluate(item, depth + 1, true));
-    if (argument && record(input)) return Object.fromEntries(Object.entries(input).map(([key, item]) => [key, evaluate(item, depth + 1, true)]));
+    if (argument && record(input)) return Object.fromEntries(Object.entries(input).map(([key, item]) => [a2uiLiteralKey(key), evaluate(item, depth + 1, true)]));
     return input;
   }
   try { return evaluate(value,0); }

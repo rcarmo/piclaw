@@ -124,7 +124,10 @@ function checkValueCalls(value: unknown, allowRemote = false): void {
       && allowedKeys(value, ['@call', 'args', 'catalogId'])
       && (value.catalogId === undefined || (name !== '@index' && value.catalogId === CLASSIC_A2UI_CATALOG)), 'unsupported function in a value');
     checkFunctionArguments(name,value.args);
+    if (record(value.args)) Object.values(value.args).forEach(item=>checkValueCalls(item,allowRemote));
+    return;
   }
+  requireClassic(Object.keys(value).every(key=>!/^@([^@]|$)/.test(key)),'unrecognised A2UI directive');
   Object.values(value).forEach(item=>checkValueCalls(item,allowRemote));
 }
 
@@ -324,15 +327,15 @@ export function applyA2uiMessages(surfaceId: string, messages: readonly unknown[
         continue;
       }
       if (operation === "deleteSurface") {
-        requireClassic(previous && index === messages.length - 1 && allowedKeys(body,['surfaceId']), "delete must finish an existing surface's batch");
+        requireClassic(index === messages.length - 1 && allowedKeys(body,['surfaceId']), "delete must finish an existing surface's batch");
         exists = false;
       }
     }
     structureMessages.push(message);
   }
   if (structureMessages.length) state.apply(projectComponentEnvelope(structureMessages,eventLiterals));
-  if (!progressive) state.checkTopology([surfaceId]);
   if (!exists) return null;
+  if (!progressive) state.checkTopology([surfaceId]);
 
   const result = state.getSurface(surfaceId)!;
   const snapshot: A2uiSnapshot = {

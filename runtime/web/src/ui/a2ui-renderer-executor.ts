@@ -1,4 +1,5 @@
 import { CallRendererFunctionMessageSchema, type RendererFunctionResponseMessage } from '@a2ui/web_core/v1_0';
+import { a2uiLiteralKey } from '../../../src/channels/web/a2ui/function-call.js';
 import { readA2uiDraft } from './a2ui-drafts.js';
 import { CLASSIC_A2UI_CATALOG, isA2uiSurfaceBlock, type A2uiSnapshot } from '../../../src/channels/web/a2ui/surface.js';
 import { boundedRpcJson, malformedRendererInvocation, MAX_RPC_VALUE, type RendererReplyMessage } from '../../../src/channels/web/a2ui/rpc-json.js';
@@ -91,7 +92,7 @@ export async function runRendererCall(raw: unknown, options: RendererCallOptions
             if (Object.keys(value).length!==1 || typeof value['@path']!=='string') throw Error('Invalid argument binding');
             return evaluateA2uiValue(context,value);
         }
-        return Object.fromEntries(Object.entries(value).map(([key,item])=>[key,resolve(item)]));
+        return Object.fromEntries(Object.entries(value).map(([key,item])=>[a2uiLiteralKey(key),resolve(item)]));
     };
     let resolved: Record<string,unknown>;
     try { resolved=Object.fromEntries(Object.entries(callFunction.args ?? {}).map(([key,value])=>[key,resolve(value)])); }

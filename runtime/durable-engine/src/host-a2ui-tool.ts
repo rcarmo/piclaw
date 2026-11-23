@@ -47,7 +47,7 @@ export function createHostA2uiTool(options: {
         check();
         return { isError: true, output: [{ type: 'text', text: JSON.stringify(error.rendererMessage) }] };
       }
-      const interaction = getMessageByRowIdFromDatabase(options.root, chatJid, result.rowId);
+      const interaction = result.rowId === null ? null : getMessageByRowIdFromDatabase(options.root, chatJid, result.rowId);
       if (interaction) options.broadcast(result.created ? 'new_post' : 'interaction_updated', interaction as unknown as Record<string, unknown>);
       const receipt = { post_id: result.rowId, surface_id: result.surfaceId, revision: result.revision, deleted: result.deleted };
       return { output: [{ type: 'text', text: JSON.stringify(receipt) }], details: receipt };

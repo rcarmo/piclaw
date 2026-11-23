@@ -14,6 +14,15 @@ const snapshot = applyA2uiMessages("owned-1", compileA2uiExpress(`
   submit = Button(Text("Send"), action=Event("send", {colour: $/choice, note: $/note, example: $/example, fixed: "literal"}));
 `, "owned-1"))!;
 
+test('function expression arguments decode escaped keys without interpreting model data',()=>{
+  const model={...snapshot,dataModel:{...snapshot.dataModel,payload:{'@@type':'unchanged'}}};
+  const echo={'@call':'echo',args:{payload:{'@@type':'note','@@path':'literal',path:'ordinary',nested:[{'@@@type':'double'}]},model:{'@path':'/payload'}}};
+  expect(readA2uiValue(model,echo,undefined,undefined,'/',(_c,_n,args)=>args)).toEqual({
+    payload:{'@type':'note','@path':'literal',path:'ordinary',nested:[{'@@type':'double'}]},model:{'@@type':'unchanged'},
+  });
+  expect(readA2uiValue(model,{'@call':'echo',args:{payload:{'@type':'unescaped'}}},undefined,undefined,'/',(_c,_n,args)=>args)).toBeUndefined();
+});
+
 const timestamp = "2026-11-22T09:00:00.000Z";
 
 test("Classic emits a v1.0 action from local drafts without sending the data model", () => {

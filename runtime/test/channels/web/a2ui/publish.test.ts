@@ -48,6 +48,23 @@ test('publishes v1.0 messages under the same thread and revision checks as Expre
   await expect(publishAgentA2ui(options, update)).rejects.toThrow();
 });
 
+test('create and delete in a single batch publishes no transient post', async () => {
+  initDatabase();
+  const chatJid='web:ephemeral-publish';
+  const threadId=storeMessage({id:'accepted',chat_jid:chatJid,sender:'user',content:'Transient form',timestamp:new Date().toISOString(),is_from_me:false});
+  const root=getDb();
+  const count=()=>root.query<{n:number},[string]>('SELECT count(*) n FROM messages WHERE chat_jid=?').get(chatJid)!.n;
+  const before=count();
+  const result=await publishAgentA2ui({root,chatJid,conversationId:31,thread:()=>threadId,authorise:()=>{}},{fallback:'Transient form',messages:[
+    {version:'1.0',createSurface:{surfaceId:'transient',catalogId:'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json',sendDataModel:true,
+      components:[{component:'Text',id:'root',text:'Transient'}]}},
+    {version:'1.0',deleteSurface:{surfaceId:'transient'}},
+  ]});
+  expect(result).toMatchObject({rowId:null,created:false,deleted:true});
+  expect(count()).toBe(before);
+  expect(readA2uiRendererDataModel(root,chatJid,31).surfaces).toEqual({});
+});
+
 test('wire publication retains incomplete definitions through independent revisions', async () => {
   initDatabase();
   const chatJid = 'web:progressive-publish';

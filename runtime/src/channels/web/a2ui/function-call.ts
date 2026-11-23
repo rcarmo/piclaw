@@ -12,6 +12,13 @@ function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+/** Decode an authored literal key once. Resolved model and RPC values never pass through here. */
+export function a2uiLiteralKey(key: string): string {
+  if (!key.startsWith('@')) return key;
+  if (key.startsWith('@@')) return key.slice(1);
+  throw Error('Unrecognised A2UI directive');
+}
+
 /** Read the canonical function descriptor, without granting catalogue or execution authority. */
 export function readClassicFunctionCall(value: unknown) {
   if (!record(value) || Object.keys(value).some(key=>!['@call','args','catalogId'].includes(key))) return;
