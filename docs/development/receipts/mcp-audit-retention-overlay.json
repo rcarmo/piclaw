@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "sourceParent": "b324b21f80a07578ea102fef919967f6e848e217",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlaySha256": "a3c02c69b5ea6fed09aa68bfb54bd347273c8b9b386e12c141cd70aa100979e1",
+  "rows": [
+    {
+      "path": "runtime/scripts/schema-ownership.json",
+      "beforeSha256": "f46d4901ffa769a83a2ce389ae5d4874880bfe982c79bf2fb0a4ec66499a4e8c",
+      "afterSha256": "081b885bda1515ab1930510ce8bec68747fd69606766529c8b0521fb5dcfd866",
+      "purpose": "Register the optional MCP-only recall capture receipt table for SDK invocation idempotency without changing earlier receipts, historical optimiser schemas or accounting."
+    }
+  ]
+}

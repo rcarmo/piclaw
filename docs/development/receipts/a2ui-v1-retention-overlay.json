@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "sourceParent": "b324b21f80a07578ea102fef919967f6e848e217",
+  "sourceParent": "cd634c974282ae2c68f0b7d4562d328644fd0e24",
   "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
   "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
-  "previousOverlay": "docs/development/receipts/optimizer-removal-retention-overlay.json",
-  "previousOverlaySha256": "a3c02c69b5ea6fed09aa68bfb54bd347273c8b9b386e12c141cd70aa100979e1",
+  "previousOverlay": "docs/development/receipts/mcp-audit-retention-overlay.json",
+  "previousOverlaySha256": "f46fdfd87aea70e0e5230fc58e7272dcd45c56708e59e842a65c56c3c5e1ab78",
   "scope": "A2UI v1.0 source transformations only. Original receipt, 105 rows, 37 deletions and financial accounting are unchanged.",
   "rows": [
     {
@@ -63,8 +63,8 @@
     },
     {
       "path": "runtime/scripts/schema-ownership.json",
-      "beforeSha256": "f46d4901ffa769a83a2ce389ae5d4874880bfe982c79bf2fb0a4ec66499a4e8c",
-      "afterSha256": "6eb9ad6458729f4cd8c6be6b4296618c1a8cb0e946b6970cdaed2a9e8e81c935",
+      "beforeSha256": "081b885bda1515ab1930510ce8bec68747fd69606766529c8b0521fb5dcfd866",
+      "afterSha256": "ccc43ae1e6c0889848443c361d2b22c19c6a40a53aaa2bde7cbeed8eec3cb4f5",
       "purpose": "Record exact owners and fingerprints for the A2UI sidecars and their indexes in each active schema profile."
     },
     {

@@ -15,21 +15,28 @@ export function openMcpPipe(config:McpStdioConnection,handlers:McpPipeHandlers,a
  const failures:Error[]=[];let closed=false;
  const exists=()=>{if(!child.pid)return false;try{process.kill(-child.pid,0);return true;}catch(error){if((error as NodeJS.ErrnoException).code==='ESRCH')return false;throw error;}};
  const kill=()=>{if(!child.pid)return;try{process.kill(-child.pid,'SIGKILL');}catch(error){if((error as NodeJS.ErrnoException).code!=='ESRCH')throw error;}};
- const ended=new Promise<void>((resolve,reject)=>{
-  child.on('error',error=>{failures.push(error);if(!child.pid)reject(Error('MCP process could not start'));});
-  for(const stream of [child.stdin,child.stdout,child.stderr])stream.on('error',error=>failures.push(error));
-  child.stdout.on('data',bytes=>handlers.onStdout(bytes));child.stderr.on('data',bytes=>handlers.onStderr(bytes));
-  child.once('close',async(code,signal)=>{
-   try{
-    // Parent exit does not certify that its descendants and pipes have ended.
-    const deadline=Date.now()+2000;while(exists()&&Date.now()<deadline)await new Promise(r=>setTimeout(r,10));
-    if(exists())throw Error('MCP process group cleanup is uncertain');
-    if(failures.length)throw Error('MCP process pipe cleanup failed');
-    if(!closed&&(signal!==null||code!==0))throw Error('MCP process exited unsuccessfully');resolve();
-   }catch(error){reject(error);}
-  });
- });
- return{write(data){if(closed||child.stdin.destroyed||child.exitCode!==null||child.signalCode!==null)throw Error('MCP process is closed');assertCurrent();const rpc=JSON.parse(typeof data==='string'?data:Buffer.from(data).toString('utf8')) as {method?:string};authority?.assertSend(rpc.method);child.stdin.write(data);},closeStdin(){if(!child.stdin.destroyed&&!child.stdin.writableEnded)child.stdin.end();},close(){closed=true;kill();},exited:ended};
+ let joining=false,pipesClosed=false;
+ const ended=Promise.withResolvers<void>();
+ const join=async()=>{
+  if(joining)return;
+  joining=true;
+  try{
+   // `close` can wait forever for inherited pipes. Start the bounded join on
+   // parent exit or forced disposal; a live group is never a successful close.
+   const deadline=performance.now()+2000;
+   while((!pipesClosed||exists())&&performance.now()<deadline)await new Promise(r=>setTimeout(r,10));
+   if(!pipesClosed||exists())throw Error('MCP process group or pipe cleanup is uncertain');
+   if(failures.length)throw Error('MCP process pipe cleanup failed');
+   if(!closed&&(child.signalCode!==null||child.exitCode!==0))throw Error('MCP process exited unsuccessfully');
+   ended.resolve();
+  }catch(error){child.stdin.destroy();child.stdout.destroy();child.stderr.destroy();ended.reject(error);}
+ };
+ child.on('error',error=>{failures.push(error);if(!child.pid)ended.reject(Error('MCP process could not start'));});
+ for(const stream of [child.stdin,child.stdout,child.stderr])stream.on('error',error=>failures.push(error));
+ child.stdout.on('data',bytes=>handlers.onStdout(bytes));child.stderr.on('data',bytes=>handlers.onStderr(bytes));
+ child.once('exit',()=>{try{kill();}catch(error){failures.push(error instanceof Error?error:Error('MCP process termination failed'));}void join();});
+ child.once('close',()=>{pipesClosed=true;void join();});
+ return{write(data){if(closed||child.stdin.destroyed||child.exitCode!==null||child.signalCode!==null)throw Error('MCP process is closed');assertCurrent();const rpc=JSON.parse(typeof data==='string'?data:Buffer.from(data).toString('utf8')) as {method?:string};authority?.assertSend(rpc.method);child.stdin.write(data);},closeStdin(){if(!child.stdin.destroyed&&!child.stdin.writableEnded)child.stdin.end();},close(){closed=true;try{kill();}finally{void join();}},exited:ended.promise};
 }
 export async function connectMcpStdio(config:McpStdioConnection,assertCurrent:()=>void,signal?:AbortSignal,authority?:McpAuthority){
  const client=new McpClient({name:'piclaw',version:'1',requestTimeoutMs:config.timeoutSeconds*1000});let pipe:McpPipe|undefined;

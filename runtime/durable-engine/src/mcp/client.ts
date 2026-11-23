@@ -1,8 +1,9 @@
 // Ported from rcarmo/kintsugi b8469c29; MIT — see UPSTREAM-LICENSE.
 import {McpOAuthAuthorizationRequiredError} from "@earendil-works/pi-mcp/oauth";
-import { McpClient, StreamableHttpTransport, McpHttpError, McpSessionExpiredError, McpConnectionClosedError, McpTimeoutError, createMcpToolName, normalizeMcpInputSchema, toLlmContent, type Tool as McpTool, type McpFetch, type AuthProvider } from "@earendil-works/pi-mcp";
+import { McpClient, StreamableHttpTransport, McpHttpError, McpSessionExpiredError, McpConnectionClosedError, McpTimeoutError, normalizeMcpInputSchema, toLlmContent, type Tool as McpTool, type McpFetch, type AuthProvider } from "@earendil-works/pi-mcp";
 import { defineExtension, defineTool, type JsonObject, type ConversationId } from "@earendil-works/pi-durable";
 import { Type } from "typebox";
+import { createHash } from 'node:crypto';
 import { Value } from "typebox/value";
 import type { Context } from "@earendil-works/chord/context";
 import type {McpAuthority} from './authority.ts';
@@ -57,13 +58,20 @@ export function retryableMcpFailure(error:unknown):boolean {
 export function lostMcpSession(error:Error):boolean {
   return error instanceof McpOAuthAuthorizationRequiredError||error instanceof McpSessionExpiredError||error instanceof McpConnectionClosedError||error instanceof McpHttpError&&[401,403].includes(error.status);
 }
+type McpToolOwner=Pick<McpHttpConnection,'id'|'name'>&{revision?:number;url?:string;workspaceId?:string;transport?:'http'|'stdio';command?:string[];workdir?:string};
+/** A versioned alias must never resolve an old ambiguous checkpoint to a new tool. */
+export function mcpToolAlias(config:McpToolOwner,method:'tool'|'resource',remote:string) {
+  // Old aliases always have another double underscore after the MCP prefix.
+  const label=`${config.name}_${remote}`.replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,25).replace(/_$/,'')||'tool';
+  const destination=config.transport==='stdio'?['stdio',config.workspaceId,config.command,config.workdir]:['http',config.url];
+  const digest=createHash('sha256').update(JSON.stringify([config.id,config.name,destination,method,remote])).digest('hex').slice(0,24);
+  return `mcp__v2_${label}_${digest}_v2`;
+}
 /** Register actual MCP tools behind code mode. Every call rechecks the grant and credential revision. */
-export function mcpToolsExtension(config:Pick<McpHttpConnection,"id"|"name"> & {revision?:number},tools:readonly McpTool[],clientFor:(conversationId:ConversationId,context:Context) => Promise<McpClient>,onFailure?:(error:Error)=>void,authority?:Pick<McpAuthority,'invoke'>) {
+export function mcpToolsExtension(config:McpToolOwner,tools:readonly McpTool[],clientFor:(conversationId:ConversationId,context:Context) => Promise<McpClient>,onFailure?:(error:Error)=>void,authority?:Pick<McpAuthority,'invoke'>) {
   const details=(tool:string)=>({mcpConnectionId:config.id,mcpConnectionRevision:config.revision??0,mcpServer:config.name,mcpTool:tool});
-  const taken = new Set<string>();
-  const name = (remote:string) => {const value = createMcpToolName(config.name,remote,item => taken.has(item));taken.add(value);return value;};
   const registered = tools.map(tool => defineTool({
-    name:name(tool.name),description:tool.description ?? tool.name,parameters:Type.Unsafe<JsonObject>(normalizeMcpInputSchema(tool.inputSchema)),structuredOutputSchema:tool.outputSchema??Type.String(),
+    name:mcpToolAlias(config,'tool',tool.name),description:tool.description ?? tool.name,parameters:Type.Unsafe<JsonObject>(normalizeMcpInputSchema(tool.inputSchema)),structuredOutputSchema:tool.outputSchema??Type.String(),
     callers:["tools"],replay:"unsafe",
     async execute(args,api,context) {
       const client = await clientFor(api.conversationId,context);
@@ -80,16 +88,17 @@ export function mcpToolsExtension(config:Pick<McpHttpConnection,"id"|"name"> & {
     },
   }));
   // Servers may publish additional contracts as resources or URI templates.
-  const resources = [defineTool({name:name("resources_list"),description:`List ${config.name} resources and URI templates.`,parameters:Type.Object({}),structuredOutputSchema:Type.Object({resources:Type.Array(Type.Unknown()),templates:Type.Array(Type.Unknown())}),callers:["tools"],replay:"unsafe",async execute(_args,api,context) {
+  const resources = [defineTool({name:mcpToolAlias(config,'resource','resources_list'),description:`List ${config.name} resources and URI templates.`,parameters:Type.Object({}),structuredOutputSchema:Type.Object({resources:Type.Array(Type.Unknown()),templates:Type.Array(Type.Unknown())}),callers:["tools"],replay:"unsafe",async execute(_args,api,context) {
     const client = await clientFor(api.conversationId,context);
     try {const resources = client.serverCapabilities?.resources ? await client.listResources({signal:context.abortSignal}) : [],templates = client.serverCapabilities?.resources ? await client.listResourceTemplates({signal:context.abortSignal}) : [];
       return {structuredOutput:JSON.parse(JSON.stringify({resources,templates})),details:details("resources_list")};
     } catch (error) {context.abortSignal?.throwIfAborted();if(error instanceof Error)onFailure?.(error);throw new Error(mcpFailure(error));}
-  }}),defineTool({name:name("resource_read"),description:`Read a discovered ${config.name} resource URI, including memory://catalog and advertised workflow templates.`,parameters:Type.Object({uri:Type.String({minLength:1,maxLength:2048})}),structuredOutputSchema:Type.Object({contents:Type.Array(Type.Unknown())}),callers:["tools"],replay:"unsafe",async execute(args,api,context) {
+  }}),defineTool({name:mcpToolAlias(config,'resource','resource_read'),description:`Read a discovered ${config.name} resource URI, including memory://catalog and advertised workflow templates.`,parameters:Type.Object({uri:Type.String({minLength:1,maxLength:2048})}),structuredOutputSchema:Type.Object({contents:Type.Array(Type.Unknown())}),callers:["tools"],replay:"unsafe",async execute(args,api,context) {
     const client = await clientFor(api.conversationId,context);
     try {return {structuredOutput:JSON.parse(JSON.stringify(await client.readResource(args.uri,{signal:context.abortSignal}))),details:details("resource_read")};}
     catch (error) {context.abortSignal?.throwIfAborted();if(error instanceof Error)onFailure?.(error);throw new Error(mcpFailure(error));}
   }})];
   const exposed=[...registered,...resources].map(tool=>({...tool,deferred:true as const,execute(args:never,api:Parameters<typeof tool.execute>[1],context:Context){return authority?authority.invoke(api,context,()=>tool.execute(args,api,context)):tool.execute(args,api,context);}}));
+  if(new Set(exposed.map(tool=>tool.name)).size!==exposed.length)throw Error('MCP catalogue contains duplicate tool identities');
   return defineExtension({name:`piclaw.mcp.${config.id}`,tools:exposed});
 }

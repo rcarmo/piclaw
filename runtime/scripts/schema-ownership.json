@@ -4794,6 +4794,13 @@
       "requiredIn": [],
       "table": "budget_request_reservations"
     },
+    "table:mcp_recall_captures": {
+      "owner": "cache:mcp-recall",
+      "fingerprints": [
+        "b999822b3b3d53888e4af144d2bcd25b33bb7621cc812f92227d9064ccd52e31"
+      ],
+      "requiredIn": []
+    },
     "index:mcp_recall_owner": {
       "owner": "cache:mcp-recall",
       "fingerprints": [

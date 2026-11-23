@@ -7,14 +7,13 @@ import {BACKGROUND_CONTEXT as context} from '@earendil-works/chord/context';
 import {createModels,fauxProvider,fauxAssistantMessage,fauxToolCall,contentText} from '@earendil-works/pi-ai';
 import {McpConnectionStore} from '../src/mcp/connections.ts';
 import {createMcpRuntime} from '../src/mcp/runtime.ts';
-import {connectMcpHttp} from '../src/mcp/client.ts';
+import {connectMcpHttp,mcpToolAlias} from '../src/mcp/client.ts';
 import {recordingMcpCalls} from '../src/mcp/codemode.ts';
 
-for(const resumed of [false,true])test(`MCP receipts preserve a non-waiting SDK call and its historical idempotency; resumed=${resumed}`,async()=>{
+test('MCP receipts preserve a non-waiting SDK call and record its outcome once',async()=>{
  const receipts:Record<string,boolean>={},phases:string[]=[];let starts=0,waits=0;
  const taskId=23 as TaskId,result={taskId,structuredOutput:{original:'kept'},isError:false,diagnostics:[]};
  const api={taskId:7,conversationId:1,callId:'caller',
-  async snapshot(){return resumed?{'nested:start':true}:undefined;},
   async commit(body:any){await body({doc:async()=>receipts,appendEntry:async(_def:any,_conversation:any,{data}:any)=>phases.push(data.phase)});},
   async executeTool(name:string,args:unknown,ctx:unknown,options:unknown){
    starts++;expect(name).toBe('mcp__test__nested');expect(args).toEqual({});expect(ctx).toBe(context);expect(options).toEqual({key:'nested',wait:false});
@@ -22,9 +21,9 @@ for(const resumed of [false,true])test(`MCP receipts preserve a non-waiting SDK 
   },
  } as unknown as ToolExecutionApi;
  const handle=await recordingMcpCalls(api).executeTool('mcp__test__nested',{},context,{key:'nested',wait:false});
- expect(handle.taskId).toBe(taskId);expect(waits).toBe(0);expect(phases).toEqual(resumed?[]:['start']);
+ expect(handle.taskId).toBe(taskId);expect(waits).toBe(0);expect(phases).toEqual(['start']);
  expect(await handle.result(context)).toBe(result);expect(await handle.result(context)).toBe(result);
- expect(starts).toBe(1);expect(waits).toBe(2);expect(phases).toEqual(resumed?['end']:['start','end']);
+ expect(starts).toBe(1);expect(waits).toBe(2);expect(phases).toEqual(['start','end']);
 });
 test('Code Mode does not record non-MCP calls',async()=>{
  const value={taskId:4 as TaskId,structuredOutput:{kept:true},isError:false,diagnostics:[]};
@@ -46,7 +45,7 @@ async function fixture(initialFailures=0){
  const root=await harness.root(context);identities.set(Number(root.id),'allowed');await root.configure({model:{provider:'faux',modelId:'faux-1'}},context);
  await runtime.attach();await runtime.ready();return{harness,root,runtime,store,faux,identities,methods,calls:()=>calls,attempts:()=>attempts,failEffects(){failCalls=true;},failCleanup(){failClose=true;},closes:()=>closes,revoke(){source=false;}};
 }
-function responses(f:Awaited<ReturnType<typeof fixture>>,code:string,expected:string){f.faux.setResponses([fauxAssistantMessage([fauxToolCall('codemode',{code})],{stopReason:'toolUse'}),request=>{const result=request.messages.filter(m=>m.role==='toolResult').map(m=>contentText(m.content)).join('\n');expect(result).toContain(expected);expect(JSON.stringify(request)).not.toContain('SYNTHETIC');return fauxAssistantMessage('Done');}]);}
+function responses(f:Awaited<ReturnType<typeof fixture>>,code:string,expected:string){const config=f.store.credential('fixture')!;code=code.replaceAll('mcp__fixture__probe',mcpToolAlias(config,'tool','probe')).replaceAll('mcp__fixture__resource_read',mcpToolAlias(config,'resource','resource_read'));f.faux.setResponses([fauxAssistantMessage([fauxToolCall('codemode',{code})],{stopReason:'toolUse'}),request=>{const result=request.messages.filter(m=>m.role==='toolResult').map(m=>contentText(m.content)).join('\n');expect(result).toContain(expected);expect(JSON.stringify(request)).not.toContain('SYNTHETIC');return fauxAssistantMessage('Done');}]);}
 test('new runtime registers only deferred MCP tools and preserves real script values/resources',async()=>{const f=await fixture();expect(f.runtime.status('fixture')?.state).toBe('connected');responses(f,"const value=await tools.mcp__fixture__probe({});const r=await tools.mcp__fixture__resource_read({uri:'memory://catalog'});return {ok:value.ok,catalog:r.contents[0].text};",'catalog');expect((await(await f.root.submit({type:'input',content:'Synthetic MCP call'},context)).wait(context)).status).toBe('done');expect(f.calls()).toBe(1);expect(f.methods).toContain('resources/read');});
 test('ungranted Agent cannot discover a private schema or invoke its remote tool',async()=>{const f=await fixture();const record=await f.harness.commit(tx=>tx.createConversation({ownership:{kind:'ownerless'}}),context);const other=(await f.harness.conversation(record.id,context))!;f.identities.set(Number(record.id),'denied');await other.configure({model:{provider:'faux',modelId:'faux-1'}},context);responses(f,"const found=await searchTools('Private fixture description');if(JSON.stringify(found).includes('Private fixture description'))throw Error('Schema leaked');try{await tools.mcp__fixture__probe({});throw Error('effect escaped');}catch(error){return 'DENIED';}",'DENIED');expect((await(await other.submit({type:'input',content:'Try ungranted tool'},context)).wait(context)).status).toBe('done');expect(f.calls()).toBe(0);});
 test('source revocation rejects a call before physical I/O and metadata changes withdraw registry tools',async()=>{const f=await fixture();f.revoke();responses(f,"try{await tools.mcp__fixture__probe({});return 'escaped';}catch{return 'SOURCE_DENIED';}",'SOURCE_DENIED');expect((await(await f.root.submit({type:'input',content:'Try revoked source'},context)).wait(context)).status).toBe('done');expect(f.calls()).toBe(0);const previous=f.store.credential('fixture')!;const{revision,accessEpoch,...input}=previous;await f.store.save({...input,enabled:false},{expectedRevision:revision});await f.runtime.ready();expect(f.runtime.status('fixture')).toBeUndefined();});
@@ -73,4 +72,82 @@ for(const mode of ['late-handle','late-error'] as const)test('close joins stale 
  try{
   await runtime.attach();await entered.promise;execution=false;const closing=runtime.close();void closing.then(()=>{settled=true;},()=>{settled=true;});await Promise.resolve();expect(settled).toBe(false);release.resolve();const failure=await closing.then(()=>null,error=>error);expect(failure).toBeInstanceOf(AggregateError);expect(JSON.stringify(failure.errors.map((error:Error)=>error.message))).not.toContain('PRIVATE_CLEANUP');expect(await runtime.close().then(()=>null,error=>error)).toBe(failure);expect(closes).toBe(mode==='late-handle'?1:0);
  }finally{release.resolve();await runtime.close().catch(()=>{});db.close();}
+});
+
+// Connection fixtures expose the existing adapter port, not a parallel scheduler.
+const schema={type:'object' as const,properties:{}};
+function syntheticClient(listChanged=false){
+ let closed=0;let notify:()=>void=()=>{},onClose:()=>void=()=>{};
+ let list:()=>Promise<import('@earendil-works/pi-mcp').Tool[]>=async()=>[{name:'probe',description:'current schema',inputSchema:schema}];
+ let call=async(_name:string)=>({content:[{type:'text' as const,text:'exact tool'}]});
+ const client={connectionState:'connected',serverCapabilities:{tools:{listChanged}},
+  onClose(fn:()=>void){onClose=fn;return()=>{};},onNotification(_method:string,fn:()=>void){notify=fn;return()=>{};},
+  listTools:()=>list(),callTool:(name:string)=>call(name),close:async()=>{closed++;},
+ } as unknown as import('@earendil-works/pi-mcp').McpClient;
+ return {client,tools:[{name:'probe',description:'pre-subscription schema',inputSchema:schema}],close:()=>client.close(),
+  get closed(){return closed;},drop:()=>onClose(),changed:()=>notify(),list(fn:typeof list){list=fn;},call(fn:typeof call){call=fn;}};
+}
+async function localRuntime(connect:Parameters<typeof createMcpRuntime>[0]['connect'],rows:{id:string;name:string;agents:string[]}[]=[{id:'primary',name:'catalog',agents:['allowed']}]){
+ const db=new Database(':memory:'),registry=createRegistry(),store=new McpConnectionStore(db,()=>{});
+ cleanup.push(async()=>db.close());
+ for(const row of rows)await store.save({id:row.id,name:row.name,agentIds:row.agents,workspaceId:'workspace',enabled:true,transport:'http',url:'https://fixture.invalid/mcp',auth:'none',allowHttp:false,timeoutSeconds:2});
+ const runtime=createMcpRuntime({workspaceId:'workspace',registry,store,assertOwner(){},resolveAgent:async()=>({agentId:'allowed',readOnly:false}),captureSource:async()=>()=>{},connect});
+ cleanup.push(()=>runtime.close());await runtime.attach();await runtime.ready();return {runtime,registry};
+}
+
+test('discovery admits exact granted registrations for long names and overlapping connections',async()=>{
+ const rows=[{id:'primary',name:'catalog',agents:['allowed']},{id:'other',name:'catalog_aux',agents:['denied']},{id:'long',name:'x'.repeat(90),agents:['allowed']}];
+ const f=await localRuntime(async()=>syntheticClient(),rows),extensions=f.registry.snapshot().installed();
+ const visible=await f.runtime.visibleAgent(1 as ConversationId,{extensions,callable:extensions.flatMap(ext=>ext.tools??[]),tools:[],deferred:[],sections:[],thinkingLevel:'off'},context);
+ expect(visible.extensions.map(ext=>ext.name).sort()).toEqual(['piclaw.mcp.long','piclaw.mcp.primary']);
+ for(const row of rows)expect(visible.callable.some(tool=>tool.name===mcpToolAlias({...row,url:'https://fixture.invalid/mcp'},'tool','probe'))).toBe(row.id!=='other');
+});
+
+test('initial discovery reconciles a list change and publishes only the final burst snapshot',async()=>{
+ const connection=syntheticClient(true);const f=await localRuntime(async()=>connection);
+ expect(f.runtime.status('primary')?.tools).toEqual(['probe']);
+ expect(f.registry.snapshot().extension('piclaw.mcp.primary')?.tools?.[0]?.description).toBe('current schema');
+ const first=Promise.withResolvers<Awaited<ReturnType<typeof connection.client.listTools>>>();let lists=0;
+ connection.list(async()=>++lists===1?first.promise:[{name:'latest',description:'latest',inputSchema:schema}]);
+ connection.changed();await Bun.sleep(0);connection.changed();connection.changed();
+ first.resolve([{name:'superseded',description:'superseded',inputSchema:schema}]);
+ await f.runtime.ready();expect(lists).toBe(2);expect(f.runtime.status('primary')?.tools).toEqual(['latest']);
+});
+
+test('one disconnect spends one retry and old notifications cannot withdraw its successor',async()=>{
+ const {McpConnectionClosedError}=await import('@earendil-works/pi-mcp');
+ const first=syntheticClient(),second=syntheticClient();let connects=0;
+ const f=await localRuntime(async()=>++connects===1?first:second);
+ const tool=f.registry.snapshot().extension('piclaw.mcp.primary')?.tools?.[0];if(!tool)throw Error('Fixture tool absent');
+ const hold=Promise.withResolvers<never>();let entered=0;first.call(async()=>{entered++;return hold.promise;});
+ const api={conversationId:1,details:async()=>{}} as unknown as ToolExecutionApi;
+ const calls=Promise.allSettled(Array.from({length:3},()=>tool.execute({} as never,api,context)));
+ while(entered<3)await Bun.sleep(0);
+ first.drop();hold.reject(new McpConnectionClosedError());await calls;
+ expect(f.runtime.status('primary')?.state).toBe('retrying');
+ const deadline=Date.now()+2200;while(connects<2&&Date.now()<deadline)await Bun.sleep(10);
+ await f.runtime.ready();expect(connects).toBe(2);first.drop();first.changed();
+ expect(f.runtime.status('primary')?.state).toBe('connected');expect(first.closed).toBe(1);expect(second.closed).toBe(0);expect(entered).toBe(3);
+},4000);
+
+for(const wait of [true,false] as const)test(`nonfatal optional end receipt cannot mask an SDK success (wait=${wait})`,async()=>{
+ const {StorageRequestError}=await import('@earendil-works/pi-durable');
+ const result={taskId:9 as TaskId,structuredOutput:{exact:'kept'},isError:false,diagnostics:[]};let effects=0,commits=0;
+ const wrapped=recordingMcpCalls({taskId:7,conversationId:1,callId:'outer',async snapshot(){return undefined;},
+  async commit(body:any){if(++commits===2)throw new StorageRequestError('optional receipt rejected');await body({doc:async()=>({}),appendEntry:async()=>{}});},
+  async executeTool(){effects++;return wait?result:{taskId:result.taskId,result:async()=>result};}
+ } as unknown as ToolExecutionApi);
+ if(wait)expect(await wrapped.executeTool('mcp__test__nested',{},context,{key:'once',wait:true})).toBe(result);
+ else expect(await (await wrapped.executeTool('mcp__test__nested',{},context,{key:'once',wait:false})).result(context)).toBe(result);
+ expect(effects).toBe(1);expect(commits).toBe(2);
+});
+
+test('optional receipt handling preserves cancellation and real storage failures',async()=>{
+ const {optionalMcpReceipt}=await import('../src/mcp/codemode.ts');
+ const {StorageRequestError}=await import('@earendil-works/pi-durable');
+ const {withAbortSignal}=await import('@earendil-works/chord/context');
+ const storage=Error('storage lost');
+ await expect(optionalMcpReceipt(context,async()=>{throw storage;})).rejects.toBe(storage);
+ const cancel=new AbortController();const cancellation=Error('cancelled');
+ await expect(optionalMcpReceipt(withAbortSignal(cancel.signal,context),async()=>{cancel.abort(cancellation);throw new StorageRequestError('optional');})).rejects.toBe(cancellation);
 });
