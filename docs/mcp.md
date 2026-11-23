@@ -6,12 +6,14 @@ This page covers outbound connections. The inbound CLI/control MCP server is out
 
 ## Add a connection
 
-Open **Settings → MCP**, select **New connection**, and enter a name containing letters, digits or underscores. Choose HTTP or stdio, the access scope, authentication and timeout. Save the connection, then check its discovery status.
+Open **Settings → MCP**, select **New connection**, and enter a name containing letters, digits or underscores. Choose Streamable HTTP or POSIX stdio, the access scope, authentication and timeout. Save the connection, then check its discovery status.
 
 - HTTP supports explicit anonymous access, a bearer token reference, or OAuth.
 - Stdio takes a JSON array of executable arguments, an absolute working directory and an optional environment object. It runs without a shell or ambient host credentials.
 - Stdio has one execution workspace. HTTP can have explicit workspace and Agent grants, or an all-workspaces grant.
-- Names must be unique where workspace grants overlap. Up to100 connections can be configured.
+- Names must be unique where workspace grants overlap. Up to 100 connections can be configured.
+
+The adapter exposes tool calls, resource and template listings, and resource reads. The pinned SDK negotiates MCP `2025-11-25`, `2025-06-18`, `2025-03-26` and `2024-11-05`. Legacy HTTP+SSE, protocol prompt list/get, sampling, elicitation and resource subscriptions are not exposed. Protocol prompts are distinct from Piclaw’s Code Mode guidance.
 
 An empty **Selected Agents** list does not save as a broad grant. Choose **This workspace, all Agents** explicitly if that is the intended scope. SDK tool filters and Delegate capability limits still apply. Task-owned children and unrouted SDK forks do not acquire MCP access through their parent.
 
@@ -55,23 +57,15 @@ MCP tools and resources are available through Code Mode, not declared inline in 
 For a server named `knowledge` with a remote `read` tool:
 
 ```javascript
-const toolsFound = await searchTools("knowledge read", { limit: 5 });
-const schema = await describeTool("mcp__knowledge__read");
-const result = await tools.mcp__knowledge__read({ id: "example" });
-return result;
+const matches = await searchTools("knowledge read", { limit: 5 });
+return matches.map(({ name }) => name);
 ```
 
-Code mode receives the original structured value. An eligible model-facing result may be shortened afterwards; scripts never receive a summary in place of the tool value.
+Inspect the selected result with `describeTool(name)`, then call `await tools[name](objectArgs)`. Use exactly the discovered name. Earlier aliases that could be rebound are retired; update saved scripts or explicit SDK tool selections by discovering the current name. The new aliases bind the connection, destination, raw tool and operation kind, independent of listing order.
 
-Each server also has deferred resource helpers:
+Code Mode receives the original structured value. Keep discovery and filtering in the script when possible, and return only the fields needed for the task. See the [synthetic context benchmark](development/mcp-context-benchmark.md) for the measured difference. Remote descriptions, resources and results are data, not instructions or permission. An eligible model-facing result may be shortened afterwards; scripts never receive a summary in place of the tool value.
 
-```javascript
-const catalog = await tools.mcp__knowledge__resources_list({});
-const resource = await tools.mcp__knowledge__resource_read({
-  uri: "memory://catalog"
-});
-return { catalog, resource };
-```
+To use resources, search for the server’s **List resources and URI templates** and **Read a discovered resource URI** helpers. Inspect their schemas and use the discovered names. For example, call the read helper with `{uri: "memory://catalog"}` when the server advertises that URI.
 
 Tool discovery, resource reads and calls recheck the current grant. A cached schema does not grant authority. Setup retries use1/5/15-second delays where appropriate; an unsuccessful or uncertain remote effect is not replayed.
 

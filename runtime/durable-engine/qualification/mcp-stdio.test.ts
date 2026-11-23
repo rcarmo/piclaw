@@ -34,3 +34,12 @@ test('parent exit never exempts a server descendant from process-group cleanup',
  writeFileSync(script,`import{createInterface}from'node:readline';import{writeFileSync}from'node:fs';const child=Bun.spawn([process.execPath,'-e','setInterval(()=>{},1000)'],{stdin:'ignore',stdout:'ignore',stderr:'ignore'});writeFileSync(${JSON.stringify(childPid)},String(child.pid));for await(const line of createInterface({input:process.stdin})){const r=JSON.parse(line);if(r.id===undefined)continue;const result=r.method==='initialize'?{protocolVersion:'2025-03-26',capabilities:{tools:{}},serverInfo:{name:'tree',version:'1'}}:{tools:[]};console.log(JSON.stringify({jsonrpc:'2.0',id:r.id,result}));}process.exit(0);`);
  const c=await connectMcpStdio({...f.config,command:[process.execPath,script]},()=>{});closes.push(c.close);const pid=Number(readFileSync(childPid,'utf8'));await c.close();expect(()=>process.kill(pid,0)).toThrow();
 });
+
+test('parent exit with inherited output pipes starts cleanup before the close event',async()=>{
+ const f=fixture(),script=join(f.dir,'pipe-holder.ts'),childPid=join(f.dir,'pipe-holder-pid');
+ writeFileSync(script,`import{createInterface}from'node:readline';import{writeFileSync}from'node:fs';const input=createInterface({input:process.stdin});for await(const line of input){const r=JSON.parse(line);if(r.id===undefined)continue;if(r.method==='initialize'){console.log(JSON.stringify({jsonrpc:'2.0',id:r.id,result:{protocolVersion:'2025-03-26',capabilities:{tools:{}},serverInfo:{name:'held-pipe',version:'1'}}}));continue;}console.log(JSON.stringify({jsonrpc:'2.0',id:r.id,result:{tools:[]}}));const child=Bun.spawn([process.execPath,'-e','setInterval(()=>{},1000)'],{stdin:'ignore',stdout:'inherit',stderr:'inherit'});writeFileSync(${JSON.stringify(childPid)},String(child.pid));setTimeout(()=>process.exit(0),40);}`);
+ const c=await connectMcpStdio({...f.config,command:[process.execPath,script]},()=>{});closes.push(c.close);
+ const closed=Promise.withResolvers<void>();c.client.onClose(closed.resolve);
+ await Promise.race([closed.promise,Bun.sleep(2800).then(()=>{throw Error('Missing close notification from pipe holder');})]);
+ await c.close();expect(()=>process.kill(Number(readFileSync(childPid,'utf8')),0)).toThrow();
+},4000);
