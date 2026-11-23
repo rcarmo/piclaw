@@ -38,9 +38,10 @@ test("1.6.0 native MCP composition excludes the retired session constructor and 
   expect(pkg.dependencies["pi-mcp-adapter"]).toBe("github:piclaw-bot/pi-mcp-adapter#dddfcf630508f42c169889c11dee94e69b746e7c");
   expect(existsSync(resolve(root, "runtime/src/agent-pool/session.ts"))).toBe(false);
   expect(existsSync(resolve(root, 'runtime/durable-engine/src/host-mcp.ts'))).toBe(false);
-  const host = readFileSync(resolve(root, 'runtime/durable-engine/src/application-optimizer-mcp.ts'), 'utf8');
+  expect(existsSync(resolve(root, 'runtime/durable-engine/src/application-optimizer-mcp.ts'))).toBe(false);
+  const host = readFileSync(resolve(root, 'runtime/durable-engine/src/mcp/application.ts'), 'utf8');
   expect(host).toContain('createMcpRuntime');
-  expect(host).not.toMatch(/pi-mcp-adapter|createAgentSession|AgentHarness|Pico3/);
+  expect(host).not.toMatch(/pi-mcp-adapter|createAgentSession|AgentHarness|Pico3|TokenOptimizer/);
   const migration = readFileSync(resolve(root, 'runtime/durable-engine/src/mcp/legacy-config.ts'), 'utf8');
   expect(migration).toContain('Read-only, one-shot migration parser');
   expect(typeof createMcpExtension).toBe("function");

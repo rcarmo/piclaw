@@ -1,4 +1,4 @@
-import {recallStorageAllowed as upstreamAllowed} from '#token-optimizer/core';
+import {recallStorageAllowed as upstreamAllowed} from './recall-privacy-upstream.ts';
 // Explicit credential-header syntax is sensitive even when the token is short, synthetic or an unknown vendor format.
 // Keep upstream exclusions and add this host restriction without changing the original invocation's value.
 export function recallStorageAllowed(tool:string,raw:string){

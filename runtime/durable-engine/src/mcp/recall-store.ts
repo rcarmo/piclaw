@@ -7,7 +7,7 @@ import {mcpAgentAllowed} from "./policy.ts";
 import type {Harness,ConversationId,DocumentReader} from "@earendil-works/pi-durable";
 import {type Context} from "@earendil-works/chord/context";
 const invalidArguments=(message:string)=>new Error(message);
-import {defaultMcpRecallSettings,type McpRecallSettings} from "#token-optimizer/core";
+import {defaultMcpRecallSettings,type McpRecallSettings} from "./recall-output.ts";
 import {recallStorageAllowed} from './recall-privacy.ts';
 import {captureMark,checkpointDeletes,conversationLineage,lineageCondition,type AgentDatabase} from "./retained-database.ts";
 import type {McpConnection,McpConnectionStore} from "./connections.ts";

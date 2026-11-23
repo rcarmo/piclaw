@@ -32,7 +32,6 @@ import { BACKGROUND_CONTEXT as context, withAbortSignal } from "@earendil-works/
 import { apply } from "@earendil-works/chord/delta";
 import { Harness, AgentDoc, LiveDoc, configure, createRegistry, defineDoc, defineExtension, defineTool, type ToolExecutionApi, type ToolHooks, type ConversationId } from "@earendil-works/pi-durable";
 import { SqliteStorage } from "@earendil-works/pi-durable/storage/sqlite";
-import { createCodemodeTool } from "@earendil-works/pi-durable/codemode";
 import { CodemodeSandbox } from "@earendil-works/pi-codemode";
 import { accessSync, constants } from "node:fs";
 import { createReadToolDefinition, SettingsManager, normalizeContext } from "../../src/durable-legacy-sdk.js";
@@ -56,10 +55,11 @@ import { readStoredProviderUsageAccountRef } from "../../src/agent-pool/provider
 import { createHostDreamTools } from './host-dream-tools.js';
 import { buildDreamPrompt } from '../../src/agent-memory/dream-prompt.js';
 import type { NativeDreamRequest,AgentOutput } from '../../src/agent-pool/contracts.js';
-import { createApplicationOptimizerMcp } from "./application-optimizer-mcp.js";
+import { createApplicationMcp } from "./mcp/application.js";
 import { createMcpSettingsHandler } from "./mcp/settings.js";
-import { optimizerSettingsApi } from "./token-optimizer-settings.js";
-import { createOptimizerCodemodeTool } from "./optimizer-codemode.js";
+import { createMcpCodemodeTool } from "./mcp/codemode.js";
+import { applicationRetainedDatabase, conversationLineage } from "./mcp/retained-database.js";
+import { createRetainedOutputReader, createRetainedOutputTools } from "./retained-tool-output.js";
 import { createHostFetch } from "./host-fetch.js";
 import { taskModelRequestScope, taskModelHookScope, taskModelToolScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
 import { createHostA2uiTool } from "./host-a2ui-tool.js";
@@ -401,7 +401,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   };
   const autoresearch = await qualifyInstalledAddon(catalog, WORKSPACE_DIR, "autoresearch");
   const infrastructure = (await Promise.all((["proxmox", "portainer", "imap"] as const).map(kind => qualifyInstalledAddon(catalog, WORKSPACE_DIR, kind)))).filter(item => item !== undefined);
-  let features: ReturnType<typeof createApplicationOptimizerMcp> | undefined;
+  let features: ReturnType<typeof createApplicationMcp> | undefined;
   let captureRuntime: HostConversationRuntime | undefined;
   let liveChannel: NativeTurnViewChannel | undefined;
   let nativeQueue: Parameters<RuntimeBackend["bind"]>[0]["queue"] | undefined;
@@ -734,7 +734,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     // Native consumers are qualified separately from generic installed add-ons.
     // Keep their exact namespaces and source assertions after legacy preflight ends.
     const nativeConfigOwners = new Map<string, { assertCurrent(): void } | undefined>([
-      ["goal", goal], ["observability", observability], ["token-optimizer", {assertCurrent:assertCoreDelegate}],
+      ["goal", goal], ["observability", observability],
       ["delegate", { assertCurrent: assertCoreDelegate }], ["code-review", codeReview],
     ]);
     releaseAdminKv = registerAddonConfigKvAuthority((extensionId, chatJid, request) => {
@@ -1112,7 +1112,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   sandbox = new CodemodeSandbox({ memoryLimitBytes: 128 * 1024 * 1024 });
   // Native tool description includes discovery instructions. Deliberately no dynamic
   // declaration section: scheduled overrides retain their own model choice.
-  const codemode = createOptimizerCodemodeTool(sandbox);
+  const codemode = createMcpCodemodeTool(sandbox);
   tools.push(defineTool<typeof codemode.parameters>({ ...codemode, async execute(args, api, context) {
     const sourceCurrent = await captureSource({ conversationId: api.conversationId, taskId: api.taskId, toolCallId: api.callId });
     const assertCurrent = () => { sourceCurrent(); assertCoreDelegate(); };
@@ -1127,7 +1127,12 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     if(!source)throw Error('Exact SDK Dream source required');
     return{chatJid:source.context.chatJid,assertCurrent:source.assertCurrent};
   }});
-  registry.install(defineExtension({ name: "app.host-builtins", tools:[...tools,...dreamTools], hooks: processControls.extension.hooks }));
+  const retainedOutputTools = createRetainedOutputTools(createRetainedOutputReader(applicationRetainedDatabase(root,assertCoreDelegate)),async id=>{
+    const owner=await features!.identity(id);assertCoreDelegate();if(!owner||owner.readOnly)return null;
+    const lineage=await conversationLineage(runtime().coreExtensionHarness(),id,context);assertCoreDelegate();
+    return {owner:JSON.stringify([features!.workspaceId,features!.environmentRevision,owner.binding.chatJid]),lineage};
+  });
+  registry.install(defineExtension({ name: "app.host-builtins", tools:[...tools,...dreamTools,...retainedOutputTools], hooks: processControls.extension.hooks }));
   const backgroundExtension=defineExtension({name:'app.host-background-policy',hooks:[{task:'pi.tool',handlers:{beforeTool:async(call:Parameters<ToolHooks['beforeTool']>[0],api:Parameters<ToolHooks['beforeTool']>[1])=>{
     await captureDreamSource({conversationId:api.conversationId,taskId:api.taskId,taskKind:'pi.tool',callId:call.id});
   }}}]});
@@ -1148,8 +1153,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   if (observability) registry.install(createHostObservabilityPrompt(observability.addon, { root, runtime,
     assertOwner() { assert(); lifetime.signal.throwIfAborted(); observability.assertCurrent(); }, failClosed(error) { lifetime.abort(error); } }));
   if (goal) registry.install(createHostGoalTerminalFence(goal.addon, { root, runtime, assertOwner: assertGoal }));
-  // Request-only optimiser projections follow source-owned Goal/Plan materialisation.
-  features=createApplicationOptimizerMcp({root,workspaceRoot:WORKSPACE_DIR,registry,host,harness:()=>runtime().coreExtensionHarness(),async bindings(harness){const mapping=await harness.snapshot(ApplicationConversations,1 as ConversationId,context);if(!mapping)throw Error("Application namespace is absent");return mapping.bindings;},assertOwner:assertCoreDelegate,assertCleanupOwner:assert,captureSource:api=>captureSource({conversationId:api.conversationId,taskId:api.taskId,toolCallId:api.callId}),offlineMaintenance});
+  features=createApplicationMcp({root,workspaceRoot:WORKSPACE_DIR,registry,harness:()=>runtime().coreExtensionHarness(),async bindings(harness){const mapping=await harness.snapshot(ApplicationConversations,1 as ConversationId,context);if(!mapping)throw Error("Application namespace is absent");return mapping.bindings;},assertOwner:assertCoreDelegate,assertCleanupOwner:assert,captureSource:api=>captureSource({conversationId:api.conversationId,taskId:api.taskId,toolCallId:api.callId}),offlineMaintenance});
   await features.prepare();
   const commandPolicy = createHostCommandPolicy(root, () => { assert(); if (readAccessConfig().mode !== "single-user") throw Error("Native controls require single-user policy"); });
   // Preparation stays paused; the executing HostConversationRuntime installs
@@ -1401,8 +1405,6 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       if (row) { if (goal) wakeGoalFollowups(row.chat_jid); drainPending(row.chat_jid); }
     },
     async onRuntime(value) { captureRuntime = value; await features!.attach(); },
-    onConversationReady:id=>features!.conversationReady(id),
-    preparePrompt:(id,text)=>features!.optimizer.preparePrompt(id,text),
         prepareInputText: goalInput, prepareTerminalEffect: goalSettlement,
         readExecutionPolicy: commandPolicy.read,
         setExecutionPolicy: commandPolicy.set,
@@ -1438,13 +1440,11 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       check(ref, lifetime.signal);
       return binding;
     },
-    runtime: { optimizer:features.authority, onSessionReset:id=>features!.reset(id), onStorageFailure: notifyStorageFailure, incarnation: mapping.domain, sessionId: mapping.domain, now: () => new Date().toISOString(), harnessOptions,
+    runtime: { onStorageFailure: notifyStorageFailure, incarnation: mapping.domain, sessionId: mapping.domain, now: () => new Date().toISOString(), harnessOptions,
       codemodeExecute: tools.find(tool => tool.name === "codemode")!.execute } }, context);
   if(!offlineMaintenance){
     const handler=createMcpSettingsHandler(features!,root,()=>{assertAdmission();assertCoreDelegate();});
     if(registerExtensionRoute('/agent/settings/mcp',handler,'core:outbound-mcp')==='rejected')throw Error('MCP settings route unavailable');
-    const registration=registerOwnedAddonConfigApi('token-optimizer','config',optimizerSettingsApi(features!,root,()=>{assertAdmission();assertCoreDelegate();},(check,body)=>runtime().withSourceWriteGuard(check,body)),'core:token-optimizer');
-    resourceDisposers.push(()=>registration.dispose());
   }
   if (remotePeer) {
     const native = await import(pathToFileURL(join(remotePeer.source.packageDir, "native.ts")).href);
@@ -1610,7 +1610,6 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       // cancellation outcomes. Keep tool/provider dependencies alive until then.
       // If close is uncertain or held maintenance cannot join, retain them and
       // ownership; the operator's process-wide backstop still bounds shutdown.
-      await features?.detach();
       await bundle.close();
       await Promise.allSettled([...usageReports]);
       const producerResults = await Promise.allSettled([closeRemote(), closeCodex(), features?.close(), observability?.addon.shutdownObservabilityRuntime()]);
@@ -1626,7 +1625,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     // A post-construction failure still owns a live SDK scheduler/storage graph.
     // Join it before invalidating execution dependencies or releasing ownership.
     if (typeof bundle !== 'undefined') {
-      try { bundle.stop(); await features?.detach(); await bundle.close(); }
+      try { bundle.stop(); await bundle.close(); }
       catch (cleanup) { throw new RuntimeStartupCleanupError([error, cleanup], 'Application startup cleanup uncertain'); }
     }
     const cleanupFailures: unknown[] = [];

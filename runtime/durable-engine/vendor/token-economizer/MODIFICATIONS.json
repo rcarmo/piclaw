@@ -5,7 +5,8 @@
   "adaptedTests": [
     {
       "path": "test/boundaries.test.ts",
-      "sha256": "19cf433670c5c4cb17aa0ddb5bdbce20f2f2c1f8d4b8cedbdc6279896a40a82c"
+      "sha256": "83f5384ca45d952b73bb56f05b03996c8fd8f4f36eb04a3aeb4e6cac92150488",
+      "reason": "Preserve pinned attribution and license checks; require archived optimiser code and aliases to stay out of Piclaw production."
     },
     {
       "path": "test/durable.test.ts",

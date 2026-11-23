@@ -131,7 +131,6 @@ type MessageKey =
   | 'settings.section.providers'
   | 'settings.section.models'
   | 'settings.section.mcp'
-  | 'settings.section.optimizer'
   | 'settings.section.theme'
   | 'settings.section.scheduled-tasks'
   | 'settings.section.quick-actions'
@@ -728,7 +727,6 @@ const EN: Record<MessageKey, string> = {
   'settings.section.providers': 'Providers',
   'settings.section.models': 'Models',
   'settings.section.mcp': 'MCP',
-  'settings.section.optimizer': 'Optimisation',
   'settings.section.theme': 'Appearance',
   'settings.section.scheduled-tasks': 'Scheduled Tasks',
   'settings.section.quick-actions': 'Quick Actions',
@@ -908,7 +906,7 @@ const EN: Record<MessageKey, string> = {
   'settings.tools.disableCompaction': 'Disable tool-result compaction for this tool',
   'settings.tools.enableCompaction': 'Enable tool-result compaction for this tool',
   'settings.tools.noMatch': 'No tools match "{filter}"',
-  'settings.tools.footer': 'Read-only tool catalogue. Availability follows SDK access restrictions and optimizer policy.',
+  'settings.tools.footer': 'Read-only tool catalogue. Availability follows SDK access restrictions.',
   'settings.environment.heading': 'Environment',
   'settings.environment.introPre': 'Showing non-keychain environment variables only. Overrides are stored in extension KV and applied to',
   'settings.environment.introPost': ', so subsequent tool calls inherit them.',
@@ -1319,7 +1317,6 @@ const ZH_CN: Partial<Record<MessageKey, string>> = {
   'settings.section.providers': '提供商',
   'settings.section.models': '模型',
   'settings.section.mcp': 'MCP',
-  'settings.section.optimizer': '优化',
   'settings.section.theme': '外观',
   'settings.section.scheduled-tasks': '计划任务',
   'settings.section.quick-actions': '快捷操作',
@@ -1910,7 +1907,6 @@ const JA: Partial<Record<MessageKey, string>> = {
   'settings.section.providers': 'プロバイダー',
   'settings.section.models': 'モデル',
   'settings.section.mcp': 'MCP',
-  'settings.section.optimizer': '最適化',
   'settings.section.theme': '外観',
   'settings.section.scheduled-tasks': 'スケジュールタスク',
   'settings.section.quick-actions': 'クイックアクション',

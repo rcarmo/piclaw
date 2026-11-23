@@ -73,6 +73,7 @@ for (const addons of [false, true]) applicationTest(`complete native startup inv
     expect(result.objects.some(object => object.owner === "core:native-timeline-media")).toBe(true);
     expect(result.objects.some(object => object.owner === "addon:code-review")).toBe(addons);
     expect(result.objects.some(object => object.owner === "archive:session-store")).toBe(false);
+    expect(result.objects.some(object => object.owner === "cache:retained-tool-output")).toBe(false);
     const kinds = db.query("SELECT DISTINCT json_extract(record,'$.kind') AS kind FROM documents").all() as { kind: string }[];
     for (const { kind } of kinds) expect(contract.documents.some(document => document.kind === kind),kind).toBe(true);
     expect(db.query("SELECT * FROM documents ORDER BY id").all()).toEqual(documents);

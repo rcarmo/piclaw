@@ -2,9 +2,9 @@ import {createHash,randomBytes} from 'node:crypto';
 import {withAddonLocalRequest,addonLocalContextApi} from '../../../src/addons/local-context.js';
 import {McpOAuthVault} from './oauth.ts';
 import type {McpConnectionInput} from './connections.ts';
-import {defaultMcpRecallSettings} from '#token-optimizer/core';
+import {defaultMcpRecallSettings} from './recall-output.ts';
 import {admitSqliteWrite} from '../../../src/db/sqlite-async-admission.js';
-import type {createApplicationOptimizerMcp} from '../application-optimizer-mcp.ts';
+import type {createApplicationMcp} from './application.ts';
 import type {Database} from 'bun:sqlite';
 const base='/agent/settings/mcp';
 const object=(value:unknown):value is Record<string,unknown>=>!!value&&typeof value==='object'&&!Array.isArray(value);
@@ -21,7 +21,7 @@ export async function readSettingsBody(request:Request){
  }finally{clearTimeout(timer);request.signal.removeEventListener('abort',abort);void reader.cancel().catch(()=>{});try{reader.releaseLock();}catch{}}
 }
 /** Authenticated Core settings only. This does not expose an inbound MCP/control server. */
-export function createMcpSettingsHandler(service:ReturnType<typeof createApplicationOptimizerMcp>,database:Database,assertOwner:()=>void){
+export function createMcpSettingsHandler(service:ReturnType<typeof createApplicationMcp>,database:Database,assertOwner:()=>void){
  return async(request:Request,pathname:string):Promise<Response>=>withAddonLocalRequest(request,async principal=>{
   const check=()=>{assertOwner();request.signal.throwIfAborted();const current=addonLocalContextApi.getRequestContext(request);if(!principal||principal.kind!=='operator'||principal.workspaceId!==service.workspaceId||!current||current.ownerId!==principal.ownerId)throw Error('Authenticated MCP configuration owner required');};
   try{

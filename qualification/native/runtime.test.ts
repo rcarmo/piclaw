@@ -23,7 +23,6 @@ import { createCurrentPiclawServiceWorkStore } from "../../runtime/src/service-e
 import { createCurrentPiclawTerminalSettlementStore } from "../../runtime/src/service-effects/current-piclaw/terminal-settlement-store.js";
 import { createHostDurableBindings, initializeHostDurableBindings } from "../../runtime/durable-engine/src/index.js";
 import { estimateContextTokens } from "../../runtime/durable-engine/qualification/ai.ts";
-import { recordOptimizerOperation } from "../../runtime/durable-engine/src/token-optimizer-operations.js";
 import { projectTurnActivity } from "../../runtime/src/channels/web/agent/turn-activity.js";
 import { InMemoryEffectPayloadResolver } from "../../runtime/src/service-effects/testing/in-memory-payload-resolver.js";
 
@@ -616,9 +615,10 @@ test("runtime: settled activity includes late optimiser receipts but not the nex
   const status = (await f.runtime.reconcile(input)).status;
   const answer = status?.type === 'input' && status.status === 'done' ? status.answer : undefined;
   expect(answer).toBeDefined();
-  const commit = (id: string) => f.runtime.coreExtensionHarness().commit(tx => recordOptimizerOperation(tx,binding.conversationId as ConversationId,{
+  const historical = defineEntry<{id:string;name:string;status:string;startedAt:number;at:number;input:Record<string,never>;output:{changes:{facts:{claim:string}[];suggestedTools:string[];withdrawnTools:string[]}}}>('piclaw.token-optimizer.operation');
+  const commit = (id: string) => f.runtime.coreExtensionHarness().commit(tx => tx.appendEntry(historical,binding.conversationId as ConversationId,{data:{
     id,name:'optimizer.learn',status:'complete',startedAt:1,at:2,input:{},output:{changes:{facts:[{claim:'private fact'}],suggestedTools:[],withdrawnTools:[]}}
-  }),context);
+  }}),context);
   await commit('first');
   // A committed input marker is enough to establish the next read boundary;
   // the existing fixture's first operation does not settle a host frontier.

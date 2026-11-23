@@ -1,7 +1,6 @@
 import './src/test-guard.js';
 import {expect} from 'bun:test';
-import {mkdirSync,writeFileSync,readFileSync,realpathSync} from 'node:fs';
-import {createHash} from 'node:crypto';
+import {mkdirSync,writeFileSync,readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {isolatedApplicationTest} from './src/isolated-application-test.js';
 import {initDatabase,getDb,closeDatabase} from '../../runtime/src/db/connection.js';
@@ -65,9 +64,12 @@ test('default outbound MCP migrates references, preserves script values, fences 
  const credentials=createTestCredentialStore({fixture:{type:'api_key',key:'synthetic-only'}}),host=await ModelRuntime.create({credentials,modelsPath:null,modelsStore:{read:async()=>undefined,write:async()=>{},delete:async()=>{}},allowModelNetwork:false,refreshOnCreate:false});
  const model:any={provider:'fixture',id:'main',name:'main',api:'openai-completions',baseUrl:'https://fixture.invalid',input:['text'],reasoning:false,contextWindow:128000,maxTokens:1000,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}};
  let keychainDeclaration: any;
- let requestedTool='codemode';const code="const value=await tools.mcp__fixture__echo({message:'DEFAULT_HTTP'});if(value.lines.length!==3000||value.tail!=='COMPLETE_TAIL')throw Error('Script value lost');const resources=await tools.mcp__fixture__resources_list({});if(resources.resources[0].uri!=='memory://fixture')throw Error('Resource list lost');const resource=await tools.mcp__fixture__resource_read({uri:'memory://fixture'});if(resource.contents[0].text!=='RESOURCE_OK')throw Error('Resource value lost');return 'DEFAULT_SCRIPT_OK';";
+ let requestedTool='codemode';const code="const found=await searchTools('Return a complete structured fixture',{limit:4});if(!JSON.stringify(found).includes('mcp__fixture__echo'))throw Error('MCP discovery lost');const schema=await describeTool('mcp__fixture__echo');if(!JSON.stringify(schema).includes('message'))throw Error('MCP schema lost');const value=await tools.mcp__fixture__echo({message:'DEFAULT_HTTP'});if(value.lines.length!==3000||value.tail!=='COMPLETE_TAIL')throw Error('Script value lost');const resources=await tools.mcp__fixture__resources_list({});if(resources.resources[0].uri!=='memory://fixture')throw Error('Resource list lost');const resource=await tools.mcp__fixture__resource_read({uri:'memory://fixture'});if(resource.contents[0].text!=='RESOURCE_OK')throw Error('Resource value lost');return 'DEFAULT_SCRIPT_OK';";
  const run=(_physical:any,transcript:any)=>{modelCalls++;const stream=createAssistantMessageEventStream(),tool=modelCalls%2===1;if(!tool)receipts.push(transcript.messages.filter((message:any)=>message.role==='toolResult').at(-1));
-  keychainDeclaration ??= transcript.messages.flatMap((message:any)=>message.toolsAdded??[]).find((declaration:any)=>declaration.name==='keychain');
+  const declarations=transcript.messages.flatMap((message:any)=>message.toolsAdded??[]);
+  expect(declarations.some((declaration:any)=>declaration.name?.startsWith('mcp__'))).toBe(false);
+  if(modelCalls===1){expect(declarations.find((item:any)=>item.name==='codemode')?.description).toContain('searchTools()');expect(JSON.stringify(transcript)).not.toContain('Return a complete structured fixture');}
+  keychainDeclaration ??= declarations.find((declaration:any)=>declaration.name==='keychain');
   const message:any={role:'assistant',api:model.api,provider:model.provider,model:model.id,timestamp:Date.now(),content:tool?[{type:'toolCall',id:'code-'+modelCalls,name:requestedTool,arguments:requestedTool==='bash'?{command:'seq 1 3000'}:requestedTool==='keychain'?{action:'list',query:'fixture/mcp'}:{code}}]:[{type:'text',text:'Fixture settled.'}],stopReason:tool?'toolUse':'stop',usage:{input:2,output:1,cacheRead:0,cacheWrite:0,totalTokens:3,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}};queueMicrotask(()=>{stream.push({type:'done',reason:message.stopReason,message});stream.end(message);});return stream;
  };
  host.registerNativeProvider({id:'fixture',name:'Fixture',getModels:()=>[model],auth:{apiKey:{name:'Synthetic',resolve:async()=>({auth:{},source:'fixture'})}},stream:run as any,streamSimple:run as any});await host.refresh({allowNetwork:false});await host.getAvailable();const registry=new ModelRegistry(host),settings=SettingsManager.create(workspace,getPiclawAgentDir());settings.setDefaultModelAndProvider('fixture','main');await settings.flush();
@@ -95,17 +97,10 @@ test('default outbound MCP migrates references, preserves script values, fences 
   secret='SYNTHETIC_ROTATED';await setKeychainEntry({name:'fixture/mcp',type:'token',secret});
   const disabled=(await view()).connections[0];expect((await handleExtensionRoutes(request('POST',{action:'save',connection:{id:connection.id,enabled:true},expectedRevision:disabled.revision}),path))?.status).toBe(200);await connected();
   await send(3);expect(remoteCalls).toBe(2);expect(JSON.stringify(receipts[2])).toContain('DEFAULT_SCRIPT_OK');expect(readFileSync(legacyPath,'utf8')).toBe(legacy);
-  const optimizerGet=()=>handleRegisteredAddonConfigApiRequest(request(),'token-optimizer','config',(body,status=200)=>Response.json(body,{status}));
-  let optimizer=await (await optimizerGet())!.json() as any;
-  for(const mode of ['observe','active']){
-   Object.assign(optimizer.config.policy,{enabled:true,mode,offloadOutputs:true,reduceOutputs:true,outputSummaries:false,offload:{bytes:1024,lines:100,retentionDays:7}});
-   const configured=await handleRegisteredAddonConfigApiRequest(request('POST',{config:optimizer.config,expectedRevision:optimizer.revision}),'token-optimizer','config',(body,status=200)=>Response.json(body,{status}));expect(configured?.status).toBe(200);optimizer=await configured!.json();expect(optimizer.config.policy.mode).toBe(mode);
-  }
+  const retired=await handleRegisteredAddonConfigApiRequest(request(),'token-optimizer','config',(body,status=200)=>Response.json(body,{status}));expect(retired).toBeNull();
   requestedTool='bash';await send(4);
-  const retained=database.query("SELECT text FROM retained_tool_outputs WHERE tool='bash'").all() as {text:string}[];
-  expect(retained.some(row=>row.text.includes('2999\n3000')),JSON.stringify(retained.map(row=>({length:row.text.length,tail:row.text.slice(-40)})))).toBe(true);expect(receipts[3]?.isError).not.toBe(true);expect(remoteCalls).toBe(2);
-  const retainedStatus=(await (await optimizerGet())!.json() as {status:{agentId:string;hasRetainedCopies:boolean}[]}).status;
-  expect(retainedStatus.find(state=>state.agentId==='web:default')?.hasRetainedCopies).toBe(true);
+  expect(receipts[3]?.isError).not.toBe(true);expect(remoteCalls).toBe(2);
+  expect(database.query("SELECT name FROM sqlite_schema WHERE name='retained_tool_outputs'").get()).toBeNull();
   expect(keychainDeclaration).toBeDefined();
   expect(Object.keys(keychainDeclaration.parameters.properties).sort()).toEqual(['action','limit','offset','query']);
   const inventoryBefore=database.query('SELECT name, type, hex(ciphertext) ciphertext FROM keychain_entries ORDER BY name').all();
@@ -115,20 +110,6 @@ test('default outbound MCP migrates references, preserves script values, fences 
   expect(JSON.stringify(receipts[4])).not.toContain(secret);
   expect(database.query('SELECT name, type, hex(ciphertext) ciphertext FROM keychain_entries ORDER BY name').all()).toEqual(inventoryBefore);
   expect(remoteCalls).toBe(2);
-  const rawConfig=()=>database.query<{value:string},[]>("SELECT value FROM router_state WHERE key='native.token-optimizer.v1'").get()!.value;
-  const legacyOptimizer=JSON.parse(rawConfig());
-  const instanceId=createHash('sha256').update(realpathSync(workspace)).digest('hex');
-  const localAgent=JSON.stringify([instanceId,'web:default']);
-  Object.assign(legacyOptimizer,{workspaces:{[instanceId]:'off'},agents:{[localAgent]:'active'},oversightWorkspaces:{[instanceId]:'observe'},oversightAgents:{[localAgent]:'off'}});
-  legacyOptimizer.policy.oversightMode='active';
-  const legacyBytes=JSON.stringify(legacyOptimizer);database.run("UPDATE router_state SET value=? WHERE key='native.token-optimizer.v1'",[legacyBytes]);
-  const projected=await (await optimizerGet())!.json() as any;
-  expect(rawConfig()).toBe(legacyBytes);
-  expect(Object.keys(projected.config).sort()).toEqual(['hasEnabled','policy','version']);
-  expect(projected.config.policy).toMatchObject({enabled:false,mode:'off',oversightMode:'observe'});
-  expect(projected.status.find((state:{agentId:string})=>state.agentId==='web:default')?.policy).toMatchObject({enabled:false,mode:'off',oversightMode:'observe'});
-  const savedInstance=await handleRegisteredAddonConfigApiRequest(request('POST',{config:projected.config,expectedRevision:projected.revision}),'token-optimizer','config',(body,status=200)=>Response.json(body,{status}));
-  expect(savedInstance?.status).toBe(200);expect(JSON.parse(rawConfig())).toEqual(projected.config);
   expect(database.query('SELECT * FROM service_effect_s01_operations').all()).toEqual([]);
   const before=modelCalls;await backend.close();backend=await createDefaultApplicationRuntime(owner,async()=>services);await connected();expect(remoteCalls).toBe(2);expect(modelCalls).toBe(before);
  }finally{await backend?.close();await channel?.stop();await base.queue.shutdown();await pool?.shutdown();await closeDatabase();owner.release();setKeyMaterialProviderForTests(null);globalThis.fetch=originalFetch;}

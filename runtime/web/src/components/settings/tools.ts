@@ -42,7 +42,7 @@ const TOOL_EXTENSION = {
 const KIND_BADGE = { 'read-only': '\ud83d\udd0d', 'mutating': '\u270f\ufe0f', 'mixed': '\ud83d\udd04' };
 const DEFAULT_ICON = renderToolIcon(12);
 
-/** Read-only catalogue. SDK access restrictions and optimizer pruning own availability. */
+/** Read-only catalogue. SDK access restrictions govern availability. */
 export function ToolsSection({ toolsets, filter = '', settingsData, mergeSettingsData }) {
     const { t: tr } = useTranslation();
     const groups = toolsets || [];

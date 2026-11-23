@@ -4,7 +4,7 @@ import type {Database} from 'bun:sqlite';
 import {createHash} from 'node:crypto';
 import {Type,type Static} from 'typebox';
 import {Value} from 'typebox/value';
-import {McpRecallSettingsSchema,defaultMcpRecallSettings} from '#token-optimizer/core';
+import {McpRecallSettingsSchema,defaultMcpRecallSettings} from './recall-output.ts';
 import {admitSqliteWrite} from '../../../src/db/sqlite-async-admission.js';
 import {canonicalMcpAccess,mcpAccess,mcpAccessOverlaps,mcpAccessSchema,mcpIdentitySchema} from './policy.ts';
 import {mcpEndpoint} from './client.ts';

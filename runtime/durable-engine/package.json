@@ -32,10 +32,5 @@
     "@earendil-works/pi-durable": "1.6.0",
     "@earendil-works/pi-telemetry": "1.6.0",
     "@earendil-works/pi-mcp": "1.6.0"
-  },
-  "imports": {
-    "#token-optimizer/core": "./vendor/token-economizer/src/core/index.ts",
-    "#token-optimizer/pi-durable": "./vendor/token-economizer/src/pi-durable/index.ts",
-    "#token-optimizer/state": "./vendor/token-economizer/src/pi-durable/documents.ts"
   }
 }

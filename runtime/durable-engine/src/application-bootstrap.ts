@@ -114,8 +114,6 @@ export interface ApplicationBootstrapOptions {
   readExecutionPolicy?: () => {autoCompact: boolean; autoRetry: boolean};
   setExecutionPolicy?: (name: "autoCompact" | "autoRetry", enabled: boolean) => void | Promise<void>;
   onRuntime?: (runtime: import("./host-runtime.js").HostConversationRuntime) => void | Promise<void>;
-  onConversationReady?: (id:ConversationId)=>Promise<void>;
-  preparePrompt?: (id:ConversationId,text:string)=>Promise<void>;
   assertConversationAvailable?: () => void;
   assertAdmission?: RuntimeOptions["assertAdmission"];
   /** Host-owned physical catalog approval; no credentials or provider execution. */
@@ -125,7 +123,7 @@ export interface ApplicationBootstrapOptions {
   assertInputAdmission?: (chatJid: string, content: string) => void;
   prepareInputText?: NonNullable<WebChannelOpts["prepareInputText"]>;
   createConversation?: (tx: import("@earendil-works/pi-durable").Tx, chatJid: string, branchId: string) => Promise<Manifest[number] & { sessionId: string }>;
-  runtime: Pick<HostControllerOptions["runtime"], "incarnation" | "sessionId" | "harnessOptions" | "now" | "codemodeExecute" | "onStorageFailure" | "optimizer" | "onSessionReset">;
+  runtime: Pick<HostControllerOptions["runtime"], "incarnation" | "sessionId" | "harnessOptions" | "now" | "codemodeExecute" | "onStorageFailure">;
   /** Existing application payload store, with immutable answer references. */
   answers: { resolver: EffectPayloadResolver; put(ref: string, text: string): void | Promise<void> };
   /** Optional acknowledgement boundary; the supplied operation still performs the real wait. */
@@ -359,7 +357,6 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
         chatJid:chat,branchId:scope.branchId,operationId:`native-message:${scope.conversationId}:${source.sourceSeq}`,sourceSeq:source.sourceSeq,
         sourceId:messageId,payloadRef:source.payloadRef,requestId,requestHash:hashCanonicalRequest({type:"input",requestId,content:row.content})});
       // Priority intervention does not wait for an idle prompt's optional optimiser tool pick.
-      if (whenBusy !== "steer") await config.preparePrompt?.(scope.conversationId as ConversationId, row.content);
       assertLive();
       const id = await runtime.submitMessage(input,whenBusy); assertLive();
       // Observe accepted SDK work even if a later Root cursor ACK is uncertain.
@@ -598,7 +595,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
         assertRoot();
         // One publication point. Every ingress and session lookup uses this record.
         routeIndex.set(chat, Object.freeze({ ...binding }));
-        await config.onConversationReady?.(binding.conversationId);assertRoot();
+        assertRoot();
       })().then(() => { if (preparing.get(chat) === promise) preparing.delete(chat); }, error => {
         // Only failures proven to precede the public commit attempt are retryable.
         // Any rejection after that boundary (including publication) is uncertain.

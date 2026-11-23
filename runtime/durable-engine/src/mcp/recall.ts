@@ -5,8 +5,8 @@ import {Type} from "typebox";
 import {Value} from "typebox/value";
 const isJsonObject=(value:unknown):value is import("@earendil-works/pi-durable").JsonObject=>value!==null&&typeof value==="object"&&!Array.isArray(value);
 const invalidArguments=(message:string)=>new Error(message);
-import {defaultMcpRecallSettings,summarizeMcpOutput} from "#token-optimizer/core";
-import {optimizerCallEntry as codemodeCallEntry,McpScriptOutputDoc} from "../optimizer-output-source.ts";
+import {defaultMcpRecallSettings,summarizeMcpOutput} from "./recall-output.ts";
+import {isMcpCallReceipt,McpScriptOutputDoc} from "./codemode.ts";
 import type {McpConnectionStore} from "./connections.ts";
 import {createMcpRecallStore,mcpAccessEpoch,mcpRecallAllowed,type McpRecallItem,type McpRecallIdentity} from "./recall-store.ts";
 import type {AgentDatabase} from "./retained-database.ts";
@@ -60,15 +60,15 @@ export function createMcpRecallExtension(options:{workspaceId:string;harness:()=
     if(!agent?.tools.some(tool=>tool.name==='codemode')||!agent.callable.some(tool=>tool.name==='mcp_recall_retrieve'))return result;
     const memo=await api.memo<{id:string;text:string;mode:string;handler:string}|null>("mcp-recall-projection-v1",context);
     if(memo!==undefined)return memo?modelProjection(result,memo.text,memo.id,memo.mode,memo.handler):result;
-    const entries=(await api.entries({order:"descending"},256,undefined,context)).items.filter(entry=>entry.byTaskId===api.taskId&&codemodeCallEntry.is(entry));
-    const starts=entries.filter(codemodeCallEntry.is).filter(entry=>entry.data.phase==="start");
-    const ends=entries.filter(codemodeCallEntry.is).filter(entry=>entry.data.phase==="end");
+    const staged=await api.snapshot(McpScriptOutputDoc,api.taskId,context);
+    if(staged?.raw==null){await api.memo("mcp-recall-projection-v1",null,context);return result;}
+    const entries=(await api.entries({order:"descending"},256,undefined,context)).items.filter(isMcpCallReceipt).filter(entry=>entry.byTaskId===api.taskId);
+    const starts=entries.filter(entry=>entry.data.phase==="start");
+    const ends=entries.filter(entry=>entry.data.phase==="end");
     if(!starts.length||starts.length!==result.details.calls.length||starts.length!==ends.length||starts.some(entry=>entry.data.phase!=="start"||!entry.data.name.startsWith("mcp__"))||ends.some(entry=>entry.data.phase!=="end"||entry.data.cancelled||entry.data.isError||!Value.Check(captureSchema,entry.data.details))){await api.memo("mcp-recall-projection-v1",null,context);return result;}
     const ids=[...new Set(ends.flatMap(entry=>entry.data.phase==="end"&&Value.Check(captureSchema,entry.data.details)?[entry.data.details.mcpResultId]:[]))],all=await store.list(api.conversationId,context),sources=all.filter(row=>ids.includes(row.id));
     if(sources.length!==ids.length){await api.memo("mcp-recall-projection-v1",null,context);return result;}
     const settings=sources.flatMap(row=>store.settings(row));if(settings.some(item=>item.mode==="off")){await api.memo("mcp-recall-projection-v1",null,context);return result;}
-    const staged=await api.snapshot(McpScriptOutputDoc,api.taskId,context);
-    if(staged?.raw==null){await api.memo("mcp-recall-projection-v1",null,context);return result;}
     const raw=staged.raw,summary=summarizeMcpOutput({tool:sources.length===1?sources[0]!.tool:"mcp-emitted",text:raw,profiles:settings.flatMap(item=>item.profiles)});
     if(!summary){await api.memo("mcp-recall-projection-v1",null,context);return result;}
     const grants=[...new Map(sources.flatMap(row=>row.grants).map(grant=>[JSON.stringify(grant),grant])).values()].sort((a,b)=>a.connectionId.localeCompare(b.connectionId));

@@ -113,7 +113,7 @@ test('large media upload route is authenticated, CSRF guarded and chunk-rate lim
 });
 
 const operator:AuthenticatedPrincipal={kind:'local',userId:'default',username:'default',displayName:'Fixture',role:'admin',mode:'single-user',homeChatJid:'web:default',authentication:{method:'local',sessionId:null,expiresAt:null}};
-for(const path of ['/agent/settings/mcp','/agent/settings/mcp/oauth/callback','/agent/addons/api/token-optimizer/config'])test('real request guard admits the current operator for '+path,async()=>{
+for(const path of ['/agent/settings/mcp','/agent/settings/mcp/oauth/callback'])test('real request guard admits the current operator for '+path,async()=>{
  let principal:AuthenticatedPrincipal=operator;const channel=createChannel({authGateway:{isInternalSecretEnabled:()=>false,getPrincipal:()=>principal}}),request=new Request('https://example.com'+path);
  expect(await enforceRequestGuards(channel,request,path,getRouteFlags(request,path))).toBeNull();
  await withAddonLocalRequest(request,async context=>{expect(context?.kind).toBe('operator');expect(context?.ownerId).toBe('default');principal={...operator,role:'member'};await expect(context!.listTargets()).rejects.toThrow('unavailable');});

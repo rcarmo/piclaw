@@ -31,7 +31,7 @@ test("core imports no host, SDK, filesystem, network or clock", async () => {
   }
 });
 
-test("distribution retains the pinned upstream licence, attribution and modified-port notices", async () => {
+test("archived source retains upstream attribution and production ships no optimiser engine", async () => {
   const licence = await Bun.file(`${root}/LICENSE`).text();
   expect(new Bun.CryptoHasher("sha256").update(licence).digest("hex")).toBe("cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30");
   const notice = await Bun.file(`${root}/NOTICE`).text();
@@ -43,21 +43,11 @@ test("distribution retains the pinned upstream licence, attribution and modified
   }
 
   const projectPackage = JSON.parse(await Bun.file(`${projectRoot}/package.json`).text()) as { files?: string[]; imports?: Record<string, string> };
-  expect(projectPackage.files ?? []).toEqual(expect.arrayContaining([
-    "runtime/durable-engine/vendor/token-economizer/src",
-    "runtime/durable-engine/vendor/token-economizer/LICENSE",
-    "runtime/durable-engine/vendor/token-economizer/NOTICE",
-    "runtime/durable-engine/vendor/token-economizer/package.json",
-    "runtime/durable-engine/vendor/token-economizer/SOURCE.json",
-  ]));
-  expect(projectPackage.imports ?? {}).toMatchObject({
-    "#token-optimizer/core": "./runtime/durable-engine/vendor/token-economizer/src/core/index.ts",
-    "#token-optimizer/pi-durable": "./runtime/durable-engine/vendor/token-economizer/src/pi-durable/index.ts",
-    "#token-optimizer/state": "./runtime/durable-engine/vendor/token-economizer/src/pi-durable/documents.ts",
-  });
+  expect(projectPackage.files?.some(path=>path.includes('vendor/token-economizer'))).toBe(false);
+  expect(Object.keys(projectPackage.imports??{}).some(name=>name.startsWith('#token-optimizer/'))).toBe(false);
 });
 
-test("the Piclaw host uses only the package's public entry points", async () => {
+test("the Piclaw host does not import the archived optimiser", async () => {
   for (const hostRoot of [resolve(projectRoot, "runtime/src"), resolve(projectRoot, "runtime/durable-engine/src")]) {
   for await (const file of new Bun.Glob("**/*.ts").scan({ cwd: hostRoot })) {
     const source = await Bun.file(`${hostRoot}/${file}`).text();
@@ -66,11 +56,7 @@ test("the Piclaw host uses only the package's public entry points", async () => 
       ...Array.from(source.matchAll(/\bimport\s+["']([^"']+)["']/g), match => match[1]),
     ];
     for (const name of names) {
-      if (name.startsWith("#token-optimizer/")) expect(name).toMatch(/^#token-optimizer\/(?:core|pi-durable|state)$/);
-      if (name.includes("token-economizer")) {
-        expect(name).not.toContain("/src/");
-        expect(name).not.toMatch(/^@kintsugi\//);
-      }
+      expect(name).not.toMatch(/^#token-optimizer\/|(?:^|\/)token-economizer(?:\/|$)/);
     }
     expect(source).not.toContain("token-economizer/src/");
     expect(source).not.toContain("@kintsugi/token-economizer");
