@@ -130,12 +130,27 @@ for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash']) f
       const afterLogoutEntries = JSON.stringify(root.query('SELECT record FROM entries').all());
       for (const key of Object.values(keys)) expect(afterLogoutEntries).not.toContain(key);
     }
+    if (migrate) {
+      const removed = await request('config', 'POST', { remove_model: childSlug });
+      expect(removed!.status).toBe(200);
+      expect(extensionKvGet("delegate", "config", "global")).toEqual({ approved_models: [], provider_order: searchable });
+      const response = await handleAgentMessage(channel, new Request('https://fixture/agent/default/message', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: 'AFTER_REVOCATION', mode: 'auto' }),
+      }), '/agent/default/message', 'web:default', 'default');
+      expect(response.status).toBe(201);
+      const terminalCount = () => (root.query('SELECT count(*) n FROM messages WHERE is_terminal_agent_reply=1').get() as { n: number }).n;
+      const deadline = Date.now() + 10000;
+      while (terminalCount() < 2 && Date.now() < deadline) await Bun.sleep(10);
+      expect(terminalCount()).toBe(2);
+      expect(offered).toHaveLength(4);
+      expect(children).toBe(1);
+    }
     const beforeReopen = (await (await request('models'))!.json() as any).candidates.map((model: any) => model.id);
     const saved = root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all(), callsBefore = offered.length;
     await backend.close(); await channel.stop(); await pool.shutdown(); await base.queue.shutdown();
     backend = await createDefaultApplicationRuntime(owner, async () => services);
     expect(root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all()).toEqual(saved);
-    expect((await (await request('models'))!.json() as any).candidates.map((model: any) => model.id)).toEqual(credentialed ? beforeReopen : expectedCandidates);
+    expect((await (await request('models'))!.json() as any).candidates.map((model: any) => model.id)).toEqual(credentialed || migrate ? beforeReopen : expectedCandidates);
     expect(offered.length).toBe(callsBefore); expect(children).toBe(approved ? 1 : 0); expect(existsSync(marker)).toBe(false);
     if (credentialed && approved) {
       expect(await credentials.read(child.provider)).toBeUndefined();
