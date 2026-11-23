@@ -1,23 +1,22 @@
 import './src/test-guard.js';
 import { expect, test } from 'bun:test';
-import { createRegistry, defineExtension, Harness, MemoryStorage } from '../../runtime/durable-engine/qualification/durable.js';
+import { createRegistry, defineDoc, defineExtension, Harness, MemoryStorage } from '../../runtime/durable-engine/qualification/durable.js';
 import { BACKGROUND_CONTEXT as context } from '../../runtime/durable-engine/qualification/context.js';
 import { createModels, createProvider } from '../../runtime/durable-engine/qualification/ai.js';
 import { AssistantMessageEventStream } from '../../runtime/durable-engine/qualification/event-stream.js';
 import { createPlanTool } from '../../runtime/durable-engine/src/plan-tool.js';
 import { PlanDoc } from '../../runtime/durable-engine/src/plan-document.js';
-import { OptimizerPlanBinding, optimizerPlanTask } from '../../runtime/durable-engine/src/optimizer-plan-binding.js';
-import { LiveDoc } from '../../runtime/durable-engine/qualification/durable.js';
+const HistoricalPlanBinding=defineDoc<{revision:number;task:string|null}>({kind:'piclaw.optimizer-plan-binding',version:1,scope:'conversation',history:'latest',fork:'initial',initial:()=>({revision:0,task:null}),checkpointWhen:()=>true});
 
 // Actual SDK registration, generation, tool tasks and document commits. The
 // product source port is synthetic here; default-application adoption/UI/prompt
 // integration requires its own tests and is NOT established by this component.
 test('direct native Plan tool: actions, aliases, adoption, scope, rollback and no legacy registration', async () => {
   const chat = 'web:native-plan', changes: any[] = [];
-  let next: any, legacyReads = 0, current = true, native = true, notificationFails = false, admittedPlanTask:string|null=null;
+  let next: any, legacyReads = 0, current = true, native = true, notificationFails = false;
   const legacy = { chat_jid: chat, markdown: '- [ ] legacy', updated_at: 'old-timestamp' };
   const tool = createPlanTool({
-    runtime: () => ({ withSourceWriteGuard: async (check, body) => { check(); return body(); }, async captureToolSource(conversationId) { admittedPlanTask=optimizerPlanTask((await harness.snapshot(LiveDoc,conversationId,context))?.run); return { operation: { chatJid: chat }, native: native ? { assertCurrent() { if (!current) throw Error('revoked'); } } : undefined } as any; } }),
+    runtime: () => ({ withSourceWriteGuard: async (check, body) => { check(); return body(); }, async captureToolSource() { return { operation: { chatJid: chat }, native: native ? { assertCurrent() { if (!current) throw Error('revoked'); } } : undefined } as any; } }),
     assertOwner() {},
     readLegacy(jid) { expect(jid).toBe(chat); legacyReads++; return legacy; },
     changed(plan, action) { if (notificationFails) throw Error('private-notification-failure'); changes.push({ plan, action }); },
@@ -53,11 +52,13 @@ test('direct native Plan tool: actions, aliases, adoption, scope, rollback and n
     const read = await run({ action: 'get' });
     expect(read).toMatchObject({ isError: false, content: [{ type: 'text', text: `Plan for ${chat}:\n\n- [ ] legacy` }], details: legacy });
     expect(await harness.snapshot(PlanDoc, chat, context)).toBeUndefined(); expect(changes).toHaveLength(0);
-    expect(await harness.snapshot(OptimizerPlanBinding,conversation.id,context)).toBeUndefined();
+    expect(await harness.snapshot(HistoricalPlanBinding,conversation.id,context)).toBeUndefined();
     expect((await run({ action: 'set', markdown: '- [ ] one\n- [ ] two' })).isError).toBe(false);
     expect((await harness.snapshot(PlanDoc, chat, context))?.markdown).toBe('- [ ] one\n- [ ] two');
     expect((await harness.snapshot(PlanDoc,chat,context))?.revision).toBe(1);
-    expect(await harness.snapshot(OptimizerPlanBinding,conversation.id,context)).toEqual({revision:1,task:admittedPlanTask});
+    expect(await harness.snapshot(HistoricalPlanBinding,conversation.id,context)).toBeUndefined();
+    const historical={revision:0,task:'historical optimiser binding'};
+    await harness.commit(async tx=>{Object.assign(await tx.doc(HistoricalPlanBinding,conversation.id),historical);},context);
     const adoptedReads = legacyReads; legacy.markdown = 'stale source';
     expect((await run({ plan: [{ step: 'first', status: 'completed' }, { step: 'second', status: 'in_progress' }] })).isError).toBe(false);
     expect((await run({ action: 'edit', oldText: '- [-] second', newText: '- [ ] second' })).isError).toBe(false);
@@ -65,7 +66,8 @@ test('direct native Plan tool: actions, aliases, adoption, scope, rollback and n
     expect((await harness.snapshot(PlanDoc, chat, context))?.markdown).toBe('- [x] first\n- [ ] second\n- [ ] third');
     expect(legacyReads).toBe(adoptedReads); expect(changes.map(event => event.action)).toEqual(['write', 'update', 'edit', 'patch']);
     const before = await harness.snapshot(PlanDoc, chat, context);
-    const bindingBefore = await harness.snapshot(OptimizerPlanBinding,conversation.id,context);
+    const bindingBefore = await harness.snapshot(HistoricalPlanBinding,conversation.id,context);
+    expect(bindingBefore).toEqual(historical);
     expect(before?.revision).toBe(4);
     for (const args of [
       { action: 'write', chat_jid: 'web:foreign', markdown: 'foreign' },
@@ -74,7 +76,7 @@ test('direct native Plan tool: actions, aliases, adoption, scope, rollback and n
     ]) expect((await run(args)).isError).toBe(true);
     expect(await harness.snapshot(PlanDoc, chat, context)).toEqual(before);
     expect(await harness.snapshot(PlanDoc, 'web:foreign', context)).toBeUndefined();
-    expect(await harness.snapshot(OptimizerPlanBinding,conversation.id,context)).toEqual(bindingBefore);
+    expect(await harness.snapshot(HistoricalPlanBinding,conversation.id,context)).toEqual(bindingBefore);
     expect(changes).toHaveLength(4);
     native = false;
     expect((await run({ action: 'write', markdown: 'unowned' })).isError).toBe(true);

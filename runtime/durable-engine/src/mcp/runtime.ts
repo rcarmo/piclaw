@@ -65,8 +65,11 @@ export function createMcpRuntime(options:McpRuntimeOptions){
   reconnect(id:string){options.assertOwner();const slot=slots.get(id);if(slot){slots.delete(id);withdraw(slot);statuses.delete(id);}refresh();},
   status(id:string){options.assertOwner();return statuses.get(id)?structuredClone(statuses.get(id)!):undefined;},
   async visibleAgent(id:ConversationId,agent:Agent,context:Context):Promise<Agent>{
-   const identity=await options.resolveAgent(id);context.abortSignal?.throwIfAborted();options.assertOwner();const prefixes=identity&&!identity.readOnly?options.store.list().filter(row=>mcpAgentAllowed(row,options.workspaceId,identity.agentId)).map(row=>mcpNamespace(row.name)):[];
-   return{...agent,callable:agent.callable.filter(tool=>!tool.name.startsWith('mcp__')||prefixes.some(prefix=>tool.name.startsWith(prefix)))};
+   const identity=await options.resolveAgent(id);context.abortSignal?.throwIfAborted();options.assertOwner();
+   const grants=identity&&!identity.readOnly?options.store.list().filter(row=>mcpAgentAllowed(row,options.workspaceId,identity.agentId)):[];
+   const prefixes=grants.map(row=>mcpNamespace(row.name)),extensions=new Set(grants.map(row=>`piclaw.mcp.${row.id}`));
+   return{...agent,extensions:agent.extensions.filter(extension=>!extension.name.startsWith('piclaw.mcp.')||extensions.has(extension.name)),
+    callable:agent.callable.filter(tool=>!tool.name.startsWith('mcp__')||prefixes.some(prefix=>tool.name.startsWith(prefix)))};
   },
   close(){return closing??=(async()=>{(options.assertCleanupOwner??options.assertOwner)();closed=true;unwatch?.();for(const[id,slot]of slots){slots.delete(id);withdraw(slot);statuses.delete(id);}await ready();if(cleanupErrors.length)throw new AggregateError(cleanupErrors,'MCP cleanup uncertain');})();},
  };

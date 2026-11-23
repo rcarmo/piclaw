@@ -1,34 +1,34 @@
 {
   "version": 1,
-  "sourceParent": "39f0cc16266c26ee09cead5b54e9d19459bf8f53",
+  "sourceParent": "b324b21f80a07578ea102fef919967f6e848e217",
   "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
   "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
-  "previousOverlay": "docs/development/receipts/kintsugi-cutover-retention-overlay.json",
-  "previousOverlaySha256": "a04e95874b586e7817d18f24e0dfdbbdbbe48260a162670ce2fcf64d17b8e9ba",
+  "previousOverlay": "docs/development/receipts/optimizer-removal-retention-overlay.json",
+  "previousOverlaySha256": "a3c02c69b5ea6fed09aa68bfb54bd347273c8b9b386e12c141cd70aa100979e1",
   "scope": "A2UI v1.0 source transformations only. Original receipt, 105 rows, 37 deletions and financial accounting are unchanged.",
   "rows": [
     {
       "path": "runtime/durable-engine/src/application-bootstrap.ts",
-      "beforeSha256": "113745355947f32b25459b9fe7390d1c24f2cfdfbb53187eb5e36979b969cfc1",
-      "afterSha256": "21a4428fddd266f44a2d285ad0adc0537efe36235afb88ea80e71d6e7b838039",
+      "beforeSha256": "cfdee15d0c568ee24fa9643aecf34f113cae1696ba4e2e9006244d367aa0887b",
+      "afterSha256": "d278cc8f4ce2056eca95d98e0b1ec626fdbda52e883eec2456a7d518f6d4722e",
       "purpose": "Capture capability offers, owned renderer leases, canonical actions, private model snapshots and diagnostics at accepted-input admission."
     },
     {
       "path": "runtime/durable-engine/src/default-application-runtime.ts",
-      "beforeSha256": "9b2f9895ba6c07bf5994398763586c95215d199def16e5d361d8b7dee948fe73",
-      "afterSha256": "91387c988b507eb29e2dd98565ad7173f948fff45b79a833e91f2ff0b86004b7",
+      "beforeSha256": "7e7ba9aa5ad6fa08d16b311d1537b3ed508061aabe396c638ca259415260f402",
+      "afterSha256": "4d22d141c8f374e1657d9567d0166a5c66657c467f0767b1305abeb3b8875825",
       "purpose": "Register the native renderer tool and bind reverse RPC to the current web-capable application owner."
     },
     {
       "path": "runtime/durable-engine/src/host-models.ts",
-      "beforeSha256": "18dedafe77507b1018189b3e7f1646e87c6512eafec0bd08e6011ba35cf8f16e",
-      "afterSha256": "5cdfc20fd58218d0f83061a6e62c2be97494b16e11e304c73a5a0fdd1d6b5103",
+      "beforeSha256": "45d493150fcb0dca1c457b9bb0186088760a16f2bf4d7faf6c78f9b72298deac",
+      "afterSha256": "910ab2a3dc704a85ab68ad7ab189cab1655db5950e9b46e40ea309a7f6a98696",
       "purpose": "Project bounded private A2UI reply metadata into only the current native model request."
     },
     {
       "path": "runtime/durable-engine/src/host-runtime.ts",
-      "beforeSha256": "a07dbbaccb749db1da1cc4c2ccda55a3c04d1f8a080f4e1584ee9fa84ef99246",
-      "afterSha256": "8737737da910345c52a2d27b9edaf20a26aa45b67d151e6fde8eee2189d28efa",
+      "beforeSha256": "cb0729d8115be037cefa9b050ffd4ef3f22c96146584c954f5e624a8e72a4405",
+      "afterSha256": "506c3f6a0ce9944e733a98c540cdfffcef69540a0af8d8cffc760ae15bf676fd",
       "purpose": "Keep private A2UI input and reply metadata out of public activity and session-history views."
     },
     {
@@ -57,14 +57,14 @@
     },
     {
       "path": "runtime/web/src/components/settings-dialog.ts",
-      "beforeSha256": "5738bc967b82c3b56c6e5edde63e3c35140726a0e01d5a7543bcbe7ea33803da",
-      "afterSha256": "e078bdf77ef5770e33675795bd15861b6bdf3aeed18cc59d831d6e373830bc39",
+      "beforeSha256": "b6383064b5084bcd046abb4c1c554b5068513c1590c1df21514aaab3eec62ce3",
+      "afterSha256": "12a02306761145fb80fc6f2656b223d2995fd8207eb3c58a4b4f0c50e9749b9d",
       "purpose": "Keep the stamped Classic cache version on the separate Delegate pane after app code splitting."
     },
     {
       "path": "runtime/scripts/schema-ownership.json",
-      "beforeSha256": "01f8b9ecb1b274995209edb16a58ce390719b5c70418031b13055a4892e5fedf",
-      "afterSha256": "78a5a676e648874d27a3c189e245a5ab78710d4d5d32d389fd5d3b61be4b176e",
+      "beforeSha256": "f46d4901ffa769a83a2ce389ae5d4874880bfe982c79bf2fb0a4ec66499a4e8c",
+      "afterSha256": "6eb9ad6458729f4cd8c6be6b4296618c1a8cb0e946b6970cdaed2a9e8e81c935",
       "purpose": "Record exact owners and fingerprints for the A2UI sidecars and their indexes in each active schema profile."
     },
     {

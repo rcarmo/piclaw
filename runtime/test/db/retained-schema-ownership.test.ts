@@ -6,7 +6,7 @@ import {Harness,MemoryStorage,createRegistry} from '../../durable-engine/qualifi
 import {BACKGROUND_CONTEXT as context} from '../../durable-engine/qualification/context.ts';
 import {createModels} from '../../durable-engine/node_modules/@earendil-works/pi-ai';
 import {applicationRetainedDatabase} from '../../durable-engine/src/mcp/retained-database.ts';
-import {createToolOutputStore} from '../../durable-engine/src/mcp/tool-output-store.ts';
+import {createToolOutputStore} from '../../durable-engine/qualification/fixtures/legacy-tool-output-store.ts';
 import {createMcpRecallStore} from '../../durable-engine/src/mcp/recall-store.ts';
 import {McpConnectionStore} from '../../durable-engine/src/mcp/connections.ts';
 import {readSchemaInventory,assertSchemaInventory,type SchemaContract} from '../../scripts/lib/schema-ownership.ts';
@@ -20,7 +20,8 @@ test('retained schemas have exact metadata/cache owners and preserve strict miss
   expect(inventory.objects.find(row=>row.name==='mcp_connections_v1')?.owner).toBe('core:outbound-mcp');
   for(const name of ['a2ui_input_metadata','a2ui_renderer_errors','a2ui_surface_owners','idx_a2ui_surface_owners_sync'])
    expect(inventory.objects.find(row=>row.name===name)).toMatchObject({owner:'core:a2ui',presence:'required'});
-  for(const name of ['retained_tool_outputs','retained_tool_output_search','mcp_recall','mcp_recall_search'])expect(inventory.objects.find(row=>row.name===name)?.category).toBe('projection-cache');
+  for(const name of ['retained_tool_outputs','retained_tool_output_search'])expect(inventory.objects.find(row=>row.name===name)?.category).toBe('retired');
+  for(const name of ['mcp_recall','mcp_recall_search'])expect(inventory.objects.find(row=>row.name===name)?.category).toBe('projection-cache');
   expect(database.query('SELECT * FROM sqlite_schema ORDER BY type,name').all()).toEqual(before);expect(database.query('SELECT * FROM piclaw_schema_migrations ORDER BY owner,migration_order').all()).toEqual(receipts);
   for(const [sql,reason]of [
    ['DROP INDEX retained_tool_outputs_expiry','Missing required object index:retained_tool_outputs_expiry'],

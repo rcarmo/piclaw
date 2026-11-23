@@ -1,7 +1,7 @@
 import { createBashTool, type BashToolOptions } from "../../src/durable-legacy-sdk.js";
 import { defineTool } from "@earendil-works/pi-durable";
 import {retainBashOutputFile} from './saved-bash-output.ts';
-import {optimizerBashOutput} from './optimizer-output-source.ts';
+import {projectBashOutput} from './bash-output.ts';
 import type { JsonValue } from "@earendil-works/chord/json";
 import { createTrackedBashOperations, type TrackedBashOperationsOptions } from "../../../runtime/src/tools/tracked-bash.ts";
 
@@ -72,7 +72,7 @@ export function createHostBashTool(options: {
         assertAllowed();
         if(result.details?.fullOutputPath)await retainBashOutputFile(api,result.details.fullOutputPath,assertAllowed);
         assertAllowed();
-        const execution=optimizerBashOutput(result.structuredContent,result.details);
+        const execution=projectBashOutput(result.structuredContent,result.details);
         return { output: result.content, details: execution?{...result.details,exitCode:execution.exitCode,truncated:execution.truncated??false}:result.details as JsonValue | undefined,
           structuredOutput: result.structuredContent as JsonValue | undefined, isError: result.isError };
       } catch {

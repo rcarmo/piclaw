@@ -2,37 +2,39 @@ import{expect,test}from'bun:test';import{existsSync,readFileSync}from'node:fs';i
 const root=resolve(import.meta.dir,'../../..');
 const manifestBytes=readFileSync(resolve(root,'docs/development/receipts/expense-final-retention-1875.json'));
 const manifest=JSON.parse(manifestBytes.toString('utf8'));
-const priorPath='docs/development/receipts/kintsugi-cutover-retention-overlay.json';
-const priorBytes=readFileSync(resolve(root,priorPath));
-const overlay=JSON.parse(priorBytes.toString('utf8'));
+const overlayBytes=readFileSync(resolve(root,'docs/development/receipts/kintsugi-cutover-retention-overlay.json'));
+const overlay=JSON.parse(overlayBytes.toString('utf8'));
+const removalPath='docs/development/receipts/optimizer-removal-retention-overlay.json';
+const removalBytes=readFileSync(resolve(root,removalPath));
+const removal=JSON.parse(removalBytes.toString('utf8'));
 const a2ui=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/a2ui-v1-retention-overlay.json'),'utf8'));
 const sha=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
 test('removal/retention witness binds every original Core path through explicit later source transformations',()=>{
- expect(a2ui.previousOverlay).toBe(priorPath);
- expect(a2ui.previousOverlaySha256).toBe(sha(priorBytes));
+ expect(sha(manifestBytes)).toBe(overlay.baseManifestSha256);
+ expect(sha(overlayBytes)).toBe(removal.previousOverlaySha256);
+ expect(removal.baseManifestSha256).toBe(overlay.baseManifestSha256);
+ expect(removal.rows).toHaveLength(8);
+ expect(a2ui.previousOverlay).toBe(removalPath);
+ expect(a2ui.previousOverlaySha256).toBe(sha(removalBytes));
+ expect(a2ui.baseManifestSha256).toBe(removal.baseManifestSha256);
+ const layers=[overlay,removal,a2ui].map(layer=>{
+  expect(layer.version).toBe(1);
+  const rows=new Map<string,{beforeSha256:string;afterSha256:string;purpose:string}>(layer.rows.map((row:any)=>[row.path,row]));
+  expect(rows.size).toBe(layer.rows.length);
+  for(const path of rows.keys())expect(manifest.rows.some((prior:any)=>prior.repo==='core'&&prior.path===path&&prior.state!=='deleted')).toBe(true);
+  return rows;
+ });
  expect(manifest.baselineEntries).toBe(105);expect(manifest.rows).toHaveLength(105);expect(manifest.deletedPaths).toBe(37);
  expect(new Set(manifest.rows.map((r:{repo:string;path:string})=>r.repo+':'+r.path)).size).toBe(105);
- const expected=new Map<string,string>();
- for(const row of manifest.rows){
-  if(row.repo!=='core')continue;
-  if(row.state==='deleted')expect(existsSync(resolve(root,row.path)),row.path).toBe(false);
-  else{expected.set(row.path,row.currentSha256);expect(row.currentPurpose.length).toBeGreaterThan(20);}
- }
- for(const layer of [overlay,a2ui]){
-  expect(layer.version).toBe(1);
-  expect(layer.baseManifest).toBe('docs/development/receipts/expense-final-retention-1875.json');
-  expect(layer.baseManifestSha256).toBe(sha(manifestBytes));
-  expect(new Set(layer.rows.map((row:{path:string})=>row.path)).size).toBe(layer.rows.length);
-  for(const change of layer.rows){
-   expect(expected.has(change.path),change.path).toBe(true);
-   expect(change.beforeSha256,change.path).toBe(expected.get(change.path));
-   expect(change.afterSha256).toMatch(/^[0-9a-f]{64}$/);
-   expect(change.afterSha256).not.toBe(change.beforeSha256);
-   expect(change.purpose.length).toBeGreaterThan(20);
-   expected.set(change.path,change.afterSha256);
+ for(const row of manifest.rows){if(row.repo!=='core')continue;const path=resolve(root,row.path);
+  if(row.state==='deleted'){
+   expect(layers.some(layer=>layer.has(row.path))).toBe(false);expect(existsSync(path),row.path).toBe(false);
+  }else{
+   let expected=row.currentSha256;
+   for(const layer of layers){const change=layer.get(row.path);if(!change)continue;expect(change.beforeSha256,row.path).toBe(expected);expect(change.purpose.length).toBeGreaterThan(20);expected=change.afterSha256;}
+   expect(sha(readFileSync(path)),row.path).toBe(expected);expect(row.currentPurpose.length).toBeGreaterThan(20);
   }
  }
- for(const [path,digest] of expected)expect(sha(readFileSync(resolve(root,path))),path).toBe(digest);
 });
 test('retirement accounting charges current additions and does not credit unrelated/generated/test changes',()=>{
  const r=manifest.reduction;expect(r.conservativeAttributedNet).toBe(r.accepted1881.physical+r.accepted1878.physical+r.currentCoreHandwrittenProduction.net+r.addon236Runtime.net);

@@ -2,7 +2,7 @@ import {openSync,closeSync,fstatSync,readSync,constants} from 'node:fs';
 import {defineDoc,type Harness,type ToolExecutionApi} from '@earendil-works/pi-durable';
 import {BACKGROUND_CONTEXT as context} from '@earendil-works/chord/context';
 import {currentTaskExecutionScope} from './task-model-boundary-shim.ts';
-import type {SavedOutputRead} from './optimizer-output-source.ts';
+import type {SavedOutputRead} from './bash-output.ts';
 export const SavedBashOutput=defineDoc<{file:{path:string;device:number;inode:number;size:number;modified:number}|null}>({kind:'app.bash-saved-output',version:1,scope:'task',initial:()=>({file:null}),checkpointWhen:()=>false});
 /** Only the local guarded bash wrapper can mint a readable output reference. */
 export async function retainBashOutputFile(api:Pick<ToolExecutionApi,'commit'|'taskId'>,path:string,check:()=>void){

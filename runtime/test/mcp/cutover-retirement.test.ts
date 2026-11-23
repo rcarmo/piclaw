@@ -13,7 +13,7 @@ test('outbound MCP has one SDK composition and no obsolete engine, ambient hydra
  ];
  for(const path of retired)expect(existsSync(resolve(root,path)),path).toBe(false);
  const source=(path:string)=>readFileSync(resolve(root,path),'utf8');
- const application=source('runtime/durable-engine/src/default-application-runtime.ts');expect(application).toContain('createApplicationOptimizerMcp');expect(application).toContain('createOptimizerCodemodeTool');
+ const application=source('runtime/durable-engine/src/default-application-runtime.ts');expect(application).toContain('createApplicationMcp');expect(application).toContain('createMcpCodemodeTool');
  for(const path of ['runtime/src/runtime/bootstrap.ts','runtime/src/runtime/startup.ts','runtime/src/agent-pool/service-factory.ts','runtime/src/agent-pool.ts'])expect(source(path)).not.toMatch(/hydrateMcp|clearMcpCredentials|McpCodemodeController|createHostMcp|applyMcpSettings/);
  expect(source('runtime/src/channels/web/agent/agent-status.ts')).not.toContain('secure/mcp-keychain');
  expect(source('runtime/durable-engine/src/mcp/legacy-config.ts')).toContain('Read-only, one-shot migration parser');

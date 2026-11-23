@@ -62,8 +62,7 @@ export function withTaskModelRequestScope(registry: RegistryReader, cancellation
       async (record: Parameters<typeof execute>[0], runtime: Runtime, context: Context) => {
         const requestPhase = definition.name === "pi.generation" && phase === "request"
           || definition.name === "pi.compaction" && phase === "summarize"
-          || definition.name === 'pi.tool' && phase === 'call'
-          || definition.name === 'token-economizer.inference' && phase === 'invoke';
+          || definition.name === 'pi.tool' && phase === 'call';
         const valid = record?.id === runtime.taskId && record.conversationId === runtime.conversationId
           && record.kind === definition.name && record.version === definition.version && record.state?.status === "running"
           && record.state.checkpoint?.phase === phase;

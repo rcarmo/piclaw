@@ -1,57 +1,89 @@
 import './src/test-guard.js';
 import {expect} from 'bun:test';
+import {createHash} from 'node:crypto';
+import {realpathSync} from 'node:fs';
+import {hostname} from 'node:os';
 import {join} from 'node:path';
-import {writeFileSync} from 'node:fs';
 import {isolatedApplicationTest} from './src/isolated-application-test.js';
 import {initDatabase,getDb,closeDatabase} from '../../runtime/src/db/connection.js';
 import {acquireRuntimeLock} from '../../runtime/src/runtime/single-instance.js';
 import {createDefaultApplicationRuntime} from '../../runtime/durable-engine/src/default-application-runtime.js';
+import {BunSqliteDatabase} from '../../runtime/durable-engine/src/bun-sqlite.js';
+import {applicationRetainedDatabase} from '../../runtime/durable-engine/src/mcp/retained-database.js';
+import {createToolOutputStore} from '../../runtime/durable-engine/qualification/fixtures/legacy-tool-output-store.js';
+import {Harness,createRegistry,defineDoc,defineEntry,defineTask,defineExtension,type ConversationId} from '../../runtime/durable-engine/qualification/durable.js';
+import {BACKGROUND_CONTEXT as context} from '../../runtime/durable-engine/qualification/context.js';
+import {SqliteStorage} from '../../runtime/durable-engine/qualification/sqlite.js';
+import {createModels} from '../../runtime/durable-engine/node_modules/@earendil-works/pi-ai';
 import {createRuntimeBaseServices} from '../../runtime/src/runtime/composition.js';
 import {createTestCredentialStore} from '../../runtime/test/model-services-fixture.js';
 import {AgentPool} from '../../runtime/src/agent-pool.js';
 import {WebChannel} from '../../runtime/src/channels/web.js';
 import {handleAgentMessage} from '../../runtime/src/channels/web/handlers/agent.js';
-import {ModelRuntime,ModelRegistry,SettingsManager} from '../../node_modules/@earendil-works/pi-coding-agent';
-import {createAssistantMessageEventStream} from '../../node_modules/@earendil-works/pi-ai';
-import {admitAddonLocalRequest} from '../../runtime/src/addons/local-context.js';
 import {handleRegisteredAddonConfigApiRequest} from '../../runtime/src/channels/web/handlers/addon-config-api.js';
 import {getPiclawAgentDir} from '../../runtime/src/core/agent-dir.js';
-const test=isolatedApplicationTest(import.meta.url),json=(body:unknown,status=200)=>Response.json(body,{status});
-for(const loop of ['rules','judge'] as const)test(`default application owns imported optimiser ${loop} tasks and SDK steering without host effects or replay`,async()=>{
+import {PiclawModelRegistry} from '../../runtime/src/agent-pool/model-services.js';
+import {ModelRuntime,SettingsManager} from '../../node_modules/@earendil-works/pi-coding-agent';
+import {createAssistantMessageEventStream} from '../../node_modules/@earendil-works/pi-ai';
+
+const test=isolatedApplicationTest(import.meta.url);
+const Mapping=defineDoc({kind:'app.application-conversations',version:1,scope:'conversation',history:'latest',fork:'initial',checkpointWhen:()=>false,initial:()=>({version:1,domain:'',bindings:[] as {chatJid:string;branchId:string;conversationId:ConversationId;sessionId:string}[]})});
+const Fact=defineEntry<{section:string;injectedIds:string[]}>('token-economizer.fact-context');
+const oldWork=defineTask<{id:string},{phase:'fold'},null>({name:'token-economizer.checkpoint',version:1,initial:()=>({phase:'fold'}),phases:{async fold(){throw Error('Historical optimiser code must not run');}},async abort(){throw Error('Historical optimiser code must not run');}});
+const oldOutput='out_'+'a'.repeat(32),retainedText='Historical retained output stays readable';
+
+test('default factory retires a historical optimiser checkpoint, preserves old facts and serves retained output after restart',async()=>{
  const workspace=process.env.PICLAW_WORKSPACE!;process.env.PICLAW_DB_IN_MEMORY='0';initDatabase();const database=getDb();
- const owner=acquireRuntimeLock({lockPath:join(workspace,'optimizer-cutover.lock'),strictOwnership:true,disabled:false});
+ const owner=acquireRuntimeLock({lockPath:join(workspace,'optimizer-removal.lock'),strictOwnership:true,disabled:false});
  const credentials=createTestCredentialStore({fixture:{type:'api_key',key:'synthetic-only'}}),host=await ModelRuntime.create({credentials,modelsPath:null,modelsStore:{read:async()=>undefined,write:async()=>{},delete:async()=>{}},allowModelNetwork:false,refreshOnCreate:false});
- const model=(id:string)=>({provider:'fixture',id,name:id,api:'openai-completions' as const,baseUrl:'https://fixture.invalid',input:['text' as const],reasoning:false,contextWindow:128000,maxTokens:1000,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}),main=model('main'),judge=model('judge');let mainCalls=0,judgeCalls=0,calibrationCalls=0,calibrating=loop==='judge';const judgeEntered=Promise.withResolvers<void>();
- const run=(physical:any,transcript:any)=>{const stream=createAssistantMessageEventStream();let content:any[],stopReason:'stop'|'toolUse'='stop';
-  if(physical.id==='judge'){judgeCalls++;judgeEntered.resolve();content=[{type:'text',text:JSON.stringify({stuck:true,confidence:1,reason:'Repeated complete failed checks'})}];}
-  else if(calibrating){calibrationCalls++;if(calibrationCalls%2){stopReason='toolUse';content=[{type:'toolCall',id:'calibrate-'+calibrationCalls,name:'bash',arguments:{command:'bun test '+join(workspace,'calibration.test.ts')}}];}else content=[{type:'text',text:'Calibration verified.'}];}
-  else{mainCalls++;const redirected=database.query("SELECT 1 FROM entries WHERE json_extract(record,'$.kind')=? LIMIT 1").get(loop==='rules'?'piclaw.token-optimizer.goal-context':'token-economizer.redirect');if(redirected||mainCalls>12)content=[{type:'text',text:'Cutover fixture finished.'}];else{stopReason='toolUse';content=[{type:'toolCall',id:'check-'+mainCalls,name:'bash',arguments:{command:"printf 'AssertionError: repeated fixture\\n'; bun test /no-such-owned-cutover-fixture.test.ts"}}];}}
-  const message:any={role:'assistant',api:physical.api,provider:physical.provider,model:physical.id,timestamp:Date.now(),content,stopReason,usage:{input:2,output:1,cacheRead:0,cacheWrite:0,totalTokens:3,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}};queueMicrotask(async()=>{if(loop==='judge'&&physical.id==='main'&&!calibrating&&mainCalls===3)await judgeEntered.promise;stream.push({type:'done',reason:stopReason,message});stream.end(message);});return stream;
+ const model={provider:'fixture',id:'main',name:'Fixture',api:'openai-completions' as const,baseUrl:'https://fixture.invalid',input:['text' as const],reasoning:false,contextWindow:128000,maxTokens:1000,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}};
+ let calls=0,toolResponse:unknown;
+ const run=(_physical:unknown,transcript:{messages:readonly {role:string}[]})=>{
+  calls++;const tool=calls===1,stream=createAssistantMessageEventStream();
+  if(!tool)toolResponse=transcript.messages.findLast(item=>item.role==='toolResult');
+  const message={role:'assistant' as const,api:model.api,provider:model.provider,model:model.id,timestamp:Date.now(),content:tool ? [{type:'toolCall' as const,id:'read-historical',name:'read_tool_output',arguments:{id:oldOutput}}] : [{type:'text' as const,text:'Ordinary reply after retirement'}],stopReason:tool?'toolUse' as const:'stop' as const,usage:{input:2,output:1,cacheRead:0,cacheWrite:0,totalTokens:3,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}};
+  queueMicrotask(()=>{stream.push({type:'done',reason:message.stopReason,message});stream.end(message);});return stream;
  };
- host.registerNativeProvider({id:'fixture',name:'Fixture',getModels:()=>[main,judge],auth:{apiKey:{name:'Synthetic',resolve:async()=>({auth:{},source:'fixture'})}},stream:run as any,streamSimple:run as any});await host.refresh({allowNetwork:false});await host.getAvailable();const registry=new ModelRegistry(host),settings=SettingsManager.create(workspace,getPiclawAgentDir());settings.setDefaultModelAndProvider('fixture','main');await settings.flush();
- const services:any={modelRuntime:host,modelRegistry:registry},base=createRuntimeBaseServices({dataDir:workspace});let backend:Awaited<ReturnType<typeof createDefaultApplicationRuntime>>|undefined,pool:AgentPool|undefined,channel:WebChannel|undefined;
- const request=(method:string,body?:unknown)=>{const req=new Request('http://fixture/agent/addons/api/token-optimizer/config',{method,...(body?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});admitAddonLocalRequest(req,{kind:'local',userId:'default',username:'default',displayName:'Fixture',role:'admin',mode:'single-user',homeChatJid:'web:default',authentication:{method:'fixture',sessionId:null,expiresAt:null}},()=>!req.signal.aborted);return req;};
+ host.registerNativeProvider({id:'fixture',name:'Fixture',getModels:()=>[model],auth:{apiKey:{name:'Synthetic',resolve:async()=>({auth:{},source:'fixture'})}},stream:run,streamSimple:run});
+ await host.refresh({allowNetwork:false});await host.getAvailable();const registry=new PiclawModelRegistry(host),settings=SettingsManager.create(workspace,getPiclawAgentDir());settings.setDefaultModelAndProvider('fixture','main');await settings.flush();
+ const services={modelRuntime:host,modelRegistry:registry,credentialStore:credentials,agentDir:getPiclawAgentDir()},base=createRuntimeBaseServices({dataDir:workspace});
+ let backend:Awaited<ReturnType<typeof createDefaultApplicationRuntime>>|undefined,pool:AgentPool|undefined,channel:WebChannel|undefined;
  try{
-  backend=await createDefaultApplicationRuntime(owner,async()=>services);pool=new AgentPool({credentialStore:credentials,modelRuntime:host,modelRegistry:registry,...backend.sessionOptions} as any);const bound=backend.bind({queue:base.queue,agentPool:pool});channel=new WebChannel(bound);backend.attachChannel!(channel);
-  const get=await handleRegisteredAddonConfigApiRequest(request('GET'),'token-optimizer','config',json);expect(get?.status).toBe(200);const snapshot=await get!.json() as any;expect(snapshot.config.policy.enabled).toBe(false);expect(mainCalls+judgeCalls).toBe(0);
-  const config=snapshot.config;Object.assign(config.policy,{oversightMode:'active',loop,goalChecks:loop==='rules',redirects:1,generativeModel:{provider:'fixture',id:'judge'},thresholds:{min_turns:2,gate_min_turns:2,gate_error_outputs:1,error_outputs:1,backstop_mult:1}});
-  config.policy.savers.templates=true;
-  const save=await handleRegisteredAddonConfigApiRequest(request('POST',{config,expectedRevision:snapshot.revision}),'token-optimizer','config',json);expect(save?.status,await save?.clone().text()).toBe(200);
-  if(loop==='judge'){
-   writeFileSync(join(workspace,'calibration.test.ts'),"import{test,expect}from'bun:test';test('owned calibration',()=>expect(1).toBe(1));\n");
-   for(let round=1;round<=5;round++){
-    const reply=await handleAgentMessage(channel,new Request('https://fixture/agent/default/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'Calibrate a completed verification '+round})}),'/agent/default/message','web:default','default');expect(reply.status).toBe(201);
-    const until=Date.now()+5000;let samples=0;while(samples<round&&Date.now()<until){const view=await handleRegisteredAddonConfigApiRequest(request('GET'),'token-optimizer','config',json);const state=await view!.json() as any;samples=state.status[0]?.process?.calibrationSamples??0;if(samples<round)await Bun.sleep(10);}expect(samples).toBe(round);
-   }
-   calibrating=false;
-  }
-  const admitted=await handleAgentMessage(channel,new Request('https://fixture/agent/default/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'Exercise repeated complete failed checks'})}),'/agent/default/message','web:default','default');expect(admitted.status,await admitted.clone().text()).toBe(201);
-  const deadline=Date.now()+15000;while((database.query('SELECT count(*) n FROM messages WHERE is_bot_message=1').get() as {n:number}).n<(loop==='judge'?6:1)&&Date.now()<deadline)await Bun.sleep(10);
-  const statusResponse=await handleRegisteredAddonConfigApiRequest(request('GET'),'token-optimizer','config',json);const status=await statusResponse!.json();
-  const debug={judgeCalls,status,tasks:database.query("SELECT record FROM tasks WHERE kind LIKE '%token-economizer%'").all()};
-  expect(mainCalls,JSON.stringify(debug)).toBeLessThanOrEqual(12);expect(database.query("SELECT count(*) n FROM entries WHERE json_extract(record,'$.kind')=?").get(loop==='rules'?'piclaw.token-optimizer.goal-context':'token-economizer.redirect'),JSON.stringify(debug)).toEqual({n:1});
-  expect(database.query('SELECT count(*) n FROM messages WHERE is_bot_message=1').get()).toEqual({n:loop==='judge'?6:1});expect(database.query('SELECT * FROM service_effect_s01_operations').all()).toEqual([]);
-  if(loop==='judge')expect(judgeCalls).toBeGreaterThan(0);else expect(judgeCalls).toBe(0);
-  const before=mainCalls+judgeCalls;await backend.close();backend=await createDefaultApplicationRuntime(owner,async()=>services);expect(mainCalls+judgeCalls).toBe(before);
- }finally{judgeEntered.resolve();await backend?.close();await channel?.stop();await base.queue.shutdown();await pool?.shutdown();await closeDatabase();owner.release();}
+  backend=await createDefaultApplicationRuntime(owner,async()=>services);
+  await backend.close();backend=undefined;
+  const path=database.query<{file:string},[]>("SELECT file FROM pragma_database_list WHERE name='main'").get()!.file;
+  const seedRegistry=createRegistry();seedRegistry.install(defineExtension({name:'fixture.old-optimizer-record',tasks:[oldWork]}));
+  const seed=await Harness.open(await SqliteStorage.open(new BunSqliteDatabase(path,{root:database,assertOwner:()=>owner.assertCurrentOwner(),fenceTransactions:true})),{registry:seedRegistry,models:createModels()},context);
+  let taskNumber:number,factNumber:number;
+  try{
+   const binding=(await seed.snapshot(Mapping,1 as ConversationId,context))!.bindings.find(row=>row.chatJid==='web:default')!;
+   const ids=await seed.commit(async tx=>{
+    const fact=await tx.appendEntry(Fact,binding.conversationId,{data:{section:'Keep this historical fact',injectedIds:['fact:fixture']}});
+    const task=await tx.createTask(oldWork,{id:'historical-example'},{conversationId:1 as ConversationId,background:true,ownership:{kind:'conversation'}});
+    return {fact:fact.id,task};
+   },context);
+   taskNumber=ids.task;factNumber=ids.fact;
+   const real=realpathSync(workspace),workspaceId=createHash('sha256').update(real).digest('hex');
+   const environment=createHash('sha256').update(JSON.stringify([hostname(),process.platform,process.arch,real,getPiclawAgentDir()])).digest('hex');
+   await createToolOutputStore(applicationRetainedDatabase(database,()=>owner.assertCurrentOwner())).save({id:oldOutput,owner:JSON.stringify([workspaceId,environment,binding.chatJid]),conversation:binding.conversationId,after:factNumber,tool:'bash',label:'historical fixture',text:retainedText,complete:true,retentionMs:60000});
+  }finally{await seed.close(context);}
+  const factRow=()=>database.query('SELECT record FROM entries WHERE id=?').get(factNumber);
+  const factBefore=factRow(),outputBefore=database.query('SELECT * FROM retained_tool_outputs WHERE id=?').get(oldOutput);
+  backend=await createDefaultApplicationRuntime(owner,async()=>services);
+  const taskRow=()=>JSON.parse(database.query<{record:string},[number]>('SELECT record FROM tasks WHERE id=?').get(taskNumber)!.record);
+  expect(taskRow()).toMatchObject({kind:'token-economizer.checkpoint',input:{id:'historical-example'},state:{status:'terminal',outcome:{status:'orphaned'}}});
+  const retired=taskRow();expect(calls).toBe(0);
+  expect(await handleRegisteredAddonConfigApiRequest(new Request('https://fixture/agent/addons/api/token-optimizer/config'),'token-optimizer','config',(body,status=200)=>Response.json(body,{status}))).toBeNull();
+  pool=new AgentPool({credentialStore:credentials,modelRuntime:host,modelRegistry:registry,...backend.sessionOptions});channel=new WebChannel(backend.bind({queue:base.queue,agentPool:pool}));backend.attachChannel!(channel);
+  const request=new Request('https://fixture/agent/default/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'Read old output without replaying it'})});
+  expect((await handleAgentMessage(channel,request,'/agent/default/message','web:default','default')).status).toBe(201);
+  const deadline=Date.now()+10000;
+  while(!database.query('SELECT 1 FROM messages WHERE is_bot_message=1 AND content=?').get('Ordinary reply after retirement')&&Date.now()<deadline)await Bun.sleep(10);
+  expect(database.query('SELECT count(*) n FROM messages WHERE is_bot_message=1 AND content=?').get('Ordinary reply after retirement')).toEqual({n:1});
+  expect(calls).toBe(2);expect(JSON.stringify(toolResponse)).toContain(retainedText);expect(JSON.stringify(toolResponse)).not.toContain('Stored outputs are unavailable');
+  await backend.close();backend=await createDefaultApplicationRuntime(owner,async()=>services);
+  expect(calls).toBe(2);expect(taskRow()).toEqual(retired);expect(factRow()).toEqual(factBefore);
+  expect(database.query('SELECT * FROM retained_tool_outputs WHERE id=?').get(oldOutput)).toEqual(outputBefore);
+  expect(database.query("SELECT count(*) n FROM tasks WHERE json_extract(record,'$.kind') LIKE 'token-economizer.%'").get()).toEqual({n:1});
+ }finally{await backend?.close();await channel?.stop();await base.queue.shutdown();await pool?.shutdown();await closeDatabase();owner.release();}
 },30000);

@@ -1219,16 +1219,13 @@
       ]
     },
     "cache:retained-tool-output": {
-      "category": "projection-cache",
-      "initializer": "runtime/durable-engine/src/mcp/tool-output-store.ts#createToolOutputStore",
-      "writers": [
-        "runtime/durable-engine/src/mcp/tool-output-store.ts"
-      ],
+      "category": "retired",
+      "initializer": "Retired. Recognise existing stores without initialising them.",
+      "writers": [],
       "sourceOfTruth": "Disposable scoped tool-output originals/chunks and FTS projections. SDK receipts and historical file-backed outputs remain authoritative.",
-      "replayRetention": "TTL, caps and explicit scoped forgetting affect retained copies only. Never delete SDK history, historical outputs or another workspace owner. Atomic schema components remain complete when preserved.",
+      "replayRetention": "Read existing unexpired rows and preserve historical schemas and rows. No new copies, pruning or replay.",
       "references": [
-        "runtime/durable-engine/src/mcp/tool-output-store.ts",
-        "runtime/durable-engine/src/mcp/retained-database.ts"
+        "runtime/durable-engine/src/retained-tool-output.ts"
       ]
     },
     "core:outbound-mcp": {
@@ -1240,7 +1237,7 @@
       "sourceOfTruth": "Reference-only connection metadata, revisions and access/credential destination epochs in the existing application SQLite database. Tool effects and replay remain SDK-owned.",
       "replayRetention": "Preserve connection metadata and keychain references across reopen. Removing a connection does not delete keychain entries or SDK history. One-shot legacy import never resurrects operator deletions.",
       "references": [
-        "runtime/durable-engine/src/application-optimizer-mcp.ts",
+        "runtime/durable-engine/src/mcp/application.ts",
         "runtime/durable-engine/src/mcp/settings.ts",
         "runtime/durable-engine/src/mcp/migration.ts"
       ]
@@ -4811,10 +4808,7 @@
       "fingerprints": [
         "c46af99e2adcc1e9fecb2c258a339255f20cfe56e6ad02cddb5ca68d94375230"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "requiredWhenOwnerPresent": true,
       "table": "retained_tool_output_chunks"
     },
@@ -4823,10 +4817,7 @@
       "fingerprints": [
         "eac1f13c7b030486a9cd67881fea4f249cb26701517774219f7062b73a43c471"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "requiredWhenOwnerPresent": true,
       "table": "retained_tool_outputs"
     },
@@ -4835,10 +4826,7 @@
       "fingerprints": [
         "df8cd07b727e70349b7b8535d9be9c7f61059eba35b55f3ebfb775e7a489131f"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "requiredWhenOwnerPresent": true,
       "table": "retained_tool_outputs"
     },
@@ -4912,10 +4900,7 @@
       "fingerprints": [
         "b5bea99efe976dced31d396fc2ec5a40ddf40566fb52729ba51acab93d6ed08a"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "requiredWhenOwnerPresent": true
     },
     "table:retained_tool_output_search": {
@@ -4923,10 +4908,7 @@
       "fingerprints": [
         "af11c5f61bf899033c9e921043ffb769997682ee10ddc90642393a56e5300b94"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "requiredWhenOwnerPresent": true
     },
     "table:retained_tool_output_search_config": {
@@ -4934,10 +4916,7 @@
       "fingerprints": [
         "7bc375749b87c79c5fc97fbd702a1afa0317ec27a6e08b55df955da98bb142b8"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "requiredWhenOwnerPresent": true
     },
     "table:retained_tool_output_search_data": {
@@ -4945,10 +4924,7 @@
       "fingerprints": [
         "6f9d79239de04ef804f574e37d0b65f6f6277193ad9164527c7362bedccb33b4"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "requiredWhenOwnerPresent": true
     },
     "table:retained_tool_output_search_docsize": {
@@ -4956,10 +4932,7 @@
       "fingerprints": [
         "516601efba8afc65becd42a73d831b9a44469f7c7aaa9508e8b210537fcf37fa"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "requiredWhenOwnerPresent": true
     },
     "table:retained_tool_output_search_idx": {
@@ -4967,10 +4940,7 @@
       "fingerprints": [
         "7dce11d79c03e8f275fecc6ddab05892ce9923a2a2a8187bd64ab08083e75c08"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "requiredWhenOwnerPresent": true
     },
     "table:retained_tool_outputs": {
@@ -4978,10 +4948,7 @@
       "fingerprints": [
         "55e34ee0e19bd0abc8763e1bbe36796fa7c5535b83e8b0df20c749796b7bafdf"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "requiredWhenOwnerPresent": true,
       "derivedIndexes": [
         "1c4aa95d10237d1ffcb34e05fff7c1e284910accf8aecc1a9275fa8c443fa295"
@@ -5010,10 +4977,7 @@
       "fingerprints": [
         "a1afb46a659be3a32306a20451a9c7b6047f44332d51bfee2ca1a91ade54b9ca"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "requiredWhenOwnerPresent": true,
       "table": "retained_tool_output_chunks"
     },
@@ -5022,10 +4986,7 @@
       "fingerprints": [
         "0496ffd328911542c24771ed0d8bd35f6f41834181deac3293cbc243d3a4ba08"
       ],
-      "requiredIn": [
-        "native",
-        "native-addons"
-      ],
+      "requiredIn": [],
       "requiredWhenOwnerPresent": true,
       "table": "retained_tool_output_chunks"
     }
@@ -5250,6 +5211,13 @@
     },
     {
       "kind": "piclaw.optimizer-call-receipts",
+      "owner": "sdk:storage",
+      "scope": "task",
+      "history": "task-scoped SDK document",
+      "fork": "not applicable"
+    },
+    {
+      "kind": "piclaw.mcp-call-receipts",
       "owner": "sdk:storage",
       "scope": "task",
       "history": "task-scoped SDK document",
