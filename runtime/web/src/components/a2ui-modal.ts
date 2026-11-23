@@ -1,0 +1,53 @@
+import { html, useLayoutEffect, useRef, useState } from '../vendor/preact-htm.js';
+import type { A2uiAria } from './a2ui-accessibility.js';
+
+export function A2uiModal({ label, aria, hidden, buttonTrigger, renderTrigger, renderContent }: {
+    label: string;
+    aria: A2uiAria;
+    hidden: boolean;
+    buttonTrigger: boolean;
+    renderTrigger: (open: (event: Event) => void) => unknown;
+    renderContent: () => unknown;
+}) {
+    const [open, setOpen] = useState(false);
+    const dialog = useRef<HTMLDialogElement | null>(null);
+    const trigger = useRef<HTMLElement | null>(null);
+    function show(event: Event) {
+        event.stopPropagation();
+        trigger.current = event.currentTarget as HTMLElement;
+        setOpen(true);
+    }
+    function dismiss() { setOpen(false); }
+    const visible=open && !hidden;
+    useLayoutEffect(() => {
+        if (hidden && open) dismiss();
+    },[hidden,open]);
+    useLayoutEffect(() => {
+        if (!visible) return;
+        const element = dialog.current!;
+        element.showModal();
+        return () => {
+            if (element.open) element.close();
+            if (trigger.current?.isConnected) trigger.current.focus({ preventScroll: true });
+        };
+    }, [visible]);
+    return html`<div class="a2ui-modal" inert=${aria.inert} aria-hidden=${aria['aria-hidden']}>
+        ${buttonTrigger ? renderTrigger(show) : html`<div role="button" tabIndex=${0} aria-haspopup="dialog" class="a2ui-modal-trigger"
+            onClick=${show} onKeyDown=${(event: KeyboardEvent) => {
+                if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+                event.preventDefault();
+                show(event);
+            }}>${renderTrigger(show)}</div>`}
+        ${visible && html`<dialog ref=${dialog} class="a2ui-surface a2ui-modal-dialog" data-no-session-dashboard-shortcut=""
+            aria-label=${label} ...${aria} onCancel=${(event: Event) => { event.preventDefault(); dismiss(); }}
+            onClick=${(event: MouseEvent) => {
+                if (event.target !== dialog.current) return;
+                const bounds = dialog.current.getBoundingClientRect();
+                if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dismiss();
+            }}>
+            <div class="a2ui-column">${renderContent()}
+                <button type="button" class="a2ui-button" onClick=${dismiss} autofocus>Close</button>
+            </div>
+        </dialog>`}
+    </div>`;
+}

@@ -28,6 +28,7 @@ import { assertNativeBackgroundExecution,claimNativeBackgroundTool,NativeBackgro
 import { nativeBackgroundIdentity,readNativeBackgroundPayload,nativeBackgroundPolicyHash,type NativeBackgroundPayload } from '../../src/agent-pool/background-operation-contract.js';
 import { NativeBackgroundContexts, type NativeBackgroundContext } from "./host-background-context.js";
 import { projectPublicHistory } from "./session-tree.js";
+import { A2UI_RENDERER_TOOL } from '../../src/channels/web/a2ui/transport-metadata.js';
 import { materializePlanContext, materializeGoalContext, type GoalContextIdentity } from "./host-plan-context.js";
 import { buildSessionTreeSnapshot, type RootSessionTreeNode, type SessionTreeSnapshot } from "../../src/agent-control/session-tree-snapshot.js";
 
@@ -114,6 +115,7 @@ export interface RuntimeOptions {
   readonly assertAdmission?: (input?: AcceptedInput) => void;
   /** Host timeline root for this exact accepted input, including queued messages. */
   readonly replyThreadFor?: (input: AcceptedInput) => number | null;
+  readonly publicInputText?: (source: {chatJid:string;sourceId:string;conversationId:number}, content:string) => string;
   /** Public evidence preparation outside SQLite; effect is invocation-local. */
   readonly prepareTerminalEffect?: (input: AcceptedInput, answer?: SettledAnswer) => Promise<TerminalDatabaseEffect | undefined>;
   readonly onExecutionSettled?: (workId: string) => void | Promise<void>;
@@ -592,6 +594,22 @@ export class HostConversationRuntime {
         contextWindow: model?.contextWindow ?? null, observedTokens, observedModel, lastAnswer, usage };
     });
   }
+  private publicDisplayEntry(entry: EntryRecord): EntryRecord {
+    const message=entry.model?.[0];
+    if (entry.model?.length!==1 || !message) return entry;
+    if (entry.kind==='pi.tool-result' && message.role==='toolResult' && message.toolName===A2UI_RENDERER_TOOL) {
+      const {details: _private,...publicMessage}=message;
+      return {...entry,model:[publicMessage]};
+    }
+    if (entry.kind==='host.accepted' && message.role==='user' && typeof message.content==='string' && this.options.publicInputText) {
+      const source=entry.data as {chatJid?:unknown;sourceId?:unknown;conversationId?:unknown} | undefined;
+      if (typeof source?.chatJid==='string' && typeof source.sourceId==='string' && source.conversationId===entry.conversationId) {
+        const content=this.options.publicInputText({chatJid:source.chatJid,sourceId:source.sourceId,conversationId:entry.conversationId},message.content);
+        if (content!==message.content) return {...entry,model:[{...message,content}]};
+      }
+    }
+    return entry;
+  }
   /** Read-only display window for one settled answer: the committed entries
    * after the previous final answer, from the first accepted input through this
    * answer. Without an answer id, the window ends at the newest entry: the
@@ -652,7 +670,7 @@ export class HostConversationRuntime {
           if (entry.kind === 'piclaw.token-optimizer.operation' && entry.conversationId === reader.binding.conversationId) afterAnswer.push(entry);
         }
       }
-      return freezeTree({ entries: structuredClone([...window, ...afterAnswer]), tasks, truncated, toolSummaries });
+      return freezeTree({ entries: structuredClone([...window.map(entry=>this.publicDisplayEntry(entry)), ...afterAnswer]), tasks, truncated, toolSummaries });
     });
   }
   /** Fork-aware public history across the explicit imported host-session bindings only. */
@@ -683,7 +701,7 @@ export class HostConversationRuntime {
           rows.push(...page.items); cursor = page.next;
         } while (cursor);
         if (id === copy.conversationId) leafId = rows.length ? String(rows[rows.length - 1]!.id) : null;
-        const projected = projectPublicHistory(rows, imported);
+        const projected = projectPublicHistory(rows.map(row=>this.publicDisplayEntry(row)), imported);
         if (id === copy.conversationId) visibleLeafId = projected.at(-1)?.entry.id ?? null;
         for (const node of projected) {
           const prior = all.get(node.entry.id);

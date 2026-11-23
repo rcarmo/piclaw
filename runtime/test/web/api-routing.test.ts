@@ -33,7 +33,9 @@ test('web API client uses preferred roster and reply paths', async () => {
   expect(calls[1]).toEqual({
     url: '/post/reply?chat_jid=web%3Abranch',
     method: 'POST',
-    body: JSON.stringify({ thread_id: 42, content: 'hello', media_ids: [7] }),
+    body: JSON.stringify({thread_id:42,content:'hello',media_ids:[7],metadata:{a2uiRendererCapabilities:{'1.0':{
+      supportedCatalogIds:['https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json'],
+    }}}}),
   });
 });
 

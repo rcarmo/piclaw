@@ -112,7 +112,7 @@ export function useSseConnection({ handleSseEvent, handleConnectionStatusChange,
     const sse = new SSEClient(
       (type, data) => sseEventRef.current(type, data),
       (status) => statusChangeRef.current(status),
-      { chatJid },
+      { chatJid, enableA2uiRpc:true },
     );
     sse.connect();
 

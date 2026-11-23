@@ -910,6 +910,19 @@ describe("CSRF origin checks", () => {
 // ── Security headers ──
 
 describe("security headers", () => {
+  test('only the Classic document opts into remote A2UI playback', async () => {
+    const { serveStatic } = await import('../../../src/channels/web/http/static.js');
+    const { withSecurityHeaders } = await import('../../../src/channels/web/http/security.js');
+    const notFound = () => new Response(null, {status:404});
+    const shell = withSecurityHeaders(await serveStatic('classic/index.html', notFound), false);
+    const login = withSecurityHeaders(await serveStatic('login.html', notFound), false);
+    expect(shell.status).toBe(200);
+    expect(login.status).toBe(200);
+    const policy = login.headers.get('Content-Security-Policy');
+    expect(policy).toContain("default-src 'self'");
+    expect(shell.headers.get('Content-Security-Policy')).toBe(`${policy}; media-src 'self' https: http: data:`);
+  });
+
   test("expected header names are defined", () => {
     // Verify the security header names we expect
     const expectedHeaders = [

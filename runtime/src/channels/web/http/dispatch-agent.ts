@@ -1,4 +1,7 @@
 import { handleA2uiAction } from "../a2ui/admission.js";
+import { handleA2uiRpc, handleA2uiRendererError, handleA2uiRendererPeer, handleA2uiRendererReply } from '../a2ui/rpc.js';
+import { CLASSIC_A2UI_AGENT_CAPABILITIES } from '../a2ui/capabilities.js';
+import { isSingleUserAccess } from '../../../core/config-access.js';
 import { handlePlan } from "../handlers/plan.js";
 import { captureHostDatabaseBinding } from "../../../db/connection.js";
 import { captureWebRequestAuthority } from "../auth/auth-gateway.js";
@@ -74,7 +77,15 @@ interface ExactAgentRoute {
 }
 
 const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
+  { method: 'GET', path: '/agent/a2ui-capabilities', handle: channel =>
+    isSingleUserAccess() && channel.dispatchAcceptedInput
+      ? channel.json({ metadata: { a2uiAgentCapabilities: CLASSIC_A2UI_AGENT_CAPABILITIES } }, 200)
+      : channel.json({ error: 'A2UI agent capabilities are unavailable.' }, 404) },
   { method: "POST", path: "/agent/a2ui-action", handle: handleA2uiAction },
+  { method: 'POST', path: '/agent/a2ui-rpc', handle: handleA2uiRpc },
+  { method: 'POST', path: '/agent/a2ui-error', handle: handleA2uiRendererError },
+  { method: 'GET', path: '/agent/a2ui-peer', handle: handleA2uiRendererPeer },
+  { method: 'POST', path: '/agent/a2ui-renderer-reply', handle: handleA2uiRendererReply },
   { method: "GET", path: "/agent/plan", handle: handlePlan },
   { method: "POST", path: "/agent/plan", handle: handlePlan },
   { method: "POST", path: "/agent/models/refresh", handle: handleModelCatalogRefresh },

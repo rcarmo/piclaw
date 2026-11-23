@@ -62,6 +62,9 @@ const SECURITY_HEADERS: Record<string, string> = {
     "frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
 };
 
+/** Only Classic reads agent-authored media; other documents retain the default policy. */
+export const CLASSIC_CONTENT_SECURITY_POLICY = `${SECURITY_HEADERS["Content-Security-Policy"]}; media-src 'self' https: http: data:`;
+
 /**
  * Clone a response and append baseline security headers when absent.
  * @param response Source response to wrap.

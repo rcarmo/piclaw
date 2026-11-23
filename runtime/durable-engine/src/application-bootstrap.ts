@@ -31,6 +31,9 @@ import { createHostController, type HostControllerOptions } from "./host-control
 import { createHostDurableBindings, createInputHandoffCompletion } from "./host-bindings.js";
 import { prepareHostSchema } from "./host-schema.js";
 import { readApplicationMessagePayload } from "./accepted-payload-recovery.js";
+import { ownsA2uiModelSync, projectA2uiAgentInput, projectPublicA2uiInput, readA2uiRendererDataModel, readA2uiSurfaceOwner, storeA2uiInputMetadata } from '../../src/channels/web/a2ui/input-metadata.js';
+import { A2uiAgentRpc, type A2uiAgentFunction } from '../../src/channels/web/a2ui/agent-rpc.js';
+import type { RendererRpcBroker } from '../../src/channels/web/a2ui/renderer-rpc.js';
 import { value, effect, sealed } from "./host-effects.js";
 import { hashScheduledLeaseToken } from "../../src/service-effects/current-piclaw/scheduled-run-values.js";
 import type { ScheduledRunLease } from "../../src/service-effects/contracts/scheduled-run-store.js";
@@ -114,6 +117,8 @@ export interface ApplicationBootstrapOptions {
   readExecutionPolicy?: () => {autoCompact: boolean; autoRetry: boolean};
   setExecutionPolicy?: (name: "autoCompact" | "autoRetry", enabled: boolean) => void | Promise<void>;
   onRuntime?: (runtime: import("./host-runtime.js").HostConversationRuntime) => void | Promise<void>;
+  a2uiAgentFunctions?: readonly A2uiAgentFunction[];
+  a2uiRendererRpc?: RendererRpcBroker;
   assertConversationAvailable?: () => void;
   assertAdmission?: RuntimeOptions["assertAdmission"];
   /** Host-owned physical catalog approval; no credentials or provider execution. */
@@ -250,6 +255,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
           sessionId: r.sessionId, bindings, work, assertCurrent(input) { assert(); config.assertAdmission?.(input); } }),
         assertAdmission: config.assertAdmission, materializeAnswer: config.materializeAnswer, prepareTerminalEffect: config.prepareTerminalEffect, onOperationSettled: config.onOperationSettled, onExecutionSettled: config.onExecutionSettled, putAnswer: config.answers.put.bind(config.answers),
         replyThreadFor(input) { assert(); return resolveAcceptedMessageThread(root, input); },
+        publicInputText(source, content) { assert(); return projectPublicA2uiInput(root,source,content); },
         async cancelOperationSource(input, expectedVersion, retryTaskId) {
           await admitSqliteWrite(root, () => {
             assert();
@@ -306,7 +312,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
         const scope = scopeFor(source.chatJid);
         if (!operation || !scope) throw Error("Missing recovered operation");
         return { claimed: { source, operation }, branchId: scope.branchId,
-          requestId: binding?.requestId ?? (pendingSideOperation ? source.sourceId : `queued-steer:${source.sourceId}`), content: await content(source.payloadRef, (source.kind === "scheduled_agent" || source.kind === "internal") && binding ? binding : source) };
+          requestId: binding?.requestId ?? (pendingSideOperation ? source.sourceId : `queued-steer:${source.sourceId}`), content: await content(source.payloadRef, binding ?? source) };
       } },
     }, context);
     const activeController = controller;
@@ -353,9 +359,10 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       if (previous && !isNativeMessageInput(previous)) throw Error("Existing host input cannot be resubmitted");
       if (!previous && (source.state!=="pending" || !/^application:pi-durable(?::|$)/.test(source.provenanceRef))) throw Error("Unsubmitted native source required");
       const requestId = `message:${rowId}:${messageId}`;
+      const content = projectA2uiAgentInput(root, { chatJid: chat, sourceId: messageId, conversationId: scope.conversationId }, row.content);
       const input: AcceptedInput = Object.freeze({incarnation:r.incarnation,conversationId:scope.conversationId as ConversationId,
         chatJid:chat,branchId:scope.branchId,operationId:`native-message:${scope.conversationId}:${source.sourceSeq}`,sourceSeq:source.sourceSeq,
-        sourceId:messageId,payloadRef:source.payloadRef,requestId,requestHash:hashCanonicalRequest({type:"input",requestId,content:row.content})});
+        sourceId:messageId,payloadRef:source.payloadRef,requestId,requestHash:hashCanonicalRequest({type:"input",requestId,content})});
       // Priority intervention does not wait for an idle prompt's optional optimiser tool pick.
       assertLive();
       const id = await runtime.submitMessage(input,whenBusy); assertLive();
@@ -420,8 +427,9 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       assertLive();const scope=routeIndex.get(chat);if(!scope||!lookup(chat,scope.branchId))throw Error("Unbound native queue");
       const items=await runtime.readMessageInbox({incarnation:r.incarnation,...scope});assertLive();
       return items.map(item=>{
-        const row=root.query("SELECT timestamp,thread_id FROM messages WHERE chat_jid=? AND id=?").get(chat,item.input.sourceId) as {timestamp:string;thread_id:number|null}|null;
-        return {row_id:item.submissionId,mode:item.mode,content:item.content,timestamp:row?.timestamp??r.now(),thread_id:row?.thread_id??null,source:"native_sdk"};
+        const row=root.query("SELECT content,timestamp,thread_id FROM messages WHERE chat_jid=? AND id=?").get(chat,item.input.sourceId) as {content:string|null;timestamp:string;thread_id:number|null}|null;
+        // The SDK inbox has the model input, including private A2UI metadata. The queue shows only its public source.
+        return {row_id:item.submissionId,mode:item.mode,content:row?.content??'',timestamp:row?.timestamp??r.now(),thread_id:row?.thread_id??null,source:"native_sdk"};
       });
     };
     const controlNativeQueue:NonNullable<WebChannelOpts["controlNativeQueue"]>=async(chat,id,action,authorise)=>{
@@ -434,11 +442,24 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       const check=()=>{assertLive();authorise?.();if(routeIndex.get(chat)!==scope||!lookup(chat,scope.branchId))throw Error("Native queue authority changed");};check();
       return candidateDatabase.withAdmissionGuard(check,()=>runtime.reorderQueuedMessages({incarnation:r.incarnation,...scope},ids));
     };
+    const a2uiAgentRpc = new A2uiAgentRpc(config.a2uiAgentFunctions);
+    const a2uiRpcScope: NonNullable<WebChannelOpts['a2uiRpcScope']> = chat => {
+      assertLive();
+      const route = routeIndex.get(chat);
+      if (!route || lookup(chat, route.branchId)?.conversationId !== route.conversationId) return;
+      return { conversationId:route.conversationId, agent:a2uiAgentRpc, renderer:config.a2uiRendererRpc, signal:shutdown.signal, assertCurrent() {
+        assertLive();
+        if (routeIndex.get(chat) !== route || lookup(chat, route.branchId)?.conversationId !== route.conversationId)
+          throw Error('A2UI RPC conversation changed');
+      } };
+    };
     const getInputSourceAdmission = (chat: string, provenanceRef="application:pi-durable"): ReturnType<NonNullable<WebChannelOpts["getInputSourceAdmission"]>> => {
       const current = () => { const binding = routeIndex.get(chat); return binding && lookup(chat, binding.branchId); };
       assert(); if (!current()) throw Error("Unbound application conversation");
-      return ({ message, rowId, database: connection }) => {
-        assert(); if (!current()) throw Error("Unbound application conversation");
+      return ({ message, rowId, database: connection }, renderer) => {
+        assert();
+        const scope = routeIndex.get(chat);
+        if (!scope || !current()) throw Error("Unbound application conversation");
         if (connection !== root || !root.inTransaction) throw Error("Root admission transaction required");
         if (message.chat_jid !== chat) throw Error("Input admission chat mismatch");
         const stored = root.query("SELECT id, chat_jid, is_bot_message FROM messages WHERE rowid=?").get(rowId) as { id: string; chat_jid: string; is_bot_message: number } | null;
@@ -458,6 +479,19 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
         };
         checkInput();
         work.acceptSourceInTransaction(input, connection);
+        if (renderer && chat.startsWith('web:')) {
+          const conversationId = scope.conversationId;
+          if (renderer.submittedSurfaceId && !ownsA2uiModelSync(root, chat, `a2ui:${renderer.submittedSurfaceId}`, conversationId))
+            throw Error('Surface renderer belongs to another conversation');
+          const action=renderer.action;
+          const owner=action && readA2uiSurfaceOwner(root,chat,`a2ui:${action.message.action.surfaceId}`);
+          if (owner && (owner.conversation_id!==conversationId || owner.post_id!==action!.postId))
+            throw Error('A2UI action belongs to another conversation or post');
+          // Surfaces published before owner tracking keep their legacy text path.
+          if (!owner && action?.message.action.metadata!==undefined) throw Error('A2UI action extensions require an owned surface');
+          const data=renderer.capabilities ? readA2uiRendererDataModel(root,chat,conversationId,renderer) : undefined;
+          storeA2uiInputMetadata(root,{chatJid:chat,sourceId:message.id,conversationId},data,renderer.capabilities,renderer.peer,owner ? action?.message : undefined);
+        }
         checkInput();
         assert();
       };
@@ -941,7 +975,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       bind(options: Pick<WebChannelOpts, "queue" | "agentPool">): Readonly<WebChannelOpts> {
         assert(); if (bound || closing) throw Error("Application bundle already bound or closing");
         bound = true;
-        return Object.freeze({ ...options, prepareInputSourceAdmission, getInputSourceAdmission,
+        return Object.freeze({ ...options, prepareInputSourceAdmission, getInputSourceAdmission, a2uiRpcScope,
           prepareInputText: prepareInputText ? (chat: string, text: string) => { assertLive(); if (!routeIndex.has(chat)) throw Error("Unbound input preparation"); return prepareInputText(chat, text); } : undefined,
           dispatchAcceptedInput: dispatch, filterNativeTimeline, readNativeQueue, controlNativeQueue, reorderNativeQueue });
       },

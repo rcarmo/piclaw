@@ -10,7 +10,7 @@ import { formatCount, formatFileSize, formatTime, formatTimestamp } from '../uti
 import { buildPostMarkdownCopyPayload } from '../utils/post-copy-markdown.js';
 import { DEFAULT_AGENT_NAME, getAvatarInfo } from '../ui/agent-utils.js';
 import { getAttachmentPreviewKind, getAttachmentPreviewLabel } from '../ui/attachment-preview.js';
-import { A2uiSurface } from './a2ui-surface.js';
+import { LazyA2uiSurface } from './a2ui-surface-loader.js';
 import { isA2uiSurfaceBlock } from '../../../src/channels/web/a2ui/surface.js';
 import { buildGeneratedWidgetPayload, canRenderGeneratedWidget } from '../ui/generated-widget.js';
 import { disclosureTriangleSvgString, renderDisclosureTriangle } from '../ui/disclosure-triangle.js';
@@ -2137,7 +2137,7 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
                         }}
                     />
                 `}
-                ${a2uiBlocks.map(block => html`<${A2uiSurface}
+                ${a2uiBlocks.map(block => html`<${LazyA2uiSurface}
                     key=${`${block.surface.surfaceId}:${block.revision}`}
                     block=${block}
                     source=${{ post_id: post.id, thread_id: data.thread_id || post.id, chat_jid: post.chat_jid }}

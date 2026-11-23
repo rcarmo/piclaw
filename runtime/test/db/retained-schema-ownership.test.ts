@@ -18,11 +18,14 @@ test('retained schemas have exact metadata/cache owners and preserve strict miss
   await createToolOutputStore(borrowed).prune();const root=await harness.root(context);await createMcpRecallStore('schema_fixture',()=>harness,connections,async()=>({owner:'schema_fixture',agentId:'default'}),borrowed).list(root.id,context);
   const before=database.query('SELECT * FROM sqlite_schema ORDER BY type,name').all(),inventory=assertSchemaInventory(readSchemaInventory(database),contract,'core');
   expect(inventory.objects.find(row=>row.name==='mcp_connections_v1')?.owner).toBe('core:outbound-mcp');
+  for(const name of ['a2ui_input_metadata','a2ui_renderer_errors','a2ui_surface_owners','idx_a2ui_surface_owners_sync'])
+   expect(inventory.objects.find(row=>row.name===name)).toMatchObject({owner:'core:a2ui',presence:'required'});
   for(const name of ['retained_tool_outputs','retained_tool_output_search'])expect(inventory.objects.find(row=>row.name===name)?.category).toBe('retired');
   for(const name of ['mcp_recall','mcp_recall_search'])expect(inventory.objects.find(row=>row.name===name)?.category).toBe('projection-cache');
   expect(database.query('SELECT * FROM sqlite_schema ORDER BY type,name').all()).toEqual(before);expect(database.query('SELECT * FROM piclaw_schema_migrations ORDER BY owner,migration_order').all()).toEqual(receipts);
   for(const [sql,reason]of [
    ['DROP INDEX retained_tool_outputs_expiry','Missing required object index:retained_tool_outputs_expiry'],
+   ['DROP INDEX idx_a2ui_surface_owners_sync','Missing required object index:idx_a2ui_surface_owners_sync'],
    ['DROP TRIGGER mcp_recall_insert','Missing required object trigger:mcp_recall_insert'],
    ['ALTER TABLE retained_tool_outputs ADD unreviewed TEXT','Unapproved schema drift table:retained_tool_outputs'],
    ['CREATE TABLE retained_tool_outputs_unowned(id INTEGER)','Unowned object table:retained_tool_outputs_unowned'],

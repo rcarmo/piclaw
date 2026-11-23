@@ -1,3 +1,4 @@
+import { classicBundleUrl } from '../ui/app-shell-state.js';
 /**
  * editor-loader.ts — Lazy-loading wrapper for the standalone editor extension.
  *
@@ -34,20 +35,11 @@ interface EditorBundleModule {
 let editorModulePromise: Promise<EditorBundleModule> | null = null;
 let editorModuleCache: EditorBundleModule | null = null;
 
-function getEditorBundleUrl(): string {
-    try {
-        const currentUrl = new URL(import.meta.url);
-        const query = currentUrl.search || '';
-        return `/static/classic/dist/editor.bundle.js${query}`;
-    } catch {
-        return '/static/classic/dist/editor.bundle.js';
-    }
-}
 
 function loadEditorModule(): Promise<EditorBundleModule> {
     if (editorModuleCache) return Promise.resolve(editorModuleCache);
     if (!editorModulePromise) {
-        editorModulePromise = import(getEditorBundleUrl())
+        editorModulePromise = import(classicBundleUrl('editor'))
             .then((mod) => {
                 editorModuleCache = mod;
                 return mod;
