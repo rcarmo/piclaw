@@ -41,10 +41,10 @@ async function fixture(run: (f: { root: Database; request(method: string, action
   const models = await ModelRuntime.create({ credentials, modelsPath: null, modelsStore: { read: async () => undefined, write: async () => {}, delete: async () => {} }, allowModelNetwork: false, refreshOnCreate: false });
   let providerCalls = 0, current = true;
   const forbidden = () => { providerCalls++; throw Error('No provider execution in configuration fixture'); };
-  const model = { provider: 'synthetic', id: 'approved', name: 'Approved', api: 'openai-completions' as const, baseUrl: 'https://invalid.invalid', input: ['text' as const], reasoning: false, contextWindow: 10000, maxTokens: 1000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
+  const model = { provider: 'synthetic', id: 'gpt-5.4-mini', name: 'Approved', api: 'openai-completions' as const, baseUrl: 'https://invalid.invalid', input: ['text' as const], reasoning: false, contextWindow: 10000, maxTokens: 1000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
   models.registerNativeProvider({ id: 'synthetic', name: 'Synthetic', getModels: () => [model] as any, auth: { apiKey: { name: 'Synthetic', check: async () => ({ type: 'api_key' }), resolve: async () => ({ auth: { apiKey: 'synthetic-only' }, source: 'fixture' }) } }, stream: forbidden as any, streamSimple: forbidden as any });
   await models.refresh({ allowNetwork: false }); await models.getAvailable();
-  const settings = SettingsManager.create(workspace, getPiclawAgentDir()); settings.setDefaultModelAndProvider('synthetic', 'approved'); await settings.flush();
+  const settings = SettingsManager.create(workspace, getPiclawAgentDir()); settings.setDefaultModelAndProvider('synthetic', model.id); await settings.flush();
   const noHttp = spyOn(globalThis, 'fetch').mockImplementation(Object.assign(async () => { throw Error('No HTTP in config fixture'); }, { preconnect() { throw Error('No HTTP preconnect in config fixture'); } }));
   const noSocket = spyOn(Socket.prototype, 'connect').mockImplementation(() => { throw Error('No TCP in config fixture'); });
   let backend: Awaited<ReturnType<typeof createDefaultApplicationRuntime>> | undefined;
@@ -173,7 +173,7 @@ test('native Goal config acknowledges an already committed clear after a late re
 
 for (const namespace of ['observability', 'late-night-regrets', 'delegate'] as const) {
   const patch = namespace === 'observability' ? { instance_name: 'Updated config' }
-    : namespace === 'delegate' ? { searchable_providers: ['synthetic'], excluded_models: ['forbidden-*'] } : { recent_hours_for_reflection: 12 };
+    : namespace === 'delegate' ? { add_model: 'synthetic/gpt-5.4-mini' } : { recent_hours_for_reflection: 12 };
   for (const reason of ['cancel', 'revoke'] as const) test(`native ${namespace} settings preserve request while writer is held: ${reason}`, () => fixture(async f => {
     const path = (f.root.query('PRAGMA database_list').all() as { name: string; file: string }[]).find(row => row.name === 'main')!.file;
     const blocker = new Database(path), controller = new AbortController(), before = f.snapshot(namespace);
@@ -196,7 +196,7 @@ for (const namespace of ['observability', 'late-night-regrets', 'delegate'] as c
       const response = await handleRegisteredAddonConfigApiRequest(f.request('POST', 'config', patch, controller.signal, namespace), namespace, 'config', json);
       expect(response!.status, await response!.clone().text()).toBe(200); expect(writes).toBe(1); expect(controller.signal.aborted).toBe(true);
       const row = f.root.query("SELECT value FROM extension_kv WHERE extension_id=? AND scope='global' AND key='config'").get(namespace) as { value: string };
-      expect(JSON.parse(row.value)).toMatchObject(patch);
+      expect(JSON.parse(row.value)).toMatchObject(namespace === 'delegate' ? { approved_models:['synthetic/gpt-5.4-mini'] } : patch);
     } finally { hook.mockRestore(); }
   }, [namespace]));
 }

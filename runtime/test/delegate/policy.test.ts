@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildModelCandidates, classifyModel, normalizeConfig, type AvailableModel } from '../../src/delegate/policy.js';
+import { buildModelCandidates, classifyModel, migrateLegacyDelegateConfig, normalizeConfig, type AvailableModel } from '../../src/delegate/policy.js';
 
 const model = (provider: string, id: string, metadata: Partial<AvailableModel> = {}): AvailableModel => ({
   provider, id, fullId: `${provider}/${id}`, ...metadata,
@@ -13,15 +13,28 @@ const models = [
   model('azure-private', 'gpt-5.4-mini'),
 ];
 
-test('Core Delegate approves no providers by default', () => {
+const migrate = (catalogue: AvailableModel[], legacy: unknown) => buildModelCandidates(catalogue, migrateLegacyDelegateConfig(catalogue, legacy));
+
+test('Core Delegate approves no models by default', () => {
   expect(buildModelCandidates(models)).toEqual([]);
-  expect(buildModelCandidates(models, { searchable_providers: [], excluded_providers: [], excluded_models: [] })).toEqual([]);
+  expect(buildModelCandidates(models, { approved_models: [] })).toEqual([]);
 });
 
-test('normalisation preserves explicit empty exclusions and removes denied provider approvals', () => {
-  expect(normalizeConfig({ searchable_providers: ['openai', 'openai', 'anthropic'], excluded_providers: ['anthropic'], excluded_models: [' MINI ', ' MINI '] }))
-    .toEqual({ searchable_providers: ['openai'], excluded_providers: ['anthropic'], excluded_models: ['MINI'] });
-  expect(normalizeConfig(null)).toEqual({ searchable_providers: null, excluded_providers: null, excluded_models: [] });
+test('only exact available persisted IDs can be selected', () => {
+  const config = normalizeConfig({ approved_models: ['github-copilot/gpt-6.1-sol', 'github-copilot/gpt-6.1-sol', 'bad', 'openrouter/openai/gpt-6.1-sol'] });
+  expect(config.approved_models).toEqual(['github-copilot/gpt-6.1-sol', 'openrouter/openai/gpt-6.1-sol']);
+  expect(buildModelCandidates(models, config).map(model => model.id)).toEqual(['github-copilot/gpt-6.1-sol']);
+  expect(buildModelCandidates(models, { approved_models:['github-copilot/*', 'github-copilot/GPT-6.1-SOL'] })).toEqual([]);
+  expect(normalizeConfig(null)).toEqual({ approved_models: [] });
+  expect(migrateLegacyDelegateConfig(models, { ...config, searchable_providers: ['openai'] })).toBeUndefined();
+  expect(migrateLegacyDelegateConfig(models, null)).toBeUndefined();
+});
+
+test('legacy migration freezes the eligible set and respects existing denials', () => {
+  const frozen = migrateLegacyDelegateConfig(models, { searchable_providers:['github-copilot','azure-private'], excluded_models:['*MAI*'] });
+  expect(frozen?.approved_models).toEqual(['github-copilot/gpt-6.1-sol']);
+  expect(buildModelCandidates([...models, model('github-copilot','gpt-5.4-mini')], frozen).map(model => model.id)).toEqual(frozen?.approved_models ?? []);
+  expect(buildModelCandidates([], frozen)).toEqual([]);
 });
 
 for (const [id, tier, rule] of [
@@ -39,14 +52,14 @@ for (const [id, tier, rule] of [
 
 for (const id of ['gpt-6.1-sol-unknown', 'gpt-6-unannounced', 'unknown-model', 'mai-code-2-pro', 'mai-code-20', 'mai-code-3']) test(`unclassified models stay denied: ${id}`, () => {
   expect(classifyModel(model('github-copilot', id))).toMatchObject({ status: 'unclassified', tier: null, rule: null });
-  expect(buildModelCandidates([model('github-copilot', id)], { searchable_providers: ['github-copilot'], excluded_providers: [], excluded_models: [] })).toEqual([]);
+  expect(buildModelCandidates([model('github-copilot', id)], { approved_models: [`github-copilot/${id}`] })).toEqual([]);
 });
 
 test('approved candidates keep metadata, deduplicate exact IDs and sort deterministically', () => {
   const config = { searchable_providers: ['anthropic', 'github-copilot', 'openai'], excluded_providers: [], excluded_models: [] };
   const input = [...models, { ...models[0]!, supportsImages: false }];
   const before = JSON.stringify({ input, config });
-  const candidates = buildModelCandidates(input, config);
+  const candidates = migrate(input, config);
   expect(candidates.map(candidate => candidate.id)).toEqual(['openai/gpt-5.4-mini', 'github-copilot/mai-code-1.1-flash', 'github-copilot/gpt-6.1-sol', 'anthropic/claude-opus-5.5']);
   expect(candidates[1]).toMatchObject({ supportsImages: true, reasoning: false, contextWindow: 100000, maxOutputTokens: 8192 });
   expect(candidates[0]).toMatchObject({ supportsImages: null, reasoning: null, contextWindow: null, maxOutputTokens: null });
@@ -58,24 +71,24 @@ test('MAI Code 2 variants require approval and preserve existing exclusions and 
   const config = { searchable_providers: ['github-copilot'], excluded_providers: ['openai-codex'], excluded_models: ['*grok*', 'gpt-6.1'] };
   const before = JSON.stringify({ mai, config });
   expect(buildModelCandidates(mai)).toEqual([]);
-  expect(buildModelCandidates(mai, config).map(candidate => [candidate.modelId, candidate.tier])).toEqual([
+  expect(migrate(mai, config).map(candidate => [candidate.modelId, candidate.tier])).toEqual([
     ['mai-code-1.1-flash', 2], ['mai-code-2-flash', 2], ['mai-code-2', 3],
   ]);
-  expect(buildModelCandidates(mai, { ...config, excluded_providers: ['github-copilot'] })).toEqual([]);
-  expect(buildModelCandidates(mai, { ...config, excluded_models: ['mai-code-2'] }).map(candidate => candidate.modelId)).toEqual(['mai-code-1.1-flash']);
+  expect(migrate(mai, { ...config, excluded_providers: ['github-copilot'] })).toEqual([]);
+  expect(migrate(mai, { ...config, excluded_models: ['mai-code-2'] }).map(candidate => candidate.modelId)).toEqual(['mai-code-1.1-flash']);
   expect(JSON.stringify({ mai, config })).toBe(before);
 });
 
 test('configured provider order breaks same-model ties without changing tier order', () => {
   const same = [model('openai', 'gpt-5.4-mini'), model('github-copilot', 'gpt-5.4-mini')];
-  expect(buildModelCandidates(same, { searchable_providers: ['github-copilot', 'openai'], excluded_providers: [], excluded_models: [] }).map(candidate => candidate.provider))
+  expect(migrate(same, { searchable_providers: ['github-copilot', 'openai'], excluded_providers: [], excluded_models: [] }).map(candidate => candidate.provider))
     .toEqual(['github-copilot', 'openai']);
 });
 
 test('provider defaults, explicit denials and case-insensitive model patterns remain fail closed', () => {
   const config = { searchable_providers: ['azure-private', 'github-copilot'], excluded_providers: null, excluded_models: ['*MAI*'] };
-  expect(buildModelCandidates(models, config).map(candidate => candidate.id)).toEqual(['github-copilot/gpt-6.1-sol']);
-  expect(buildModelCandidates(models, { ...config, excluded_providers: [] }).map(candidate => candidate.id)).toEqual(['azure-private/gpt-5.4-mini', 'github-copilot/gpt-6.1-sol']);
-  expect(buildModelCandidates(models, { ...config, excluded_providers: ['github-copilot'] })).toEqual(['azure-private/gpt-5.4-mini'].map(id => expect.objectContaining({ id })));
-  expect(buildModelCandidates(models, { ...config, excluded_models: ['GPT-6.1', 'mai'] })).toEqual([]);
+  expect(migrate(models, config).map(candidate => candidate.id)).toEqual(['github-copilot/gpt-6.1-sol']);
+  expect(migrate(models, { ...config, excluded_providers: [] }).map(candidate => candidate.id)).toEqual(['azure-private/gpt-5.4-mini', 'github-copilot/gpt-6.1-sol']);
+  expect(migrate(models, { ...config, excluded_providers: ['github-copilot'] })).toEqual(['azure-private/gpt-5.4-mini'].map(id => expect.objectContaining({ id })));
+  expect(migrate(models, { ...config, excluded_models: ['GPT-6.1', 'mai'] })).toEqual([]);
 });

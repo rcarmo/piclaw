@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { isolatedApplicationTest } from './src/isolated-application-test.js';
 import { initDatabase, getDb, closeDatabase } from '../../runtime/src/db/connection.js';
+import { extensionKvGet, extensionKvSet } from '../../runtime/src/db/extension-kv.js';
 import { storeChatMetadata } from '../../runtime/src/db.js';
 import { acquireRuntimeLock } from '../../runtime/src/runtime/single-instance.js';
 import { createDefaultApplicationRuntime } from '../../runtime/durable-engine/src/default-application-runtime.js';
@@ -37,9 +38,10 @@ for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash']) f
   const keys: Record<string, string> = { [parent.provider]: 'SYNTHETIC_PARENT_AUTH', [child.provider]: 'SYNTHETIC_CHILD_AUTH', unrelated: 'SYNTHETIC_UNRELATED_AUTH' };
   const credentials = createTestCredentialStore(credentialed ? Object.fromEntries(Object.entries(keys).map(([id, key]) => [id, { type: 'api_key' as const, key }])) : {});
   const searchable = [...new Set([parent.provider, child.provider])];
-  const expectedCandidates = !approved ? [] : childModelId === 'mai-code-2'
-    ? [`${parent.provider}/${parent.id}`, `${child.provider}/${child.id}`]
-    : [`${child.provider}/${child.id}`, `${parent.provider}/${parent.id}`];
+  const childSlug = `${child.provider}/${child.id}`, parentSlug = `${parent.provider}/${parent.id}`;
+  const migrate = approved && installedLegacy && !credentialed && childModelId === 'gpt-5.4-mini';
+  if (migrate) root.transaction(() => extensionKvSet('delegate', 'config', { searchable_providers: searchable, excluded_models: [parent.id] }, 'global'))();
+  const expectedCandidates = approved ? [childSlug] : [];
   const host = await ModelRuntime.create({ credentials, modelsPath: null, modelsStore: { read: async () => undefined, write: async () => {}, delete: async () => {} }, refreshOnCreate: false, allowModelNetwork: false });
   let children = 0; const offered: string[][] = [];
   const requests: { provider: string; model: string; apiKey: string | undefined; options: string; transcript: string }[] = [];
@@ -74,12 +76,16 @@ for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash']) f
     pool = new AgentPool({ credentialStore: credentials, modelRuntime: host, modelRegistry: services.modelRegistry, ...backend.sessionOptions } as any);
     channel = new WebChannel(backend.bind({ queue: base.queue, agentPool: pool })); await backend.attachChannel!(channel);
     const initial = await request('models'); expect(initial?.status).toBe(200);
-    const snapshot: any = await initial!.json(); expect(snapshot.source).toBe('native'); expect(snapshot.candidates).toEqual([]);
-    expect(root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all()).toEqual(original);
-    const denied = await request('config', 'POST', { searchable_providers: searchable }, false);
+    const snapshot: any = await initial!.json(); expect(snapshot.source).toBe('native'); expect(snapshot.candidates.map((entry: any) => entry.id)).toEqual(migrate ? [childSlug] : []);
+    const migratedRows = root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all();
+    if (!migrate) expect(migratedRows).toEqual(original);
+    else expect(extensionKvGet("delegate", "config", "global")).toEqual({ approved_models: [childSlug], provider_order: searchable });
+    const denied = await request('config', 'POST', { add_model: childSlug }, false);
     expect(denied!.status).toBeGreaterThanOrEqual(400);
-    expect(root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all()).toEqual(original);
-    if (approved) expect((await request('config', 'POST', { searchable_providers: searchable, excluded_models: [] }))!.status).toBe(200);
+    expect(root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all()).toEqual(migratedRows);
+    expect((await request('config', 'POST', { add_model: `${parentSlug}-unknown` }))!.status).toBeGreaterThanOrEqual(400);
+    expect((await request('config', 'POST', { searchable_providers: searchable }))!.status).toBeGreaterThanOrEqual(400);
+    if (approved && !migrate) expect((await request('config', 'POST', { add_model: childSlug }))!.status).toBe(200);
     const current: any = await (await request('models'))!.json();
     expect(current.candidates.map((model: any) => model.id)).toEqual(expectedCandidates);
     expect(JSON.stringify(current)).not.toMatch(/api_key|synthetic-only|access_token|Authorization/);

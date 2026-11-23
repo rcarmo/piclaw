@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "sourceParent": "b324b21f80a07578ea102fef919967f6e848e217",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlaySha256": "a3c02c69b5ea6fed09aa68bfb54bd347273c8b9b386e12c141cd70aa100979e1",
+  "scope": "Delegate whitelist migration only; original 105 entries, 37 deletions and accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/default-application-runtime.ts",
+      "beforeSha256": "7e7ba9aa5ad6fa08d16b311d1537b3ed508061aabe396c638ca259415260f402",
+      "afterSha256": "57a89016e6a4ee47a57d33633cd57eccfb6e58c99503852b3134a4066f31856f",
+      "purpose": "Freeze previously eligible Delegate models as exact IDs before native recovery and enforce the whitelist for each child model."
+    }
+  ]
+}
