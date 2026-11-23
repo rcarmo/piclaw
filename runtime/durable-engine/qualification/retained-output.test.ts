@@ -3,8 +3,9 @@ import {afterEach,expect,test} from "bun:test";
 import {mkdtemp,readFile,rm} from "node:fs/promises";
 import {join} from "node:path";
 import {tmpdir} from "node:os";
-import {createToolOutputStore,toolOutputLimits,type ToolOutputScope} from "../src/mcp/tool-output-store.ts";
+import {createToolOutputStore,toolOutputLimits,type ToolOutputScope} from "./fixtures/legacy-tool-output-store.ts";
 import {Database} from "bun:sqlite";
+import {createRetainedOutputReader} from '../src/retained-tool-output.ts';
 import {mkdirSync} from "node:fs";
 import {dirname} from "node:path";
 import {applicationRetainedDatabase,lineageCondition,forgetRetainedCopies} from "../src/mcp/retained-database.ts";
@@ -41,6 +42,18 @@ test("stored outputs are searchable with FTS and readable only in bounded window
   expect(window).toMatchObject({startLine:248,endLine:250,nextStart:251,totalLines:300});expect(window.text.split("\n")).toEqual(["line 248: value-248","line 249: value-249","line 250: NEEDLE-ALPHA failed in src/parser.ts"]);
   expect(await f.store.read(scope,{id:saved.id,fromEnd:true,lines:2})).toMatchObject({startLine:299,endLine:300,nextStart:null});
   expect((await f.store.read(scope,{id:saved.id,lines:500})).text.length).toBeLessThanOrEqual(toolOutputLimits.readChars);
+});
+
+test('compatibility readers neither initialise a fresh store nor prune expired historical rows',async()=>{
+ const f=await fixture(),reader=createRetainedOutputReader(f.database,()=>f.now),inspect=async()=> (await f.database()).withSync(db=>db.query("SELECT name FROM sqlite_schema WHERE name LIKE 'retained_tool_output%'").all());
+ expect(await reader.search(scope,{query:'NEEDLE'})).toEqual([]);expect(await inspect()).toEqual([]);
+ const saved=await save(f);const rows=await inspect();expect(rows.length).toBeGreaterThan(0);
+ expect((await reader.read(scope,{id:saved.id,start:250,lines:1})).text).toContain('NEEDLE');
+ await expect(reader.read({...scope,owner:'another-agent'},{id:saved.id})).rejects.toThrow('unavailable');
+ f.advance(60_001);
+ await expect(reader.read(scope,{id:saved.id})).rejects.toThrow('unavailable');
+ expect(await reader.search(scope,{query:'NEEDLE'})).toEqual([]);expect(await inspect()).toEqual(rows);
+ expect(await(await f.database()).withSync(db=>db.query('SELECT count(*) AS n FROM retained_tool_outputs').get())).toEqual({n:1});
 });
 
 test("a branch sees outputs captured on it and before its fork point, never later or sibling captures",async()=>{

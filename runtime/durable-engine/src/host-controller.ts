@@ -5,6 +5,7 @@ import { HostConversationRuntime, isNativeScheduledInput, type AcceptedInput, ty
 import { reconstituteAcceptedWork } from "./host-recovery.js";
 import { AcceptedReplyThreadUnavailableError } from "./host-message-thread.js";
 import { createLogger } from "../../src/utils/logger.js";
+import { retireOptimizerWork, restoreIdleOptimizerMasks } from "./retired-optimizer.js";
 const log = createLogger("durable.controller");
 
 type Recovery = Parameters<typeof reconstituteAcceptedWork>[0];
@@ -78,14 +79,20 @@ export async function createHostController(config: HostControllerOptions, contex
         } else known.add(state.submissionId);
       }
     }
+    const legacyRedirects = new Set<number>();
     for (const submission of inspection.submissions) {
-      if (!known.has(submission.id) && (await runtime.ownsMessageSubmission(submission) || await runtime.ownsDreamSubmission(submission) || await runtime.ownsOptimizerSubmission(submission))) known.add(submission.id);
+      if (!known.has(submission.id)) {
+        if (await runtime.ownsMessageSubmission(submission) || await runtime.ownsDreamSubmission(submission)) known.add(submission.id);
+        else if (submission.status === 'placed' && await runtime.ownsOptimizerSubmission(submission)) {
+          known.add(submission.id); legacyRedirects.add(submission.id);
+        }
+      }
       assert();
     }
     // Foreground Delegate children have SDK inputs, not independent host sources.
     // Qualify their exact task/request ownership back to ALREADY known host inputs;
     // neither a conversation ancestor nor a child-supplied request grants authority.
-    const hostInputs = new Set(known), delegateRoots = new Set<number>();
+    const hostInputs = new Set([...known].filter(id=>!legacyRedirects.has(id))), delegateRoots = new Set<number>();
     for (const submission of inspection.submissions) {
       if (known.has(submission.id)) continue;
       if (await runtime.ownsMaintenanceSubmission(submission, maintenance?.taskId, maintenance?.binding.conversationId)) { assert(); known.add(submission.id); continue; }
@@ -103,9 +110,8 @@ export async function createHostController(config: HostControllerOptions, contex
       if (task) roots.add(task.id);
     }
     const { runs, compactions } = await runtime.inspectAuthority(recovered.map(entry => entry.input)); assert();
-    const backgroundCompactions = new Set<number>(),optimizerRoots=new Set<number>();
+    const backgroundCompactions = new Set<number>();
     for (const { record } of inspection.tasks) {
-      if(await runtime.qualifyOptimizerTask(record)){assert();roots.add(record.id);optimizerRoots.add(record.id);continue;}
       if (record.kind === "pi.compaction" && record.owner === undefined && !record.background &&
           (record.input as { reason?: string }).reason === "manual" && runtime.ownsMaintenance(record.id)) {
         roots.add(record.id); continue;
@@ -116,7 +122,7 @@ export async function createHostController(config: HostControllerOptions, contex
       roots.add(record.id); backgroundCompactions.add(record.id);
     }
     for (const run of runs) {
-      if (!run.inputs.length || run.inputs.some(id => !known.has(id))) return deny();
+      if (!run.inputs.some(id=>!legacyRedirects.has(id)) || run.inputs.some(id => !known.has(id))) return deny();
       roots.add(run.taskId);
     }
     // Only exact public run roots and their ordinary owned descendants are supported.
@@ -137,7 +143,7 @@ export async function createHostController(config: HostControllerOptions, contex
         if (!parent) return deny();
         current = parent;
       }
-      if ((current.background && !backgroundCompactions.has(current.id)&&!optimizerRoots.has(current.id)) || current.owner !== undefined) return deny();
+      if ((current.background && !backgroundCompactions.has(current.id)) || current.owner !== undefined) return deny();
     }
     assert();
   }
@@ -185,8 +191,14 @@ export async function createHostController(config: HostControllerOptions, contex
       .map(entry => entry.input.operationId));
     ready = true;
     // Public Harness inspection covers the entire store, including unknown conversations.
-    const { inspection } = await runtime.inspectAuthority();
-    if (inspection.scheduling !== "paused") throw Error("Expected paused bootstrap");
+    const first = (await runtime.inspectAuthority()).inspection;
+    if (first.scheduling !== "paused") throw Error("Expected paused bootstrap");
+    const harness = runtime.coreExtensionHarness();
+    const retired = await retireOptimizerWork(harness,first,context,assert);
+    const inspection = retired ? (await runtime.inspectAuthority()).inspection : first;
+    // Preserve host work accepted before it received an SDK submission as well.
+    const recovering = new Set(recovered.map(row=>row.input.chatJid));
+    await restoreIdleOptimizerMasks(harness,manifest.filter(binding=>!recovering.has(binding.chatJid)).map(binding=>binding.conversationId),inspection,context,assert);
     // Manual maintenance has no accepted-input operation. Admit one exact
     // manifest task, including its terminal summary write, alongside proven work.
     const manualTasks = await runtime.inspectRecoverableMaintenance(inspection); assert();

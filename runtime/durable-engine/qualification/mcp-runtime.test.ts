@@ -8,22 +8,28 @@ import {createModels,fauxProvider,fauxAssistantMessage,fauxToolCall,contentText}
 import {McpConnectionStore} from '../src/mcp/connections.ts';
 import {createMcpRuntime} from '../src/mcp/runtime.ts';
 import {connectMcpHttp} from '../src/mcp/client.ts';
-import {recordingOptimizerCalls} from '../src/optimizer-codemode.ts';
+import {recordingMcpCalls} from '../src/mcp/codemode.ts';
 
-test('optimizer receipts preserve a non-waiting SDK call and record only the observed outcome',async()=>{
+for(const resumed of [false,true])test(`MCP receipts preserve a non-waiting SDK call and its historical idempotency; resumed=${resumed}`,async()=>{
  const receipts:Record<string,boolean>={},phases:string[]=[];let starts=0,waits=0;
  const taskId=23 as TaskId,result={taskId,structuredOutput:{original:'kept'},isError:false,diagnostics:[]};
  const api={taskId:7,conversationId:1,callId:'caller',
+  async snapshot(){return resumed?{'nested:start':true}:undefined;},
   async commit(body:any){await body({doc:async()=>receipts,appendEntry:async(_def:any,_conversation:any,{data}:any)=>phases.push(data.phase)});},
   async executeTool(name:string,args:unknown,ctx:unknown,options:unknown){
    starts++;expect(name).toBe('mcp__test__nested');expect(args).toEqual({});expect(ctx).toBe(context);expect(options).toEqual({key:'nested',wait:false});
    return {taskId:result.taskId,async result(ctx:unknown){expect(ctx).toBe(context);waits++;return result;}};
   },
  } as unknown as ToolExecutionApi;
- const handle=await recordingOptimizerCalls(api).executeTool('mcp__test__nested',{},context,{key:'nested',wait:false});
- expect(handle.taskId).toBe(taskId);expect(waits).toBe(0);expect(phases).toEqual(['start']);
+ const handle=await recordingMcpCalls(api).executeTool('mcp__test__nested',{},context,{key:'nested',wait:false});
+ expect(handle.taskId).toBe(taskId);expect(waits).toBe(0);expect(phases).toEqual(resumed?[]:['start']);
  expect(await handle.result(context)).toBe(result);expect(await handle.result(context)).toBe(result);
- expect(starts).toBe(1);expect(waits).toBe(2);expect(phases).toEqual(['start','end']);
+ expect(starts).toBe(1);expect(waits).toBe(2);expect(phases).toEqual(resumed?['end']:['start','end']);
+});
+test('Code Mode does not record non-MCP calls',async()=>{
+ const value={taskId:4 as TaskId,structuredOutput:{kept:true},isError:false,diagnostics:[]};
+ const api={commit(){throw Error('Ordinary calls must not create MCP or optimiser receipts');},async executeTool(name:string,args:unknown,ctx:unknown){expect(name).toBe('bash');expect(args).toEqual({command:'fixture'});expect(ctx).toBe(context);return value;}} as unknown as ToolExecutionApi;
+ expect(await recordingMcpCalls(api).executeTool('bash',{command:'fixture'},context,{key:'ordinary',wait:true})).toBe(value);
 });
 const cleanup:(()=>Promise<void>)[]=[];afterEach(async()=>{for(const close of cleanup.splice(0).reverse())await close();});
 async function fixture(initialFailures=0){

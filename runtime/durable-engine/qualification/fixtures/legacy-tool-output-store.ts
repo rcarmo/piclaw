@@ -3,7 +3,7 @@ import {Type} from "typebox";
 import {Value} from "typebox/value";
 import type { Database } from "bun:sqlite";
 const invalidArguments = (message:string) => new Error(message);
-import { checkpointDeletes, lineageCondition, type AgentDatabase, type Lineage } from "./retained-database.ts";
+import { checkpointDeletes, lineageCondition, type AgentDatabase, type Lineage } from "../../src/mcp/retained-database.ts";
 
 /** Bounds for the per-workspace store. Expired rows are never returned, then deleted and overwritten on the next prune. */
 export const toolOutputLimits = { maxChars: 4 * 1024 * 1024, maxTotalBytes: 256 * 1024 * 1024, maxOutputs: 5000, readLines: 500, readChars: 16_000, lineChars: 2000, chunkLines: 20, chunkChars: 4000 } as const;

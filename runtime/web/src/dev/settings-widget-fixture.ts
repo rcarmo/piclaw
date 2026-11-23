@@ -1,7 +1,7 @@
 import { html, render, useCallback, useMemo, useState } from '../vendor/preact-htm.js';
 import { SettingsDialogContent } from '../components/settings-dialog.js';
 import { registerSettingsPane } from '../components/settings/pane-registry.js';
-import { defaultPolicy, defaultMcpRecallSettings, outputOffload } from '#token-optimizer/core';
+import { defaultMcpRecallSettings } from '../../../durable-engine/src/mcp/recall-output.ts';
 
 const mockIcon = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>`;
 
@@ -157,10 +157,6 @@ const mockMcpConnections = [
   { id: 'local', name: 'local_tools', workspaceId: 'fixture', agentIds: [], enabled: false, revision: 1, transport: 'stdio', url: '', auth: 'bearer', command: ['example-service'], hasSavedCredentials: false, allowHttp: false, timeoutSeconds: 30, recall: defaultMcpRecallSettings() },
 ];
 const mockMcpSnapshot = () => ({ ok: true, workspaceId: 'fixture', connections: mockMcpConnections, agents: [{ id: 'default', label: 'Default' }], defaults: { recall: defaultMcpRecallSettings() } });
-let mockOptimizerConfig = { version: 1, hasEnabled: false, policy: { ...defaultPolicy(), oversightMode: 'off', oversightInferenceInObserve: false, offload: outputOffload(defaultPolicy()) } };
-let mockOptimizerRevision = 'fixture-1';
-const mockOptimizerSnapshot = () => ({ ok: true, config: mockOptimizerConfig, revision: mockOptimizerRevision, models: [{ provider: 'fixture', id: 'small', type: 'chat' }], status: [] });
-
 let mockMode = new URLSearchParams(window.location.search).get('real') !== '1';
 const originalFetch = window.fetch.bind(window);
 
@@ -182,17 +178,6 @@ function installMockFetch() {
     }
     if (url.pathname === '/agent/models') return json(mockModelsPayload);
     if (url.pathname === '/agent/addons') return json(mockAddonsPayload);
-    if (url.pathname === '/agent/addons/api/token-optimizer/config') {
-      if (method === 'POST') {
-        const body = JSON.parse(String(init?.body || '{}'));
-        if (body.expectedRevision !== mockOptimizerRevision) return json({ error: 'Settings changed; reload before saving' }, 409);
-        const next = structuredClone(body.config);
-        if (next.policy.enabled && !mockOptimizerConfig.hasEnabled) next.policy.mode = 'observe';
-        next.hasEnabled = mockOptimizerConfig.hasEnabled || next.policy.enabled;
-        mockOptimizerConfig = next; mockOptimizerRevision = crypto.randomUUID();
-      }
-      return json(mockOptimizerSnapshot());
-    }
     if (url.pathname.startsWith('/agent/addons/')) return json({ ok: true, message: 'Fixture add-on action accepted.', ...mockAddonsPayload });
     if (url.pathname === '/agent/keychain') {
       if (method === 'GET') return json(mockKeychainPayload);
@@ -259,7 +244,7 @@ function FixtureApp() {
   const [renderKey, setRenderKey] = useState(0);
 
   const sections = useMemo(() => [
-    'general', 'theme', 'sessions', 'compaction', 'keyboard', 'quick-actions', 'workspace', 'environment', 'keychain', 'providers', 'models', 'mcp', 'optimizer', 'tools', 'authentication', 'scheduled-tasks', 'addons', 'editor', 'developer',
+    'general', 'theme', 'sessions', 'compaction', 'keyboard', 'quick-actions', 'workspace', 'environment', 'keychain', 'providers', 'models', 'mcp', 'tools', 'authentication', 'scheduled-tasks', 'addons', 'editor', 'developer',
     'fixture-b-cheapskate', 'fixture-z-observability', 'fixture-a-portainer', 'fixture-m-proxmox',
   ], []);
 

@@ -41,7 +41,7 @@ import { GeneralSection } from './settings/general.js';
 perf('imports-done');
 
 type SettingsSectionComponent = unknown;
-type BuiltinSectionId = 'authentication' | 'general' | 'sessions' | 'compaction' | 'mcp' | 'optimizer' | 'keyboard' | 'workspace' | 'environment' | 'providers' | 'models' | 'theme' | 'scheduled-tasks' | 'quick-actions' | 'keychain' | 'tools' | 'addons';
+type BuiltinSectionId = 'authentication' | 'general' | 'sessions' | 'compaction' | 'mcp' | 'keyboard' | 'workspace' | 'environment' | 'providers' | 'models' | 'theme' | 'scheduled-tasks' | 'quick-actions' | 'keychain' | 'tools' | 'addons';
 
 const builtinSectionComponentCache = new Map<BuiltinSectionId, SettingsSectionComponent>();
 const builtinSectionLoadPromiseCache = new Map<BuiltinSectionId, Promise<SettingsSectionComponent>>();
@@ -55,7 +55,6 @@ const BUILTIN_SECTION_LOADERS: Record<BuiltinSectionId, () => Promise<SettingsSe
     sessions: () => import('./settings/sessions.js').then(mod => mod.SessionsSection),
     compaction: () => import('./settings/compaction.js').then(mod => mod.CompactionSection),
     mcp: () => import('./settings/mcp.js').then(mod => mod.McpSection),
-    optimizer: () => import('./settings/optimizer.js').then(mod => mod.OptimizerSection),
     keyboard: () => import('./settings/keyboard.js').then(mod => mod.KeyboardSection),
     workspace: () => import('./settings/workspace.js').then(mod => mod.WorkspaceSection),
     environment: () => import('./settings/environment.js').then(mod => mod.EnvironmentSection),
@@ -147,7 +146,6 @@ const BUILTIN_SECTIONS: SettingsSectionMeta[] = [
     { id: 'environment', label: 'Environment', icon: iconEnvironment, searchable: true, placeholder: 'Filter environment…', order: 16 },
     { id: 'providers', label: 'Providers', icon: iconProviders, searchable: false, order: 20 },
     { id: 'models', label: 'Models', icon: iconModels, searchable: true, placeholder: 'Filter models…', order: 30 },
-    { id: 'optimizer', label: 'Optimisation', icon: iconTools, searchable: false, order: 30.1 },
     { id: 'mcp', label: 'MCP', icon: iconProviders, searchable: false, order: 30.5 },
     { id: 'theme', label: 'Appearance', icon: iconAppearance, searchable: false, order: 11 },
     { id: 'scheduled-tasks', label: 'Scheduled Tasks', icon: iconScheduledTasks, searchable: true, placeholder: 'Filter scheduled tasks…', order: 65 },
@@ -366,7 +364,6 @@ export function SettingsDialogContent({ onClose = null, variant = 'dialog' }) {
             case 'sessions': return html`<${Comp} settingsData=${settingsData} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;
             case 'compaction': return html`<${Comp} settingsData=${settingsData} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;
             case 'mcp': return html`<${Comp} />`;
-            case 'optimizer': return html`<${Comp} />`;
             case 'keyboard': return html`<${Comp} filter=${filter} setStatus=${setStatus} />`;
             case 'workspace': return html`<${Comp} settingsData=${settingsData} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;
             case 'environment': return html`<${Comp} settingsData=${settingsData} filter=${filter} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;

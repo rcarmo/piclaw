@@ -1321,5 +1321,5 @@ var Xc=[`<symbol id="file-tree-builtin-bash" viewBox="0 0 16 16">
 `);if(c===i)return;i=c,n.onExpandedChange?.(f.map((d)=>Zt(d).path))}),u=(f)=>{n=f;let c=Ah(f.root);r=c.counts,o=c.paths.filter((m)=>m.endsWith("/"));let d=[...f.expanded].filter((m)=>m&&m!==".").map((m)=>Nn(m,"dir"));if(i=d.filter((m)=>o.includes(m)).join(`
 `),l.resetPaths(c.paths,{initialExpandedPaths:d}),f.selectedPath){let m=o.includes(Nn(f.selectedPath,"dir"))?Nn(f.selectedPath,"dir"):f.selectedPath,v=l.getItem(m);if(v&&!v.isSelected())s=!0,v.select(),s=!1}};return u(t),{update:u,startRename(f,c){l.startRenaming(Nn(f,c))},focus(){l.focusFirstItem()},dispose(){h(),l.cleanUp()}}}export{Ya as PLACEHOLDER_NAME,Mh as WORKSPACE_TREE_CSS,Ah as buildTreePaths,Zt as fromTreePath,kr as isPlaceholderPath,Jp as mountWorkspaceTree,Nn as toTreePath};
 
-//# debugId=5431F174E2A0A9F364756E2164756E21
+//# debugId=6C9DD5C4D54C88B964756E2164756E21
 //# sourceMappingURL=workspace-tree.bundle.js.map

@@ -50,11 +50,13 @@ The callback binds the connection/workspace/endpoint, redirect URL, browser cook
 
 ## Discover and call tools
 
-MCP tools are deferred behind code mode. Search their current schemas, then call them with ordinary objects. The old `mcp({tool,args})` proxy and engine-switching controls are retired.
+MCP tools and resources are available through Code Mode, not declared inline in model requests. Use `searchTools()` to find tools for the task and `describeTool()` to inspect a specific schema. Discovery and invocation both enforce the current Agent grant. The old `mcp({tool,args})` proxy and engine-switching controls are retired.
 
 For a server named `knowledge` with a remote `read` tool:
 
 ```javascript
+const toolsFound = await searchTools("knowledge read", { limit: 5 });
+const schema = await describeTool("mcp__knowledge__read");
 const result = await tools.mcp__knowledge__read({ id: "example" });
 return result;
 ```
@@ -91,9 +93,7 @@ return { matches, page };
 
 `mcp_recall_manage` lists/stats, pins or forgets scoped copies. **Forget recall** in Settings removes this connection's retained copies in the current workspace. Original SDK history and other workspaces' copies remain.
 
-**Settings → Optimisation** independently controls general tool-output reduction/offload, model-written summaries, learned facts, tool pruning and task oversight. Optimisation defaults **Off**; its first enable starts in **Observe**. Model use in either Observe mode and sharing one bounded current Plan item require explicit consent. Oversight can run while token optimisation is Off.
-
-Long bash outputs use task-owned local file bindings and bounded retrieval. General offload uses `read_tool_output` and `search_tool_output`. Shortening stops when the permitted retrieval tool is unavailable. Restoring optimiser-owned tools cannot widen an external SDK filter.
+Existing non-MCP tool-output copies remain readable through `read_tool_output` and `search_tool_output`, with their original owner, branch and expiry checks. They are never recreated or pruned by the MCP adapter. Historical optimisation and Oversight records remain in the SDK journal; no new optimisation or Oversight work is created.
 
 ## One-shot configuration migration
 

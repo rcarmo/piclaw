@@ -90,6 +90,6 @@ export function mcpToolsExtension(config:Pick<McpHttpConnection,"id"|"name"> & {
     try {return {structuredOutput:JSON.parse(JSON.stringify(await client.readResource(args.uri,{signal:context.abortSignal}))),details:details("resource_read")};}
     catch (error) {context.abortSignal?.throwIfAborted();if(error instanceof Error)onFailure?.(error);throw new Error(mcpFailure(error));}
   }})];
-  const exposed=[...registered,...resources].map(tool=>({...tool,execute(args:never,api:Parameters<typeof tool.execute>[1],context:Context){return authority?authority.invoke(api,context,()=>tool.execute(args,api,context)):tool.execute(args,api,context);}}));
+  const exposed=[...registered,...resources].map(tool=>({...tool,deferred:true as const,execute(args:never,api:Parameters<typeof tool.execute>[1],context:Context){return authority?authority.invoke(api,context,()=>tool.execute(args,api,context)):tool.execute(args,api,context);}}));
   return defineExtension({name:`piclaw.mcp.${config.id}`,tools:exposed});
 }

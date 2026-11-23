@@ -1203,16 +1203,13 @@
       ]
     },
     "cache:retained-tool-output": {
-      "category": "projection-cache",
-      "initializer": "runtime/durable-engine/src/mcp/tool-output-store.ts#createToolOutputStore",
-      "writers": [
-        "runtime/durable-engine/src/mcp/tool-output-store.ts"
-      ],
+      "category": "retired",
+      "initializer": "Retired. Recognise existing stores without initialising them.",
+      "writers": [],
       "sourceOfTruth": "Disposable scoped tool-output originals/chunks and FTS projections. SDK receipts and historical file-backed outputs remain authoritative.",
-      "replayRetention": "TTL, caps and explicit scoped forgetting affect retained copies only. Never delete SDK history, historical outputs or another workspace owner. Atomic schema components remain complete when preserved.",
+      "replayRetention": "Read existing unexpired rows and preserve historical schemas and rows. No new copies, pruning or replay.",
       "references": [
-        "runtime/durable-engine/src/mcp/tool-output-store.ts",
-        "runtime/durable-engine/src/mcp/retained-database.ts"
+        "runtime/durable-engine/src/retained-tool-output.ts"
       ]
     },
     "core:outbound-mcp": {
@@ -1224,7 +1221,7 @@
       "sourceOfTruth": "Reference-only connection metadata, revisions and access/credential destination epochs in the existing application SQLite database. Tool effects and replay remain SDK-owned.",
       "replayRetention": "Preserve connection metadata and keychain references across reopen. Removing a connection does not delete keychain entries or SDK history. One-shot legacy import never resurrects operator deletions.",
       "references": [
-        "runtime/durable-engine/src/application-optimizer-mcp.ts",
+        "runtime/durable-engine/src/mcp/application.ts",
         "runtime/durable-engine/src/mcp/settings.ts",
         "runtime/durable-engine/src/mcp/migration.ts"
       ]
@@ -5180,6 +5177,13 @@
     },
     {
       "kind": "piclaw.optimizer-call-receipts",
+      "owner": "sdk:storage",
+      "scope": "task",
+      "history": "task-scoped SDK document",
+      "fork": "not applicable"
+    },
+    {
+      "kind": "piclaw.mcp-call-receipts",
       "owner": "sdk:storage",
       "scope": "task",
       "history": "task-scoped SDK document",

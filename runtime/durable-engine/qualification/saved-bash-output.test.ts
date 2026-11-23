@@ -8,7 +8,7 @@ import {createModels,fauxProvider,fauxAssistantMessage,fauxToolCall} from '@eare
 import {Type} from 'typebox';
 import {withTaskModelRequestScope} from '../src/task-model-boundary-shim.ts';
 import {retainBashOutputFile,readOwnedBashOutput} from '../src/saved-bash-output.ts';
-import type {SavedOutputRead} from '../src/optimizer-output-source.ts';
+import type {SavedOutputRead} from '../src/bash-output.ts';
 for(const mode of ['owned','different-path','replacement','hard-link','symlink','missing','bounded','revoked'] as const)test('task-owned saved bash output: '+mode,async()=>{
  const dir=mkdtempSync(join(tmpdir(),'saved-bash-boundary-')),path=join(dir,'output.log'),other=join(dir,'other.log'),registry=createRegistry(),models=createModels(),faux=fauxProvider({tokensPerSecond:100000});models.setProvider(faux.provider);
  const original=mode==='bounded'?'x'.repeat(4*1024*1024+100):'OWNED ORIGINAL';writeFileSync(path,original);writeFileSync(other,'FOREIGN FILE');let allowed=true,harness:Harness,seen:SavedOutputRead|undefined,denied=false;

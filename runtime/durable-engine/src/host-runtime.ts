@@ -9,6 +9,7 @@ import { assertModelContextFits, modelSelectionFrame, projectModelContext, prepa
 import { readNativeExitReceipt, nativeExitNotice, type NativeExitReceipt } from "./host-process-receipt.js";
 import { modelFailureNotice, parseModelFailure } from "./host-model-failure.js";
 import { createLogger } from "../../src/utils/logger.js";
+import { ownsHistoricalOptimizerSubmission } from "./retired-optimizer.js";
 import { createToolCallSummaryResolver, collectToolCallSummaries, type ToolCallSummaryResolver } from "../../src/tool-call-summary.js";
 import { estimateContextTokens } from "@earendil-works/pi-ai/utils/estimate";
 const log = createLogger("durable.runtime");
@@ -105,9 +106,6 @@ export interface MaterializedAnswer {
   readonly mediaIds: readonly number[];
 }
 export interface RuntimeOptions {
-  /** Imported SDK optimizer state, qualified in the same namespace; no independent execution owner. */
-  readonly optimizer?: import('./token-optimizer-authority.js').OptimizerAuthority;
-  readonly onSessionReset?:(conversationId:ConversationId)=>Promise<void>;
   /** Fresh producer only; atomic root ACK plus exact execution harness. */
   readonly completeInputHandoff?: (input: AcceptedInput, submissionId: SubmissionId, capturedOperation: OperationSnapshot, intent: boolean, signal?: AbortSignal) => Promise<void>;
   readonly incarnation: string;
@@ -227,7 +225,6 @@ function runtimeSnapshot(o: RuntimeOptions): RuntimeSnapshot {
   const { owner, work, terminal, bindings, harnessOptions: h, existingConversationIds,
     openStorage, conversationFor, authorizeScheduling, putAnswer, materializeAnswer, now, incarnation, sessionId } = o;
   return Object.freeze({ incarnation, sessionId, captured: true as const,
-    optimizer:o.optimizer&&Object.freeze({task:o.optimizer.task.bind(o.optimizer),steering:o.optimizer.steering.bind(o.optimizer)}),onSessionReset:o.onSessionReset?.bind(o),
     completeInputHandoff: o.completeInputHandoff?.bind(o),
     codemodeExecute: o.codemodeExecute,
     onStorageFailure: o.onStorageFailure?.bind(o),
@@ -308,8 +305,7 @@ export class HostConversationRuntime {
 
   /** Trusted Core extensions borrow this exact SDK namespace; no second Harness or storage owner is constructed. */
   coreExtensionHarness(): Harness { this.fence(); return this.harness; }
-  qualifyOptimizerTask(record: HarnessInspection['tasks'][number]['record']) {return this.observe(async()=>{const allowed=await this.options.optimizer?.task(this.harness,record);this.fence();return allowed===true;});}
-  ownsOptimizerSubmission(record:SubmissionRecord) {return this.observe(async()=>{const allowed=await this.options.optimizer?.steering(this.harness,record);this.fence();return allowed===true;});}
+  ownsOptimizerSubmission(record:SubmissionRecord) {return this.observe(()=>ownsHistoricalOptimizerSubmission(this.harness,record,this.context,()=>this.fence()));}
 
   /** Borrow the existing SDK SQLite admission scope. It rechecks the source at
    * physical write/COMMIT boundaries; it owns no state, queue or transaction. */
@@ -864,7 +860,6 @@ export class HostConversationRuntime {
         } else {
           await conversation.reset(undefined, this.context);
         }
-        await this.options.onSessionReset?.(copy.conversationId as ConversationId);this.fence();
       });
       this.fence();
     })();
