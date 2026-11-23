@@ -4,7 +4,7 @@ import {createRegistry,Harness,MemoryStorage} from '@earendil-works/pi-durable';
 import {createCodemodeExtension} from '@earendil-works/pi-durable/codemode';
 import {CodemodeSandbox} from '@earendil-works/pi-codemode';
 import {createModels,fauxProvider,fauxAssistantMessage,fauxToolCall,contentText} from '@earendil-works/pi-ai';
-import {connectMcpHttp,mcpEndpoint,mcpFailure,mcpToolsExtension} from '../src/mcp/client.ts';
+import {connectMcpHttp,mcpEndpoint,mcpFailure,mcpToolAlias,mcpToolsExtension} from '../src/mcp/client.ts';
 import {canonicalMcpAccess,mcpAgentAllowed,mcpAccessOverlaps} from '../src/mcp/policy.ts';
 import {createMcpAuthority,type McpAuthority} from '../src/mcp/authority.ts';
 const cleanups:(()=>Promise<void>)[]=[];
@@ -76,7 +76,7 @@ for(const fixture of [
  const models=createModels(),faux=fauxProvider({tokensPerSecond:100000});models.setProvider(faux.provider);
  const harness=await Harness.open(new MemoryStorage(),{registry,models},context);cleanups.push(()=>harness.close(context));
  const root=await harness.root(context);await root.configure({model:{provider:'faux',modelId:'faux-1'}},context);
- const code=`let rejected=false,value;try{value=await tools.mcp__fixture__probe({});}catch{rejected=true;}if(rejected!==${fixture.error})throw Error('Error status changed');if(!rejected&&JSON.stringify(value)!==JSON.stringify(${JSON.stringify(fixture.expected)}))throw Error('Original value changed');return 'ORIGINAL_VALUE_OK';`;
+ const code=`let rejected=false,value;try{value=await tools.${mcpToolAlias(config,'tool','probe')}({});}catch{rejected=true;}if(rejected!==${fixture.error})throw Error('Error status changed');if(!rejected&&JSON.stringify(value)!==JSON.stringify(${JSON.stringify(fixture.expected)}))throw Error('Original value changed');return 'ORIGINAL_VALUE_OK';`;
  faux.setResponses([fauxAssistantMessage([fauxToolCall('codemode',{code})],{stopReason:'toolUse'}),request=>{
   const output=request.messages.filter(m=>m.role==='toolResult').map(m=>contentText(m.content)).join('\n');expect(output).toContain('ORIGINAL_VALUE_OK');expect(JSON.stringify(request)).not.toContain(config.bearer);return fauxAssistantMessage('Done');
  }]);
@@ -107,7 +107,21 @@ for(const structuredOnly of [false,true])test(`schema-less large ${structuredOnl
  const registry=createRegistry(),sandbox=new CodemodeSandbox();registry.install(createCodemodeExtension({sandbox,models:false}));registry.install(mcpToolsExtension(config,c.tools,async()=>c.client));const models=createModels(),faux=fauxProvider({tokensPerSecond:100000});models.setProvider(faux.provider);
  const harness=await Harness.open(new MemoryStorage(),{registry,models},context);cleanups.push(()=>harness.close(context));
  const root=await harness.root(context);await root.configure({model:{provider:'faux',modelId:'faux-1'}},context);
- const code=`const value=await tools.mcp__fixture__probe({});if(typeof value!=='string'||value.length!==${expected.length}||JSON.parse(value).tail!=='ORIGINAL_COMPLETE_TAIL')throw Error('Schema-less script value was truncated');return 'LARGE_ORIGINAL_VALUE_OK';`;
+ const code=`const value=await tools.${mcpToolAlias(config,'tool','probe')}({});if(typeof value!=='string'||value.length!==${expected.length}||JSON.parse(value).tail!=='ORIGINAL_COMPLETE_TAIL')throw Error('Schema-less script value was truncated');return 'LARGE_ORIGINAL_VALUE_OK';`;
  faux.setResponses([fauxAssistantMessage([fauxToolCall('codemode',{code})],{stopReason:'toolUse'}),request=>{expect(request.messages.filter(message=>message.role==='toolResult').map(message=>contentText(message.content)).join('\n')).toContain('LARGE_ORIGINAL_VALUE_OK');return fauxAssistantMessage('Done');}]);
  expect((await(await root.submit({type:'input',content:'Exercise complete schema-less value'},context)).wait(context)).status).toBe('done');expect(c.calls()).toBe(1);
+});
+
+test('aliases are deterministic over refresh and cannot collide with resource helpers or legacy names',()=>{
+ const owner={id:'stable-id',name:'fixture'},schema={type:'object' as const,properties:{}};
+ const tools=['lookup-item','lookup_item','resources_list'].map(name=>({name,description:name,inputSchema:schema}));
+ const build=(items:typeof tools)=>new Map(mcpToolsExtension(owner,items,async()=>{throw Error('No remote invocation in alias fixture');}).tools?.map(tool=>[tool.name,tool.description]));
+ const first=build(tools),reversed=build([...tools].reverse());expect(first).toEqual(reversed);expect(first.size).toBe(5);
+ const hyphen=mcpToolAlias(owner,'tool','lookup-item'),underscore=mcpToolAlias(owner,'tool','lookup_item');
+ expect(hyphen).not.toBe(underscore);expect(build(tools.slice(1)).has(hyphen)).toBe(false);
+ expect(build(tools.slice(1)).get(underscore)).toBe('lookup_item');
+ expect(first.has('mcp__fixture__lookup_item')).toBe(false);
+ expect(mcpToolAlias({...owner,id:'replacement'},'tool','lookup_item')).not.toBe(underscore);
+ expect(mcpToolAlias({...owner,url:'https://new.fixture.invalid/mcp'},'tool','lookup_item')).not.toBe(underscore);
+ expect(mcpToolAlias(owner,'resource','resources_list')).not.toBe(mcpToolAlias(owner,'tool','resources_list'));
 });

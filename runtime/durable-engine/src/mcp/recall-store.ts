@@ -46,6 +46,7 @@ function initialize(db:Database){
   }
   db.exec(`CREATE TABLE IF NOT EXISTS mcp_recall (n INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, digest TEXT NOT NULL, owner TEXT NOT NULL, conversation INTEGER NOT NULL, after INTEGER NOT NULL, tool TEXT NOT NULL, kind TEXT NOT NULL, grants TEXT NOT NULL, sources TEXT NOT NULL, handler TEXT NOT NULL, bytes INTEGER NOT NULL, createdAt INTEGER NOT NULL, lastSeen INTEGER NOT NULL, hits INTEGER NOT NULL, pinned INTEGER NOT NULL, isError INTEGER NOT NULL, summary TEXT NOT NULL, legacy INTEGER NOT NULL DEFAULT 0, exact_raw TEXT, raw TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS mcp_recall_owner ON mcp_recall(owner, digest);
+    CREATE TABLE IF NOT EXISTS mcp_recall_captures (task_id INTEGER NOT NULL, kind TEXT NOT NULL, owner TEXT NOT NULL, digest TEXT NOT NULL, result_id TEXT NOT NULL, PRIMARY KEY(task_id,kind)) STRICT, WITHOUT ROWID;
     CREATE VIRTUAL TABLE IF NOT EXISTS mcp_recall_search USING fts5(raw, content='mcp_recall', content_rowid='n', tokenize='unicode61');
     CREATE TRIGGER IF NOT EXISTS mcp_recall_insert AFTER INSERT ON mcp_recall BEGIN INSERT INTO mcp_recall_search(rowid,raw) VALUES(new.n,new.raw); END;
     CREATE TRIGGER IF NOT EXISTS mcp_recall_delete AFTER DELETE ON mcp_recall BEGIN INSERT INTO mcp_recall_search(mcp_recall_search,rowid,raw) VALUES('delete',old.n,old.raw); END;
@@ -72,9 +73,22 @@ export function expiredMcpRecall(rows:readonly McpRecallItem[],configs:readonly 
 export function createMcpRecallStore(workspaceId:string,harness:()=>Harness,connections:McpConnectionStore,identityOf:(id:ConversationId,context:Context)=>Promise<McpRecallIdentity>,database:AgentDatabase,now:()=>number=Date.now){
   async function use<T>(action:(db:Database)=>T) {return (await database()).withSync(db=>{initialize(db);return action(db);});}
   function configs(){return connections.list().flatMap(row=>{const config=connections.credential(row.id);return config?[config]:[];});}
-  const allowed=(row:McpRecallItem,identity:McpRecallIdentity)=>row.owner===identity.owner&&row.grants.every(grant=>{const config=connections.credential(grant.connectionId);return mcpRecallAllowed(config,workspaceId,identity.agentId)&&(config.recall??defaultMcpRecallSettings()).mode!=="off"&&mcpAccessEpoch(config)===grant.epoch;});
+  function currentSettings(grants:readonly McpRecallGrant[],identity:McpRecallIdentity){
+    if(!grants.length)return;
+    const settings:McpRecallSettings[]=[];
+    for(const grant of grants){const config=connections.credential(grant.connectionId);if(!mcpRecallAllowed(config,workspaceId,identity.agentId)||mcpAccessEpoch(config)!==grant.epoch)return;settings.push(config.recall??defaultMcpRecallSettings());}
+    return settings;
+  }
+  async function authorisedSettings(conversationId:ConversationId,grants:readonly McpRecallGrant[],context:Context){return currentSettings(grants,await identityOf(conversationId,context));}
+  const allowed=(row:McpRecallItem,identity:McpRecallIdentity)=>row.owner===identity.owner&&currentSettings(row.grants,identity)?.every(config=>config.mode!=='off')===true;
   function remove(db:Database,ids:Iterable<string>){let removed=0;for(const id of ids){db.run("DELETE FROM mcp_recall WHERE id=?",[id]);removed++;}return removed;}
-  function prune(db:Database){return remove(db,expiredMcpRecall(db.query<Row,[]>(`SELECT ${columns} FROM mcp_recall r`).all().map(item),configs(),now()));}
+  function prune(db:Database){
+    // Forget/expiry must not resurrect a capture if its SDK memo was not yet
+    // published. Discard idempotency markers only after the owning task settles.
+    if(db.query("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='tasks'").get())
+      db.run("DELETE FROM mcp_recall_captures WHERE EXISTS (SELECT 1 FROM tasks WHERE id=task_id AND status='terminal')");
+    return remove(db,expiredMcpRecall(db.query<Row,[]>(`SELECT ${columns} FROM mcp_recall r`).all().map(item),configs(),now()));
+  }
   // Never inside a transaction.
   const checkpoint=(db:Database,removed:number)=>{if(removed)checkpointDeletes(db);};
   /** Rows this conversation may use: its Agent's, captured on its branch history, under current grants. */
@@ -109,7 +123,7 @@ export function createMcpRecallStore(workspaceId:string,harness:()=>Harness,conn
     return {results:results.slice(0,limit),limited:results.length>limit};
     });
   }
-  async function capture(conversationId:ConversationId,input:Pick<McpRecallRecord,"grants"|"tool"|"kind"|"raw"|"summary"|"handler"|"sources"|"isError">,context:Context){
+  async function capture(conversationId:ConversationId,input:Pick<McpRecallRecord,"grants"|"tool"|"kind"|"raw"|"summary"|"handler"|"sources"|"isError">,context:Context,taskId?:number){
     const identity=await identityOf(conversationId,context),owner=identity.owner,bytes=Buffer.byteLength(input.raw);
     if(!bytes||bytes>1024*1024||!input.grants.length||!recallStorageAllowed(input.tool,input.raw))return null;
     const digest=createHash("sha256").update(JSON.stringify([owner,input.grants,input.tool,input.kind,input.raw])).digest("hex"),conversation=Number(conversationId);
@@ -120,14 +134,25 @@ export function createMcpRecallStore(workspaceId:string,harness:()=>Harness,conn
     if(!allowed(draft,identity))return null;
     let removed=0;
     const stored=db.transaction(()=>{
+      if(taskId!==undefined){
+        const receipt=db.query<{owner:string;digest:string;result_id:string},[number,string]>('SELECT owner,digest,result_id FROM mcp_recall_captures WHERE task_id=? AND kind=?').get(taskId,input.kind);
+        if(receipt){
+          if(receipt.owner!==owner||receipt.digest!==digest)return null;
+          const same=db.query<Row,(string|number)[]>(`SELECT ${columns} FROM mcp_recall r WHERE r.id=? AND ${scope.sql}`).get(receipt.result_id,...scope.params);
+          return same?item(same):null;
+        }
+      }
+      const remember=(resultId:string)=>{if(taskId!==undefined)db.run('INSERT INTO mcp_recall_captures(task_id,kind,owner,digest,result_id) VALUES(?,?,?,?,?)',[taskId,input.kind,owner,digest,resultId]);};
       // The same result already visible on this branch is refreshed rather than copied again.
       const previous=db.query<Row,(string|number)[]>(`SELECT ${columns} FROM mcp_recall r WHERE r.digest=? AND ${scope.sql}`).get(digest,...scope.params);
       if(previous){
         db.run("UPDATE mcp_recall SET hits=hits+1,lastSeen=?,summary=?,handler=?,sources=? WHERE id=?",[at,input.summary,input.handler,JSON.stringify(input.sources),previous.id]);
+        remember(previous.id);
         return {...item(previous),hits:previous.hits+1,lastSeen:at,summary:input.summary,handler:input.handler,sources:[...input.sources]};
       }
       db.run("INSERT OR IGNORE INTO mcp_recall(id,digest,owner,conversation,after,tool,kind,grants,sources,handler,bytes,createdAt,lastSeen,hits,pinned,isError,summary,legacy,exact_raw,raw) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [id,digest,owner,conversation,after,draft.tool,draft.kind,JSON.stringify(draft.grants),JSON.stringify(draft.sources),draft.handler,bytes,at,at,1,0,Number(draft.isError),draft.summary,Number(scope.legacy.includes(id)),/[\uD800-\uDFFF]/u.test(input.raw)?JSON.stringify(input.raw):null,input.raw]);
+      remember(id);
       removed=prune(db);
       const row=db.query<Row,[string]>(`SELECT ${columns} FROM mcp_recall r WHERE r.id=?`).get(id);
       return row?item(row):null;
@@ -145,6 +170,6 @@ export function createMcpRecallStore(workspaceId:string,harness:()=>Harness,conn
     });
   }
   function settings(row:McpRecallItem):McpRecallSettings[] {return row.grants.map(grant=>connections.credential(grant.connectionId)?.recall??defaultMcpRecallSettings());}
-  return {list,get,search,capture,change,settings};
+  return {list,get,search,capture,change,settings,authorisedSettings};
 }
 export type McpRecallStore=ReturnType<typeof createMcpRecallStore>;

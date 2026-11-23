@@ -4,14 +4,19 @@ const manifestBytes=readFileSync(resolve(root,'docs/development/receipts/expense
 const manifest=JSON.parse(manifestBytes.toString('utf8'));
 const overlayBytes=readFileSync(resolve(root,'docs/development/receipts/kintsugi-cutover-retention-overlay.json'));
 const overlay=JSON.parse(overlayBytes.toString('utf8'));
-const removal=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/optimizer-removal-retention-overlay.json'),'utf8'));
+const removalBytes=readFileSync(resolve(root,'docs/development/receipts/optimizer-removal-retention-overlay.json'));
+const removal=JSON.parse(removalBytes.toString('utf8'));
+const mcpAudit=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/mcp-audit-retention-overlay.json'),'utf8'));
 const sha=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
 test('removal/retention witness binds every original Core path through explicit later source transformations',()=>{
  expect(sha(manifestBytes)).toBe(overlay.baseManifestSha256);
  expect(sha(overlayBytes)).toBe(removal.previousOverlaySha256);
  expect(removal.baseManifestSha256).toBe(overlay.baseManifestSha256);
  expect(removal.rows).toHaveLength(8);
- const layers=[overlay,removal].map(layer=>{
+ expect(sha(removalBytes)).toBe(mcpAudit.previousOverlaySha256);
+ expect(mcpAudit.baseManifestSha256).toBe(overlay.baseManifestSha256);
+ expect(mcpAudit.rows.map((row:{path:string})=>row.path)).toEqual(['runtime/scripts/schema-ownership.json']);
+ const layers=[overlay,removal,mcpAudit].map(layer=>{
   expect(layer.version).toBe(1);
   const rows=new Map<string,{beforeSha256:string;afterSha256:string;purpose:string}>(layer.rows.map((row:any)=>[row.path,row]));
   expect(rows.size).toBe(layer.rows.length);
