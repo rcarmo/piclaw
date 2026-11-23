@@ -1,4 +1,4 @@
-import { html, useCallback, useEffect, useMemo, useState } from '../../vendor/preact-htm.js';
+import { html, useCallback, useEffect, useMemo, useRef, useState } from '../../vendor/preact-htm.js';
 import { useSettingsFieldIds } from './field-ids.js';
 import { NumberStepper } from './number-stepper.js';
 
@@ -74,6 +74,9 @@ function createConnectionDraft(workspaceId: string, source: any = null, recallDe
         workdir: data.workdir || '',
         env: data.env && typeof data.env === 'object' ? { ...data.env } : {},
         envText: data.env && typeof data.env === 'object' ? JSON.stringify(data.env) : '',
+        clearEnvironment: false,
+        removeEnvironment: [] as string[],
+        environmentNames: Array.isArray(data.environmentNames) ? data.environmentNames : [],
         recall,
     };
 }
@@ -118,7 +121,7 @@ function toConnectionSavePayload(draft: any, fallbackWorkspace: string): Record<
             if (typeof value === 'string') envFiltered[key] = value;
             else if (value !== undefined && value !== null) envFiltered[key] = String(value);
         }
-        if (String(draft.envText || '').trim() || Object.keys(envFiltered).length) payload.env = envFiltered;
+        if (!draft.clearEnvironment && (String(draft.envText || '').trim() || Object.keys(envFiltered).length)) payload.env = envFiltered;
     } else {
         payload.url = String(draft.url || '').trim();
         if (draft.auth === 'bearer' && String(draft.bearerTokenKeychain || '').trim()) {
@@ -160,9 +163,14 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [draft, setDraft] = useState<any>(() => createConnectionDraft('workspace'));
 
+    const loadedDraft = useRef<any>(null);
+    const [revisionConflict, setRevisionConflict] = useState(false);
+    const dirty = loadedDraft.current !== null && JSON.stringify(draft) !== JSON.stringify(loadedDraft.current);
+    const confirmDiscard = () => !dirty || confirm('Discard unsaved MCP connection changes?');
+    const loadDraft = (value: any) => { loadedDraft.current = value; setDraft(value); setRevisionConflict(false); };
     const selectedConnection = useMemo(() => connections.find((connection) => connection.id === selectedId) || null, [connections, selectedId]);
 
-    const loadSettings = useCallback(async () => {
+    const loadSettings = useCallback(async (resetDraft = false) => {
         setLoading(true);
         setError('');
         try {
@@ -174,6 +182,7 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
             const nextConnections = Array.isArray(payload.connections) ? payload.connections : [];
             setWorkspaceId(payload.workspaceId || 'workspace');
             setAgents(Array.isArray(payload.agents) ? payload.agents : []);
+            if (resetDraft) loadedDraft.current = null;
             setConnections(nextConnections);
             setMigration(payload.migration || null);
             setDefaults({ recall: normalizeRecallInput(payload.defaults?.recall || DEFAULT_RECALL()) });
@@ -181,7 +190,6 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
                 if (current && nextConnections.some((connection) => connection.id === current)) return current;
                 return nextConnections[0]?.id || null;
             });
-            setStatus?.(null);
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             setError(message);
@@ -194,12 +202,15 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
     useEffect(() => { void loadSettings(); }, [loadSettings]);
 
     useEffect(() => {
-        if (!selectedConnection) {
-            setDraft(createConnectionDraft(workspaceId, null, defaults.recall));
-            return;
-        }
-        setDraft(createConnectionDraft(workspaceId, selectedConnection, defaults.recall));
+        if (!dirty || !loadedDraft.current) loadDraft(createConnectionDraft(workspaceId, selectedConnection, defaults.recall));
     }, [defaults.recall, selectedConnection, workspaceId]);
+
+    const selectConnection = (connection: any) => {
+        if (!confirmDiscard()) return;
+        setSelectedId(connection?.id ?? null);
+        loadDraft(createConnectionDraft(workspaceId, connection, defaults.recall));
+        setError('');
+    };
 
     const noConnectionOpen = !selectedConnection && !selectedId;
 
@@ -220,6 +231,11 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
         setStatus?.('Saving MCP connection…', 'info');
         try {
             const connection = toConnectionSavePayload(draft, workspaceId);
+            const clear: string[] = [];
+            if (connection.transport === 'stdio') {
+                if (!connection.workdir) clear.push('workdir');
+                if (draft.clearEnvironment) clear.push('environment');
+            } else if (connection.auth === 'oauth' && !connection.oauth?.scope) clear.push('oauthScope');
             const response = await fetch('/agent/settings/mcp', {
                 method: 'POST',
                 credentials: 'same-origin',
@@ -227,18 +243,21 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
                 body: JSON.stringify({
                     action: 'save',
                     connection,
-                    expectedRevision: Number((selectedConnection?.revision ?? draft.revision ?? 0) || 0),
+                    expectedRevision: Number(draft.revision || 0),
+                    ...(clear.length ? { clear } : {}),
+                    ...(connection.transport === 'stdio' && !connection.env && !draft.clearEnvironment && draft.removeEnvironment.length ? { removeEnvironment: draft.removeEnvironment } : {}),
                     approveCredentialReuse: Boolean(draft.approveCredentialReuse),
                 }),
             });
             const payload = await response.json().catch(() => ({}));
             if (!response.ok || !payload?.ok) {
+                setRevisionConflict(response.status === 409);
                 const detail = payload?.error || 'MCP connection could not be saved.';
                 throw new Error(detail);
             }
             setStatus?.('MCP connection saved.', 'success');
             setSelectedId(payload?.connection?.id || connection.id || selectedId || null);
-            await loadSettings();
+            await loadSettings(true);
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             setError(message);
@@ -249,7 +268,7 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
     }, [draft, loadSettings, selectedConnection, selectedId, setStatus, workspaceId]);
 
     const removeSelected = useCallback(async () => {
-        if (!selectedConnection) return;
+        if (!selectedConnection || !confirmDiscard()) return;
         setSaving(true);
         try {
             const response = await fetch('/agent/settings/mcp', {
@@ -264,7 +283,7 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
             }
             setSelectedId(null);
             setStatus?.('MCP connection removed.', 'success');
-            await loadSettings();
+            await loadSettings(true);
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             setError(message);
@@ -272,7 +291,7 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
         } finally {
             setSaving(false);
         }
-    }, [loadSettings, selectedConnection, setStatus]);
+    }, [loadSettings, selectedConnection, setStatus, dirty]);
 
     const reconnectSelected = useCallback(async () => {
         if (!selectedConnection) return;
@@ -300,7 +319,7 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
     }, [loadSettings, selectedConnection, setStatus]);
 
     const signIn = useCallback(async () => {
-        if (!selectedConnection || saving) return;
+        if (!selectedConnection || saving || !confirmDiscard()) return;
         setSaving(true);
         try {
             const response = await fetch('/agent/settings/mcp', {
@@ -318,7 +337,7 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
             setError(message);
             setStatus?.(message, 'error');
         } finally { setSaving(false); }
-    }, [selectedConnection, setStatus, saving, loadSettings]);
+    }, [selectedConnection, setStatus, saving, loadSettings, dirty]);
 
     const signOut = useCallback(async () => {
         if (!selectedConnection || saving) return;
@@ -328,7 +347,7 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'sign_out', id: selectedConnection.id }),
+                body: JSON.stringify({ action: 'sign_out', id: selectedConnection.id, expectedRevision: selectedConnection.revision }),
             });
             const payload = await response.json().catch(() => ({}));
             if (!response.ok || !payload?.ok) {
@@ -373,6 +392,7 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
             <h3>MCP</h3>
             ${loading && html`<p class="settings-hint" role="status">Loading MCP connections…</p>`}
             ${error && html`<p class="mcp-notice settings-error" role="alert">${error}</p>`}
+            ${revisionConflict && html`<button type="button" class="settings-btn" disabled=${saving || loading} onClick=${() => { if (confirmDiscard()) void loadSettings(true); }}>Reload saved connection</button>`}
             ${migration?.diagnostics?.length > 0 && html`
                 <div class="settings-row settings-dense-row" style="display:block">
                     <strong>Imported disabled entries</strong>
@@ -397,13 +417,14 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
                             type="button"
                             key=${connection.id}
                             class=${`settings-btn ${selectedId === connection.id ? 'primary' : ''}`}
-                            onClick=${() => setSelectedId(connection.id)}
+                            aria-pressed=${selectedId === connection.id}
+                            onClick=${() => selectConnection(connection)}
                             disabled=${saving}
                         >
                             ${connection.name || 'Unnamed'}
                         </button>
                     `)}
-                    <button type="button" class="settings-btn" onClick=${() => setSelectedId(null)} disabled=${saving}>New connection</button>
+                    <button type="button" class="settings-btn" onClick=${() => selectConnection(null)} disabled=${saving}>New connection</button>
                 </div>
             </div>
 
@@ -516,7 +537,14 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
                 </div>
                 <div class="settings-row settings-dense-row">
                     <label for=${fieldId('stdio-env')}>Environment JSON</label>
-                    <textarea id=${fieldId('stdio-env')} rows="3" value=${draft.envText || ''} disabled=${!canEdit} onInput=${(event) => setDraft((prev) => ({ ...prev, envText: (event.currentTarget as HTMLTextAreaElement).value }))} placeholder='{"KEY":"keychain:server/token"}'></textarea>
+                    <textarea id=${fieldId('stdio-env')} rows="3" value=${draft.envText || ''} disabled=${!canEdit || draft.clearEnvironment} onInput=${(event) => setDraft((prev) => ({ ...prev, envText: (event.currentTarget as HTMLTextAreaElement).value }))} placeholder='{"KEY":"keychain:server/token"}'></textarea>
+                    <span class="settings-hint">Leave blank to keep the saved environment. Enter a JSON object to replace it.</span>
+                    ${draft.environmentNames.length > 0 && html`
+                        <label class="settings-dense-check"><input type="checkbox" disabled=${!canEdit} checked=${draft.clearEnvironment} onChange=${event => setDraft(prev => ({ ...prev, clearEnvironment: event.currentTarget.checked }))} /> Clear saved environment</label>
+                        <details><summary>Remove individual saved entries</summary>
+                            ${draft.environmentNames.map((name: string) => html`<label key=${name} class="settings-dense-check"><input type="checkbox" disabled=${!canEdit || draft.clearEnvironment || Boolean(draft.envText.trim())} checked=${draft.removeEnvironment.includes(name)} onChange=${event => setDraft(prev => ({ ...prev, removeEnvironment: event.currentTarget.checked ? [...prev.removeEnvironment, name] : prev.removeEnvironment.filter((item: string) => item !== name) }))} /> Remove ${name}</label>`)}
+                        </details>
+                    `}
                 </div>
             `}
 
@@ -603,7 +631,7 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
             </div>
 
             ${selectedConnection?.status && html`
-                <div class="settings-row" style="display:block;">
+                <div class="settings-row" style="display:block;" role="status">
                     <strong>Status</strong>
                     <p class="settings-hint" style="margin:8px 0 0 0">${renderConnectionStateLabel(selectedConnection.status)}</p>
                 </div>

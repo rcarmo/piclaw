@@ -17,6 +17,7 @@ export type McpConnection=Static<typeof McpConnectionSchema>;
 export type McpConnectionInput=Static<typeof McpConnectionInputSchema>;
 export type PublicMcpConnection=Omit<McpConnection,'bearerTokenKeychain'|'oauth'|'env'> & {hasSavedCredentials:boolean;needsCredentialApproval:boolean;environmentNames:string[];oauth?:{clientId?:string;scope?:string}};
 export class McpConnectionValidationError extends Error{}
+export class McpConnectionConflictError extends McpConnectionValidationError{}
 export const mcpCommandCredentialTarget=(value:Pick<McpConnectionInput,'workspaceId'|'command'|'workdir'>)=>createHash('sha256').update(JSON.stringify([value.workspaceId,value.command??[],value.workdir??null])).digest('hex');
 const commandReferences=(value:Pick<McpConnectionInput,'env'>)=>Object.values(value.env??{}).filter(entry=>entry.startsWith('keychain:'));
 const accessIdentity=(value:McpConnectionInput)=>JSON.stringify([value.workspaceId,canonicalMcpAccess(mcpAccess(value)),value.url,value.credentialUrl??value.url,value.credentialCommand,value.bearerTokenKeychain,value.transport,value.auth,value.command,value.workdir,value.env,value.oauth]);
@@ -34,11 +35,11 @@ export class McpConnectionStore{
  list():PublicMcpConnection[]{return this.rows().map(row=>this.credential(row.id)!).map(({bearerTokenKeychain,oauth,env,...row})=>({...row,hasSavedCredentials:Boolean(bearerTokenKeychain||oauth?.clientSecretKeychain||commandReferences({env}).length),needsCredentialApproval:row.transport==='http'?(row.credentialUrl??row.url)!==row.url:commandReferences({env}).length>0&&row.credentialCommand!==mcpCommandCredentialTarget(row),environmentNames:Object.keys(env??{}),...(oauth?{oauth:{clientId:oauth.clientId,scope:oauth.scope}}:{})}));}
  watch(listener:()=>Promise<void>){this.listeners.add(listener);return()=>{this.listeners.delete(listener);};}
  async save(input:McpConnectionInput,options:{expectedRevision?:number;approveCredentialReuse?:boolean;authorise?:()=>void;signal?:AbortSignal}={}){
-  const supplied=structuredClone(input);Value.Assert(McpConnectionInputSchema,supplied);
+  const supplied=structuredClone(input);if(!Value.Check(McpConnectionInputSchema,supplied))throw new McpConnectionValidationError('Check the connection fields and limits.');
   const check=()=>{this.assertOwner();options.authorise?.();};
   const stored=await admitSqliteWrite(this.database,()=>{
    check();const previous=this.stored(supplied.id);
-   if(options.expectedRevision!==undefined&&options.expectedRevision!==(previous?.revision??0))throw new McpConnectionValidationError('The connection changed; reload before saving.');
+   if(options.expectedRevision!==undefined&&options.expectedRevision!==(previous?.revision??0))throw new McpConnectionConflictError('The connection changed; reload before saving.');
    if(!previous&&this.rows().length>=100)throw new McpConnectionValidationError('At most 100 MCP connections can be configured.');
    const candidate:McpConnection={...supplied,revision:(previous?.revision??0)+1,accessEpoch:previous?.accessEpoch??crypto.randomUUID(),recall:supplied.recall??previous?.recall??defaultMcpRecallSettings()};
    if(candidate.access){candidate.access=canonicalMcpAccess(candidate.access);if(candidate.access.kind==='workspaces'&&new Set(candidate.access.grants.map(g=>g.workspaceId)).size!==candidate.access.grants.length)throw new McpConnectionValidationError('Choose each workspace only once.');}
@@ -51,10 +52,11 @@ export class McpConnectionStore{
     else delete candidate.credentialCommand;
     candidate.url='';candidate.auth='bearer';delete candidate.bearerTokenKeychain;delete candidate.credentialUrl;delete candidate.oauth;
    }else{
-    candidate.url=mcpEndpoint(candidate.url,candidate.allowHttp);delete candidate.command;delete candidate.workdir;delete candidate.env;delete candidate.credentialCommand;
+    try{candidate.url=mcpEndpoint(candidate.url,candidate.allowHttp);}catch{throw new McpConnectionValidationError('Use an approved HTTP(S) MCP endpoint without credentials, query or fragment.');}delete candidate.command;delete candidate.workdir;delete candidate.env;delete candidate.credentialCommand;
     if(candidate.auth==='none'){delete candidate.bearerTokenKeychain;delete candidate.oauth;}
     else if(candidate.auth==='oauth')delete candidate.bearerTokenKeychain;else delete candidate.oauth;
-    const sameCredentials=previous&&candidate.auth===previous.auth&&candidate.bearerTokenKeychain===previous.bearerTokenKeychain&&JSON.stringify(candidate.oauth)===JSON.stringify(previous.oauth);
+    // Editing an OAuth scope or client ID does not replace its saved secret reference.
+    const sameCredentials=previous&&candidate.auth===previous.auth&&candidate.bearerTokenKeychain===previous.bearerTokenKeychain&&candidate.oauth?.clientSecretKeychain===previous.oauth?.clientSecretKeychain;
     candidate.credentialUrl=previous?(sameCredentials?(previous.credentialUrl??previous.url):candidate.url):(supplied.credentialUrl??candidate.url);
     if(candidate.auth==='none'||options.approveCredentialReuse)candidate.credentialUrl=candidate.url;
     if(candidate.credentialUrl!==candidate.url||candidate.auth==='bearer'&&!candidate.bearerTokenKeychain)candidate.enabled=false;
@@ -70,7 +72,7 @@ export class McpConnectionStore{
  }
  async remove(id:string,options:{expectedRevision?:number;authorise?:()=>void;signal?:AbortSignal}={}){
   const check=()=>{this.assertOwner();options.authorise?.();};
-  await admitSqliteWrite(this.database,()=>{check();const previous=this.credential(id);if(options.expectedRevision!==undefined&&options.expectedRevision!==(previous?.revision??0))throw new McpConnectionValidationError('The connection changed; reload before removing.');this.database.query('DELETE FROM mcp_connections_v1 WHERE id=?').run(id);check();},check,options.signal,undefined,check);
+  await admitSqliteWrite(this.database,()=>{check();const previous=this.credential(id);if(options.expectedRevision!==undefined&&options.expectedRevision!==(previous?.revision??0))throw new McpConnectionConflictError('The connection changed; reload before removing.');this.database.query('DELETE FROM mcp_connections_v1 WHERE id=?').run(id);check();},check,options.signal,undefined,check);
   // Existing keychain entries are shared references and are never deleted here.
   await Promise.all([...this.listeners].map(listener=>listener()));
  }

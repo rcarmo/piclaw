@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "sourceParent": "b324b21f80a07578ea102fef919967f6e848e217",
+  "sourceParent": "cd634c974282ae2c68f0b7d4562d328644fd0e24",
   "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
-  "previousOverlaySha256": "a3c02c69b5ea6fed09aa68bfb54bd347273c8b9b386e12c141cd70aa100979e1",
+  "previousOverlaySha256": "f46fdfd87aea70e0e5230fc58e7272dcd45c56708e59e842a65c56c3c5e1ab78",
   "scope": "Delegate whitelist migration only; original 105 entries, 37 deletions and accounting are unchanged.",
   "rows": [
     {
