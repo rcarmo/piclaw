@@ -74,10 +74,10 @@ import { createHostCommandPolicy } from "./host-command-policy.js";
 import { createHostProcessControls, nativeProcessInstructions } from "./host-process-controls.js";
 import { inspectAddonInstall, loadApplicationExtensionCatalog, qualifyInstalledAddon, bindInstalledAddon, qualifyInstalledCodeReview, qualifyInstalledEditableTable, qualifyInstalledOfficeViewer, qualifyInstalledDrawio, qualifyInstalledGoal, qualifyInstalledObservability, qualifyInstalledRestic, assertApplicationExtensionCatalogSupported } from "./host-extension-catalog.js";
 import { createHostDelegateTool } from "./host-delegate-tool.js";
-import { buildModelCandidates, type DelegateConfig } from "../../src/delegate/policy.js";
+import { buildModelCandidates, migrateLegacyDelegateConfig, type DelegateConfig } from "../../src/delegate/policy.js";
 import { createDelegateSettings, delegateInstructions } from "../../src/delegate/settings.js";
 import { createHostDelegateFileReader } from "./host-delegate-files.js";
-import { extensionKvGet } from "../../src/db/extension-kv.js";
+import { extensionKvGet, extensionKvSet } from "../../src/db/extension-kv.js";
 import { createHostProxmoxTool, type ProxmoxNativeExports } from "./host-proxmox-tool.js";
 import { createHostPortainerTool, type PortainerNativeExports } from "./host-portainer-tool.js";
 import { createHostImapTool, type ImapNativeExports } from "./host-imap-tool.js";
@@ -800,8 +800,29 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     }
     return approved;
   };
+  const delegateModels = () => {
+    assertCoreDelegate();
+    return available().flatMap(model => {
+      const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
+      if (!physical || physical.provider !== model.provider || physical.id !== model.id) return [];
+      return [{ provider: physical.provider, id: physical.id, fullId: `${physical.provider}/${physical.id}`, name: physical.name,
+        supportsImages: physical.input?.includes("image"), reasoning: physical.reasoning, contextWindow: physical.contextWindow, maxOutputTokens: physical.maxTokens }];
+    });
+  };
   const selected = provider && modelId ? available().find(model => model.provider === provider && model.id === modelId) : available()[0];
   if (!selected) throw Error("Durable startup requires an available host default model");
+  // Freeze the broad legacy approvals before recovery can admit Delegate work.
+  // Offline maintenance must never rewrite approval policy.
+  if (!offlineMaintenance) {
+    const readDelegateConfig = () => extensionKvGet("delegate", "config", "global");
+    const legacy = readDelegateConfig();
+    if (legacy && typeof legacy === "object" && Object.hasOwn(legacy, "searchable_providers") && !Object.hasOwn(legacy, "approved_models")) {
+      await admitSqliteWrite(root, () => {
+        const config = migrateLegacyDelegateConfig(delegateModels(), readDelegateConfig());
+        if (config) extensionKvSet("delegate", "config", config, "global");
+      }, assertCoreDelegate, lifetime.signal, undefined, assertCoreDelegate);
+    }
+  }
   const ref = { provider: selected.provider, id: selected.id };
   const defaultThinking = (model: any) => getSupportedThinkingLevels(model).includes("medium") ? "medium" as const : getSupportedThinkingLevels(model)[0]!;
   // Allocate/recover the shared namespace before any accepted task or API read.
@@ -859,7 +880,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     }
   }
   // Automatic selection inherits the parent; explicit exact models use the same
-  // installed approval/classification/exclusion policy, without a parent-tier cap.
+  // exact whitelist and classification policy, without a parent-tier cap.
   assertDelegateModel = (model: { provider: string; modelId: string }) => {
     assertCoreDelegate(); check({ provider: model.provider, id: model.modelId }, lifetime.signal);
     const config = extensionKvGet("delegate", "config", "global");
@@ -1481,14 +1502,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     remoteDisposers.push(registerChatTransport(remotePorts.chatTransport));
     if (!offlineMaintenance) await remotePorts.start();
   }
-  const delegateSettings = createDelegateSettings({ assertCurrent: assertCoreDelegate, defaultModel: () => `${selected.provider}/${selected.id}`,
-    models: () => { assertCoreDelegate(); return host.modelRegistry.getAvailable().flatMap(model => {
-      if (!available().some(allowed => allowed.provider === model.provider && allowed.id === model.id)) return [];
-      const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
-      if (!physical || physical.provider !== model.provider || physical.id !== model.id) return [];
-      return [{ provider: physical.provider, id: physical.id, fullId: `${physical.provider}/${physical.id}`, name: physical.name,
-        supportsImages: physical.input?.includes("image"), reasoning: physical.reasoning, contextWindow: physical.contextWindow, maxOutputTokens: physical.maxTokens }];
-    }); } });
+  const delegateSettings = createDelegateSettings({ assertCurrent: assertCoreDelegate, defaultModel: () => `${selected.provider}/${selected.id}`, models: delegateModels });
   for (const [action, handlers] of [["config", { get: () => delegateSettings.get(), set: (patch: unknown) => delegateSettings.set(patch) }],
     ["models", { get: () => delegateSettings.models(), set: () => delegateSettings.models() }]] as const) {
     const registration = registerOwnedAddonConfigApi("delegate", action, handlers, "core:delegate");

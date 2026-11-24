@@ -2,7 +2,7 @@
 const AZURE_PROVIDER_RE = /^azure-/i;
 const DEFAULT_SEARCHABLE_PROVIDER_ORDER = ["github-copilot", "anthropic", "openai", "google", "openai-codex", "cerebras", "ollama"];
 
-export interface DelegateConfig {
+export interface LegacyDelegateConfig {
   /** Operator-approved providers. null and [] both mean approve none (fail closed). */
   searchable_providers: string[] | null;
   /** Additional explicit provider denials. null = default exclusions; [] = no extra denials. */
@@ -11,11 +11,23 @@ export interface DelegateConfig {
   excluded_models: string[];
 }
 
-const DEFAULT_CONFIG: DelegateConfig = {
-  searchable_providers: null, // fail closed until an operator approves providers in Settings
-  excluded_providers: null,
-  excluded_models: [],
-};
+export interface DelegateConfig {
+  /** Explicit, case-sensitive provider/model IDs; [] approves nothing. */
+  approved_models: string[];
+  /** Preserve the old ordering only as a tie-breaker, never as an approval. */
+  provider_order?: string[];
+}
+
+export function isDelegateModelId(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 512 && /^[^/\s\x00-\x1f\x7f]+\/[^\s\x00-\x1f\x7f]+$/.test(value);
+}
+
+export function normalizeConfig(value: Partial<DelegateConfig> | null | undefined): DelegateConfig {
+  return {
+    approved_models: Array.isArray(value?.approved_models) ? [...new Set(value.approved_models.filter(isDelegateModelId))] : [],
+    ...(Array.isArray(value?.provider_order) ? { provider_order: normalizeStringList(value.provider_order) ?? [] } : {}),
+  };
+}
 
 function normalizeStringList(values: unknown): string[] | null {
   if (values == null) return null;
@@ -35,7 +47,7 @@ function normalizeModelExclusionList(values: unknown): string[] {
   return normalizeStringList(values) ?? [];
 }
 
-export function normalizeConfig(config: Partial<DelegateConfig> | null | undefined): DelegateConfig {
+function normalizeLegacyConfig(config: Partial<LegacyDelegateConfig>): LegacyDelegateConfig {
   const searchableProviders = normalizeProviderList(config?.searchable_providers);
   const excludedProviders = normalizeProviderList(config?.excluded_providers);
   const excludedSet = new Set(excludedProviders ?? []);
@@ -207,7 +219,7 @@ export function classifyModel(model: Pick<AvailableModel, "provider" | "id"> | s
   };
 }
 
-function providerPreference(provider: string, searchableProviders: string[] | null): number {
+function providerPreference(provider: string, searchableProviders?: string[]): number {
   const configured = searchableProviders?.indexOf(provider) ?? -1;
   if (configured >= 0) return configured;
   const preferred = DEFAULT_SEARCHABLE_PROVIDER_ORDER.indexOf(provider);
@@ -219,14 +231,14 @@ function getDiscoveredProviders(models: AvailableModel[]): string[] {
   return [...new Set(models.map((model) => model.provider).filter(Boolean))].sort();
 }
 
-function getExcludedProviders(models: AvailableModel[], config: DelegateConfig): string[] {
+function getExcludedProviders(models: AvailableModel[], config: LegacyDelegateConfig): string[] {
   const discovered = getDiscoveredProviders(models);
   const configured = normalizeProviderList(config.excluded_providers);
   if (configured !== null) return configured.filter((provider) => discovered.includes(provider));
   return discovered.filter((provider) => AZURE_PROVIDER_RE.test(provider));
 }
 
-function getAllowedProviders(models: AvailableModel[], config: DelegateConfig): string[] {
+function getAllowedProviders(models: AvailableModel[], config: LegacyDelegateConfig): string[] {
   const discovered = getDiscoveredProviders(models);
   const excluded = new Set(getExcludedProviders(models, config));
   const configured = normalizeProviderList(config.searchable_providers) ?? [];
@@ -246,7 +258,7 @@ function modelExclusionMatches(pattern: string, model: AvailableModel): boolean 
   return haystacks.some((value) => value === normalizedPattern || value.includes(normalizedPattern));
 }
 
-function isExcludedModel(model: AvailableModel, config: DelegateConfig): boolean {
+function isExcludedModel(model: AvailableModel, config: LegacyDelegateConfig): boolean {
   return normalizeModelExclusionList(config.excluded_models).some((pattern) => modelExclusionMatches(pattern, model));
 }
 
@@ -260,16 +272,29 @@ function optionalCount(value: number | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
 
-export function buildModelCandidates(models: AvailableModel[], config: DelegateConfig = DEFAULT_CONFIG): ModelCandidate[] {
-  const normalizedConfig = normalizeConfig(config);
-  const allowedProviders = new Set(getAllowedProviders(models, normalizedConfig));
+/** Snapshot eligible legacy approvals once, at owned runtime startup. */
+export function migrateLegacyDelegateConfig(models: AvailableModel[], input: unknown): DelegateConfig | undefined {
+  if (!input || typeof input !== 'object' || Object.hasOwn(input, 'approved_models')
+    || !Object.hasOwn(input, 'searchable_providers')) return;
+  const legacy = normalizeLegacyConfig(input as Partial<LegacyDelegateConfig>);
+  const providers = new Set(getAllowedProviders(models, legacy));
+  const approved = classifyDelegateModels(models.filter(model => providers.has(model.provider) && !isExcludedModel(model, legacy)));
+  return { approved_models: approved.map(model => model.id), provider_order: legacy.searchable_providers ?? [] };
+}
+
+export function buildModelCandidates(models: AvailableModel[], input?: Partial<DelegateConfig> | null): ModelCandidate[] {
+  const config = normalizeConfig(input), ids = new Set(config.approved_models);
+  return classifyDelegateModels(models.filter(model => ids.has(model.fullId)), config.provider_order);
+}
+
+/** Available, classified models with their tier and capability metadata, irrespective of approval. */
+export function classifyDelegateModels(models: AvailableModel[], providerOrder?: string[]): ModelCandidate[] {
   const candidates: Array<ModelCandidate & { preference: number; providerRank: number }> = [];
   const seen = new Set<string>();
 
   for (const model of models) {
-    if (seen.has(model.fullId)) continue;
+    if (model.provider.includes("/") || !isDelegateModelId(model.fullId) || model.fullId !== `${model.provider}/${model.id}` || seen.has(model.fullId)) continue;
     seen.add(model.fullId);
-    if (!allowedProviders.has(model.provider) || isExcludedModel(model, normalizedConfig)) continue;
     const classification = classifyModel(model);
     if (classification.status !== "classified" || classification.tier === null || !classification.rule) continue;
     candidates.push({
@@ -288,7 +313,7 @@ export function buildModelCandidates(models: AvailableModel[], config: DelegateC
       contextWindow: optionalCount(model.contextWindow),
       maxOutputTokens: optionalCount(model.maxOutputTokens),
       preference: classification.preference,
-      providerRank: providerPreference(model.provider, normalizedConfig.searchable_providers),
+      providerRank: providerPreference(model.provider, providerOrder),
     });
   }
 
@@ -296,31 +321,3 @@ export function buildModelCandidates(models: AvailableModel[], config: DelegateC
     .sort((a, b) => a.tier - b.tier || a.preference - b.preference || a.providerRank - b.providerRank || a.id.localeCompare(b.id))
     .map(({ preference: _preference, providerRank: _providerRank, ...candidate }) => candidate);
 }
-
-
-export function providerSummaries(models: AvailableModel[], config: DelegateConfig) {
-  const enabled = new Set(getAllowedProviders(models, config));
-  const excluded = new Set(getExcludedProviders(models, config));
-  const providers = getDiscoveredProviders(models);
-  return providers.map((provider) => ({
-    provider,
-    enabled: enabled.has(provider),
-    excluded: excluded.has(provider),
-    blacklisted: excluded.has(provider),
-    defaultExcluded: config.excluded_providers === null && AZURE_PROVIDER_RE.test(provider),
-    modelCount: models.filter((model) => model.provider === provider).length,
-  })).sort((left, right) => {
-    const configured = config.searchable_providers;
-    if (configured !== null) {
-      const leftIndex = configured.indexOf(left.provider);
-      const rightIndex = configured.indexOf(right.provider);
-      const leftConfigured = leftIndex >= 0;
-      const rightConfigured = rightIndex >= 0;
-      if (leftConfigured !== rightConfigured) return leftConfigured ? -1 : 1;
-      if (leftConfigured && rightConfigured && leftIndex !== rightIndex) return leftIndex - rightIndex;
-    }
-    return providerPreference(left.provider, null) - providerPreference(right.provider, null)
-      || left.provider.localeCompare(right.provider);
-  });
-}
-

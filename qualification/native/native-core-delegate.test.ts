@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { isolatedApplicationTest } from './src/isolated-application-test.js';
 import { initDatabase, getDb, closeDatabase } from '../../runtime/src/db/connection.js';
+import { extensionKvGet, extensionKvSet } from '../../runtime/src/db/extension-kv.js';
 import { storeChatMetadata } from '../../runtime/src/db.js';
 import { acquireRuntimeLock } from '../../runtime/src/runtime/single-instance.js';
 import { createDefaultApplicationRuntime } from '../../runtime/durable-engine/src/default-application-runtime.js';
@@ -37,9 +38,10 @@ for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash']) f
   const keys: Record<string, string> = { [parent.provider]: 'SYNTHETIC_PARENT_AUTH', [child.provider]: 'SYNTHETIC_CHILD_AUTH', unrelated: 'SYNTHETIC_UNRELATED_AUTH' };
   const credentials = createTestCredentialStore(credentialed ? Object.fromEntries(Object.entries(keys).map(([id, key]) => [id, { type: 'api_key' as const, key }])) : {});
   const searchable = [...new Set([parent.provider, child.provider])];
-  const expectedCandidates = !approved ? [] : childModelId === 'mai-code-2'
-    ? [`${parent.provider}/${parent.id}`, `${child.provider}/${child.id}`]
-    : [`${child.provider}/${child.id}`, `${parent.provider}/${parent.id}`];
+  const childSlug = `${child.provider}/${child.id}`, parentSlug = `${parent.provider}/${parent.id}`;
+  const migrate = approved && installedLegacy && !credentialed && childModelId === 'gpt-5.4-mini';
+  if (migrate) root.transaction(() => extensionKvSet('delegate', 'config', { searchable_providers: searchable, excluded_models: [parent.id] }, 'global'))();
+  const expectedCandidates = approved ? [childSlug] : [];
   const host = await ModelRuntime.create({ credentials, modelsPath: null, modelsStore: { read: async () => undefined, write: async () => {}, delete: async () => {} }, refreshOnCreate: false, allowModelNetwork: false });
   let children = 0; const offered: string[][] = [];
   const requests: { provider: string; model: string; apiKey: string | undefined; options: string; transcript: string }[] = [];
@@ -74,12 +76,16 @@ for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash']) f
     pool = new AgentPool({ credentialStore: credentials, modelRuntime: host, modelRegistry: services.modelRegistry, ...backend.sessionOptions } as any);
     channel = new WebChannel(backend.bind({ queue: base.queue, agentPool: pool })); await backend.attachChannel!(channel);
     const initial = await request('models'); expect(initial?.status).toBe(200);
-    const snapshot: any = await initial!.json(); expect(snapshot.source).toBe('native'); expect(snapshot.candidates).toEqual([]);
-    expect(root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all()).toEqual(original);
-    const denied = await request('config', 'POST', { searchable_providers: searchable }, false);
+    const snapshot: any = await initial!.json(); expect(snapshot.source).toBe('native'); expect(snapshot.candidates.map((entry: any) => entry.id)).toEqual(migrate ? [childSlug] : []);
+    const migratedRows = root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all();
+    if (!migrate) expect(migratedRows).toEqual(original);
+    else expect(extensionKvGet("delegate", "config", "global")).toEqual({ approved_models: [childSlug], provider_order: searchable });
+    const denied = await request('config', 'POST', { add_model: childSlug }, false);
     expect(denied!.status).toBeGreaterThanOrEqual(400);
-    expect(root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all()).toEqual(original);
-    if (approved) expect((await request('config', 'POST', { searchable_providers: searchable, excluded_models: [] }))!.status).toBe(200);
+    expect(root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all()).toEqual(migratedRows);
+    expect((await request('config', 'POST', { add_model: `${parentSlug}-unknown` }))!.status).toBeGreaterThanOrEqual(400);
+    expect((await request('config', 'POST', { searchable_providers: searchable }))!.status).toBeGreaterThanOrEqual(400);
+    if (approved && !migrate) expect((await request('config', 'POST', { add_model: childSlug }))!.status).toBe(200);
     const current: any = await (await request('models'))!.json();
     expect(current.candidates.map((model: any) => model.id)).toEqual(expectedCandidates);
     expect(JSON.stringify(current)).not.toMatch(/api_key|synthetic-only|access_token|Authorization/);
@@ -124,12 +130,27 @@ for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash']) f
       const afterLogoutEntries = JSON.stringify(root.query('SELECT record FROM entries').all());
       for (const key of Object.values(keys)) expect(afterLogoutEntries).not.toContain(key);
     }
+    if (migrate) {
+      const removed = await request('config', 'POST', { remove_model: childSlug });
+      expect(removed!.status).toBe(200);
+      expect(extensionKvGet("delegate", "config", "global")).toEqual({ approved_models: [], provider_order: searchable });
+      const response = await handleAgentMessage(channel, new Request('https://fixture/agent/default/message', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: 'AFTER_REVOCATION', mode: 'auto' }),
+      }), '/agent/default/message', 'web:default', 'default');
+      expect(response.status).toBe(201);
+      const terminalCount = () => (root.query('SELECT count(*) n FROM messages WHERE is_terminal_agent_reply=1').get() as { n: number }).n;
+      const deadline = Date.now() + 10000;
+      while (terminalCount() < 2 && Date.now() < deadline) await Bun.sleep(10);
+      expect(terminalCount()).toBe(2);
+      expect(offered).toHaveLength(4);
+      expect(children).toBe(1);
+    }
     const beforeReopen = (await (await request('models'))!.json() as any).candidates.map((model: any) => model.id);
     const saved = root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all(), callsBefore = offered.length;
     await backend.close(); await channel.stop(); await pool.shutdown(); await base.queue.shutdown();
     backend = await createDefaultApplicationRuntime(owner, async () => services);
     expect(root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all()).toEqual(saved);
-    expect((await (await request('models'))!.json() as any).candidates.map((model: any) => model.id)).toEqual(credentialed ? beforeReopen : expectedCandidates);
+    expect((await (await request('models'))!.json() as any).candidates.map((model: any) => model.id)).toEqual(credentialed || migrate ? beforeReopen : expectedCandidates);
     expect(offered.length).toBe(callsBefore); expect(children).toBe(approved ? 1 : 0); expect(existsSync(marker)).toBe(false);
     if (credentialed && approved) {
       expect(await credentials.read(child.provider)).toBeUndefined();
