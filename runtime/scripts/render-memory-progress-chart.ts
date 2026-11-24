@@ -369,7 +369,28 @@ function extractPostStartSample(notes: string): PostStartSample | null {
   return { rssMb, heapUsedMb, externalMb };
 }
 
-function renderSvg(config: TemplateConfig, inputPath: string, coldRows: ColdRow[], liveRows: LiveRow[]): string {
+function renderMatchedRss(markdown: string, top: number): { height: number; svg: string } {
+  const rows = parseMarkdownTableSection(markdown, "## Matched synthetic RSS comparisons").map(row => ({
+    label: row["Workload"], baseline: parseNumberCell(row["Baseline RSS (MiB)"]),
+    candidate: parseNumberCell(row["Candidate RSS (MiB)"]),
+  })).filter(row => row.label && row.baseline !== null && row.candidate !== null);
+  if (!rows.length) return { height: 0, svg: "" };
+  const height = 88 + 54 * rows.length;
+  const max = niceCeil(Math.max(...rows.flatMap(row => [row.baseline!, row.candidate!])), 4);
+  const scale = (value: number) => value / max * 630;
+  const ticks = Array.from({ length: 5 }, (_, i) => max * i / 4).map(value => {
+    const x = 420 + scale(value);
+    return `<line x1="${x}" x2="${x}" y1="68" y2="${height - 15}" stroke="#283547"/><text x="${x}" y="62" text-anchor="middle" class="axis">${formatNumber(value, 0)}</text>`;
+  }).join("\n");
+  const bars = rows.map((row, i) => {
+    const y = 75 + i * 54;
+    return `<text x="20" y="${y + 22}" class="body">${escapeXml(stripMarkdown(row.label))}</text>` +
+      [row.baseline!, row.candidate!].map((value, j) => `<rect x="420" y="${y + j * 18}" width="${scale(value)}" height="12" rx="3" fill="${j ? "#34d399" : "#60a5fa"}"/><text x="${428 + scale(value)}" y="${y + j * 18 + 11}" class="value">${formatNumber(value)}</text>`).join("");
+  }).join("\n");
+  return { height: height + 12, svg: `<g transform="translate(40 ${top})"><rect width="1120" height="${height}" rx="18" fill="#111827" stroke="#1f2937"/><text x="20" y="29" class="h2">Matched synthetic RSS comparisons · MiB</text><text x="20" y="51" class="small">Independent fixtures; only compare within a row. Separate from live service history.</text>${renderLegendItem(855, 23, "#60a5fa", "Baseline")}${renderLegendItem(960, 23, "#34d399", "Candidate")}${ticks}${bars}</g>` };
+}
+
+function renderSvg(config: TemplateConfig, inputPath: string, coldRows: ColdRow[], liveRows: LiveRow[], matched: { height: number; svg: string }): string {
   if (coldRows.length === 0) throw new Error("No fresh-process cold-session benchmark rows found in memory history.");
   if (liveRows.length === 0) throw new Error("No live-service snapshot rows found in memory history.");
 
@@ -407,9 +428,10 @@ function renderSvg(config: TemplateConfig, inputPath: string, coldRows: ColdRow[
     `Interpretation: the middle row is ordered experimental progression, while the bottom row is the actual chronological live-service memory history.`,
   ];
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${config.width}" height="${config.height}" viewBox="0 0 ${config.width} ${config.height}" role="img" aria-labelledby="title desc">
+  const totalHeight = config.height + matched.height;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${config.width}" height="${totalHeight}" viewBox="0 0 ${config.width} ${totalHeight}" role="img" aria-labelledby="title desc">
   <title id="title">${escapeXml(config.title)}</title>
-  <desc id="desc">Cold-session experiment progression and chronological live-service memory history from ${escapeXml(inputPath)}.</desc>
+  <desc id="desc">Cold-session experiments, historical live-service memory and separate matched synthetic comparisons from ${escapeXml(inputPath)}.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#0f172a"/>
@@ -438,7 +460,7 @@ function renderSvg(config: TemplateConfig, inputPath: string, coldRows: ColdRow[
     </style>
   </defs>
 
-  <rect x="0" y="0" width="${config.width}" height="${config.height}" fill="url(#bg)"/>
+  <rect x="0" y="0" width="${config.width}" height="${totalHeight}" fill="url(#bg)"/>
 
   <text x="40" y="48" class="h1">${escapeXml(config.title)}</text>
   <text x="40" y="74" class="body">${escapeXml(config.subtitle_prefix)} · latest commit ${escapeXml(subtitleCommit)} · ${displayedColdRows.length} cold experiment steps · ${liveRows.length} live snapshots</text>
@@ -493,6 +515,7 @@ function renderSvg(config: TemplateConfig, inputPath: string, coldRows: ColdRow[
   <text x="60" y="885" class="body">${escapeXml(footerLines[0])}</text>
   <text x="60" y="903" class="body">${escapeXml(footerLines[1])}</text>
   <text x="60" y="921" class="body">${escapeXml(footerLines[2])}</text>
+  ${matched.svg}
 </svg>`;
 }
 
@@ -510,8 +533,8 @@ function main() {
 
   const coldRows = parseColdRows(markdown);
   const liveRows = parseLiveRows(markdown);
-  const svg = renderSvg(template, path.relative(projectRoot, inputPath), coldRows, liveRows);
-  writeFileSync(outputPath, svg);
+  const svg = renderSvg(template, path.relative(projectRoot, inputPath), coldRows, liveRows, renderMatchedRss(markdown, template.height - 5));
+  writeFileSync(outputPath, svg.replace(/[ \t]+$/gm, "") + "\n");
   console.log(JSON.stringify({ output: path.relative(projectRoot, outputPath), cold_rows: coldRows.length, live_rows: liveRows.length }, null, 2));
 }
 

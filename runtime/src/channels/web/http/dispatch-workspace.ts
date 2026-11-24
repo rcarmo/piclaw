@@ -28,7 +28,7 @@ export interface WorkspaceDispatchChannel {
   /** Optional override for GET `/workspace/tree` requests. */
   handleWorkspaceTree?(req: Request): Response;
   /** Optional override for GET `/workspace/file` requests. */
-  handleWorkspaceFile?(req: Request): Response;
+  handleWorkspaceFile?(req: Request): Response | Promise<Response>;
   /** Optional override for GET `/workspace/branch` requests. */
   handleWorkspaceBranch?(req: Request): Response;
   /** Optional override for GET `/workspace/index-status` requests. */

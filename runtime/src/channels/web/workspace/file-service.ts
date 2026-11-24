@@ -9,10 +9,11 @@ import { getDb } from "../../../db/connection.js";
  * Consumers: web/handlers/workspace.ts delegates file operations here.
  */
 
-import { appendFileSync, closeSync, constants, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "fs";
+import { appendFileSync, closeSync, constants, createReadStream, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { readdir } from "fs/promises";
 import path from "path";
-import { gunzipSync } from "zlib";
+import { createGunzip } from "node:zlib";
+import { pipeline } from "node:stream/promises";
 
 import { createMedia } from "../../../db.js";
 import { DATA_DIR, getWebRuntimeConfig } from "../../../core/config.js";
@@ -149,43 +150,59 @@ function isTarGzPath(filePath: string): boolean {
   return lower.endsWith(".tar.gz") || lower.endsWith(".tgz");
 }
 
-function parseTarEntries(buffer: Buffer, maxEntries = 200): { entries: ArchiveEntrySummary[]; totalEntries: number; truncated: boolean } {
-  const entries: ArchiveEntrySummary[] = [];
-  let offset = 0;
-  let totalEntries = 0;
+const MAX_TAR_PREVIEW_DECODED_BYTES = 512 * 1024 * 1024;
 
-  while (offset + 512 <= buffer.length) {
-    const header = buffer.subarray(offset, offset + 512);
-    if (header.every((byte) => byte === 0)) break;
-
-    const rawName = header.toString("utf8", 0, 100).replace(/\0.*$/, "");
-    const rawPrefix = header.toString("utf8", 345, 500).replace(/\0.*$/, "");
-    const sizeOctal = header.toString("utf8", 124, 136).replace(/\0.*$/, "").trim();
-    const typeFlag = header.toString("utf8", 156, 157) || "0";
-    const size = sizeOctal ? parseInt(sizeOctal.replace(/\s/g, ""), 8) || 0 : 0;
-    const name = rawPrefix ? `${rawPrefix}/${rawName}` : rawName;
-    const isDirectory = typeFlag === "5" || name.endsWith("/");
-
-    if (!name) break;
-
-    totalEntries += 1;
-    if (entries.length < maxEntries) {
-      entries.push({
-        name,
-        compressedSize: null,
-        uncompressedSize: size,
-        isDirectory,
-      });
-    }
-
-    offset += 512 + Math.ceil(size / 512) * 512;
+async function readTarGzEntries(filePath: string, signal?: AbortSignal): Promise<{ entries: ArchiveEntrySummary[]; totalEntries: number; truncated: boolean }> {
+  signal?.throwIfAborted();
+  const fd = openSync(filePath, constants.O_RDONLY | constants.O_NONBLOCK);
+  let input: ReturnType<typeof createReadStream>;
+  try {
+    if (!fstatSync(fd).isFile()) throw Error("Preview requires a regular file");
+    input = createReadStream(filePath, { fd, autoClose: true });
+  } catch (error) {
+    closeSync(fd);
+    throw error;
   }
-
-  return {
-    entries,
-    totalEntries,
-    truncated: totalEntries > entries.length,
-  };
+  const entries: ArchiveEntrySummary[] = [];
+  const header = Buffer.allocUnsafe(512);
+  let filled = 0, skip = 0, decoded = 0, totalEntries = 0, end = false;
+  // The pipeline owns the descriptor and both streams. Retain one header,
+  // discard member bytes, and let gzip validate its trailer even after tar EOF.
+  await pipeline(input, createGunzip(), async (source: AsyncIterable<Buffer>) => {
+    for await (const chunk of source) {
+      decoded += chunk.length;
+      if (decoded > MAX_TAR_PREVIEW_DECODED_BYTES) throw Error("Archive exceeds the decoded preview limit");
+      for (let offset = 0; offset < chunk.length && !end;) {
+        if (skip) {
+          const bytes = Math.min(skip, chunk.length - offset);
+          skip -= bytes;
+          offset += bytes;
+          continue;
+        }
+        const bytes = Math.min(header.length - filled, chunk.length - offset);
+        chunk.copy(header, filled, offset, offset + bytes);
+        filled += bytes;
+        offset += bytes;
+        if (filled < header.length) continue;
+        filled = 0;
+        if (header.every(byte => byte === 0)) { end = true; break; }
+        const name = header.toString("utf8", 0, 100).split("\0", 1)[0];
+        const prefix = header.toString("utf8", 345, 500).split("\0", 1)[0];
+        const sizeOctal = header.toString("ascii", 124, 136).split("\0", 1)[0].trim();
+        if ((!name && !prefix) || !/^[0-7]*$/.test(sizeOctal)) throw Error("Invalid tar header");
+        const size = sizeOctal ? Number.parseInt(sizeOctal, 8) : 0;
+        skip = Math.ceil(size / 512) * 512;
+        totalEntries += 1;
+        if (entries.length < 200) {
+          const member = prefix ? `${prefix}/${name}` : name;
+          entries.push({ name: member, compressedSize: null, uncompressedSize: size,
+            isDirectory: header[156] === 53 || member.endsWith("/") });
+        }
+      }
+    }
+    if (!end && (filled || skip)) throw Error("Truncated tar archive");
+  }, { signal });
+  return { entries, totalEntries, truncated: totalEntries > entries.length };
 }
 
 function formatArchiveListing(label: string, relPath: string, stats: { size: number }, parsed: { entries: ArchiveEntrySummary[]; totalEntries: number; truncated: boolean }): string {
@@ -312,11 +329,12 @@ function cleanupStaleChunkUploads(now = Date.now()): void {
 
 /** File read/write service for the workspace explorer API. */
 export class WorkspaceFileService {
-  getFile(
+  async getFile(
     pathParam: string | null,
     maxParam?: string | null,
-    modeParam?: string | null
-  ): { status: number; body: unknown } {
+    modeParam?: string | null,
+    signal?: AbortSignal,
+  ): Promise<{ status: number; body: unknown }> {
     const targetPath = resolveWorkspacePath(pathParam);
     if (!targetPath) return { status: 400, body: { error: "Invalid path" } };
     if (isEscapedExistingWorkspacePath(targetPath)) {
@@ -366,7 +384,7 @@ export class WorkspaceFileService {
       if (!isEditMode && (ext === ".zip" || isTarGzPath(targetPath))) {
         try {
           const isZip = ext === ".zip";
-          const parsed = isZip ? readZipEntries(targetPath) : parseTarEntries(gunzipSync(readFileSync(targetPath)));
+          const parsed = isZip ? readZipEntries(targetPath) : await readTarGzEntries(targetPath, signal);
           return {
             status: 200,
             body: {
