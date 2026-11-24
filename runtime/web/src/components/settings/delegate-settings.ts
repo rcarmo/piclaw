@@ -73,10 +73,10 @@ function DelegateSettings() {
     ${failed && html`<button type="button" disabled=${busy} onClick=${() => load()}>Retry</button>`}
   </div>`;
 
-  const approved = new Set(data.config.approved_models);
-  const available = new Map(data.available.map(model => [model.id, model]));
-  const candidates = new Set(data.candidates.map(model => model.id));
-  const models = new Map(data.models.map(model => [model.id, model]));
+  const approved = new Set<string>(data.config.approved_models);
+  const available = new Map<string, ModelCandidate>(data.available.map(model => [model.id, model]));
+  const candidates = new Set<string>(data.candidates.map(model => model.id));
+  const models = new Map<string, Models['models'][number]>(data.models.map(model => [model.id, model]));
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const matches = [...models.values()].filter(model => {
     const text = `${model.id} ${model.name ?? ''}`.toLowerCase();
