@@ -10,6 +10,7 @@
  */
 
 import type { DurableTurnEntries } from "../../../agent-pool/durable-runtime-adapter.js";
+import { A2UI_RENDERER_TOOL } from '../a2ui/transport-metadata.js';
 import { formatToolTitle } from "./agent-utils.js";
 import { optimizerActivityRows } from "./optimizer-activity.js";
 import { languageForPath, originalToolInput, readableToolInput, type EmittedOutput, type ReadableInput } from "./tool-presentation.js";
@@ -266,7 +267,8 @@ export function projectTurnStepDetail(turn: DurableTurnEntries, stepId: string, 
 export function toolResultFor(turn: DurableTurnEntries, callId: string): { text: string; details: unknown } | null {
   for (const entry of turn.entries) {
     const message = first(entry);
-    if (entry.kind === "pi.tool-result" && message?.toolCallId === callId) return { text: resultText(message), details: message.details };
+    if (entry.kind === "pi.tool-result" && message?.toolCallId === callId)
+      return {text:resultText(message),details:message.toolName===A2UI_RENDERER_TOOL ? undefined : message.details};
   }
   return null;
 }

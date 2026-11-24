@@ -6,8 +6,11 @@ const overlayBytes=readFileSync(resolve(root,'docs/development/receipts/kintsugi
 const overlay=JSON.parse(overlayBytes.toString('utf8'));
 const removalBytes=readFileSync(resolve(root,'docs/development/receipts/optimizer-removal-retention-overlay.json'));
 const removal=JSON.parse(removalBytes.toString('utf8'));
-const mcpAuditBytes=readFileSync(resolve(root,'docs/development/receipts/mcp-audit-retention-overlay.json'));
+const mcpAuditPath='docs/development/receipts/mcp-audit-retention-overlay.json';
+const mcpAuditBytes=readFileSync(resolve(root,mcpAuditPath));
 const mcpAudit=JSON.parse(mcpAuditBytes.toString('utf8'));
+const a2uiBytes=readFileSync(resolve(root,'docs/development/receipts/a2ui-v1-retention-overlay.json'));
+const a2ui=JSON.parse(a2uiBytes.toString('utf8'));
 const delegate=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/delegate-whitelist-retention-overlay.json'),'utf8'));
 const sha=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
 test('removal/retention witness binds every original Core path through explicit later source transformations',()=>{
@@ -18,9 +21,12 @@ test('removal/retention witness binds every original Core path through explicit 
  expect(sha(removalBytes)).toBe(mcpAudit.previousOverlaySha256);
  expect(mcpAudit.baseManifestSha256).toBe(overlay.baseManifestSha256);
  expect(mcpAudit.rows.map((row:{path:string})=>row.path)).toEqual(['runtime/scripts/schema-ownership.json']);
- expect(delegate.previousOverlaySha256).toBe(sha(mcpAuditBytes));
+ expect(a2ui.previousOverlay).toBe(mcpAuditPath);
+ expect(a2ui.previousOverlaySha256).toBe(sha(mcpAuditBytes));
+ expect(a2ui.baseManifestSha256).toBe(mcpAudit.baseManifestSha256);
+ expect(delegate.previousOverlaySha256).toBe(sha(a2uiBytes));
  expect(delegate.baseManifestSha256).toBe(overlay.baseManifestSha256);
- const layers=[overlay,removal,mcpAudit,delegate].map(layer=>{
+ const layers=[overlay,removal,mcpAudit,a2ui,delegate].map(layer=>{
   expect(layer.version).toBe(1);
   const rows=new Map<string,{beforeSha256:string;afterSha256:string;purpose:string}>(layer.rows.map((row:any)=>[row.path,row]));
   expect(rows.size).toBe(layer.rows.length);

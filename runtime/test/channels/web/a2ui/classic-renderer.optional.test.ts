@@ -3,19 +3,56 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium, webkit } from "playwright";
+import { referenceValidator } from '../../../fixtures/a2ui-v1/schema.js';
+import { CLASSIC_CONTENT_SECURITY_POLICY } from '../../../../src/channels/web/http/security.js';
 import { applyA2uiMessages, compileA2uiExpress } from "../../../../src/channels/web/a2ui/express.js";
+import type { CallAgentFunctionMessage } from '@a2ui/web_core/v1_0';
 
 const browserTest = process.env.PICLAW_RUN_OPTIONAL_BROWSER_TESTS === "1" ? test : test.skip;
 const source = `
   $/note = "";
   $/notify = false;
   $/choice = ["small"];
+  $/tags = ["front"];
+  $/level = 4;
+  $/date = "2028-02-29";
+  $/preview = "/media/42";
+  $/unsafe = "javascript:void(0)";
+  $/shape = "M2 2 L8 8";
   root = Column([Text("<img src=x onerror=alert(1)>"),
-    TextField(label="Note", value=$/note),
+    Text("**Bold A2UI** and *emphasised* plus [plain label](https://example.test/no-link) and ![plain image alt](https://example.test/no-image)"),
+    Text("- Markdown item one\\n- Markdown item two"),
+    List(children=[Text("First step"), Text("Second step")], direction="horizontal", align="center"),
+    Tabs(tabs=[{title:"Summary",child:summary},{title:"Details",child:details}]),
+    Modal(trigger=show, content=help),
+    Icon(name={svgPath:$/shape}),
+    Icon(name={svgPath:$/unsafe}),
+    Button(Icon(name="check"), action=Event("confirm")),
+    Image(url=$/preview, description="Project preview", variant="avatar", fit="cover"),
+    Image(url=$/unsafe, description="Unavailable preview"),
+    AudioPlayer(url=$/audio, description="Fixture recording"),
+    Video(url="/media/43", posterUrl=$/preview),
+    TextField(label="Note", value=$/note, checks=[{condition:not(not(required($/note))),message:"Enter a note"}]),
     CheckBox(label="Notify", value=$/notify),
+    Slider(label="Level", min=0, max=10, steps=5, value=$/level),
+    DateTimeInput(label="Due date", enableDate=true, min="2028-02-28", max="2028-03-31", value=$/date),
+    Row([Text("One part", weight=1), Text("Two parts", weight=2)]),
     ChoicePicker(label="Size", options=[{label:"Small",value:"small"},{label:"Large",value:"large"}],value=$/choice),
-    Button(Text("Submit"), variant="primary", action=Event("save", {note:$/note,notify:$/notify,size:$/choice}))]);
+    ChoicePicker(label="Tags", options=[{label:"Frontend",value:"front"},{label:"Backend",value:"back"}], value=$/tags, variant="multipleSelection", displayStyle="chips", filterable=true),
+    Button(Text("**Submit**"), variant="primary", action=Event("save", {note:$/note,notify:$/notify,size:$/choice,level:$/level,date:$/date,tags:$/tags}),
+      checks=[{condition:not(not(required($/note))),message:"Cannot submit an empty note"}])]);
+  summary = Text("Summary panel");
+  details = Text("Details panel");
+  show = Text("Show help");
+  help = Text("Help panel is local");
 `;
+
+// 100 ms of silent 8-bit mono PCM, with no media or codec dependency on the test runner.
+const wav = Buffer.alloc(844, 128);
+wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8);
+wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(8000, 28); wav.writeUInt16LE(1, 32);
+wav.writeUInt16LE(8, 34); wav.write('data', 36); wav.writeUInt32LE(wav.length - 44, 40);
 
 for (const engine of [chromium, webkit]) {
   browserTest(`Classic Preact timeline form on ${engine.name()}`, async () => {
@@ -24,10 +61,28 @@ for (const engine of [chromium, webkit]) {
     const entry = join(scratch, "fixture.ts");
     let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
     let server: ReturnType<typeof Bun.serve> | undefined;
+    const audioRequests: (string | null)[] = [];
+    const rpcRequests: {chat_jid:string;post_id:number;thread_id:number;revision:number;evaluation_site?:string;message:CallAgentFunctionMessage}[] = [];
+    const reports: unknown[] = [];
+    const delayedRpc = Promise.withResolvers<void>();
+    const videoFixture = Promise.withResolvers<void>();
+    const displayRpc = Promise.withResolvers<void>();
+    const audioOrigin = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(req) {
+      audioRequests.push(req.headers.get('cookie'));
+      const headers = new Headers({ 'Content-Type': 'audio/wav', 'Access-Control-Allow-Origin': '*', 'Accept-Ranges': 'bytes' });
+      const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.get('range') ?? '');
+      if (!range) return new Response(wav, { headers });
+      const start = Number(range[1]), end = Math.min(wav.length - 1, Number(range[2] || wav.length - 1));
+      if (start > end) return new Response(null, { status: 416, headers });
+      headers.set('Content-Range', `bytes ${start}-${end}/${wav.length}`);
+      return new Response(wav.subarray(start, end + 1), { status: 206, headers });
+    }});
     try {
       await Bun.write(entry, `
         import { html, render } from ${JSON.stringify(join(web, "src/vendor/preact-htm.js"))};
         import { Post } from ${JSON.stringify(join(web, "src/components/post.ts"))};
+        import { sendAgentMessage } from ${JSON.stringify(join(web, 'src/api.ts'))};
+        window.sendDraftQuery = chat => sendAgentMessage('default', 'Query current model', null, [], null, chat);
         window.events = [];
         const submit = async (payload) => {
           window.events.push(payload);
@@ -49,13 +104,45 @@ for (const engine of [chromium, webkit]) {
           post=\${{id:19, chat_jid:"web:test", is_bot_message:true,
             data:{content:"Form fallback",content_blocks:[block],thread_id:3}}} onSubmitA2uiAction=\${submit} />\`, document.body);
       `);
-      const build = await Bun.build({ entrypoints: [entry], outdir: scratch, target: "browser", format: "esm" });
+      const build = await Bun.build({ entrypoints: [entry], outdir: scratch, target: "browser", format: "esm", splitting: true });
       expect(build.success).toBe(true);
-      server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(req) {
+      const scripts = new Set(build.outputs.map(file=>file.path.split('/').at(-1)));
+      server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
         const { pathname } = new URL(req.url);
-        if (pathname === "/fixture.js") return new Response(Bun.file(join(scratch, "fixture.js")));
+        if (pathname === '/agent/default/message') return Response.json(await req.json());
+        if (pathname === '/agent/a2ui-error') {
+          reports.push(await req.json());
+          return new Response(null,{status:204});
+        }
+        if (pathname === '/agent/a2ui-rpc') {
+          const input = await req.json() as typeof rpcRequests[number];
+          rpcRequests.push(input);
+          const {functionCallId,callFunction}=input.message.callAgentFunction;
+          if (callFunction['@call']==='waitForRevision') {
+            await delayedRpc.promise;
+            return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,error:{code:'INVALID_FUNCTION_CALL',message:'Obsolete response'}}});
+          }
+          if (callFunction['@call']==='displayStatus') {
+            await displayRpc.promise;
+            return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,value:`Ready: ${callFunction.args?.label}`}});
+          }
+          if (callFunction['@call']==='verifyProjection') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,value:true}});
+          if (callFunction['@call']==='checkValue') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,
+            value:callFunction.args?.input==='ready' ? {valid:true} : {valid:false,message:'Awaiting verified value'},
+          }});
+          if (callFunction['@call']==='deriveValue') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,value:'Fresh summary'}});
+          if (callFunction['@call']==='displayNumber') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,value:42}});
+          if (callFunction['@call']==='displayFailure') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,error:{code:'UNKNOWN_FUNCTION',message:'Not registered'}}});
+          if (callFunction['@call']==='broken') return Response.json({version:'1.0',agentFunctionResponse:{functionCallId:'wrong',value:'cannot be accepted'}});
+          return Response.json({version:'1.0',agentFunctionResponse:{functionCallId,value:null}});
+        }
+        if (pathname === '/media/501' || pathname === '/media/502') return new Response(null,{status:404});
+        if (pathname === '/media/43') { await videoFixture.promise; return new Response(null,{status:404}); }
+        if (pathname === '/media/42') return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="green"/></svg>', {headers:{'Content-Type':'image/svg+xml'}});
+        if (scripts.has(pathname.slice(1))) return new Response(Bun.file(join(scratch, pathname.slice(1))));
+        if (pathname === '/marked.js') return new Response(Bun.file(join(web, 'static/common/js/marked.min.js')), {headers:{'Content-Type':'text/javascript'}});
         if (pathname === "/base.css" || pathname === "/content.css") return new Response(Bun.file(join(web, "static/classic/css", pathname.slice(1))));
-        return new Response('<!doctype html><html lang="en" data-theme="dark"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/base.css"><link rel="stylesheet" href="/content.css"></head><body><script type="module" src="/fixture.js"></script></body></html>', { headers: { "Content-Type": "text/html" } });
+        return new Response('<!doctype html><html lang="en" data-theme="dark"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/base.css"><link rel="stylesheet" href="/content.css"></head><body><script src="/marked.js"></script><script type="module" src="/fixture.js"></script></body></html>', { headers: { "Content-Type": "text/html", 'Content-Security-Policy': CLASSIC_CONTENT_SECURITY_POLICY } });
       } });
       browser = await engine.launch({headless:true});
       const page = await browser.newPage({ viewport: { width: 390, height: 800 }, colorScheme: 'dark' });
@@ -64,16 +151,101 @@ for (const engine of [chromium, webkit]) {
       page.on("pageerror", (err) => errors.push(err.message));
       await page.goto(`http://127.0.0.1:${server.port}/`);
       await page.waitForFunction(() => typeof (window as any).draw === "function");
-      const block = { type: "a2ui_surface", state: "active", revision: 1, surface: applyA2uiMessages("test-form", compileA2uiExpress(source, "test-form")), fallback_text: "Form fallback" };
+      const block = { type: "a2ui_surface", state: "active", revision: 1, surface: applyA2uiMessages("test-form", compileA2uiExpress(`$/audio = ${JSON.stringify(`${audioOrigin.url.origin}/fixture.wav`)};\n${source}`, "test-form")), fallback_text: "Form fallback" };
       await page.evaluate((block) => (window as any).draw(block), block);
+      const list = page.locator('.a2ui-surface .a2ui-list');
+      await list.getByRole('listitem').first().waitFor();
+      expect(await list.getByRole('listitem').allTextContents()).toEqual(['First step', 'Second step']);
+      expect(await list.evaluate(el => getComputedStyle(el).flexDirection)).toBe('row');
       const field = page.getByRole("textbox", { name: "Note" });
+      const submitButton = page.getByRole('button', {name:'Submit'});
+      expect(await field.getAttribute('aria-invalid')).toBe('true');
+      expect(await page.getByText('Enter a note', {exact:true}).isVisible()).toBe(true);
+      expect(await submitButton.getAttribute('aria-disabled')).toBe('true');
       await field.fill("Keep this draft");
+      expect(await field.getAttribute('aria-invalid')).toBeNull();
+      expect(await page.getByText('Enter a note', {exact:true}).count()).toBe(0);
+      expect(await field.evaluate(el => el === document.activeElement)).toBe(true);
+      expect(await submitButton.getAttribute('aria-disabled')).toBe('false');
+      const summary = page.getByRole('tab', { name: 'Summary' });
+      const details = page.getByRole('tab', { name: 'Details' });
+      expect(await summary.getAttribute('aria-selected')).toBe('true');
+      await summary.focus();
+      await page.keyboard.press('ArrowRight');
+      expect(await details.getAttribute('aria-selected')).toBe('true');
+      expect(await details.evaluate(element => element === document.activeElement)).toBe(true);
+      expect(await page.getByRole('tabpanel', { name: 'Details' }).textContent()).toBe('Details panel');
+      expect(await page.getByRole('tabpanel', { name: 'Summary' }).count()).toBe(0);
+      expect(await page.evaluate(() => (window as any).events)).toHaveLength(0);
+      const show = page.getByRole('button', {name:'Show help'});
+      await show.focus();
+      await page.keyboard.press('Enter');
+      const help = page.getByRole('dialog', { name: 'Show help' });
+      await help.getByText('Help panel is local').waitFor();
+      expect(await help.evaluate(el => el.contains(document.activeElement))).toBe(true);
+      await page.keyboard.press('Escape');
+      await help.waitFor({ state: 'detached' });
+      expect(await show.evaluate(el => el === document.activeElement)).toBe(true);
+      expect(await page.evaluate(() => (window as any).events)).toHaveLength(0);
+      await field.focus();
       await page.evaluate((block) => (window as any).draw(block), block);
       expect(await field.inputValue()).toBe("Keep this draft");
       expect(await field.evaluate((el) => el === document.activeElement)).toBe(true);
-      expect(await page.locator(".a2ui-surface img").count()).toBe(0);
+      expect(await page.locator('.a2ui-surface img').count()).toBe(1);
+      expect(await page.locator('.a2ui-surface strong').getByText('Bold A2UI').count()).toBe(1);
+      expect(await page.locator('.a2ui-surface em').getByText('emphasised').count()).toBe(1);
+      expect(await page.getByText(/plain label.*plain image alt/).count()).toBe(1);
+      expect(await page.getByRole('link', { name:'plain label' }).count()).toBe(0);
+      expect(await page.locator('.a2ui-surface ul li').allTextContents()).toEqual(['Markdown item one','Markdown item two']);
+      expect(await submitButton.locator('strong').textContent()).toBe('Submit');
+      expect(await page.getByText('<img src=x onerror=alert(1)>', {exact:true}).count()).toBe(1);
+      const preview = page.getByRole('img', { name: 'Project preview' });
+      expect(await preview.getAttribute('src')).toBe('/media/42');
+      expect(await preview.getAttribute('referrerpolicy')).toBe('no-referrer');
+      expect(await preview.evaluate(element => getComputedStyle(element).objectFit)).toBe('cover');
+      await page.waitForFunction(() => (document.querySelector('img[alt="Project preview"]') as HTMLImageElement)?.naturalWidth === 8);
+      expect(await page.getByText('Unavailable preview').count()).toBe(1);
+      const icons = page.locator('svg.a2ui-icon');
+      expect(await icons.count()).toBe(2);
+      expect(await icons.first().locator('path').getAttribute('d')).toBe('M2 2 L8 8');
+      const checkIcon = page.getByRole('button', { name: 'Check' }).locator('svg');
+      expect(await checkIcon.evaluate(el => el.namespaceURI)).toBe('http://www.w3.org/2000/svg');
+      expect(await checkIcon.locator('path').getAttribute('d')).toBeTruthy();
+      expect(audioRequests).toHaveLength(0);
+      expect(await page.locator('audio').count()).toBe(0);
+      const video = page.locator('.a2ui-surface video');
+      expect(await video.getAttribute('poster')).toBe('/media/42');
+      expect(await video.evaluate(el => (el as HTMLVideoElement).controls && !(el as HTMLVideoElement).autoplay)).toBe(true);
+      videoFixture.resolve();
+      await page.getByText('Video unavailable',{exact:true}).waitFor();
+      await page.context().addCookies([{ name: 'media_fixture', value: 'synthetic', url: audioOrigin.url.origin }]);
+      await page.getByRole('button', { name: 'Load external audio' }).click();
+      const audio = page.locator('audio[aria-label="Fixture recording"]');
+      await audio.waitFor();
+      expect(await audio.evaluate(el => el === document.activeElement)).toBe(true);
+      await page.waitForFunction(() => (document.querySelector('audio') as HTMLAudioElement)?.duration === 0.1);
+      expect(audioRequests.length).toBeGreaterThan(0);
+      expect(audioRequests.every(cookie => cookie === null)).toBe(true);
       await page.getByRole("checkbox", { name: "Notify" }).check();
-      await page.getByRole("combobox", { name: "Size" }).selectOption("large");
+      const slider = page.getByRole('slider', { name: 'Level' });
+      expect(await slider.inputValue()).toBe('4');
+      await slider.focus();
+      await page.keyboard.press('ArrowRight');
+      expect(await slider.inputValue()).toBe('6');
+      const date = page.getByLabel('Due date');
+      expect(await date.inputValue()).toBe('2028-02-29');
+      expect(await date.getAttribute('min')).toBe('2028-02-28');
+      expect(await date.getAttribute('max')).toBe('2028-03-31');
+      await date.fill('2028-03-01');
+      expect(await page.getByText('Two parts').evaluate(el => getComputedStyle(el.parentElement!).flexGrow)).toBe('2');
+      const size = page.getByRole('group', { name: 'Size' });
+      await size.getByRole('radio', { name: 'Large' }).check();
+      expect(await size.getByRole('radio', { name: 'Small' }).isChecked()).toBe(false);
+      const tags = page.getByRole('group', { name: 'Tags' });
+      await tags.getByRole('searchbox', { name: 'Filter options' }).fill(' BACK ');
+      expect(await tags.getByRole('button', { name: 'Frontend' }).count()).toBe(0);
+      await tags.getByRole('button', { name: 'Backend' }).click();
+      expect(await tags.getByRole('button', { name: 'Backend' }).getAttribute('aria-pressed')).toBe('true');
       const button = page.getByRole("button", { name: "Submit" });
       expect(await button.evaluate(el => el.closest('[data-no-session-dashboard-shortcut]') !== null)).toBe(true);
       await button.focus();
@@ -82,10 +254,12 @@ for (const engine of [chromium, webkit]) {
       expect(await field.inputValue()).toBe("Keep this draft");
       await button.click();
       const events = await page.evaluate(() => (window as any).events);
+      const validateToAgent=(await referenceValidator())('renderer_to_agent.json');
+      expect(validateToAgent(events.at(-1).message),JSON.stringify(validateToAgent.errors)).toBe(true);
       expect(events).toHaveLength(2);
       expect(events[1]).toMatchObject({ post_id: 19, thread_id: 3, chat_jid: "web:test", revision: 1,
         request_id: events[0].request_id, message: { version: "1.0", action: { name:"save", surfaceId:"test-form",
-          context:{note:"Keep this draft",notify:true,size:["large"]} } } });
+          context:{note:"Keep this draft",notify:true,size:["large"],level:6,date:"2028-03-01",tags:["front","back"]} } } });
       await page.evaluate((block) => (window as any).draw(block), { ...block, state: "completed", revision: 2 });
       expect(await button.isDisabled()).toBe(true);
       const panel = page.locator('.a2ui-surface');
@@ -142,12 +316,376 @@ for (const engine of [chromium, webkit]) {
       expect(await page.getByText('PRIVATEDEVICE').count()).toBe(0);
       const authSubmit = await page.evaluate(() => (window as any).events.at(-1));
       expect(authSubmit).toMatchObject({ private_value: 'synthetic-only-key', revision: 6, message: { action: { context: {} } } });
-      const docs = { ...block, revision: 7, surface: applyA2uiMessages('docs-link',
-        compileA2uiExpress('root = Button(Text("Docs"), action=openUrl("https://example.test/docs"))', 'docs-link')) };
+      const docsId = 'docs-link';
+      const docs = { ...block, revision: 7, surface: applyA2uiMessages(docsId,
+        compileA2uiExpress('$/target="https://example.test/docs"; root = Button(Text("Docs"), variant="primary", action=openUrl(formatString("${/target}")))', docsId))! };
       await page.evaluate((block) => (window as any).draw(block), docs);
       const link = page.getByRole('link', { name: 'Docs' });
       expect(await link.getAttribute('href')).toBe('https://example.test/docs');
       expect(await link.getAttribute('rel')).toBe('noopener noreferrer');
+      expect(await link.evaluate(element=>element.classList.contains('a2ui-button-primary'))).toBe(true);
+      const brokenLink = applyA2uiMessages(docsId, [{version:'1.0',updateDataModel:{surfaceId:docsId,path:'/target',value:'javascript:void(0)'}}], docs.surface);
+      const count = await page.evaluate(() => (window as any).events.length);
+      await page.evaluate((block) => (window as any).draw(block), {...docs, surface:brokenLink});
+      expect(await link.count()).toBe(0);
+      const disabledLink = page.getByRole('button', {name:'Docs'});
+      expect(await disabledLink.getAttribute('aria-disabled')).toBe('true');
+      await disabledLink.evaluate(element => element.click());
+      expect(await page.evaluate(() => (window as any).events.length)).toBe(count);
+      const pointerId = 'pointer-browser';
+      const binding={'@path':'/a~1b//0096/~0label text'};
+      const pointerSurface = applyA2uiMessages(pointerId, [{ version:'1.0', createSurface:{
+        surfaceId:pointerId, catalogId:'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json',
+        components:[{id:'root',component:'Column',children:['field','send','status','checked'], '@accessibility':{label:'Wire form',live:'polite'}},
+          {id:'checked',component:'CheckBox',label:'Coerced checkbox',value:{'@call':'required',args:{value:binding}}},
+          {id:'status',component:'Text',text:'Visible but decorative', '@accessibility':{hidden:{'@path':'/hide'}}},
+          {id:'field',component:'TextField',label:'Escaped field',value:binding, '@accessibility':{label:{'@path':'/accessibleName'},description:'Use ordinary text'}},
+          {id:'send',component:'Button',child:'label',action:{event:{name:'send',context:{field:binding}}}}, {id:'label',component:'Text',text:'Send escaped value'}],
+        dataModel:{'a/b':{'':{'0096':{'~label text':'Before update'}}},accessibleName:'Escaped value',hide:'TrUe'},
+      }},{version:'1.0',updateDataModel:{surfaceId:pointerId,path:binding['@path'],value:'Stored value'}}]);
+      await page.evaluate((block) => (window as any).draw(block), {...block, revision: 8, surface:pointerSurface});
+      const pointerFrame = page.getByRole('group', {name:'Wire form'});
+      expect(await pointerFrame.getAttribute('aria-live')).toBe('polite');
+      const pointerField = pointerFrame.getByRole('textbox', {name:'Escaped value'});
+      expect(await pointerField.getAttribute('aria-description')).toBe('Use ordinary text');
+      expect(await pointerFrame.getByText('Visible but decorative').getAttribute('aria-hidden')).toBe('true');
+      expect(await pointerFrame.getByText('Visible but decorative').isVisible()).toBe(true);
+      expect(await pointerFrame.getByRole('checkbox',{name:'Coerced checkbox'}).isChecked()).toBe(true);
+      expect(await pointerField.inputValue()).toBe('Stored value');
+      await pointerField.fill('Edited value');
+      await page.getByRole('button', {name:'Send escaped value'}).click();
+      expect(await page.evaluate(() => (window as any).events.at(-1)?.message.action.context)).toEqual({field:'Edited value'});
+      const repeatId = 'repeated-browser';
+      const authored = applyA2uiMessages(repeatId, compileA2uiExpress(`
+        $/groups=[{items:[{label:"First",note:"one"}]},{items:[{label:"Second",note:"two"}]}];
+        root=Column(_template($/groups, group));
+        group=List(_template($items, item));
+        item=Row([Text($label),index,TextField(label="Row note",value=$note),Text(formatString("Draft: \${note}")),submit]);
+        index=Text("Placeholder");
+        submit=Button(Text("Apply row"),action=Event("apply",{label:$label,note:$note}));
+      `, repeatId))!;
+      const repeated = applyA2uiMessages(repeatId, [{version:'1.0',updateComponents:{surfaceId:repeatId,
+        components:[{id:'index',component:'Text',text:{'@call':'@index',args:{offset:1}}}],
+      }}], authored);
+      await page.evaluate((block) => (window as any).draw(block), {...block, revision:9, surface:repeated});
+      const firstRow = page.getByRole('listitem').filter({hasText:'First'});
+      const secondRow = page.getByRole('listitem').filter({hasText:'Second'});
+      expect(await secondRow.getByText('1', {exact:true}).count()).toBe(1);
+      expect(await secondRow.getByText('2', {exact:true}).count()).toBe(0);
+      await secondRow.getByLabel('Row note').fill('second draft');
+      expect(await firstRow.getByLabel('Row note').inputValue()).toBe('one');
+      expect(await firstRow.getByText('Draft: one').isVisible()).toBe(true);
+      expect(await secondRow.getByText('Draft: second draft').isVisible()).toBe(true);
+      await secondRow.getByRole('button', {name:'Apply row'}).click();
+      expect(await page.evaluate(() => (window as any).events.at(-1))).toMatchObject({instance_path:'/1/0',
+        message:{action:{sourceComponentId:'submit', context:{label:'Second',note:'second draft'}}}});
+      const stagedId = 'progressive-browser';
+      const basicCatalogue = 'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json';
+      const drawStage = (surface: unknown, revision: number) => page.evaluate((block) => (window as any).draw(block),
+        {...block, surface, revision, fallback_text:'Preparing steps'});
+      const empty = applyA2uiMessages(stagedId, [{version:'1.0',createSurface:{surfaceId:stagedId,
+        dataModel:{greeting:'Stored before root'},
+      }}], undefined, true)!;
+      const updateStage = (surface: typeof empty, components: Record<string, unknown>[]) =>
+        applyA2uiMessages(stagedId, [{version:'1.0',updateComponents:{surfaceId:stagedId,
+          components:components.map(component => ({ ...component, '@catalogId':basicCatalogue })),
+        }}], surface)!;
+      await drawStage(empty, 1);
+      await panel.getByText('Preparing steps').waitFor();
+      const head = updateStage(empty, [{id:'title',component:'Text',text:{'@call':'formatString',catalogId:basicCatalogue,args:{value:'${/greeting}'}}}]);
+      await drawStage(head, 2);
+      expect(await panel.getByText('Stored before root').count()).toBe(0);
+      const partial = updateStage(head, [{id:'root',component:'Column',children:['title','send']},
+        {id:'send',component:'Button',child:'label',action:{event:{name:'confirmStage'}}}]);
+      await drawStage(partial, 3);
+      await panel.getByText('Stored before root').waitFor();
+      expect(await panel.getByRole('button').count()).toBe(0);
+      const ready = updateStage(partial, [{id:'label',component:'Text',text:'Confirm stage'}]);
+      await drawStage(ready, 4);
+      await panel.getByRole('button',{name:'Confirm stage'}).click();
+      expect(await page.evaluate(() => (window as any).events.at(-1))).toMatchObject({revision:4,
+        message:{action:{surfaceId:stagedId,sourceComponentId:'send',name:'confirmStage'}}});
+      const syncedId = 'synced-browser';
+      const synced = {...block, owner:'agent', revision:10, surface:applyA2uiMessages(syncedId, compileA2uiExpress(`
+        surface("synced-browser", sendDataModel=true);
+        $/memo="Initial";
+        root=Column([memo,Button(Text("Send draft"),action=Event("syncDraft"))]);
+        memo=TextField(label="Draft memo",value=$/memo);
+      `, syncedId))!};
+      await page.evaluate((item) => (window as any).draw(item), synced);
+      await page.getByRole('textbox',{name:'Draft memo'}).fill('Unsubmitted draft');
+      const expectedDraft = {surface_id:syncedId,revision:10,edits:[{component_id:'memo',value:'Unsubmitted draft'}]};
+      const query = (chat: string) => page.evaluate(jid => (window as any).sendDraftQuery(jid), chat);
+      const capabilities = {a2uiRendererCapabilities:{'1.0':{supportedCatalogIds:[basicCatalogue]}}};
+      expect(await query('web:test')).toMatchObject({content:'Query current model',a2ui_drafts:[expectedDraft],metadata:capabilities});
+      expect(await query('web:other')).not.toHaveProperty('a2ui_drafts');
+      await page.evaluate((item) => (window as any).draw(item), block);
+      await page.evaluate((item) => (window as any).draw(item), synced);
+      expect(await page.getByRole('textbox',{name:'Draft memo'}).inputValue()).toBe('Unsubmitted draft');
+      await page.evaluate((item) => (window as any).draw(item), {...synced,revision:11});
+      expect(await page.getByRole('textbox',{name:'Draft memo'}).inputValue()).toBe('Initial');
+      expect(await query('web:test')).not.toHaveProperty('a2ui_drafts');
+      await page.getByRole('textbox',{name:'Draft memo'}).fill('Action draft');
+      await page.getByRole('button',{name:'Send draft'}).click();
+      expect(await page.evaluate(() => (window as any).events.at(-1))).toMatchObject({revision:11,metadata:capabilities,
+        a2ui_drafts:[{...expectedDraft, revision:11, edits:[{component_id:'memo',value:'Action draft'}]}],
+        message:{action:{name:'syncDraft',context:{}}}});
+      const rpcId='agent-function-form';
+      const rpcSurface=applyA2uiMessages(rpcId,[{version:'1.0',createSurface:{surfaceId:rpcId,catalogId:basicCatalogue,dataModel:{rows:[{name:'One'},{name:'Two'}]},components:[
+        {id:'root',component:'Column',children:['rows','local','invalid','wait']},
+        {id:'rows',component:'List',children:{componentId:'row',path:'/rows'}},
+        {id:'row',component:'Row',children:['field','call']},
+        {id:'field',component:'TextField',label:'Item',value:{'@path':'name'}},
+        {id:'call',component:'Button',child:'callLabel',action:{functionCall:{'@call':'verifyItem',args:{label:{'@path':'name'},index:{'@call':'@index'},payload:{'@@type':'row','@@call':'literal'}}}}},
+        {id:'callLabel',component:'Text',text:'Verify item'},
+        {id:'invalid',component:'Button',child:'invalidLabel',action:{functionCall:{'@call':'broken'}}},
+        {id:'invalidLabel',component:'Text',text:'Try invalid response'},
+        {id:'local',component:'Button',child:'localLabel',action:{functionCall:{'@call':'formatString',args:{value:'Pure local function'}}}},
+        {id:'localLabel',component:'Text',text:'Run local function'},
+        {id:'wait',component:'Button',child:'waitLabel',action:{functionCall:{'@call':'waitForRevision'}}},
+        {id:'waitLabel',component:'Text',text:'Wait for revision'},
+      ]}}],undefined,true)!;
+      const initialEventCount=await page.evaluate(()=>(window as any).events.length);
+      await page.evaluate((item)=>(window as any).draw(item),{...block,owner:'agent',revision:12,surface:rpcSurface});
+      const rows=panel.getByRole('listitem');
+      await rows.nth(1).getByRole('textbox',{name:'Item'}).fill('Second draft');
+      await panel.getByRole('button',{name:'Run local function'}).click();
+      expect(rpcRequests).toHaveLength(0);
+      const verify=rows.nth(1).getByRole('button',{name:'Verify item'});
+      await verify.click();
+      await page.locator('.a2ui-surface[aria-busy="true"]').waitFor({state:'detached'});
+      await verify.click();
+      await page.locator('.a2ui-surface[aria-busy="true"]').waitFor({state:'detached'});
+      expect(rpcRequests).toHaveLength(2);
+      for (const request of rpcRequests) expect(request).toMatchObject({post_id:19,thread_id:3,revision:12,chat_jid:'web:test',message:{version:'1.0',callAgentFunction:{surfaceId:rpcId,
+        callFunction:{'@call':'verifyItem',catalogId:basicCatalogue,args:{label:'Second draft',index:1,payload:{'@type':'row','@call':'literal'}}},
+      }}});
+      expect(rpcRequests[1].message.callAgentFunction.functionCallId).not.toBe(rpcRequests[0].message.callAgentFunction.functionCallId);
+      await panel.getByRole('button',{name:'Try invalid response'}).click();
+      await panel.getByRole('alert').getByText('The agent function did not complete.').waitFor();
+      const held = page.waitForRequest(request=>request.method()==='POST' && request.url().endsWith('/agent/a2ui-rpc') && request.postData()?.includes('waitForRevision')===true);
+      await panel.getByRole('button',{name:'Wait for revision'}).click();
+      await held;
+      await page.locator('.a2ui-surface[aria-busy="true"]').waitFor();
+      await page.evaluate((item)=>(window as any).draw(item),{...block,owner:'agent',revision:13,surface:rpcSurface});
+      await page.locator('.a2ui-surface[aria-busy="false"]').waitFor();
+      delayedRpc.resolve();
+      expect(await panel.getByRole('alert').count()).toBe(0);
+      expect(await page.evaluate(()=>(window as any).events.length)).toBe(initialEventCount);
+      const displayId='agent-binding-form';
+      const display=applyA2uiMessages(displayId,[{version:'1.0',createSurface:{surfaceId:displayId,catalogId:basicCatalogue,dataModel:{label:'Classic'},components:[
+        {id:'root',component:'Column',children:['sibling','remote','same','nested','missing']},
+        {id:'sibling',component:'Text',text:'Unaffected sibling'},
+        {id:'remote',component:'Text',text:{'@call':'displayStatus',args:{label:{'@path':'/label'}}}},
+        {id:'same',component:'Text',text:{'@call':'displayStatus',args:{label:'Classic'}}},
+        {id:'nested',component:'Text',text:{'@call':'formatNumber',args:{value:{'@call':'displayNumber'}}}},
+        {id:'missing',component:'Text',text:{'@call':'displayFailure'}},
+      ]}}],undefined,true)!;
+      await page.evaluate((item)=>(window as any).draw(item),{...block,owner:'agent',revision:14,surface:display});
+      await panel.getByText('Unaffected sibling').waitFor();
+      await page.locator('.a2ui-surface[aria-busy="true"]').waitFor();
+      expect(await panel.getByText('Ready: Classic').count()).toBe(0);
+      displayRpc.resolve();
+      await page.locator('.a2ui-surface[aria-busy="false"]').waitFor();
+      expect(await panel.getByText('Ready: Classic').count()).toBe(2);
+      expect(await panel.getByText('Unaffected sibling').count()).toBe(1);
+      expect(await panel.getByText('42',{exact:true}).count()).toBe(1);
+      expect(await panel.getByText('Not registered').count()).toBe(0);
+      expect(rpcRequests.filter(request=>request.message.callAgentFunction.callFunction['@call']==='displayStatus')).toHaveLength(1);
+      const failures=rpcRequests.filter(request=>['broken','displayFailure'].includes(request.message.callAgentFunction.callFunction['@call']));
+      expect(failures).toHaveLength(2);
+      expect(reports).toEqual(failures.map(request=>({chat_jid:request.chat_jid,post_id:request.post_id,thread_id:request.thread_id,revision:request.revision,
+        surface_id:request.message.callAgentFunction.surfaceId,
+        message:{version:'1.0',error:{code:'EXPRESSION_ERROR',functionCallId:request.message.callAgentFunction.functionCallId,message:'The agent function did not complete.'}},
+      })));
+      const checkId='async-check-fixture';
+      const checkSurface=applyA2uiMessages(checkId,[{version:'1.0',createSurface:{surfaceId:checkId,catalogId:basicCatalogue,dataModel:{value:'unverified'},components:[
+        {id:'root',component:'Column',children:['edit','check']},
+        {id:'edit',component:'TextField',label:'Verification value',value:{'@path':'/value'}},
+        {id:'check',component:'Button',child:'checkLabel',action:{event:{name:'verified',context:{value:{'@path':'/value'},summary:{'@call':'deriveValue'}},
+          userMessage:{'@call':'deriveValue'}}},
+          '@checks':[{condition:{'@call':'checkValue',args:{input:{'@path':'/value'}}}}]},
+        {id:'checkLabel',component:'Text',text:'Confirm verified value'},
+      ]}}],undefined,true)!;
+      await page.evaluate(item=>(window as any).draw(item),{...block,owner:'agent',revision:16,surface:checkSurface});
+      await panel.getByText('Awaiting verified value').waitFor();
+      const checkedButton=panel.getByRole('button',{name:'Confirm verified value'});
+      expect(await checkedButton.getAttribute('aria-disabled')).toBe('true');
+      await panel.getByRole('textbox',{name:'Verification value'}).fill('ready');
+      await page.waitForFunction(()=>document.querySelector('.a2ui-surface button')?.getAttribute('aria-disabled')==='false');
+      expect(rpcRequests.filter(request=>request.evaluation_site)).toHaveLength(0);
+      await checkedButton.click();
+      await page.waitForFunction(()=>(window as any).events.at(-1)?.message.action.name==='verified');
+      const sites=rpcRequests.filter(request=>request.evaluation_site);
+      expect(sites.map(request=>JSON.parse(request.evaluation_site!).at(-1))).toEqual(['context:summary','userMessage']);
+      const proof=rpcRequests.findLast(request=>request.message.callAgentFunction.callFunction['@call']==='checkValue')!;
+      expect(await page.evaluate(()=>(window as any).events.at(-1))).toMatchObject({revision:16,rpc_receipts:[proof.message.callAgentFunction.functionCallId],
+        rpc_derived_receipts:{'context:summary':[sites[0].message.callAgentFunction.functionCallId],userMessage:[sites[1].message.callAgentFunction.functionCallId]},
+        message:{action:{name:'verified',userMessage:'Fresh summary',context:{value:'ready',summary:'Fresh summary'}}},
+      });
+      const recheckId='async-check-projection';
+      const recheck=applyA2uiMessages(recheckId,[{version:'1.0',createSurface:{surfaceId:recheckId,catalogId:basicCatalogue,
+        dataModel:{value:'Stored condition'},components:[
+          {id:'root',component:'Column',children:['edit','check','audio']},
+          {id:'edit',component:'TextField',label:'Unshared field',value:{'@path':'/value'}},
+          {id:'check',component:'Button',child:'checkLabel',action:{event:{name:'verifiedProjection'}},
+            '@checks':[{condition:{'@call':'verifyProjection',args:{input:{'@path':'/value'}}}}]},
+          {id:'checkLabel',component:'Text',text:'Confirm projected check'},
+          {id:'audio',component:'AudioPlayer',url:{'@path':'/absent'},description:'Unavailable audio',
+            '@accessibility':{label:'Recording description',hidden:true,live:'polite'}},
+        ],
+      }}],undefined,true)!;
+      await page.evaluate(item=>(window as any).draw(item),{...block,owner:'agent',revision:21,surface:recheck});
+      const recheckButton=panel.getByRole('button',{name:'Confirm projected check'});
+      await page.waitForFunction(()=>document.querySelector('.a2ui-surface button')?.getAttribute('aria-disabled')==='false');
+      await panel.getByRole('textbox',{name:'Unshared field'}).fill('Local condition');
+      await page.waitForFunction(()=>document.querySelector('.a2ui-surface button')?.getAttribute('aria-disabled')==='false');
+      const rechecks=()=>rpcRequests.filter(request=>request.message.callAgentFunction.surfaceId===recheckId);
+      expect(rechecks().map(r=>r.message.callAgentFunction.callFunction.args?.input)).toEqual(['Stored condition','Local condition']);
+      await recheckButton.click();
+      await page.waitForFunction(()=>(window as any).events.at(-1)?.message.action.name==='verifiedProjection',undefined,{timeout:2500});
+      expect(rechecks().map(r=>r.message.callAgentFunction.callFunction.args?.input)).toEqual(['Stored condition','Local condition','Stored condition']);
+      const projected=await page.evaluate(()=>(window as any).events.at(-1));
+      expect(projected.message.action.context).toEqual({});
+      expect(projected.a2ui_drafts?.some((draft:{surface_id:string})=>draft.surface_id===recheckId) ?? false).toBe(false);
+      expect(projected.rpc_receipts).toEqual([rechecks().at(-1)!.message.callAgentFunction.functionCallId]);
+      expect(await panel.getByText('Unavailable audio').getAttribute('aria-hidden')).toBe('true');
+      expect(await panel.getByText('Unavailable audio').getAttribute('aria-live')).toBe('polite');
+      const localId='local-expression-errors';
+      const badFormat={'@call':'formatNumber',args:{value:{'@path':'/number'}}};
+      const brokenLocal=applyA2uiMessages(localId,[{version:'1.0',createSurface:{surfaceId:localId,catalogId:basicCatalogue,
+        dataModel:{number:'not numeric'},components:[
+          {id:'root',component:'Column',children:['sibling','value','empty','event','checked']},
+          {id:'sibling',component:'Text',text:'Sibling stays mounted'},
+          {id:'value',component:'Text',text:badFormat,'@accessibility':{label:'Formatted number'}},
+          {id:'empty',component:'Text',text:{'@path':'/absent'},'@accessibility':{label:'Missing binding'}},
+          {id:'event',component:'Button',child:'send',action:{event:{name:'rejectDerived',context:{number:badFormat}}}},
+          {id:'send',component:'Text',text:'Submit with broken expression'},
+          {id:'checked',component:'TextField',label:'Checked field',value:'', '@checks':[{condition:badFormat}]},
+        ],
+      }}],undefined,true)!;
+      const localReports=reports.length;
+      const eventCount=await page.evaluate(()=>(window as any).events.length);
+      await page.evaluate((item)=>(window as any).draw(item),{...block,owner:'agent',revision:17,surface:brokenLocal});
+      await panel.getByText('Sibling stays mounted').waitFor();
+      expect(await panel.getByRole('group',{name:'Formatted number'}).textContent()).toBe('');
+      expect(await panel.getByRole('group',{name:'Missing binding'}).textContent()).toBe('');
+      await panel.getByRole('status').getByText('The renderer could not evaluate the function.').waitFor({timeout:2500});
+      const waitForError=(code:string)=>page.waitForRequest(req=>req.url().endsWith('/agent/a2ui-error') && req.postDataJSON()?.message?.error?.code===code);
+      const failedAction=waitForError('EXECUTION_ERROR');
+      await panel.getByRole('button',{name:'Submit with broken expression'}).click();
+      await failedAction;
+      await panel.getByRole('alert').getByText('The renderer could not evaluate the function.').waitFor();
+      expect(await page.evaluate(()=>(window as any).events.length)).toBe(eventCount);
+      expect(reports.slice(localReports)).toEqual(['EXPRESSION_ERROR','EXECUTION_ERROR'].map(code=>({
+        chat_jid:'web:test',post_id:19,thread_id:3,revision:17,surface_id:localId,
+        message:{version:'1.0',error:{code,surfaceId:localId,message:'The renderer could not evaluate the function.'}},
+      })));
+      const integrity = page.waitForResponse(response=>response.url().endsWith('/agent/a2ui-error') && response.status()===204);
+      await page.evaluate((item)=>(window as any).draw(item),{...block,owner:'agent',revision:15,
+        surface:{...display,components:[{id:'root',component:'Column',children:['root']}]},fallback_text:'Unable to reconstruct this form',
+      });
+      await panel.getByText('Unable to reconstruct this form').waitFor();
+      await integrity;
+      expect(reports.at(-1)).toMatchObject({surface_id:displayId,revision:15,message:{version:'1.0',error:{code:'INTEGRITY_ERROR',surfaceId:displayId}}});
+      const maskId='mask-basic';
+      const mask=applyA2uiMessages(maskId,[{version:'1.0',createSurface:{surfaceId:maskId,catalogId:basicCatalogue,sendDataModel:true,
+        dataModel:{entry:''},components:[
+          {id:'root',component:'Column',children:['field','row','send']},
+          {id:'field',component:'TextField',label:'Masked answer',value:{'@path':'/entry'},variant:'obscured'},
+          {id:'row',component:'Row',children:['left','separator','right']},
+          {id:'left',component:'Text',text:'Left'},
+          {id:'separator',component:'Divider',axis:'vertical','@accessibility':{label:'Section separator'}},
+          {id:'right',component:'Text',text:'Right'},
+          {id:'send',component:'Button',child:'send_label',action:{event:{name:'sendMasked',context:{entry:{'@path':'/entry'}}}}},
+          {id:'send_label',component:'Text',text:'Send masked answer'},
+        ],
+      }}],undefined,true)!;
+      await page.evaluate(item=>(window as any).draw(item),{...block,owner:'agent',revision:18,surface:mask});
+      const masked=page.getByLabel('Masked answer',{exact:true});
+      expect(await masked.getAttribute('type')).toBe('password');
+      expect(await masked.getAttribute('autocomplete')).toBe('off');
+      expect(await masked.getAttribute('aria-describedby')).toBeTruthy();
+      const guidance=await masked.evaluate(field=>document.getElementById(field.getAttribute('aria-describedby')!)?.textContent);
+      expect(guidance).toBe('Masked on screen only. Do not enter passwords or keys; this value can be sent to the agent and saved in chat.');
+      expect(await page.getByRole('separator',{name:'Section separator'}).getAttribute('aria-orientation')).toBe('vertical');
+      await masked.fill('ordinary answer');
+      const maskQuery=await query('web:test');
+      expect(maskQuery.a2ui_drafts).toContainEqual({surface_id:maskId,revision:18,edits:[{component_id:'field',value:'ordinary answer'}]});
+      expect(maskQuery).not.toHaveProperty('private_value');
+      await page.getByRole('button',{name:'Send masked answer'}).click();
+      const maskAction=await page.evaluate(()=>(window as any).events.at(-1));
+      expect(maskAction.message.action.context).toEqual({entry:'ordinary answer'});
+      expect(maskAction).not.toHaveProperty('private_value');
+      for (const sync of [false,true]) {
+        const repeatId=`reactive-list-${sync}`;
+        const form=applyA2uiMessages(repeatId,[{version:'1.0',createSurface:{surfaceId:repeatId,catalogId:basicCatalogue,sendDataModel:sync,
+          dataModel:{rows:['North'],note:''},components:[
+            {id:'root',component:'Column',children:['choice','note','rows']},
+            {id:'choice',component:'ChoicePicker',label:'Visible rows',variant:'multipleSelection',value:{'@path':'/rows'},
+              options:[{label:'Show North',value:'North'},{label:'Show South',value:'South'}]},
+            {id:'note',component:'TextField',label:'Unrelated note',value:{'@path':'/note'}},
+            {id:'rows',component:'List',children:{componentId:'send',path:'/rows'}},
+            {id:'send',component:'Button',child:'label',action:{event:{name:'choose_row',context:{row:{'@path':'.'},index:{'@call':'@index'}}}}},
+            {id:'label',component:'Text',text:{'@path':'.'}},
+          ],
+        }}],undefined,true)!;
+        await page.evaluate(item=>(window as any).draw(item),{...block,owner:'agent',revision:19,surface:form});
+        const list=panel.getByRole('list');
+        await list.getByRole('button',{name:'North'}).waitFor();
+        await panel.getByRole('textbox',{name:'Unrelated note'}).fill('Do not include if unsynced');
+        const showSouth=panel.getByRole('checkbox',{name:'Show South'});
+        await showSouth.check();
+        const south=list.getByRole('button',{name:'South'});
+        await south.waitFor({timeout:2000});
+        await showSouth.uncheck();
+        await south.waitFor({state:'detached',timeout:2000});
+        await showSouth.check();
+        await south.click();
+        const submission=await page.evaluate(()=>(window as any).events.at(-1));
+        expect(submission).toMatchObject({instance_path:'/1',message:{action:{surfaceId:repeatId,context:{row:'South',index:1}}}});
+        expect(submission.a2ui_drafts.find((patch:any)=>patch.surface_id===repeatId).edits).toEqual([
+          ...(sync ? [{component_id:'note',value:'Do not include if unsynced'}] : []),
+          {component_id:'choice',value:['North','South']},
+        ]);
+      }
+      const iconId='icon-model-data';
+      const icon=applyA2uiMessages(iconId,[{version:'1.0',createSurface:{surfaceId:iconId,catalogId:basicCatalogue,
+        dataModel:{shape:'M1 1 L10 10',record:{svgPath:{'@path':'/shape'}}},components:[
+          {id:'root',component:'Row',children:['literal','bound']},
+          {id:'literal',component:'Icon',name:{svgPath:{'@path':'/shape'}},'@accessibility':{label:'Authored shape'}},
+          {id:'bound',component:'Icon',name:{'@path':'/record'},'@accessibility':{label:'Inert model shape'}},
+        ],
+      }}],undefined,true)!;
+      await page.evaluate(item=>(window as any).draw(item),{...block,owner:'agent',revision:20,surface:icon});
+      expect(await panel.getByRole('img',{name:'Authored shape'}).locator('path').getAttribute('d')).toBe('M1 1 L10 10');
+      expect(await panel.getByRole('img',{name:'Inert model shape'}).count()).toBe(0);
+      const hiddenId='hidden-keyboard';
+      const hidden=applyA2uiMessages(hiddenId,[{version:'1.0',createSurface:{surfaceId:hiddenId,catalogId:basicCatalogue,
+        dataModel:{show:false,toggle:false,name:''},components:[
+          {id:'root',component:'Column',children:['start','group','direct','next','image','audio']},
+          {id:'start',component:'CheckBox',label:'Start here',value:{'@path':'/toggle'}},
+          {id:'group',component:'Column',children:['field'],'@accessibility':{hidden:{'@call':'not',args:{value:{'@path':'/show'}}}}},
+          {id:'field',component:'TextField',label:'Hidden field',value:{'@path':'/name'}},
+          {id:'direct',component:'CheckBox',label:'Hidden checkbox',value:{'@path':'/toggle'},'@accessibility':{hidden:true}},
+          {id:'next',component:'CheckBox',label:'Visible next',value:{'@path':'/show'}},
+          {id:'image',component:'Image',url:'/media/501',description:'Missing image'},
+          {id:'audio',component:'AudioPlayer',url:'/media/502',description:'Missing recording'},
+        ],
+      }}],undefined,true)!;
+      await page.evaluate(item=>(window as any).draw(item),{...block,owner:'agent',revision:22,surface:hidden});
+      await panel.getByRole('checkbox',{name:'Start here'}).focus();
+      await page.keyboard.press('Tab');
+      expect(await page.evaluate(()=>document.activeElement?.closest('label')?.textContent?.trim())).toBe('Visible next');
+      await panel.getByRole('checkbox',{name:'Visible next'}).check();
+      await panel.getByRole('textbox',{name:'Hidden field'}).focus();
+      await page.keyboard.press('Tab');
+      expect(await page.evaluate(()=>document.activeElement?.closest('label')?.textContent?.trim())).toBe('Visible next');
+      await panel.getByText('Image unavailable: Missing image',{exact:true}).waitFor();
+      await panel.getByText('Audio unavailable: Missing recording',{exact:true}).waitFor();
+      expect(await panel.getByRole('checkbox',{name:'Visible next'}).isVisible()).toBe(true);
+      await panel.getByRole('button',{name:'Retry image'}).click();
+      await panel.getByText('Image unavailable: Missing image',{exact:true}).waitFor();
       const legacyRequests: string[] = [];
       page.on('request', request => { if (request.url().includes('adaptivecards')) legacyRequests.push(request.url()); });
       await page.evaluate(() => (window as any).draw({
@@ -160,8 +698,11 @@ for (const engine of [chromium, webkit]) {
       expect(legacyRequests).toEqual([]);
       expect(errors).toEqual([]);
     } finally {
+      delayedRpc.resolve();
+      displayRpc.resolve();
       await browser?.close();
-      server?.stop(true);
+      videoFixture.resolve(); server?.stop(true);
+      audioOrigin.stop(true);
       await rm(scratch, { recursive: true, force: true });
     }
   });

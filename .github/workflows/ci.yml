@@ -121,6 +121,8 @@ jobs:
         run: |
           bun run test:local --cwd runtime --env PICLAW_DB_IN_MEMORY=1 -- bun test --isolate --max-concurrency=1 --timeout=60000 \
             test/channels/web/a2ui/classic-renderer.optional.test.ts \
+            test/channels/web/a2ui/renderer-peer.optional.test.ts \
+            test/channels/web/a2ui/wire-peer.optional.test.ts \
             test/web/provider-auth-ui-matrix.playwright.optional.test.ts \
             test/web/provider-auth-surfaces.playwright.optional.test.ts
 

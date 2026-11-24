@@ -1,4 +1,4 @@
-/** Foreground, conversation-owned Express publication. No arbitrary structured posting. */
+/** Foreground, conversation-owned A2UI publication. No arbitrary structured posting. */
 import type { Database } from 'bun:sqlite';
 import { Type, type Static } from 'typebox';
 import { getIdentityConfig } from '../../../core/config.js';
@@ -7,10 +7,15 @@ import { getMessageByRowIdFromDatabase, storeMessageInDatabase } from '../../../
 import { admitSqliteWrite } from '../../../db/sqlite-async-admission.js';
 import { stripInternalTags } from '../../../router.js';
 import { replaceSurfaceBlocks } from './persistence.js';
+import { publicationProtocolError } from './protocol-errors.js';
+import { bindA2uiSurfaceOwner, readA2uiSurfaceOwner, releaseA2uiModelSync } from './input-metadata.js';
 import { isA2uiSurfaceBlock, type A2uiSurfaceBlock } from './surface.js';
 
 export const a2uiToolParameters = Type.Object({
-  express: Type.String({ maxLength: 16_384, description: 'Bare A2UI Express DSL (no Markdown fences or <a2ui> tags).' }),
+  express: Type.Optional(Type.String({ maxLength: 16_384, description: 'Bare A2UI Express DSL. Supply exactly one of express or messages.' })),
+  messages: Type.Optional(Type.Array(Type.Record(Type.String(), Type.Unknown()), {
+    minItems: 1, maxItems: 32, description: 'A2UI v1.0 create/update/delete messages for one surface. Use one draft ID on creation, then the returned surface_id on edits. Supply exactly one of express or messages.',
+  })),
   fallback: Type.Optional(Type.String({ maxLength: 1024, description: 'Plain visible summary; required when creating a surface.' })),
   post_id: Type.Optional(Type.Integer({ minimum: 1, description: 'Existing surface post to edit in this thread; omit to create.' })),
   revision: Type.Optional(Type.Integer({ minimum: 1, description: 'Current revision, required when editing or deleting.' })),
@@ -20,14 +25,16 @@ export const a2uiToolParameters = Type.Object({
 export async function publishAgentA2ui(options: {
   root: Database;
   chatJid: string;
+  conversationId?: number;
   thread: () => number;
   authorise: () => void;
   signal?: AbortSignal;
 }, params: Static<typeof a2uiToolParameters>) {
-  const { root, chatJid, authorise, signal } = options;
+  const { root, chatJid, conversationId, authorise, signal } = options;
   const assertBinding = captureHostDatabaseBinding(root);
   const check = () => { assertBinding(); authorise(); signal?.throwIfAborted(); };
   check();
+  if ((params.express === undefined) === (params.messages === undefined)) throw new Error('Supply exactly one of express or messages');
   const threadId = options.thread();
   if (!chatJid.startsWith('web:') || !Number.isSafeInteger(threadId) || threadId < 1) throw new Error('Foreground web thread required');
   const lookup = (postId: number) => {
@@ -44,9 +51,20 @@ export async function publishAgentA2ui(options: {
   const fallback = prior?.surface.fallback_text ?? stripInternalTags(params.fallback ?? '').trim();
   if (!fallback || fallback.length > 1024) throw new Error('A visible surface fallback is required');
   const surfaceId = prior?.surface.surface.surfaceId ?? crypto.randomUUID();
-  const { compileA2uiExpress, applyA2uiMessages } = await import('./express.js');
+  const { compileA2uiExpress, applyA2uiMessages, bindA2uiDraftId, readA2uiDraftSurfaceId } = await import('./express.js');
   check();
-  const surface = applyA2uiMessages(surfaceId, compileA2uiExpress(params.express, surfaceId), prior?.surface.surface);
+  let surface: ReturnType<typeof applyA2uiMessages>;
+  try {
+    const messages = params.express !== undefined ? compileA2uiExpress(params.express, surfaceId)
+      : editing ? params.messages! : bindA2uiDraftId(params.messages!, surfaceId);
+    surface = applyA2uiMessages(surfaceId, messages, prior?.surface.surface, params.messages !== undefined);
+  } catch (error) {
+    const draftId = !editing && params.messages ? readA2uiDraftSurfaceId(params.messages) : undefined;
+    throw publicationProtocolError(error, draftId ?? surfaceId) ?? error;
+  }
+  if (surface?.sendDataModel && (conversationId === undefined || !Number.isSafeInteger(conversationId) || conversationId < 1))
+    throw new Error('Model sync requires an owning agent conversation');
+  const messageId = `a2ui:${surfaceId}`;
   const revision = (prior?.surface.revision ?? 0) + 1;
   const rowId = await admitSqliteWrite(root, () => {
     if (options.thread() !== threadId) throw new Error('Surface thread changed');
@@ -57,17 +75,23 @@ export async function publishAgentA2ui(options: {
     if (prior) {
       const current = lookup(params.post_id!);
       if (!current || JSON.stringify(current.surface) !== JSON.stringify(prior.surface)) throw new Error('Surface has changed');
+      const owner = readA2uiSurfaceOwner(root, chatJid, messageId);
+      if (owner ? owner.conversation_id !== conversationId : current.surface.surface.sendDataModel)
+        throw new Error('Surface belongs to another agent conversation');
       const blocks = current.blocks.map(block => block === current.surface
         ? next ?? { type: "a2ui_surface_removed", revision } : block);
       replaceSurfaceBlocks(root, chatJid, params.post_id!, blocks);
+      if (!next && current.surface.surface.sendDataModel) releaseA2uiModelSync(root, chatJid, messageId);
       return params.post_id!;
     }
-    if (!next) throw new Error('Missing new surface');
-    const row = storeMessageInDatabase(root, { id: `a2ui:${surfaceId}`, chat_jid: chatJid, thread_id: threadId,
+    // A freshly created surface deleted in the same batch never reaches the timeline.
+    if (!next) return null;
+    const row = storeMessageInDatabase(root, { id: messageId, chat_jid: chatJid, thread_id: threadId,
       sender: 'assistant', sender_name: getIdentityConfig().assistantName, is_from_me: true, is_bot_message: true,
       timestamp: new Date().toISOString(), content: fallback, content_blocks: [next] });
     if (row <= 0) throw new Error('Could not store surface');
+    if (conversationId !== undefined) bindA2uiSurfaceOwner(root, chatJid, messageId, conversationId, next.surface.sendDataModel === true);
     return row;
   }, check, signal, undefined, assertBinding);
-  return { rowId, surfaceId, revision, deleted: !surface, created: !editing };
+  return { rowId, surfaceId, revision, deleted: !surface, created: rowId !== null && !editing };
 }

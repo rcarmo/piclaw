@@ -1,0 +1,109 @@
+import { Catalog } from '@a2ui/web_core/catalog';
+import { BASIC_FUNCTIONS } from '@a2ui/web_core/catalogs/basic/v1';
+import { isSignal, peekValue } from '@a2ui/web_core/reactivity';
+import type { DataContext } from '@a2ui/web_core/resolution';
+import { readA2uiPath, scopedA2uiPointer } from './data-path.js';
+import { CLASSIC_A2UI_CATALOG, type A2uiSnapshot } from './surface.js';
+import { a2uiLiteralKey, readClassicFunctionCall } from './function-call.js';
+
+const pureFunctions = BASIC_FUNCTIONS.filter(fn => fn.name !== '@index' && fn.name !== 'openUrl' && !fn.requiresUserActivation);
+const pureNames = new Set(pureFunctions.map(fn => fn.name));
+const pureCatalog = new Catalog(CLASSIC_A2UI_CATALOG, '1.0', [], pureFunctions);
+export const CLASSIC_A2UI_FUNCTIONS = [...pureNames, 'openUrl'];
+
+export function isClassicValueFunction(name: unknown): name is string {
+  return typeof name === 'string' && (name === '@index' || pureNames.has(name));
+}
+
+function record(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** v1.0 DynamicBoolean coercion, not JavaScript truthiness. */
+export function coerceA2uiBoolean(value: unknown): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) && value !== 0;
+  if (typeof value === 'string') return value.toLowerCase() === 'true';
+  return record(value) && value.valid === true;
+}
+
+export function a2uiBindingPath(value: unknown): string | undefined {
+  return record(value) && Object.hasOwn(value, '@path') && typeof value['@path'] === 'string' ? value['@path'] : undefined;
+}
+
+/** Invoke a pure function with already resolved arguments. Result objects are not expressions. */
+export function evaluateClassicLocalFunction(name: string, args: Record<string, unknown>, instancePath: string | undefined, resolveSignal: (part: unknown) => unknown): unknown {
+  if (name === '@index') {
+    if (!instancePath) return;
+    const index = Number(instancePath.slice(instancePath.lastIndexOf('/') + 1));
+    const offset = typeof args.offset === 'number' && Number.isFinite(args.offset) ? args.offset : 0;
+    const result = index + offset;
+    return Number.isFinite(result) ? result : undefined;
+  }
+  if (!pureNames.has(name) || (name === 'formatString' && (typeof args.value !== 'string' || args.value.length > 4096))) return;
+  // Interpolation may resolve scoped bindings, but has no transport or window capability.
+  const context = { surface: { protocolVersion: '1.0' }, resolveSignal } as unknown as DataContext;
+  if ((name === 'and' || name === 'or') && Array.isArray(args.values)) args = {...args,values:args.values.map(coerceA2uiBoolean)};
+  if (name === 'not' && Object.hasOwn(args,'value')) args = {...args,value:coerceA2uiBoolean(args.value)};
+  if ((name === 'formatNumber' || name === 'formatCurrency') && Object.hasOwn(args,'grouping')) args = {...args,grouping:coerceA2uiBoolean(args.grouping)};
+  const result = pureCatalog.invoker(name, args, context);
+  return isSignal(result) ? peekValue(result) : result;
+}
+
+export type A2uiRemoteValueResolver = (catalogId: string, name: string, args: Record<string, unknown>) => unknown;
+export const A2UI_LOCAL_EXPRESSION_ERROR = 'The renderer could not evaluate the function.';
+export class A2uiExpressionFailure extends Error {}
+
+/** Detect RPC expressions in the admitted syntax, never in a resolved value. */
+export function hasA2uiAgentFunction(value: unknown): boolean {
+  const call=readClassicFunctionCall(value);
+  if (call) return call.name!=='openUrl' && (!isClassicValueFunction(call.name) || hasA2uiAgentFunction(call.args));
+  if (a2uiBindingPath(value)!==undefined) return false;
+  if (Array.isArray(value)) return value.some(hasA2uiAgentFunction);
+  return record(value) && Object.values(value).some(hasA2uiAgentFunction);
+}
+
+/** Shared, bounded evaluation. A resolver may only look up already settled results. */
+export function evaluateA2uiValue(snapshot: A2uiSnapshot, value: unknown, edits?: ReadonlyMap<string, unknown>, instancePath?: string, scope = '/', resolveRemote?: A2uiRemoteValueResolver): unknown {
+  let remaining = 256;
+  function evaluate(input: unknown, depth: number, argument = false): unknown {
+    if (--remaining < 0 || depth > 24) throw Error('A2UI expression limit exceeded');
+    const path = a2uiBindingPath(input);
+    if (path !== undefined) {
+      const absolute = path.startsWith('/') ? path : scopedA2uiPointer(path, scope);
+      if (absolute === undefined) return;
+      return edits?.has(absolute) ? edits.get(absolute) : readA2uiPath(snapshot.dataModel, absolute);
+    }
+    if (record(input) && Object.hasOwn(input, '@call')) {
+      // The SDK's internal formatString AST annotates local calls with returnType.
+      // That annotation is not a wire key and never enables a remote call.
+      const {returnType: _returnType,...localExpression}=input;
+      const call=readClassicFunctionCall(isClassicValueFunction(input['@call']) ? localExpression : input);
+      if (!call || call.name==='openUrl') throw Error('Invalid A2UI value function');
+      const args = Object.fromEntries(Object.entries(call.args ?? {}).map(([key,arg])=>[key,evaluate(arg,depth+1,true)]));
+      if (isClassicValueFunction(call.name)) {
+        const result=evaluateClassicLocalFunction(call.name,args,instancePath,part=>evaluate(part,depth+1,true));
+        if (result===undefined) throw Error('Missing local function result');
+        return result;
+      }
+      const catalogId=call.catalogId ?? snapshot.catalogId;
+      const resolved=catalogId && resolveRemote ? resolveRemote(catalogId,call.name,args) : undefined;
+      if (resolved===undefined) throw new A2uiExpressionFailure('The agent did not resolve an action value.');
+      return resolved;
+    }
+    if (argument && Array.isArray(input)) return input.map(item => evaluate(item, depth + 1, true));
+    if (argument && record(input)) return Object.fromEntries(Object.entries(input).map(([key, item]) => [a2uiLiteralKey(key), evaluate(item, depth + 1, true)]));
+    return input;
+  }
+  try { return evaluate(value,0); }
+  catch (error) {
+    if (error instanceof A2uiExpressionFailure) throw error;
+    throw new A2uiExpressionFailure(A2UI_LOCAL_EXPRESSION_ERROR);
+  }
+}
+
+/** Read a value in surfaces that use a silent fallback, such as stored history. */
+export function readA2uiValue(...args: Parameters<typeof evaluateA2uiValue>): unknown {
+  try { return evaluateA2uiValue(...args); }
+  catch { return undefined; }
+}

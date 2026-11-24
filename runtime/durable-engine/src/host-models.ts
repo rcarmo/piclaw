@@ -17,9 +17,10 @@ import {
 import { normalizeContext as normalizeHostContext, type ModelRuntime } from "../../src/durable-legacy-sdk.js";
 import type { previewSdkRequest, SimpleRequestPreview } from "../../src/agent-pool/model-request-preview.js";
 import { awaitWithContext, BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
-import type { PreviewModels } from "./host-model-context.js";
+import { assertModelContextFits, type PreviewModels } from "./host-model-context.js";
 import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
 import { transformMessages } from "@earendil-works/pi-ai/api/transform-messages";
+import { A2UI_METADATA_HEADING, A2UI_PRIVATE_REPLY_METADATA, A2UI_RENDERER_TOOL, MAX_A2UI_METADATA_BYTES } from '../../src/channels/web/a2ui/transport-metadata.js';
 
 export interface ModelRef { provider: string; id: string; type?: ModelType }
 type Operation = "chat" | "generateImages" | "classify";
@@ -417,9 +418,22 @@ export function createHostModels(
         // Let the SDK project tool-only image placeholders without changing the
         // committed history, provider-specific framing or accepted user inputs.
         const request = data(context);
+        // Reply metadata is an SDK-private tool detail. Only the owning native
+        // generation sees it, and old replies never refill a future turn's context.
+        const lastUser = request.messages.findLastIndex(message=>message.role==='user');
+        let withReplyMetadata=false;
+        request.messages = request.messages.map((message,index)=>{
+          if (message.role!=='toolResult' || message.toolName!==A2UI_RENDERER_TOOL) return message;
+          const encoded=(message.details as Record<string,unknown> | undefined)?.[A2UI_PRIVATE_REPLY_METADATA];
+          const {details: _details,...reply}=message;
+          if (!scope || index<=lastUser || typeof encoded!=='string' || Buffer.byteLength(encoded)>MAX_A2UI_METADATA_BYTES) return reply;
+          withReplyMetadata=true;
+          return {...reply,content:[...reply.content,{type:'text' as const,text:A2UI_METADATA_HEADING+encoded}]};
+        });
         if (!model.input.includes("image")) request.messages = request.messages.map(message =>
           message.role === "toolResult" && message.content.some(block => block.type === "image")
             ? transformMessages([message], model)[0]! : message);
+        if (withReplyMetadata) assertModelContextFits(request.messages,physical);
         const providerContext = codex ? codex.context(request) : request;
         phase = "provider";
         const stream = simple
