@@ -46,12 +46,13 @@ export function handleWorkspaceTree(req: Request): Response {
  * @param req Incoming HTTP request with path/max/mode query parameters.
  * @returns JSON response containing file content metadata or an error payload.
  */
-export function handleWorkspaceFile(req: Request): Response {
+export async function handleWorkspaceFile(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  const result = workspaceService.getFile(
+  const result = await workspaceService.getFile(
     url.searchParams.get("path"),
     url.searchParams.get("max"),
-    url.searchParams.get("mode")
+    url.searchParams.get("mode"),
+    req.signal
   );
   return jsonResponse(result.body, result.status);
 }

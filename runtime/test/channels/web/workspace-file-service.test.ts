@@ -87,7 +87,7 @@ function pickOutsideWorkspaceParent(): string {
   throw new Error(`No writable temp directory outside workspace root ${workspaceReal}`);
 }
 
-test("getFile handles invalid, directory, text/json/image, archive and binary modes", () => {
+test("getFile handles invalid, directory, text/json/image, archive and binary modes", async () => {
   const { prefix, base, cleanup, service } = setupWorkspaceDir();
   try {
     writeFileSync(join(base, "note.txt"), "hello\nworld\n", "utf8");
@@ -100,42 +100,42 @@ test("getFile handles invalid, directory, text/json/image, archive and binary mo
       { name: "report.csv", content: "a,b\n1,2\n" },
     ])));
 
-    expect(service.getFile("../../etc/passwd").status).toBe(400);
-    expect(service.getFile(prefix).status).toBe(400); // directory path
+    expect((await service.getFile("../../etc/passwd")).status).toBe(400);
+    expect((await service.getFile(prefix)).status).toBe(400); // directory path
 
-    const text = service.getFile(`${prefix}/note.txt`);
+    const text = await service.getFile(`${prefix}/note.txt`);
     expect(text.status).toBe(200);
     expect((text.body as any).kind).toBe("text");
     expect((text.body as any).text).toContain("hello");
 
-    const json = service.getFile(`${prefix}/raw.json`);
+    const json = await service.getFile(`${prefix}/raw.json`);
     expect(json.status).toBe(200);
     expect((json.body as any).text).toContain('\n  "a": 1\n');
 
-    const image = service.getFile(`${prefix}/image.png`);
+    const image = await service.getFile(`${prefix}/image.png`);
     expect(image.status).toBe(200);
     expect((image.body as any).kind).toBe("image");
     expect((image.body as any).url).toContain(`/workspace/raw?path=${encodeURIComponent(`${prefix}/image.png`)}`);
 
-    const zipPreview = service.getFile(`${prefix}/bundle.zip`);
+    const zipPreview = await service.getFile(`${prefix}/bundle.zip`);
     expect(zipPreview.status).toBe(200);
     expect((zipPreview.body as any).kind).toBe("text");
     expect((zipPreview.body as any).text).toContain(`ZIP archive: ${prefix}/bundle.zip`);
     expect((zipPreview.body as any).text).toContain("notes/readme.txt");
     expect((zipPreview.body as any).text).toContain("data.json");
 
-    const tarPreview = service.getFile(`${prefix}/archive.tar.gz`);
+    const tarPreview = await service.getFile(`${prefix}/archive.tar.gz`);
     expect(tarPreview.status).toBe(200);
     expect((tarPreview.body as any).kind).toBe("text");
     expect((tarPreview.body as any).text).toContain(`tar.gz archive: ${prefix}/archive.tar.gz`);
     expect((tarPreview.body as any).text).toContain("docs/readme.txt");
     expect((tarPreview.body as any).text).toContain("report.csv");
 
-    const binaryPreview = service.getFile(`${prefix}/binary.bin`);
+    const binaryPreview = await service.getFile(`${prefix}/binary.bin`);
     expect(binaryPreview.status).toBe(200);
     expect((binaryPreview.body as any).kind).toBe("binary");
 
-    const binaryEdit = service.getFile(`${prefix}/binary.bin`, null, "edit");
+    const binaryEdit = await service.getFile(`${prefix}/binary.bin`, null, "edit");
     expect(binaryEdit.status).toBe(400);
     expect((binaryEdit.body as any).error).toContain("Binary file cannot be edited");
   } finally {
@@ -143,7 +143,34 @@ test("getFile handles invalid, directory, text/json/image, archive and binary mo
   }
 });
 
-test("ZIP preview reads only the directory, bounds names and keeps the 200-row listing", () => {
+test("tar.gz preview streams padded member bodies and checks the gzip trailer", async () => {
+  const { prefix, base, cleanup, service } = setupWorkspaceDir();
+  const file = join(base, "stream.tgz");
+  const archive = gzipSync(createTarBuffer(Array.from({ length: 201 }, (_, index) => ({
+    name: `notes/${index}.txt`, content: "x".repeat(index === 0 ? 70_001 : 1),
+  }))));
+  writeFileSync(file, archive);
+  const readAll = spyOn(fs, "readFileSync");
+  try {
+    const result = await service.getFile(`${prefix}/stream.tgz`);
+    expect(result.status).toBe(200);
+    expect(result.body).toMatchObject({ kind: "text", truncated: true });
+    const text = (result.body as { text: string }).text;
+    expect(text).toContain("Entries: 201");
+    expect(text).toContain("notes/0.txt (70001 B)");
+    expect(text).toContain("notes/199.txt");
+    expect(text).not.toContain("notes/200.txt");
+    expect(readAll.mock.calls.some(([target]) => target === file)).toBe(false);
+    const aborted = AbortSignal.abort();
+    const cancelled = await service.getFile(`${prefix}/stream.tgz`, null, null, aborted);
+    expect(cancelled.body).toMatchObject({ kind: "binary" });
+    archive[archive.length - 8] ^= 1;
+    writeFileSync(file, archive);
+    expect((await service.getFile(`${prefix}/stream.tgz`)).body).toMatchObject({ kind: "binary" });
+  } finally { readAll.mockRestore(); cleanup(); }
+});
+
+test("ZIP preview reads only the directory, bounds names and keeps the 200-row listing", async () => {
   const { prefix, base, cleanup, service } = setupWorkspaceDir();
   const path = join(base, "bundle.zip");
   const entries = Object.fromEntries(Array.from({ length: 201 }, (_, index) => [`notes/${index}.txt`, strToU8("hello")]));
@@ -155,7 +182,7 @@ test("ZIP preview reads only the directory, bounds names and keeps the 200-row l
   writeFileSync(path, Buffer.concat([archive, comment]));
   const readAll = spyOn(fs, "readFileSync");
   try {
-    const response = service.getFile(`${prefix}/bundle.zip`);
+    const response = await service.getFile(`${prefix}/bundle.zip`);
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ kind: "text", size: archive.length + comment.length, truncated: true });
     const text = (response.body as { text: string }).text;
@@ -166,33 +193,33 @@ test("ZIP preview reads only the directory, bounds names and keeps the 200-row l
     expect(readAll.mock.calls.some(([target]) => target === path)).toBe(false);
     const long = Buffer.from(zipSync({ [`a${"x".repeat(40_000)}`]: strToU8("a"), [`b${"x".repeat(40_000)}`]: strToU8("b") }));
     writeFileSync(path, long);
-    const bounded = service.getFile(`${prefix}/bundle.zip`);
+    const bounded = await service.getFile(`${prefix}/bundle.zip`);
     expect(bounded.body).toMatchObject({ kind: "text", truncated: true });
     expect((bounded.body as { text: string }).text).toContain("showing first 1 entries of 2");
     expect(Buffer.byteLength((bounded.body as { text: string }).text)).toBeLessThan(65_536);
   } finally { readAll.mockRestore(); cleanup(); }
 });
 
-test("ZIP preview rejects a central directory outside the file without reading member data", () => {
+test("ZIP preview rejects a central directory outside the file without reading member data", async () => {
   const { prefix, base, cleanup, service } = setupWorkspaceDir();
   const path = join(base, "bundle.zip");
   const archive = Buffer.from(zipSync({ "ok.txt": strToU8("ok") }));
   archive.writeUInt32LE(0xfffffff0, archive.length - 6);
   writeFileSync(path, archive);
   try {
-    const response = service.getFile(`${prefix}/bundle.zip`);
+    const response = await service.getFile(`${prefix}/bundle.zip`);
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ kind: "binary", truncated: false });
   } finally { cleanup(); }
 });
 
-test("ordinary previews never read the whole file to truncate it", () => {
+test("ordinary previews never read the whole file to truncate it", async () => {
   const { prefix, base, cleanup, service } = setupWorkspaceDir();
   const path = join(base, "large.txt");
   writeFileSync(path, "a".repeat(16_384));
   const readAll = spyOn(fs, "readFileSync");
   try {
-    const response = service.getFile(`${prefix}/large.txt`, "1024");
+    const response = await service.getFile(`${prefix}/large.txt`, "1024");
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ kind: "text", text: "a".repeat(1024), size: 16_384, truncated: true });
     expect(readAll.mock.calls.some(([target]) => target === path)).toBe(false);
@@ -316,7 +343,7 @@ test("workspace file APIs reject symlinks escaping the workspace root", async ()
     writeFileSync(join(base, "gitfile-repo", ".git"), `gitdir: ${join(outside, "repo", ".git")}\n`, "utf8");
     writeFileSync(join(base, "moveme.txt"), "move me", "utf8");
 
-    expect(service.getFile(`${prefix}/secret-link.txt`).status).toBe(400);
+    expect((await service.getFile(`${prefix}/secret-link.txt`)).status).toBe(400);
     expect(service.getRaw(`${prefix}/secret-link.txt`).status).toBe(400);
     expect((await service.attachFile(`${prefix}/secret-link.txt`)).status).toBe(400);
     expect(service.updateFile(`${prefix}/secret-link.txt`, "changed").status).toBe(400);
@@ -357,14 +384,14 @@ test("workspace file APIs reject symlinks escaping the workspace root", async ()
   }
 });
 
-test("workspace file APIs allow symlinks whose real targets stay inside the workspace", () => {
+test("workspace file APIs allow symlinks whose real targets stay inside the workspace", async () => {
   const { prefix, base, cleanup, service } = setupWorkspaceDir();
   try {
     mkdirSync(join(base, "real"), { recursive: true });
     writeFileSync(join(base, "real", "inside.txt"), "inside", "utf8");
     symlinkSync(join(base, "real", "inside.txt"), join(base, "inside-link.txt"));
 
-    const preview = service.getFile(`${prefix}/inside-link.txt`);
+    const preview = await service.getFile(`${prefix}/inside-link.txt`);
     expect(preview.status).toBe(200);
     expect((preview.body as any).text).toBe("inside");
 

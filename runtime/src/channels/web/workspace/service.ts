@@ -28,8 +28,8 @@ export class WorkspaceService {
     return this.treeCache.getTree(pathParam, depthParam, includeHidden);
   }
 
-  getFile(pathParam: string | null, maxParam?: string | null, mode?: string | null) {
-    return this.fileService.getFile(pathParam, maxParam, mode);
+  getFile(pathParam: string | null, maxParam?: string | null, mode?: string | null, signal?: AbortSignal) {
+    return this.fileService.getFile(pathParam, maxParam, mode, signal);
   }
 
   getRaw(pathParam: string | null, download = false) {
