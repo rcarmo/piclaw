@@ -40,7 +40,7 @@ The existing staged runner measured six selected host files in three fresh proce
 | Delegate policy and staged-runner contract | 2 | 84.14 | 36.17 | 4 |
 
 ```sh
-PICLAW_LOCAL_TEST_NICE=10 bun run test:local -- bun runtime/scripts/controlled-test-runner.ts \
+nice -n 10 bun run test:local -- bun runtime/scripts/controlled-test-runner.ts \
   --stage-size 2 --sample-ms 100 --report /workspace/tmp/controlled-rss.json --isolate \
   ./test/channels/web/workspace-file-service.test.ts ./test/channels/web/http-dispatch-workspace.test.ts \
   ./test/channels/web/input-source-admission.test.ts ./test/channels/web/manual-compaction-status-ownership.test.ts \
