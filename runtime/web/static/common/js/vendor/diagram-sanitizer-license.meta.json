@@ -1,11 +1,11 @@
 {
   "manifest_id": "diagram-sanitizer-license",
   "package_name": "dompurify",
-  "package_version": "3.4.17",
+  "package_version": "3.4.18",
   "package_license": "(MPL-2.0 OR Apache-2.0)",
   "package_repository": "git://github.com/cure53/DOMPurify.git",
   "package_versions": {
-    "dompurify": "3.4.17"
+    "dompurify": "3.4.18"
   },
   "package_licenses": {
     "dompurify": "(MPL-2.0 OR Apache-2.0)"
