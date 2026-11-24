@@ -54,19 +54,20 @@ function Fixture() {
   const shell = useRef(null), timeline = useRef(null), sidebar = useRef(280), editor = useRef(320), dock = useRef(200);
   const [workspaceOpen, setWorkspaceOpen] = useState(params.get('tree') === '1');
   const [editorOpen] = useState(params.get('editor') === '1');
+  const [menuMounted, setMenuMounted] = useState(true);
   const [current, setCurrent] = useState('web:default');
   const toggleWorkspace = useCallback(() => setWorkspaceOpen((open) => !open), []);
   const setWorkspaceVisible = useCallback((next: boolean) => setWorkspaceOpen(Boolean(next)), []);
   const splitters = useSplitters({ appShellRef: shell, sidebarWidthRef: sidebar, editorWidthRef: editor, dockHeightRef: dock });
   useAppShellShortcuts({ hasDockPanes: false, toggleDock: () => {}, toggleZenMode: () => {}, exitZenMode: () => {}, zenMode: false, toggleWorkspace });
-  (window as any).workbench = { shell: () => shell.current, current: () => current, workspaceOpen: () => workspaceOpen, probes };
+  (window as any).workbench = { shell: () => shell.current, current: () => current, workspaceOpen: () => workspaceOpen, setMenuMounted, probes };
   return html`<div class=${buildMainShellClassName({ workspaceOpen, editorOpen, zenMode: false })} ref=${shell} style="--editor-width:320px;--sidebar-width:280px">
     <${WorkbenchSidebar} activeChatAgents=${chats} currentChatJid=${current} onSwitchChat=${setCurrent} appShellRef=${shell}
       loadSessionStatus=${loadSessionStatus} onRefreshSessions=${() => { probes.refreshes += 1; }}
       workspaceOpen=${workspaceOpen} setWorkspaceVisible=${setWorkspaceVisible} onOpenSettings=${() => { probes.settings += 1; }} onOpenPlan=${() => { probes.plans += 1; }} sessionActions=${sessionActions}
       explorer=${html`<aside class="workspace-sidebar"><div class="workspace-header"><div class="workspace-header-left"><span>Workspace</span></div></div><div class="workspace-tree">notes.md</div></aside>`} />
-    <${TimelineMenu} workspaceOpen=${workspaceOpen} toggleWorkspace=${toggleWorkspace} openEditor=${(path: string) => probes.editors.push(path)}
-      onOpenTerminalTab=${() => probes.actions.push('terminal')} />
+    ${menuMounted && html`<${TimelineMenu} workspaceOpen=${workspaceOpen} toggleWorkspace=${toggleWorkspace} openEditor=${(path: string) => probes.editors.push(path)}
+      onOpenTerminalTab=${() => probes.actions.push('terminal')} />`}
     <div class="container"><${ChatSurface} currentChatJid=${current} posts=${posts} timelineRef=${timeline} hasMore=${false}
       agentStatus=${runningStatus} currentTurnId=${runningStatus ? 'turn-1' : null} loadStatusWorkspaceBranch=${async () => ({ branch: 'main', repo_path: 'piclaw' })}
       composeProps=${{ currentChatJid: current, onPost: () => {}, services, activeChatAgents: chats, activeModel: model, contextUsage, modelUsage: params.has('quota') ? { hint_short: '5h 92% · weekly 86% · resets in 4h 25m' } : null, agentModels: { current: model, thinking_level: 'high' }, ...(params.has('routed') ? { thinkingLevel: 'high', supportsThinking: true, agentModelsPayload: { current: model, thinking_level: 'high', supports_thinking: true, latest_requested_model: model, latest_response_model: 'provider/routed-target' } } : {}), capabilities: { speech: true, media: true, location: false, notifications: false, modelPicker: true, commands: false } }} /></div>
