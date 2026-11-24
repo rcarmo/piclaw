@@ -8,7 +8,8 @@ Track Piclaw memory measurements over time with the repo commit context that pro
 - Record the Git commit hash that best matches the measured code.
 - If the workspace is not clean, mark the entry as `dirty` and describe why.
 - Regenerate the SVG chart with:
-  - `bun run runtime/scripts/render-memory-progress-chart.ts --template docs/performance/memory-progress.template.json --input docs/performance/memory-footprint-history.md --output docs/performance/memory-progress-2026-04-17.svg`
+  - `bun run runtime/scripts/render-memory-progress-chart.ts --template docs/performance/memory-progress.template.json --input docs/performance/memory-footprint-history.md --output docs/performance/memory-progress-2026-11-24.svg`
+- The [updated chart](memory-progress-2026-11-24.svg) keeps matched synthetic comparisons separate from the historical live-service timeline. The April SVG and PNG remain historical artifacts.
 - Prefer two measurement types:
   - **live-service snapshot** — running `piclaw.service` after restart/settle
   - **fresh-process cold-session benchmark** — isolated one-shot measurement of session bootstrap cost
@@ -54,6 +55,20 @@ Track Piclaw memory measurements over time with the repo commit context that pro
 | 2026-04-17T18:47:37Z | `d35e1f61dd1ed99662616384307ba7ca475e9ede` | yes | Real web-chat cold-session benchmark after lazy-loading heavy Office/CDP modules | 215 ms | 25.3 MB | 46 | `cdp-browser` and `office-tools` now lazy-load their heavier dependencies, cutting the earlier Linux web benchmark from ~296 ms / 80.0 MB while keeping the same exposed tool count. |
 | 2026-04-17T22:32:00Z* | `0943907f` | yes | Real web-chat cold-session benchmark after Azure provider-bootstrap + session-shim split | 169 ms | 26.9 MB | 41 | Backfilled from the focused source-tree harness run during the Azure cold-path tranche. This step moved Azure provider registration off ordinary session bootstrap and into the async provider-bootstrap/session-shim path, materially reducing cold-path elapsed time while also dropping active-tool count. |
 | 2026-04-17T22:38:00Z* | `0943907f` | yes | Real web-chat cold-session benchmark after splitting Azure image helpers out of the provider module | 175 ms | 26.3 MB | 41 | Backfilled from the follow-up source-tree harness run after moving `/image` and `/flux` into `runtime/extensions/integrations/azure-openai-images.ts`. RSS improved a bit further, while elapsed time stayed within the same noise band as the prior Azure provider-bootstrap split. |
+
+## Current installed-service observation
+
+On 24 November 2026 at 13:49:19 UTC, Smith's existing `piclaw.service` process, PID 3923744, reported 712.48 MiB RSS, 711.36 MiB PSS, 686.79 MiB anonymous RSS and 2,989.93 MiB lifetime peak RSS. The service cgroup separately reported 861.95 MiB current memory. Heap metrics and idle state were not verified. This is a read-only observation of the service that restarted on 23 November, not a fresh idle run or a measurement of current main.
+
+Installed Core reported 3.3.4, private `pi-durable` 1.6.0. It still has the legacy optimiser-off recovery backport; installed source fingerprints and exact synthetic scope are in the [November report](memory-report-2026-11-24.md). This sample is excluded from the historical chart's chronological comparison: its installed build, workload and time since startup do not match the April runs. No new live baseline was manufactured by restarting or sending test traffic.
+
+## Matched synthetic RSS comparisons
+
+| Workload | Baseline RSS (MiB) | Candidate RSS (MiB) | Measurement |
+|---|---:|---:|---|
+| ZIP preview · incremental peak RSS | 189.95 | 0.25 | 192 MiB stored member; three pairs, [#2081](https://github.com/rcarmo/piclaw/pull/2081). |
+| Long-history SDK idle · RSS at 30 s | 214.31 | 66.72 | Eight conversations, 512 × 32 KiB entries each; three pairs, [#2083 follow-up](https://github.com/rcarmo/piclaw/issues/2044#issuecomment-7069609046). |
+| tar.gz preview · incremental peak RSS | 321.93 | 21.77 | 160 MiB decoded member; three alternating pairs, [November report](memory-report-2026-11-24.md). |
 
 ## Notes
 
