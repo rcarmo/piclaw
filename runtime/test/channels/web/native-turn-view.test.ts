@@ -158,14 +158,36 @@ test("native message frames need no host operation row; compaction activity foll
 test("SDK inbox/placement deltas reuse queue and timeline events even when a whole run coalesces",()=>{
   const database=new Database(":memory:");const events:{event:string;data:any}[]=[],published:string[]=[];
   try{
-    const render=createNativeTurnView(database,{broadcastEvent(event,data){events.push({event,data});},publishInput(id){published.push(id);}},"chat");
+    const chat = 'web:queue';
+    const heading = '\n\nA2UI renderer metadata:\n';
+    const visible = `queued body${heading}literal user quotation`;
+    const privateInput = `${visible}${heading}${JSON.stringify({
+      a2uiRendererCapabilities: { '1.0': { supportedCatalogIds: ['https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json'] } },
+      a2uiRendererDataModel: { private: 'tab draft' },
+    })}`;
+    database.exec('CREATE TABLE messages(id, chat_jid, content, is_bot_message)');
+    const put = database.query('INSERT INTO messages VALUES(?,?,?,?)');
+    put.run('source', chat, visible, 0);
+    put.run('foreign', 'web:other', 'foreign input', 0);
+    put.run('reply', chat, 'agent reply', 1);
+    const render=createNativeTurnView(database,{broadcastEvent(event,data){events.push({event,data});},publishInput(id){published.push(id);}},chat);
     const frame=(entries:any[],inbox:any[])=>({conversation:{id:2},entries,docs:{"pi.live":{},"pi.inbox":{items:inbox}}});
+    const queued=(id:number, sourceId:string, conversationId=2)=>({id,mode:'followUp',content:privateInput,
+      entry:{kind:'host.accepted',data:{chatJid:chat,sourceId,conversationId}}});
     render(frame([],[]));
-    const queued={id:7,mode:"followUp",content:"queued body",entry:{kind:"host.accepted",data:{chatJid:"chat",sourceId:"source"}}};
-    render(frame([],[queued]));
-    expect(published).toEqual([]);expect(events.find(item=>item.event==="agent_followup_queued")?.data).toMatchObject({row_id:7,source:"native_sdk",content:"queued body"});
-    render(frame([{id:9,conversationId:2,kind:"host.accepted",data:{chatJid:"chat",sourceId:"source"}}],[]));
-    expect(published).toEqual(["source"]);expect(events.find(item=>item.event==="agent_followup_consumed")?.data).toMatchObject({chat_jid:"chat",row_id:7});
-    render(frame([{id:9,conversationId:2,kind:"host.accepted",data:{chatJid:"chat",sourceId:"source"}}],[]));expect(published).toEqual(["source"]);
+    const inbox=[queued(7,'source'), queued(8,'missing'), queued(9,'foreign'), queued(10,'reply'), queued(11,'source',3)];
+    render(frame([],inbox));
+    render(frame([],inbox));
+    expect(published).toEqual([]);
+    expect(events.filter(item=>item.event==='agent_followup_queued').map(item=>item.data)).toEqual([
+      {chat_jid:chat,row_id:7,mode:'followUp',source:'native_sdk',content:visible},
+    ]);
+    expect(inbox[0]?.content).toBe(privateInput);
+    const placed = [{id:9,conversationId:2,kind:'host.accepted',data:{chatJid:chat,sourceId:'source'}}];
+    render(frame(placed,[]));
+    expect(published).toEqual(['source']);
+    expect(events.find(item=>item.event==='agent_followup_consumed')?.data).toMatchObject({chat_jid:chat,row_id:7});
+    render(frame(placed,[]));
+    expect(published).toEqual(['source']);
   }finally{database.close();}
 });
