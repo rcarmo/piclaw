@@ -55,6 +55,11 @@ browserTest(`Classic cutover ${engine}/${width}/${colorScheme}: reference-safe M
   await picker.selectOption('fixture');await page.waitForFunction(()=>(document.querySelector('input[id$="name"]') as HTMLInputElement)?.value==='renamed');
   const add=page.getByRole('button',{name:'Add server',exact:true});await add.focus();await page.keyboard.press('Enter');
   await page.getByRole('heading',{name:'New server',exact:true}).waitFor();
+  await page.waitForFunction(()=>{
+   const name=document.querySelector<HTMLInputElement>('input[id$="name"]');
+   const picker=document.querySelector<HTMLSelectElement>('select[id$="server"]');
+   return name?.value===''&&picker?.value==='';
+  });
   expect(await name.inputValue()).toBe('');expect(await picker.inputValue()).toBe('');
   expect(await add.evaluate(node=>node===document.activeElement)).toBe(true);
   await picker.selectOption('fixture');
