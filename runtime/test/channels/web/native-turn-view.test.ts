@@ -165,11 +165,11 @@ test("SDK inbox/placement deltas reuse queue and timeline events even when a who
       a2uiRendererCapabilities: { '1.0': { supportedCatalogIds: ['https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json'] } },
       a2uiRendererDataModel: { private: 'tab draft' },
     })}`;
-    database.exec('CREATE TABLE messages(id, chat_jid, content, timestamp, thread_id, is_bot_message)');
-    const put = database.query('INSERT INTO messages VALUES(?,?,?,?,?,?)');
-    put.run('source', chat, visible, '2026-11-25T10:00:00Z', 42, 0);
-    put.run('foreign', 'web:other', 'foreign input', '2026-11-25T10:00:00Z', 42, 0);
-    put.run('reply', chat, 'agent reply', '2026-11-25T10:00:00Z', 42, 1);
+    database.exec('CREATE TABLE messages(id, chat_jid, content, is_bot_message)');
+    const put = database.query('INSERT INTO messages VALUES(?,?,?,?)');
+    put.run('source', chat, visible, 0);
+    put.run('foreign', 'web:other', 'foreign input', 0);
+    put.run('reply', chat, 'agent reply', 1);
     const render=createNativeTurnView(database,{broadcastEvent(event,data){events.push({event,data});},publishInput(id){published.push(id);}},chat);
     const frame=(entries:any[],inbox:any[])=>({conversation:{id:2},entries,docs:{"pi.live":{},"pi.inbox":{items:inbox}}});
     const queued=(id:number, sourceId:string, conversationId=2)=>({id,mode:'followUp',content:privateInput,
@@ -180,7 +180,7 @@ test("SDK inbox/placement deltas reuse queue and timeline events even when a who
     render(frame([],inbox));
     expect(published).toEqual([]);
     expect(events.filter(item=>item.event==='agent_followup_queued').map(item=>item.data)).toEqual([
-      {chat_jid:chat,row_id:7,mode:'followUp',source:'native_sdk',content:visible,timestamp:'2026-11-25T10:00:00Z',thread_id:42},
+      {chat_jid:chat,row_id:7,mode:'followUp',source:'native_sdk',content:visible},
     ]);
     expect(inbox[0]?.content).toBe(privateInput);
     const placed = [{id:9,conversationId:2,kind:'host.accepted',data:{chatJid:chat,sourceId:'source'}}];

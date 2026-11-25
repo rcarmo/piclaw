@@ -57,12 +57,11 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
       if (queuedIds.has(item.id) || item.entry?.kind !== 'host.accepted' || source?.chatJid !== chat
         || source.conversationId !== view.conversation?.id || typeof source.sourceId !== 'string') continue;
       // Inbox text is the model input and can include private renderer metadata.
-      // Use the committed user message, and never fall back to the SDK text.
-      const row = database.query('SELECT content,timestamp,thread_id FROM messages WHERE chat_jid=? AND id=? AND is_bot_message=0')
-        .get(chat, source.sourceId) as { content: string | null; timestamp: string; thread_id: number | null } | null;
+      // Use only the committed user text. The watch does not acknowledge the HTTP handoff.
+      const row = database.query('SELECT content FROM messages WHERE chat_jid=? AND id=? AND is_bot_message=0')
+        .get(chat, source.sourceId) as { content: string | null } | null;
       if (row && typeof row.content === 'string') channel.broadcastEvent('agent_followup_queued', {
-        chat_jid: chat, row_id: item.id, mode: item.mode, content: row.content, timestamp: row.timestamp,
-        thread_id: row.thread_id, source: 'native_sdk',
+        chat_jid: chat, row_id: item.id, mode: item.mode, content: row.content, source: 'native_sdk',
       });
     }
     for(const id of queuedIds)if(!nextQueuedIds.has(id))channel.broadcastEvent("agent_followup_consumed",{chat_jid:chat,row_id:id});
