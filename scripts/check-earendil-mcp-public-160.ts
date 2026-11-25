@@ -70,13 +70,13 @@ export function matchNegativeDiagnostics(text: string) {
   return missingSeams.map(row => ({ ...row }));
 }
 
-export function checkMcpPublic160(repoRoot = resolve(import.meta.dir, "..")) {
+function checkMcpPublic(repoRoot: string, version: string, referenceGitHead: string) {
   if (!process.versions.bun) throw new Error("Bun execution is required.");
   const root = resolve(repoRoot);
   const packages = ["pi-coding-agent", "pi-mcp", "pi-codemode"].map(name => {
     const file = join(root, "node_modules/@earendil-works", name, "package.json");
     const pkg = JSON.parse(readFileSync(file, "utf8"));
-    if (pkg.version !== MCP_VERSION) throw new Error(`Exact ${MCP_VERSION} required for ${name}.`);
+    if (pkg.version !== version) throw new Error(`Exact ${version} required for ${name}.`);
     return { name: pkg.name as string, version: pkg.version as string };
   });
   const scratch = mkdtempSync(join(tmpdir(), "mcp-api-120-"));
@@ -94,9 +94,15 @@ export function checkMcpPublic160(repoRoot = resolve(import.meta.dir, "..")) {
     const unsupported = compile("negative", negative);
     if (unsupported.exit !== 1 && unsupported.exit !== 2) throw new Error(`Negative compile must exit with diagnostics, got ${unsupported.exit}: ${unsupported.text}`);
     const diagnostics = matchNegativeDiagnostics(unsupported.text);
-    return { version: MCP_VERSION, referenceGitHead: MCP_GIT_HEAD, archiveIntegrity: "not_remeasured_by_compile_probe", runtime: `Bun ${Bun.version}`, packages, positive: "pass", negative: diagnostics,
+    return { version, referenceGitHead, archiveIntegrity: "not_remeasured_by_compile_probe", runtime: `Bun ${Bun.version}`, packages, positive: "pass", negative: diagnostics,
       positiveSourceSha256: digest(positive), negativeSourceSha256: digest(negative),
       scope: "public_type_contract_only", lifecycle: "separate_real_session_fixture", nativeParity: "not_qualified", productionActivation: false };
   } finally { rmSync(scratch, { recursive: true, force: true }); }
 }
-if (import.meta.main) console.log(JSON.stringify(checkMcpPublic160(), null, 2));
+export function checkMcpPublic160(repoRoot = resolve(import.meta.dir, "..")) {
+  return checkMcpPublic(repoRoot, MCP_VERSION, MCP_GIT_HEAD);
+}
+export function checkMcpPublic161(repoRoot = resolve(import.meta.dir, "..")) {
+  return checkMcpPublic(repoRoot, "1.6.1", "ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe");
+}
+if (import.meta.main) console.log(JSON.stringify(process.argv.includes('--release=1.6.1') ? checkMcpPublic161() : checkMcpPublic160(), null, 2));

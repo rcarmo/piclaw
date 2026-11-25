@@ -9,11 +9,11 @@ const denyBootstrap = () => { bootstrapRequests++; throw new Error("Unexpected p
 globalThis.fetch = Object.assign(denyBootstrap, { preconnect: denyBootstrap });
 const { builtinProviders } = await import("@earendil-works/pi-ai/providers/all");
 assert.equal(bootstrapRequests, 0);
-// Current 1.6.0 OAuth implementation hashes are independently measured; historical archives stay unchanged.
+// Current 1.6.1 OAuth implementation hashes are independently measured; historical archives stay unchanged.
 const root = import.meta.resolve("@earendil-works/pi-ai");
-assert.equal(JSON.parse(await readFile(fileURLToPath(new URL("../package.json", root)), "utf8")).version, "1.6.0");
+assert.equal(JSON.parse(await readFile(fileURLToPath(new URL("../package.json", root)), "utf8")).version, "1.6.1");
 const fingerprints = {
-  "github-copilot.js":"22819bb759cbd2a9b846d1cfe8cf7ee9b93ccb8aecc70fc32f9a02daedd536a3",
+  "github-copilot.js":"ad34c66e188dad8db14c4f7d69a28370d4425ed730ef91b1b9b4f9c747106293",
   "kimi-coding.js":"49d62d8a59e05e37ea6868c41784c52408797cb940dadc7b0de1cfb75176fcbd",
   "device-code.js":"8f197cc9af67be64b82939573d719d1b55388f96f2e53cb8c47f9618fc1297eb",
 };
@@ -132,7 +132,7 @@ try {
         cancellationObserved: abortObserved, timerCancellationVerified: mode.includes("wait-cancel"), timingVerified: ["expiry", "pending-success", "slow-down"].includes(mode) });
     }
   }
-  console.log(JSON.stringify({ version: "1.6.0", runtime: typeof Bun === "undefined" ? `Node ${process.versions.node}` : `Bun ${Bun.version}`,
+  console.log(JSON.stringify({ version: "1.6.1", runtime: typeof Bun === "undefined" ? `Node ${process.versions.node}` : `Bun ${Bun.version}`,
     scope: "public_provider_device_methods_only", results, sdkFileSha256: fingerprints,
     credentialPersistence: "none", inference: "not_invoked", modelPolicyWrites: "none", networkGuard: "fetch_interception_no_os_sandbox" }));
 } finally { globalThis.fetch = originalFetch; }
