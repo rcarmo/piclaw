@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { initializeDatabaseSchema } from '../../../src/db/connection.js';
 import { projectPublicA2uiInput, storeA2uiInputMetadata } from '../../../src/channels/web/a2ui/input-metadata.js';
+import { CLASSIC_A2UI_RENDERER_CAPABILITIES } from '../../../src/channels/web/a2ui/capabilities.js';
 import { readApplicationMessagePayload } from '../../../durable-engine/src/accepted-payload-recovery.ts';
 
 function fixture(chatJid = 'chat') {
@@ -35,14 +36,19 @@ test('A2UI input metadata is an immutable projection for the exact recipient, ou
   const metadata = {version:'1.0' as const,surfaces:{form:{synced:'draft value'}}};
   const rendererMessage = {version:'1.0' as const,action:{surfaceId:'form',sourceComponentId:'submit',name:'save',timestamp:'2026-11-22T09:00:00Z',
     context:{},metadata:{extensions:{rendererExample:true}}}};
-  const write = () => storeA2uiInputMetadata(db,sender,metadata,undefined,undefined,rendererMessage);
+  const write = () => storeA2uiInputMetadata(db,sender,metadata,CLASSIC_A2UI_RENDERER_CAPABILITIES,undefined,rendererMessage);
   expect(write).toThrow();
   db.transaction(write)();
   expect(() => db.transaction(write)()).toThrow();
-  const privatePayload=`Continue\n\nA2UI renderer metadata:\n${JSON.stringify({a2uiRendererDataModel:metadata,a2uiRendererMessage:rendererMessage})}`;
+  // The accepted model input includes the exact ordered envelope. Public projection
+  // must neither rewrite it nor move metadata into the shared instruction prefix.
+  const privatePayload=`Continue\n\nA2UI renderer metadata:\n${JSON.stringify({a2uiRendererDataModel:metadata,
+    a2uiRendererCapabilities:{'1.0':{supportedCatalogIds:['https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json']}},
+    a2uiRendererMessage:rendererMessage})}`;
   expect(readApplicationMessagePayload(db,'inc',sender,ref)).toBe(privatePayload);
   expect(projectPublicA2uiInput(db,sender,privatePayload)).toBe('Continue');
   expect(projectPublicA2uiInput(db,{...sender,conversationId:24},privatePayload)).toBe('Continue');
+  expect(readApplicationMessagePayload(db,'inc',sender,ref)).toBe(privatePayload);
   const literal='Literal heading\n\nA2UI renderer metadata:\n{"test":true}';
   db.query(`INSERT INTO messages (id,chat_jid,is_bot_message,content) VALUES (?, ?, 0, ?)`).run('literal',sender.chatJid,literal);
   expect(projectPublicA2uiInput(db,{...sender,sourceId:'literal'},literal)).toBe(literal);
