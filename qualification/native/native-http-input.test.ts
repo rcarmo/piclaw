@@ -32,6 +32,8 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
   const model:any={provider:"fixture",id:"direct",name:"Fixture",api:"openai-completions",baseUrl:"https://fixture.invalid",input:["text"],reasoning:false,contextWindow:100000,maxTokens:1000,cost:{input:0,output:0,cacheRead:0,cacheWrite:0}};
   const host=await ModelRuntime.create({credentials,modelsPath:null,modelsStore:{read:async()=>undefined,write:async()=>{},delete:async()=>{}},allowModelNetwork:false,refreshOnCreate:false});
   const entered=pause(),release=pause();let calls=0,toolSeen=false;
+  let followupModelInput: string | undefined;
+  const queuedEvents: Record<string, unknown>[] = [];
   const heldRequests=new Map<number,{entered:ReturnType<typeof pause>;release:ReturnType<typeof pause>}>();
   const requestSignals=new Map<number,AbortSignal|undefined>();
   host.registerNativeProvider({id:model.provider,name:"Fixture",getModels:()=>[model],auth:{apiKey:{name:"Keyless fixture",resolve:async()=>({auth:{},source:"fixture"})}},
@@ -44,6 +46,7 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
       options?.signal?.throwIfAborted();
       const users=transcript.messages.filter((message:any)=>message.role==="user");
       const text=JSON.stringify(users.at(-1)?.content);
+      if (text?.includes('follow-up instruction')) followupModelInput = text;
       if (text?.includes("Native recovery proof")) throw Error("HTTP 503 unavailable");
       const tool=transcript.messages.findLast((message:any)=>message.role==="toolResult"&&message.toolName==="read");
       if(tool){expect(JSON.stringify(tool)).toContain("SDK tool source proof");toolSeen=true;}
@@ -69,6 +72,11 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     backend=await createDefaultApplicationRuntime(lock,async()=>services);
     pool=new AgentPool({credentialStore:credentials,modelRuntime:host,modelRegistry:services.modelRegistry,...backend.sessionOptions} as any);
     const bound=backend.bind({queue:base.queue,agentPool:pool});channel=new WebChannel(bound);
+    const broadcast = channel.broadcastEvent.bind(channel);
+    channel.broadcastEvent = (event, data) => {
+      if (event === 'agent_followup_queued') queuedEvents.push(data as Record<string, unknown>);
+      broadcast(event, data);
+    };
     backend.attachChannel!(channel);
     channel.queue.isLaneBusy=()=>{throw Error("Host lane admission is retired");};
     (channel as any).getQueuedFollowupCount=()=>{throw Error("UI queue admission is retired");};
@@ -96,6 +104,11 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     const queue=await (await channel.handleAgentQueueState(queueRequest())).json() as any;
     expect(queue.count).toBe(2);expect(queue.items.map((item:any)=>item.row_id)).toEqual([followup.submission_id,steer.submission_id]);
     expect(queue.items.map((item:any)=>item.content)).toEqual(['follow-up instruction','steering instruction']);
+    const liveFollowup = () => queuedEvents.find(event => event.row_id === followup.submission_id && event.mode === 'followUp');
+    const watchDeadline = Date.now() + 2000;
+    while (!liveFollowup() && Date.now() < watchDeadline) await Bun.sleep(10);
+    expect(liveFollowup()).toMatchObject({ chat_jid: 'web:default', content: 'follow-up instruction', source: 'native_sdk' });
+    expect(JSON.stringify(queuedEvents)).not.toContain('A2UI renderer metadata');
     const action=(path:string,id:number)=>new Request(`https://fixture/agent/${path}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({chat_jid:"web:default",row_id:id})});
     const modeBefore=database.query("SELECT record FROM submissions WHERE id=?").get(steer.submission_id);
     expect((await channel.handleAgentQueueSteer(action("queue-steer",steer.submission_id))).status).toBe(201);
@@ -115,6 +128,8 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     expect(replies).toHaveLength(2);expect(replies[0]!.content).toContain("steering instruction");expect(replies[1]!.content).toContain("follow-up instruction");
     expect(replies.map(reply=>reply.thread_id)).toEqual([primary.thread_id,followup.thread_id]);
     expect(toolSeen).toBe(true);expect(calls).toBe(3);
+    expect(followupModelInput).toContain('A2UI renderer metadata:');
+    expect(followupModelInput).toContain('a2uiRendererCapabilities');
     expect(lostBinding()).toEqual({submission_id:null}); // Reply publication used SDK evidence, never a manufactured ACK.
     const placedTimeline=await (await channel.handleTimeline(50,undefined,"web:default")).json() as any;
     expect(placedTimeline.posts.filter((post:any)=>post.data.type==="user_message").map((post:any)=>post.id)).toEqual([primary.thread_id,followup.thread_id,steer.thread_id]);
