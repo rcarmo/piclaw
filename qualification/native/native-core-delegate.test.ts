@@ -1,5 +1,6 @@
 import './src/test-guard.js';
 import { expect } from 'bun:test';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { isolatedApplicationTest } from './src/isolated-application-test.js';
@@ -14,12 +15,16 @@ import { AgentPool } from '../../runtime/src/agent-pool.js';
 import { WebChannel } from '../../runtime/src/channels/web.js';
 import { handleAgentMessage } from '../../runtime/src/channels/web/handlers/agent.js';
 import { ModelRuntime } from '../../node_modules/@earendil-works/pi-coding-agent';
-import { createAssistantMessageEventStream, getCurrentTools } from '../../node_modules/@earendil-works/pi-ai';
+import { createAssistantMessageEventStream, getCurrentSystemPrompt, getCurrentTools, toToolDeclaration } from '../../node_modules/@earendil-works/pi-ai';
 import { admitAddonLocalRequest } from '../../runtime/src/addons/local-context.js';
 import { handleRegisteredAddonConfigApiRequest } from '../../runtime/src/channels/web/handlers/addon-config-api.js';
 
 const applicationTest = isolatedApplicationTest(import.meta.url);
-for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash']) for (const installedLegacy of [false, true]) for (const approved of [false, true]) for (const credentialed of [false, true]) applicationTest(`Core Delegate fresh tool and Settings; child=${childModelId}; installedLegacy=${installedLegacy}; approved=${approved}; credentialed=${credentialed}`, async () => {
+const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
+// Freeze only the model-facing Delegate bytes from main before #2105 (5d850c4d5).
+const delegateDeclarationHash = '0509256753bfd0e28113f01ab145c0c53e2e6697b872158c4a1da17328a6823c';
+const delegateInstructionsHash = 'f5cf78b6911f3aae33229b2bc9b31bb64229adee711c426b7fce854182d4d9a4';
+for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash', 'gpt-6.1-terra']) for (const installedLegacy of [false, true]) for (const approved of [false, true]) for (const credentialed of [false, true]) applicationTest(`Core Delegate fresh tool and Settings; child=${childModelId}; installedLegacy=${installedLegacy}; approved=${approved}; credentialed=${credentialed}`, async () => {
   const workspace = process.env.PICLAW_WORKSPACE!;
   const marker = join(workspace, 'retired-delegate-evaluated');
   if (installedLegacy) {
@@ -45,11 +50,17 @@ for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash']) f
   const host = await ModelRuntime.create({ credentials, modelsPath: null, modelsStore: { read: async () => undefined, write: async () => {}, delete: async () => {} }, refreshOnCreate: false, allowModelNetwork: false });
   let children = 0; const offered: string[][] = [];
   const requests: { provider: string; model: string; apiKey: string | undefined; options: string; transcript: string }[] = [];
-  const stream = (physical: any, transcript: any, options?: { apiKey?: string }) => {
+  const parentContexts: { instructions: string; declaration: string; tools: string; sessionId?: string }[] = [];
+  const stream = (physical: any, transcript: any, options?: { apiKey?: string; sessionId?: string }) => {
     requests.push({ provider: physical.provider, model: physical.id, apiKey: options?.apiKey, options: JSON.stringify(options ?? {}), transcript: JSON.stringify(transcript) });
     const isChild = physical.id === child.id;
     if (isChild) { children++; expect(JSON.stringify(transcript)).not.toContain('PARENT_PRIVATE'); }
-    else offered.push(getCurrentTools(transcript.messages).map(tool => tool.name));
+    else {
+      const tools = getCurrentTools(transcript.messages).map(toToolDeclaration);
+      offered.push(tools.map(tool => tool.name));
+      parentContexts.push({ instructions: getCurrentSystemPrompt(transcript.messages),
+        declaration: JSON.stringify(tools.find(tool => tool.name === 'delegate')), tools: JSON.stringify(tools), sessionId: options?.sessionId });
+    }
     const lastUser = transcript.messages.findLastIndex((message: any) => message.role === 'user');
     const called = transcript.messages.slice(lastUser).some((message: any) => message.role === 'toolResult');
     const content = !isChild && !called ? [{ type: 'toolCall', id: 'core-delegate', name: 'delegate', arguments: { prompt: 'CHILD_STANDALONE', model: `${child.provider}/${child.id}`, tools: 'read_only' } }]
@@ -77,6 +88,7 @@ for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash']) f
     channel = new WebChannel(backend.bind({ queue: base.queue, agentPool: pool })); await backend.attachChannel!(channel);
     const initial = await request('models'); expect(initial?.status).toBe(200);
     const snapshot: any = await initial!.json(); expect(snapshot.source).toBe('native'); expect(snapshot.candidates.map((entry: any) => entry.id)).toEqual(migrate ? [childSlug] : []);
+    if (childModelId === 'gpt-6.1-terra') expect(snapshot.available).toContainEqual(expect.objectContaining({ id: childSlug, tier: 3, classificationRule: 'default' }));
     const migratedRows = root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all();
     if (!migrate) expect(migratedRows).toEqual(original);
     else expect(extensionKvGet("delegate", "config", "global")).toEqual({ approved_models: [childSlug], provider_order: searchable });
@@ -94,6 +106,13 @@ for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash']) f
     const deadline = Date.now() + 10000;
     while (!root.query('SELECT 1 FROM messages WHERE is_terminal_agent_reply=1').get() && Date.now() < deadline) await Bun.sleep(10);
     expect(offered[0]).toContain('delegate'); expect(offered).toHaveLength(2); expect(children).toBe(approved ? 1 : 0);
+    const initialPrompt = parentContexts[0]!;
+    const delegateBlock = initialPrompt.instructions.split('\n\n').find(block => block.startsWith('## Delegate tool\n'));
+    expect(typeof delegateBlock).toBe('string');
+    expect(sha256(delegateBlock!)).toBe(delegateInstructionsHash);
+    expect(sha256(initialPrompt.declaration)).toBe(delegateDeclarationHash);
+    expect(initialPrompt.sessionId).toBeTruthy();
+    expect(parentContexts[1]).toEqual(initialPrompt);
     expect(existsSync(marker)).toBe(false);
     expect(root.query("SELECT value FROM extension_kv WHERE extension_id='delegate' AND key='config' AND scope='global' AND scope_key=''").all()).toHaveLength(approved ? 1 : 0);
     const firstEntries = JSON.stringify(root.query('SELECT record FROM entries').all());
@@ -145,6 +164,8 @@ for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash']) f
       expect(offered).toHaveLength(4);
       expect(children).toBe(1);
     }
+    // A changed approval affects selection/results, not the parent prompt or cache identity.
+    for (const prompt of parentContexts) expect(prompt).toEqual(initialPrompt);
     const beforeReopen = (await (await request('models'))!.json() as any).candidates.map((model: any) => model.id);
     const saved = root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all(), callsBefore = offered.length;
     await backend.close(); await channel.stop(); await pool.shutdown(); await base.queue.shutdown();

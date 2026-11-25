@@ -61,8 +61,8 @@ function normalizeLegacyConfig(config: Partial<LegacyDelegateConfig>): LegacyDel
 }
 
 export type ModelTierNumber = 1 | 2 | 3 | 4 | 5;
-export type ModelClassificationStatus = "classified" | "unclassified";
-export type ModelClassificationConfidence = "exact-policy" | "none";
+export type ModelClassificationStatus = "classified" | "default";
+export type ModelClassificationConfidence = "exact-policy" | "default";
 export type ModelCatalogSource = "runtime" | "cli";
 
 export interface AvailableModel {
@@ -83,9 +83,9 @@ export interface AvailableModel {
 
 export interface ModelClassification {
   status: ModelClassificationStatus;
-  tier: ModelTierNumber | null;
+  tier: ModelTierNumber;
   family: string;
-  rule: string | null;
+  rule: string;
   reason: string;
   confidence: ModelClassificationConfidence;
   preference: number;
@@ -146,7 +146,7 @@ const MODEL_CLASSIFICATION_RULES: ClassificationRule[] = [
   rule("claude-sonnet-5", 3, "claude", 25, "Claude Sonnet 5 general-purpose model", /^claude-sonnet-5(?:-|$)/),
   rule("claude-sonnet", 3, "claude", 30, "Claude Sonnet general-purpose family", /^claude-sonnet(?:-|$)/),
 
-  // Enumerated Astra variants only; do not approve unknown GPT-6 families/suffixes.
+  // Enumerated Astra variants only; other variants use the default rank.
   // OpenRouter retains the upstream publisher namespace in its model IDs.
   rule("gpt-6-astra-pro", 4, "gpt", 46, "GPT 6 Astra Pro high-capability variant", /^(?:openai\/)?gpt-6-astra-pro(?::batch)?$/),
   rule("gpt-6-astra", 3, "gpt", 52, "GPT 6 Astra general-purpose model", /^(?:openai\/)?gpt-6-astra(?::batch)?$/),
@@ -185,7 +185,7 @@ const MODEL_CLASSIFICATION_RULES: ClassificationRule[] = [
   rule("lfm", 1, "lfm", 50, "LFM lightweight local family", /^lfm(?:\d|-|:|$)/),
 ];
 
-function inferUnclassifiedFamily(modelId: string): string {
+function inferModelFamily(modelId: string): string {
   const normalized = normalizedPolicyModelId(modelId);
   return normalized.split("-")[0] || "unknown";
 }
@@ -199,12 +199,12 @@ export function classifyModel(model: Pick<AvailableModel, "provider" | "id"> | s
   const matched = MODEL_CLASSIFICATION_RULES.find((candidate) => candidate.matches(provider, normalizedId));
   if (!matched) {
     return {
-      status: "unclassified",
-      tier: null,
-      family: inferUnclassifiedFamily(modelId),
-      rule: null,
-      reason: `No ordered Delegate policy rule matches ${fullId}`,
-      confidence: "none",
+      status: "default",
+      tier: 3,
+      family: inferModelFamily(modelId),
+      rule: "default",
+      reason: "Default Delegate ranking",
+      confidence: "default",
       preference: Number.MAX_SAFE_INTEGER,
     };
   }
@@ -278,7 +278,10 @@ export function migrateLegacyDelegateConfig(models: AvailableModel[], input: unk
     || !Object.hasOwn(input, 'searchable_providers')) return;
   const legacy = normalizeLegacyConfig(input as Partial<LegacyDelegateConfig>);
   const providers = new Set(getAllowedProviders(models, legacy));
-  const approved = classifyDelegateModels(models.filter(model => providers.has(model.provider) && !isExcludedModel(model, legacy)));
+  // Only migrate models eligible under the old policy. A default rank makes
+  // new models addable, but it does not grant prior or future approval.
+  const approved = classifyDelegateModels(models.filter(model => providers.has(model.provider)
+    && !isExcludedModel(model, legacy) && classifyModel(model).status === "classified"));
   return { approved_models: approved.map(model => model.id), provider_order: legacy.searchable_providers ?? [] };
 }
 
@@ -287,7 +290,7 @@ export function buildModelCandidates(models: AvailableModel[], input?: Partial<D
   return classifyDelegateModels(models.filter(model => ids.has(model.fullId)), config.provider_order);
 }
 
-/** Available, classified models with their tier and capability metadata, irrespective of approval. */
+/** Available models with their internal ranking and capability metadata, irrespective of approval. */
 export function classifyDelegateModels(models: AvailableModel[], providerOrder?: string[]): ModelCandidate[] {
   const candidates: Array<ModelCandidate & { preference: number; providerRank: number }> = [];
   const seen = new Set<string>();
@@ -296,7 +299,6 @@ export function classifyDelegateModels(models: AvailableModel[], providerOrder?:
     if (model.provider.includes("/") || !isDelegateModelId(model.fullId) || model.fullId !== `${model.provider}/${model.id}` || seen.has(model.fullId)) continue;
     seen.add(model.fullId);
     const classification = classifyModel(model);
-    if (classification.status !== "classified" || classification.tier === null || !classification.rule) continue;
     candidates.push({
       id: model.fullId,
       tier: classification.tier,
@@ -304,7 +306,7 @@ export function classifyDelegateModels(models: AvailableModel[], providerOrder?:
       sourceId: classification.rule,
       provider: model.provider,
       modelId: model.id,
-      matchScore: 100,
+      matchScore: classification.status === "classified" ? 100 : 0,
       classificationRule: classification.rule,
       classificationReason: classification.reason,
       classificationConfidence: classification.confidence,

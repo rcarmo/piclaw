@@ -1,5 +1,5 @@
 import { getExtensionKvStore } from '../extension-kv-registry.js';
-import { classifyDelegateModels, classifyModel, isDelegateModelId, normalizeConfig, type AvailableModel, type DelegateConfig } from './policy.js';
+import { classifyDelegateModels, isDelegateModelId, normalizeConfig, type AvailableModel, type DelegateConfig } from './policy.js';
 
 /** Current-native config keeps its existing namespace; reads never adopt/rewrite it.
  * The authenticated request's existing KV router owns write admission and SQL. */
@@ -12,11 +12,11 @@ export function createDelegateSettings(options: {
   const snapshot = (config: DelegateConfig, models = options.models()) => {
     const approved = new Set(config.approved_models);
     const available = classifyDelegateModels(models, config.provider_order);
-    const classified = new Set(available.map(model => model.id));
+    const addable = new Set(available.map(model => model.id));
     return {
       ok: true, source: 'native', config,
       models: models.map(({ fullId, name }) => ({ id: fullId, name,
-        ...(classified.has(fullId) ? {} : { reason: classifyModel(fullId).reason }) })),
+        ...(addable.has(fullId) ? {} : { reason: 'Unavailable for Delegate' }) })),
       available, candidates: available.filter(model => approved.has(model.id)),
       runtime_catalog: { captured_at: Date.now(), current_model: options.defaultModel(), model_count: models.length },
     };
@@ -35,7 +35,7 @@ export function createDelegateSettings(options: {
         options.assertCurrent();
         const current = read(), models = options.models();
         if (key === 'add_model' && !classifyDelegateModels(models).some(model => model.id === id))
-          throw Error('Only a currently available, classified model may be added');
+          throw Error('Only a currently available model may be added');
         const approved = new Set(current.approved_models);
         if (key === 'add_model') approved.add(id);
         else approved.delete(id);
