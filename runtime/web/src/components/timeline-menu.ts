@@ -151,23 +151,28 @@ export function TimelineMenu({
         s.right = 'auto';
     }, [pos]);
 
-    useEffect(() => {
+    const closeMenu = useCallback((restoreFocus = false) => {
+        const trigger = btnRef.current;
+        if (restoreFocus && trigger?.isConnected && !trigger.disabled) trigger.focus();
+        setOpen(false);
+    }, []);
+
+    useLayoutEffect(() => {
         if (!open) return;
         const onClick = (e) => {
-            if (menuRef.current?.contains(e.target)) return;
-            if (btnRef.current?.contains(e.target)) return;
-            setOpen(false);
+            if (menuRef.current?.contains(e.target) || btnRef.current?.contains(e.target)) return;
+            closeMenu();
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape') closeMenu(menuRef.current?.contains(document.activeElement));
         };
         document.addEventListener('mousedown', onClick, true);
-        return () => document.removeEventListener('mousedown', onClick, true);
-    }, [open]);
-
-    useEffect(() => {
-        if (!open) return;
-        const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
         document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [open]);
+        return () => {
+            document.removeEventListener('mousedown', onClick, true);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [open, closeMenu]);
 
     useEffect(() => { setOpen(false); }, [workspaceOpen]);
 
@@ -211,7 +216,11 @@ export function TimelineMenu({
         }
     }, [commitPwaDisplayScale]);
 
-    const run = useCallback((fn) => { setOpen(false); fn?.(); }, []);
+    // Only actions that leave the user here return keyboard focus to the menu.
+    const run = useCallback((fn, localActionEvent?) => {
+        closeMenu(localActionEvent?.detail === 0);
+        fn?.();
+    }, [closeMenu]);
 
     const content = html`
         <button ref=${btnRef} class=${`timeline-menu-btn${open ? ' active' : ''}`} data-testid="hamburger"
@@ -235,8 +244,8 @@ export function TimelineMenu({
                     <span class="timeline-menu-check-mark" aria-hidden="true"></span>
                     <span class="timeline-menu-check-label">Plan</span>
                 </button>
-                <${MenuCheckItem} checked=${metersOn} label="System meters" onSelect=${() => run(() => toggleMetersCollapsed())} />
-                <${MenuCheckItem} checked=${!workbench.activityHidden} label="Activity bar" onSelect=${() => run(() => dispatchWorkbenchCommand('activity-bar'))} />
+                <${MenuCheckItem} checked=${metersOn} label="System meters" onSelect=${(event) => run(toggleMetersCollapsed, event)} />
+                <${MenuCheckItem} checked=${!workbench.activityHidden} label="Activity bar" onSelect=${(event) => run(() => dispatchWorkbenchCommand('activity-bar'), event)} />
 
                 ${(onOpenTerminalTab || onOpenVncTab || onOpenCdpTab) && html`
                     <div class="workspace-menu-separator"></div>
@@ -261,14 +270,14 @@ export function TimelineMenu({
                 })()}
                 <div class="workspace-menu-separator"></div>
                 <div class="workspace-menu-submenu-label">Workspace</div>
-                <button class="workspace-menu-item" role="menuitem" onClick=${() => run(() => window.dispatchEvent(new CustomEvent('piclaw:workspace-action', { detail: { action: 'refresh' } })))}>${t('menu.refreshTree')}</button>
-                <button class="workspace-menu-item" role="menuitem" onClick=${() => run(() => window.dispatchEvent(new CustomEvent('piclaw:workspace-action', { detail: { action: 'reindex' } })))}>${t('menu.reindex')}</button>
-                <${MenuCheckItem} checked=${showHidden} label="Show hidden files" onSelect=${() => run(() => {
+                <button class="workspace-menu-item" role="menuitem" onClick=${(event) => run(() => window.dispatchEvent(new CustomEvent('piclaw:workspace-action', { detail: { action: 'refresh' } })), event)}>${t('menu.refreshTree')}</button>
+                <button class="workspace-menu-item" role="menuitem" onClick=${(event) => run(() => window.dispatchEvent(new CustomEvent('piclaw:workspace-action', { detail: { action: 'reindex' } })), event)}>${t('menu.reindex')}</button>
+                <${MenuCheckItem} checked=${showHidden} label="Show hidden files" onSelect=${(event) => run(() => {
                     const next = !showHidden;
                     setShowHidden(next);
                     try { localStorage.setItem('workspaceShowHidden', String(next)); } catch { setShowHidden(next); }
                     window.dispatchEvent(new CustomEvent('piclaw:toggle-hidden-files', { detail: { showHidden: next } }));
-                })} />
+                }, event)} />
                 <div class="workspace-menu-separator"></div>
                 <button class="workspace-menu-item" role="menuitem" onClick=${() => run(() => window.dispatchEvent(new CustomEvent('piclaw:open-settings')))}>${t('menu.settings')}…</button>
                 <div class="workspace-menu-separator"></div>

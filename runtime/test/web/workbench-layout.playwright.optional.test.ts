@@ -234,6 +234,52 @@ for (const engine of ['chromium', 'webkit']) {
     } finally { await page.close(); }
   }, 30000);
 
+  for (const width of [390, 1440]) browserTest(`${engine} ${width}px: menu dismissal restores focus only for keyboard actions in the menu`, async () => {
+    const { page, errors } = await open(engine, width, 844);
+    try {
+      page.setDefaultTimeout(5000);
+      const trigger = page.getByTestId('hamburger');
+      const menu = page.locator('.timeline-menu-dropdown');
+      const item = menu.getByRole('menuitemcheckbox', { name: 'Show hidden files' });
+      const composer = page.locator('.compose-box textarea').filter({ visible: true }).first();
+      const openFromKeyboard = async () => {
+        await trigger.press('Enter');
+        await menu.waitFor();
+        await item.focus();
+      };
+      const expectRestored = async () => {
+        await menu.waitFor({ state: 'hidden' });
+        expect(await trigger.evaluate(el => document.activeElement === el)).toBe(true);
+        expect(await trigger.getAttribute('aria-expanded')).toBe('false');
+      };
+      await openFromKeyboard();
+      await page.keyboard.press('Escape');
+      await expectRestored();
+      await openFromKeyboard();
+      await page.keyboard.press('Space');
+      await expectRestored();
+      expect(await page.evaluate(() => localStorage.getItem('workspaceShowHidden'))).toBe('true');
+      await openFromKeyboard();
+      await composer.click();
+      await menu.waitFor({ state: 'hidden' });
+      expect(await composer.evaluate(el => document.activeElement === el)).toBe(true);
+      await openFromKeyboard();
+      await trigger.evaluate((el: HTMLButtonElement) => { el.disabled = true; });
+      await page.keyboard.press('Escape');
+      await menu.waitFor({ state: 'hidden' });
+      expect(await trigger.evaluate(el => document.activeElement === el)).toBe(false);
+      await trigger.evaluate((el: HTMLButtonElement) => { el.disabled = false; });
+      await openFromKeyboard();
+      await page.evaluate(() => (window as any).workbench.setMenuMounted(false));
+      await trigger.waitFor({ state: 'detached' });
+      await menu.waitFor({ state: 'detached' });
+      await composer.focus();
+      await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+      expect(await composer.evaluate(el => document.activeElement === el)).toBe(true);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  }, 30000);
+
   browserTest(`${engine}: the global menu sits in the activity bar and can hide it, leaving only the menu`, async () => {
     const { page, errors } = await open(engine, 1440, 900);
     try {
