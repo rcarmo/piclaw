@@ -1,4 +1,4 @@
-function H(P){let{html:s,useState:r,useEffect:T,useCallback:E,registerSettingsPane:z,notifySettingsPanesChanged:A}=P,N="/agent/addons/api/delegate",j=`
+function q(A){let{html:s,useState:i,useEffect:D,useCallback:P,registerSettingsPane:R,notifySettingsPanesChanged:I}=A,B="/agent/addons/api/delegate",O=`
 @layer delegate-settings-fallback {
   .delegate-settings { padding: .5rem 0; min-width: 0; }
   .delegate-settings .settings-addon-section { margin-bottom: 20px; min-width: 0; }
@@ -25,8 +25,7 @@ function H(P){let{html:s,useState:r,useEffect:T,useCallback:E,registerSettingsPa
 .delegate-settings .delegate-model { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem; padding: .4rem .5rem; border-bottom: 1px solid var(--border-color); }
 .delegate-settings .delegate-model button { min-height: 34px; min-width: 34px; }
 .delegate-settings .delegate-model button[aria-disabled=true] { opacity: .5; cursor: default; }
-.delegate-settings .delegate-tier { margin: 0; padding: .35rem .5rem; background: var(--bg-secondary); font-size: .82rem; }
-`;async function x(n,c={}){let o=await fetch(`/agent/addons/api/delegate/${n}`,c),d=await o.json().catch(()=>({}));if(!o.ok||d?.ok===!1)throw Error(d?.error||`HTTP ${o.status}`);return d}function I(){let[n,c]=r(null),[o,d]=r(""),[g,p]=r(!1),[S,i]=r(""),[m,u]=r(!1),h=E(async(e=!1,t)=>{p(!0),i(""),u(!1);try{let a=await x("models",e?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({refresh:!0}),signal:t}:{signal:t});if(t?.aborted)return;if(c(a),e)i("Model list refreshed.")}catch(a){if(!t?.aborted)u(!0),i(a instanceof Error?a.message:"Could not load Delegate models.")}finally{if(!t?.aborted)p(!1)}},[]);T(()=>{let e=new AbortController;return h(!1,e.signal),()=>e.abort()},[h]);async function R(e,t,a){if(g)return;p(!0),i(""),u(!1);try{if(c(await x("config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({[t?"add_model":"remove_model"]:e})})),!t&&a.ownerDocument.activeElement===a)a.closest(".delegate-settings")?.querySelector("#delegate-model-search")?.focus({preventScroll:!0});i(`${t?"Added":"Removed"} ${e}.`)}catch(l){u(!0),i(l instanceof Error?l.message:"Could not change the Delegate whitelist.")}finally{p(!1)}}if(!n)return s`<div class="delegate-settings"><style>${`
+`;function x(n,l){return n<l?-1:n===l?0:1}async function S(n,l={}){let r=await fetch(`/agent/addons/api/delegate/${n}`,l),g=await r.json().catch(()=>({}));if(!r.ok||g?.ok===!1)throw Error(g?.error||`HTTP ${r.status}`);return g}function N(){let[n,l]=i(null),[r,g]=i(""),[k,z]=i("name"),[c,p]=i(!1),[E,d]=i(""),[m,u]=i(!1),h=P(async(e=!1,a)=>{p(!0),d(""),u(!1);try{let t=await S("models",e?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({refresh:!0}),signal:a}:{signal:a});if(a?.aborted)return;if(l(t),e)d("Model list refreshed.")}catch(t){if(!a?.aborted)u(!0),d(t instanceof Error?t.message:"Could not load Delegate models.")}finally{if(!a?.aborted)p(!1)}},[]);D(()=>{let e=new AbortController;return h(!1,e.signal),()=>e.abort()},[h]);async function L(e,a,t){if(c)return;p(!0),d(""),u(!1);try{if(l(await S("config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({[a?"add_model":"remove_model"]:e})})),!a&&t.ownerDocument.activeElement===t)t.closest(".delegate-settings")?.querySelector("#delegate-model-search")?.focus({preventScroll:!0});d(`${a?"Added":"Removed"} ${e}.`)}catch(o){u(!0),d(o instanceof Error?o.message:"Could not change the Delegate whitelist.")}finally{p(!1)}}if(!n)return s`<div class="delegate-settings"><style>${`
 @layer delegate-settings-fallback {
   .delegate-settings { padding: .5rem 0; min-width: 0; }
   .delegate-settings .settings-addon-section { margin-bottom: 20px; min-width: 0; }
@@ -53,16 +52,15 @@ function H(P){let{html:s,useState:r,useEffect:T,useCallback:E,registerSettingsPa
 .delegate-settings .delegate-model { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem; padding: .4rem .5rem; border-bottom: 1px solid var(--border-color); }
 .delegate-settings .delegate-model button { min-height: 34px; min-width: 34px; }
 .delegate-settings .delegate-model button[aria-disabled=true] { opacity: .5; cursor: default; }
-.delegate-settings .delegate-tier { margin: 0; padding: .35rem .5rem; background: var(--bg-secondary); font-size: .82rem; }
 `}</style>
-    <p role=${m?"alert":"status"}>${S||"Loading Delegate models…"}</p>
-    ${m&&s`<button type="button" disabled=${g} onClick=${()=>h()}>Retry</button>`}
-  </div>`;let b=new Set(n.config.approved_models),y=new Map(n.available.map((e)=>[e.id,e])),C=new Set(n.candidates.map((e)=>e.id)),M=new Map(n.models.map((e)=>[e.id,e])),v=o.trim().toLowerCase().split(/\s+/).filter(Boolean),f=[...M.values()].filter((e)=>{let t=`${e.id} ${e.name??""}`.toLowerCase();return v.every((a)=>t.includes(a))}).sort((e,t)=>e.id<t.id?-1:e.id===t.id?0:1),k=[...b].filter((e)=>!C.has(e)),w=(e,t,a=!1)=>{let l=b.has(e),D=g||!a&&(l||!y.has(e));return s`<li key=${e} class="delegate-model">
-      <span><code>${e}</code><br /><span class="settings-addon-help">${t}</span></span>
-      ${(a||y.has(e))&&s`<button type="button" aria-disabled=${D} onClick=${(L)=>{if(!D)R(e,!a,L.currentTarget)}}
-        aria-label=${a?`Remove ${e} from whitelist`:l?`${e} is on the whitelist`:`Add ${e} to whitelist`}
-        title=${a?"Remove from whitelist":l?"Already on the whitelist":"Add to whitelist"}>${a?"−":l?"✓":"+"}</button>`}
-    </li>`};return s`<div class="delegate-settings" aria-busy=${g}><style>${`
+    <p role=${m?"alert":"status"}>${E||"Loading Delegate models…"}</p>
+    ${m&&s`<button type="button" disabled=${c} onClick=${()=>h()}>Retry</button>`}
+  </div>`;let b=new Set(n.config.approved_models),y=new Map(n.available.map((e)=>[e.id,e.tier])),f=new Map(n.candidates.map((e)=>[e.id,e.tier])),_=new Map(n.models.map((e)=>[e.id,e])),w=r.trim().toLowerCase().split(/\s+/).filter(Boolean),v=[..._.values()].filter((e)=>{let a=`${e.id} ${e.name??""}`.toLowerCase();return w.every((t)=>a.includes(t))}).sort((e,a)=>x(e.id,a.id)),H=[...b].sort((e,a)=>{if(k==="rank"){let t=f.get(e)??Number.MAX_SAFE_INTEGER,o=f.get(a)??Number.MAX_SAFE_INTEGER;if(t!==o)return t-o}return x(e,a)}),M=(e)=>e===void 0?"Not currently available":`Rank ${e}`,C=(e,a,t=!1)=>{let o=b.has(e),T=c||!t&&(o||!y.has(e));return s`<li key=${e} class="delegate-model">
+      <span><code>${e}</code>${a&&s`<br /><span class="settings-addon-help">${a}</span>`}</span>
+      ${(t||y.has(e))&&s`<button type="button" aria-disabled=${T} onClick=${(j)=>{if(!T)L(e,!t,j.currentTarget)}}
+        aria-label=${t?`Remove ${e} from whitelist`:o?`${e} is on the whitelist`:`Add ${e} to whitelist`}
+        title=${t?"Remove from whitelist":o?"Already on the whitelist":"Add to whitelist"}>${t?"−":o?"✓":"+"}</button>`}
+    </li>`};return s`<div class="delegate-settings" aria-busy=${c}><style>${`
 @layer delegate-settings-fallback {
   .delegate-settings { padding: .5rem 0; min-width: 0; }
   .delegate-settings .settings-addon-section { margin-bottom: 20px; min-width: 0; }
@@ -89,7 +87,6 @@ function H(P){let{html:s,useState:r,useEffect:T,useCallback:E,registerSettingsPa
 .delegate-settings .delegate-model { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem; padding: .4rem .5rem; border-bottom: 1px solid var(--border-color); }
 .delegate-settings .delegate-model button { min-height: 34px; min-width: 34px; }
 .delegate-settings .delegate-model button[aria-disabled=true] { opacity: .5; cursor: default; }
-.delegate-settings .delegate-tier { margin: 0; padding: .35rem .5rem; background: var(--bg-secondary); font-size: .82rem; }
 `}</style>
     <section class="settings-addon-section">
       <h4 id="delegate-available-label">Available models</h4>
@@ -98,27 +95,33 @@ function H(P){let{html:s,useState:r,useEffect:T,useCallback:E,registerSettingsPa
         <label class="settings-addon-label" for="delegate-model-search">Search models</label>
         <div class="settings-addon-control-group">
           <input id="delegate-model-search" class="settings-addon-control" type="search" aria-controls="delegate-available"
-            aria-describedby="delegate-search-help" placeholder="Search models…" value=${o} onInput=${(e)=>d(e.currentTarget.value)} />
-          <button type="button" disabled=${g} onClick=${()=>h(!0)}>Refresh models</button>
+            aria-describedby="delegate-search-help" placeholder="Search models…" value=${r} onInput=${(e)=>g(e.currentTarget.value)} />
+          <button type="button" disabled=${c} onClick=${()=>h(!0)}>Refresh models</button>
         </div>
       </div>
-      <p class="settings-addon-help" role="status">${f.length} ${f.length===1?"model":"models"}${v.length?" found":" available"}.</p>
+      <p class="settings-addon-help" role="status">${v.length} ${v.length===1?"model":"models"}${w.length?" found":" available"}.</p>
       <div class="delegate-scroll" id="delegate-available" role="region" aria-labelledby="delegate-available-label" tabIndex=${0}>
-        ${f.length?s`<ul class="delegate-models">${f.map((e)=>{let t=y.get(e.id);return w(e.id,t?`Tier ${t.tier} · ${e.name||t.family}`:e.reason??"Unavailable for Delegate")})}</ul>`:s`<p class="settings-addon-help">${v.length?"No models match your search.":"No models are currently available."}</p>`}
+        ${v.length?s`<ul class="delegate-models">${v.map((e)=>C(e.id,e.reason??M(y.get(e.id))))}</ul>`:s`<p class="settings-addon-help">${w.length?"No models match your search.":"No models are currently available."}</p>`}
       </div>
     </section>
     <section class="settings-addon-section">
       <h4 id="delegate-whitelist-label">Delegate whitelist</h4>
-      <p class="settings-addon-help">${b.size} approved · ${C.size} ready. Delegate still requires a currently available, classified model.</p>
-      ${b.size?s`<div class="delegate-scroll" role="region" aria-labelledby="delegate-whitelist-label" tabIndex=${0}>
-        ${[1,2,3,4,5].map((e)=>{let t=n.candidates.filter((a)=>a.tier===e);return t.length?s`<h5 class="delegate-tier">Tier ${e}</h5><ul class="delegate-models">
-            ${t.map((a)=>w(a.id,`${a.family} · ${a.classificationRule}`,!0))}</ul>`:null})}
-        ${k.length?s`<h5 class="delegate-tier">Unavailable</h5><ul class="delegate-models">
-          ${k.map((e)=>w(e,M.get(e)?.reason??"Not currently available",!0))}</ul>`:null}
-      </div>`:s`<p class="settings-addon-help">No models are approved.</p>`}
+      <p class="settings-addon-help">${b.size} approved · ${f.size} ready. Only available models can run.</p>
+      ${b.size?s`
+        <div class="settings-addon-field">
+          <label class="settings-addon-label" for="delegate-whitelist-sort">Sort whitelist</label>
+          <select id="delegate-whitelist-sort" class="settings-addon-control" value=${k}
+            onChange=${(e)=>z(e.currentTarget.value==="rank"?"rank":"name")}>
+            <option value="name">Model name (A–Z)</option>
+            <option value="rank">Rank (low to high)</option>
+          </select>
+        </div>
+        <div class="delegate-scroll" role="region" aria-labelledby="delegate-whitelist-label" tabIndex=${0}>
+          <ul class="delegate-models">${H.map((e)=>C(e,M(f.get(e)),!0))}</ul>
+        </div>`:s`<p class="settings-addon-help">No models are approved.</p>`}
     </section>
-    <div class=${m?"settings-addon-error":"settings-addon-status"} role=${m?"alert":"status"}>${S}</div>
-  </div>`}z({id:"delegate",label:"Delegate",icon:s`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7h10v10H7z"/><path d="M4 4h4m8 0h4M4 20h4m8 0h4"/></svg>`,component:I,order:30.25}),A()}export{H as registerDelegateSettings};
+    <div class=${m?"settings-addon-error":"settings-addon-status"} role=${m?"alert":"status"}>${E}</div>
+  </div>`}R({id:"delegate",label:"Delegate",icon:s`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7h10v10H7z"/><path d="M4 4h4m8 0h4M4 20h4m8 0h4"/></svg>`,component:N,order:30.25}),I()}export{q as registerDelegateSettings};
 
-//# debugId=A0B540E53232B82C64756E2164756E21
+//# debugId=D60649EB3A94234264756E2164756E21
 //# sourceMappingURL=delegate-settings.bundle.js.map

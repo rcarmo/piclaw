@@ -19,7 +19,7 @@ import { admitAddonLocalRequest } from '../../runtime/src/addons/local-context.j
 import { handleRegisteredAddonConfigApiRequest } from '../../runtime/src/channels/web/handlers/addon-config-api.js';
 
 const applicationTest = isolatedApplicationTest(import.meta.url);
-for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash']) for (const installedLegacy of [false, true]) for (const approved of [false, true]) for (const credentialed of [false, true]) applicationTest(`Core Delegate fresh tool and Settings; child=${childModelId}; installedLegacy=${installedLegacy}; approved=${approved}; credentialed=${credentialed}`, async () => {
+for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash', 'gpt-6.1-terra']) for (const installedLegacy of [false, true]) for (const approved of [false, true]) for (const credentialed of [false, true]) applicationTest(`Core Delegate fresh tool and Settings; child=${childModelId}; installedLegacy=${installedLegacy}; approved=${approved}; credentialed=${credentialed}`, async () => {
   const workspace = process.env.PICLAW_WORKSPACE!;
   const marker = join(workspace, 'retired-delegate-evaluated');
   if (installedLegacy) {
@@ -77,6 +77,7 @@ for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash']) f
     channel = new WebChannel(backend.bind({ queue: base.queue, agentPool: pool })); await backend.attachChannel!(channel);
     const initial = await request('models'); expect(initial?.status).toBe(200);
     const snapshot: any = await initial!.json(); expect(snapshot.source).toBe('native'); expect(snapshot.candidates.map((entry: any) => entry.id)).toEqual(migrate ? [childSlug] : []);
+    if (childModelId === 'gpt-6.1-terra') expect(snapshot.available).toContainEqual(expect.objectContaining({ id: childSlug, tier: 3, classificationRule: 'default' }));
     const migratedRows = root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all();
     if (!migrate) expect(migratedRows).toEqual(original);
     else expect(extensionKvGet("delegate", "config", "global")).toEqual({ approved_models: [childSlug], provider_order: searchable });
