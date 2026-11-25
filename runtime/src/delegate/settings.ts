@@ -52,8 +52,8 @@ export function createDelegateSettings(options: {
 export const delegateInstructions = [
   '## Delegate tool',
   'Use delegate for self-contained work in a fresh SDK child conversation; it receives no parent history.',
-  'Only currently available native models on the Delegate whitelist can run. No models are approved by default.',
-  'Native automatic selection inherits the parent model. An explicit exact provider/model may override automatic model selection, but never the whitelist, current availability or image support.',
+  'Only current available native models on the Delegate whitelist and classified by the ordered policy can run. No models are approved by default.',
+  'Native automatic selection inherits the parent model. An explicit exact provider/model may override the parent tier, but never the whitelist, classification, current availability or image support.',
   'The omitted tool profile is read_only; request standard explicitly for guarded host editing/shell tools. Explicit host-builtin subsets are supported. Recursive delegation, full/MCP child profiles and task_category judge are not qualified and fail closed.',
   'Text and supported raster image attachments follow the workspace/file limits. Timeout is an integer from 10 to 300 seconds, default 120; native cancellation joins the owned child and is not an uncooperative-provider hard kill.',
   'When delegating, give the user one visible sentence explaining the delegated task and why it is self-contained.',
