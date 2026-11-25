@@ -5,7 +5,6 @@ import {Harness,MemoryStorage,createRegistry,defineEntry,defineExtension,defineT
 import {createModels,fauxProvider,fauxAssistantMessage,fauxToolCall} from '@earendil-works/pi-ai';
 import {Type} from 'typebox';
 import {createApplicationMcp,type ApplicationMcpBinding} from '../src/mcp/application.ts';
-import {mcpAgentAllowed} from '../src/mcp/policy.ts';
 
 test('application identity distinguishes routed Agents, task-owned children and unrouted SDK forks without granting MCP',async()=>{
  const database=new Database(':memory:');database.exec("CREATE TABLE chat_branches(chat_jid TEXT,branch_id TEXT,agent_name TEXT,archived_at TEXT);INSERT INTO chat_branches VALUES('web:default','root','default',NULL)");
@@ -24,20 +23,17 @@ test('application identity distinguishes routed Agents, task-owned children and 
  }finally{await features.close();await harness.close(context);database.close();}
 });
 
-test('selected MCP grants survive rename but never transfer through alias reuse or branch replacement',async()=>{
+test('MCP identities follow current owned branches, not friendly names',async()=>{
  const database=new Database(':memory:');database.exec("CREATE TABLE chat_branches(chat_jid TEXT,branch_id TEXT,agent_name TEXT,archived_at TEXT);INSERT INTO chat_branches VALUES('web:original','original-branch','private-agent',NULL)");
  const registry=createRegistry(),harness=await Harness.open(new MemoryStorage(),{registry,models:createModels()},context),root=await harness.root(context);
  const other=await harness.commit(tx=>tx.createConversation({ownership:{kind:'ownerless'}}),context),bindings:ApplicationMcpBinding[]=[{chatJid:'web:original',branchId:'original-branch',conversationId:root.id}];
  const features=createApplicationMcp({root:database,workspaceRoot:process.env.PICLAW_WORKSPACE!,registry,harness:()=>harness,bindings:async()=>bindings,assertOwner(){},captureSource:async()=>{throw Error('No MCP call is admitted by this identity fixture');},offlineMaintenance:true});
  try{
-  const original=(await features.identity(root.id))!,grant={workspaceId:features.workspaceId,agentIds:[original.agentId],enabled:true};
   database.run("UPDATE chat_branches SET agent_name='renamed' WHERE branch_id='original-branch'");database.run("INSERT INTO chat_branches VALUES('web:other','other-branch','private-agent',NULL)");bindings.push({chatJid:'web:other',branchId:'other-branch',conversationId:other.id});
   const renamed=(await features.identity(root.id))!,alias=(await features.identity(other.id))!;
-  expect({originalStillGranted:mcpAgentAllowed(grant,features.workspaceId,renamed.agentId),aliasDenied:!mcpAgentAllowed(grant,features.workspaceId,alias.agentId)}).toEqual({originalStillGranted:true,aliasDenied:true});
   expect(renamed.agentId).toBe('original-branch');expect(alias.agentId).toBe('other-branch');
   database.run("UPDATE chat_branches SET archived_at='archived' WHERE branch_id='original-branch'");expect(await features.identity(root.id)).toBeUndefined();
   database.run("DELETE FROM chat_branches WHERE branch_id='original-branch'");database.run("INSERT INTO chat_branches VALUES('web:original','replacement-branch','renamed',NULL)");bindings[0]={...bindings[0]!,branchId:'replacement-branch'};
-  expect(mcpAgentAllowed(grant,features.workspaceId,(await features.identity(root.id))!.agentId)).toBe(false);
-  expect(mcpAgentAllowed({...grant,agentIds:['renamed']},features.workspaceId,(await features.identity(root.id))!.agentId)).toBe(false);
+  expect(await features.identity(root.id)).toMatchObject({agentId:'replacement-branch',readOnly:false});
  }finally{await features.close();await harness.close(context);database.close();}
 });

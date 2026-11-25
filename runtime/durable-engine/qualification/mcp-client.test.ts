@@ -5,7 +5,6 @@ import {createCodemodeExtension} from '@earendil-works/pi-durable/codemode';
 import {CodemodeSandbox} from '@earendil-works/pi-codemode';
 import {createModels,fauxProvider,fauxAssistantMessage,fauxToolCall,contentText} from '@earendil-works/pi-ai';
 import {connectMcpHttp,mcpEndpoint,mcpFailure,mcpToolAlias,mcpToolsExtension} from '../src/mcp/client.ts';
-import {canonicalMcpAccess,mcpAgentAllowed,mcpAccessOverlaps} from '../src/mcp/policy.ts';
 import {createMcpAuthority,type McpAuthority} from '../src/mcp/authority.ts';
 const cleanups:(()=>Promise<void>)[]=[];
 afterEach(async()=>{for(const close of cleanups.splice(0).reverse())await close();});
@@ -21,12 +20,6 @@ test('bearer is never forwarded through redirects',async()=>{
  let leaked=0;const destination=Bun.serve({hostname:'127.0.0.1',port:0,fetch(){leaked++;return new Response('leak');}});cleanups.push(async()=>{destination.stop(true);});
  const redirect=Bun.serve({hostname:'127.0.0.1',port:0,fetch(){return Response.redirect(destination.url,307);}});cleanups.push(async()=>{redirect.stop(true);});
  await expect(connectMcpHttp({...config,url:redirect.url.href,allowHttp:true})).rejects.toThrow();expect(leaked).toBe(0);
-});
-test('MCP grants retain explicit workspace and Agent boundaries',()=>{
- const grant={workspaceId:'a',agentIds:[],enabled:true,access:{kind:'workspaces' as const,grants:[{workspaceId:'a',agentIds:['one','one']}]}};
- expect(canonicalMcpAccess(grant.access)).toEqual({kind:'workspaces',grants:[{workspaceId:'a',agentIds:['one']}]});
- expect(mcpAgentAllowed(grant,'a','one')).toBe(true);expect(mcpAgentAllowed(grant,'a','two')).toBe(false);expect(mcpAgentAllowed(grant,'b','one')).toBe(false);
- expect(mcpAgentAllowed({...grant,enabled:false},'a','one')).toBe(false);expect(mcpAccessOverlaps(grant,{...grant,workspaceId:'b',access:{kind:'workspaces',grants:[{workspaceId:'b',agentIds:'all'}]}})).toBe(false);
 });
 async function serverFixture(outputSchema:unknown,result:unknown,resourceOnly=false,authority?:McpAuthority){
  let calls=0;const methods:string[]=[];

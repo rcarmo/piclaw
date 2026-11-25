@@ -3,14 +3,13 @@ import type {Context} from '@earendil-works/chord/context';
 import type {Registry,ConversationId,ToolExecutionApi,Agent,Extension} from '@earendil-works/pi-durable';
 import {McpConnectionClosedError,type McpClient,type Tool as McpTool} from '@earendil-works/pi-mcp';
 import {createMcpAuthority,type McpAuthority} from './authority.ts';
-import {mcpAgentAllowed,mcpWorkspaceAllowed} from './policy.ts';
 import {mcpToolsExtension,mcpFailure,retryableMcpFailure,lostMcpSession} from './client.ts';
 import type {McpConnection,McpConnectionStore} from './connections.ts';
 export interface McpConnectionStatus {state:'connecting'|'retrying'|'connected'|'unavailable';tools:string[];message:string;nextRetryAt?:number}
 export interface ConnectedMcp {client:McpClient;tools:McpTool[];close():Promise<void>;assertCurrent?():void}
 export interface McpRuntimeOptions {
- workspaceId:string;registry:Registry;store:McpConnectionStore;assertOwner():void;assertCleanupOwner?():void;
- resolveAgent(id:ConversationId):Promise<{agentId:string;readOnly:boolean}|undefined>;
+ registry:Registry;store:McpConnectionStore;assertOwner():void;assertCleanupOwner?():void;
+ resolveAgent(id:ConversationId):Promise<{readOnly:boolean}|undefined>;
  captureSource(api:ToolExecutionApi):Promise<()=>void>;
  connect(config:McpConnection,authority:McpAuthority,signal:AbortSignal):Promise<ConnectedMcp>;
 }
@@ -21,7 +20,7 @@ type Slot={config:McpConnection;failures:number;attempt?:Attempt;timer?:ReturnTy
 export function createMcpRuntime(options:McpRuntimeOptions){
  const slots=new Map<string,Slot>(),queue=new Set<Slot>(),pending=new Set<Promise<void>>(),waiters=new Set<()=>void>(),statuses=new Map<string,McpConnectionStatus>(),cleanupErrors:unknown[]=[];
  let closed=false,active=0,unwatch:(()=>void)|undefined,closing:Promise<void>|undefined;
- const current=(slot:Slot)=>{if(closed||slots.get(slot.config.id)!==slot)return false;try{options.assertOwner();const row=options.store.credential(slot.config.id);return row?.revision===slot.config.revision&&row?.accessEpoch===slot.config.accessEpoch;}catch{return false;}};
+ const current=(slot:Slot)=>{if(closed||slots.get(slot.config.id)!==slot)return false;try{options.assertOwner();const row=options.store.credential(slot.config.id);return row?.enabled===true&&row.revision===slot.config.revision&&row.accessEpoch===slot.config.accessEpoch;}catch{return false;}};
  const live=(slot:Slot,attempt:Attempt)=>slot.attempt===attempt&&current(slot);
  function drained(){if(!pending.size&&!queue.size&&!active){for(const resolve of waiters)resolve();waiters.clear();}}
  function ready(){return !pending.size&&!queue.size&&!active?Promise.resolve():new Promise<void>(resolve=>waiters.add(resolve));}
@@ -58,9 +57,8 @@ export function createMcpRuntime(options:McpRuntimeOptions){
    assertConnection(){if(!live(slot,attempt))throw Error('MCP connection changed');attempt.connection?.assertCurrent?.();},
    captureSource:async api=>{
     const identity=await options.resolveAgent(api.conversationId);
-    if(!identity||identity.readOnly||!mcpAgentAllowed(options.store.credential(slot.config.id),options.workspaceId,identity.agentId))throw Error('MCP Agent grant unavailable');
-    const guard=await options.captureSource(api);
-    return()=>{guard();if(!mcpAgentAllowed(options.store.credential(slot.config.id),options.workspaceId,identity.agentId))throw Error('MCP Agent grant revoked');};
+    if(!identity||identity.readOnly)throw Error('MCP conversation authority unavailable');
+    return options.captureSource(api);
    }});
   statuses.set(slot.config.id,{state:'connecting',tools:[],message:'Discovering MCP tools…'});
   try{
@@ -73,7 +71,7 @@ export function createMcpRuntime(options:McpRuntimeOptions){
    const publish=(tools:McpTool[])=>{
     const next=mcpToolsExtension(slot.config,tools,async id=>{
      const identity=await options.resolveAgent(id);options.assertOwner();
-     if(!live(slot,attempt)||attempt.publication!==next||!identity||identity.readOnly||!mcpAgentAllowed(options.store.credential(slot.config.id),options.workspaceId,identity.agentId))throw Error('MCP catalogue or connection grant changed; discover the tool again');
+     if(!live(slot,attempt)||attempt.publication!==next||!identity||identity.readOnly)throw Error('MCP catalogue, connection or conversation changed; discover the tool again');
      if(connection.client.connectionState!=='connected')throw Error('MCP connection is recovering');
      connection.assertCurrent?.();return connection.client;
     },error=>{if(lostMcpSession(error))failed(slot,attempt,error);},authority);
@@ -107,8 +105,8 @@ export function createMcpRuntime(options:McpRuntimeOptions){
  }
  function pump(){while(!closed&&active<4&&queue.size){const slot=queue.values().next().value!;queue.delete(slot);if(!current(slot))continue;active++;track(async()=>{try{if(current(slot))await discover(slot);}finally{active--;pump();}});}drained();}
  function refresh(){
-  options.assertOwner();if(closed)return;const desired=options.store.list().filter(row=>mcpWorkspaceAllowed(row,options.workspaceId));
-  for(const[id,slot]of slots)if(!desired.some(row=>row.id===id&&row.revision===slot.config.revision&&row.accessEpoch===slot.config.accessEpoch)){slots.delete(id);withdraw(slot);statuses.delete(id);}
+  options.assertOwner();if(closed)return;const desired=options.store.list().filter(row=>row.enabled);
+  for(const[id,slot]of slots)if(!desired.some(row=>row.id===id&&row.revision===slot.config.revision&&current(slot))){slots.delete(id);withdraw(slot);statuses.delete(id);}
   for(const row of desired)if(!slots.has(row.id)){
    const config=options.store.credential(row.id)!;
    const slot={config,failures:0};slots.set(row.id,slot);queue.add(slot);statuses.set(row.id,{state:'connecting',tools:[],message:'Waiting for discovery…'});
@@ -124,10 +122,10 @@ export function createMcpRuntime(options:McpRuntimeOptions){
    const visible=new Set<Extension>();
    if(identity&&!identity.readOnly)for(const slot of slots.values()){
     const publication=slot.attempt?.publication;
-    if(publication&&current(slot)&&mcpAgentAllowed(slot.config,options.workspaceId,identity.agentId))visible.add(publication);
+    if(publication&&current(slot))visible.add(publication);
    }
    const providers=new Map<string,Extension>();
-   // Match the SDK's last selected tool registration; names alone are not grant identity.
+   // Match the SDK's last selected tool registration; names alone are not connection identity.
    for(const extension of agent.extensions)for(const tool of extension.tools??[])providers.set(tool.name,extension);
    return{...agent,extensions:agent.extensions.filter(extension=>!extension.name.startsWith('piclaw.mcp.')||visible.has(extension)),
     callable:agent.callable.filter(tool=>{const provider=providers.get(tool.name);return !tool.name.startsWith('mcp__')||(provider!==undefined&&visible.has(provider));})};

@@ -3,7 +3,6 @@ import {createHash} from "node:crypto";
 import type {Database} from "bun:sqlite";
 import {Type} from "typebox";
 import {Value} from "typebox/value";
-import {mcpAgentAllowed} from "./policy.ts";
 import type {Harness,ConversationId,DocumentReader} from "@earendil-works/pi-durable";
 import {type Context} from "@earendil-works/chord/context";
 const invalidArguments=(message:string)=>new Error(message);
@@ -17,8 +16,8 @@ export type McpRecallItem={id:string;owner:string;grants:McpRecallGrant[];tool:s
 export type McpRecallRecord=McpRecallItem&{raw:string};
 export const mcpAccessEpoch=(config:McpConnection)=>config.accessEpoch??`legacy:${config.revision}`;
 export type McpRecallIdentity={owner:string;agentId:string};
-export function mcpRecallAllowed(config:McpConnection|undefined,workspaceId:string,owner:string):config is McpConnection {
-  return mcpAgentAllowed(config,workspaceId,owner);
+export function mcpRecallAllowed(config:McpConnection|undefined):config is McpConnection {
+  return config?.enabled===true;
 }
 const grantsSchema=Type.Array(Type.Object({connectionId:Type.String(),epoch:Type.String()}));
 const sourcesSchema=Type.Array(Type.String());
@@ -70,17 +69,17 @@ export function expiredMcpRecall(rows:readonly McpRecallItem[],configs:readonly 
   cap([...rows],256,16*1024*1024);
   return removed;
 }
-export function createMcpRecallStore(workspaceId:string,harness:()=>Harness,connections:McpConnectionStore,identityOf:(id:ConversationId,context:Context)=>Promise<McpRecallIdentity>,database:AgentDatabase,now:()=>number=Date.now){
+export function createMcpRecallStore(harness:()=>Harness,connections:McpConnectionStore,identityOf:(id:ConversationId,context:Context)=>Promise<McpRecallIdentity>,database:AgentDatabase,now:()=>number=Date.now){
   async function use<T>(action:(db:Database)=>T) {return (await database()).withSync(db=>{initialize(db);return action(db);});}
   function configs(){return connections.list().flatMap(row=>{const config=connections.credential(row.id);return config?[config]:[];});}
-  function currentSettings(grants:readonly McpRecallGrant[],identity:McpRecallIdentity){
+  function currentSettings(grants:readonly McpRecallGrant[]){
     if(!grants.length)return;
     const settings:McpRecallSettings[]=[];
-    for(const grant of grants){const config=connections.credential(grant.connectionId);if(!mcpRecallAllowed(config,workspaceId,identity.agentId)||mcpAccessEpoch(config)!==grant.epoch)return;settings.push(config.recall??defaultMcpRecallSettings());}
+    for(const grant of grants){const config=connections.credential(grant.connectionId);if(!mcpRecallAllowed(config)||mcpAccessEpoch(config)!==grant.epoch)return;settings.push(config.recall??defaultMcpRecallSettings());}
     return settings;
   }
-  async function authorisedSettings(conversationId:ConversationId,grants:readonly McpRecallGrant[],context:Context){return currentSettings(grants,await identityOf(conversationId,context));}
-  const allowed=(row:McpRecallItem,identity:McpRecallIdentity)=>row.owner===identity.owner&&currentSettings(row.grants,identity)?.every(config=>config.mode!=='off')===true;
+  async function authorisedSettings(conversationId:ConversationId,grants:readonly McpRecallGrant[],context:Context){await identityOf(conversationId,context);return currentSettings(grants); }
+  const allowed=(row:McpRecallItem,identity:McpRecallIdentity)=>row.owner===identity.owner&&currentSettings(row.grants)?.every(config=>config.mode!=='off')===true;
   function remove(db:Database,ids:Iterable<string>){let removed=0;for(const id of ids){db.run("DELETE FROM mcp_recall WHERE id=?",[id]);removed++;}return removed;}
   function prune(db:Database){
     // Forget/expiry must not resurrect a capture if its SDK memo was not yet

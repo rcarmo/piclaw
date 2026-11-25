@@ -26,7 +26,7 @@ export function planLegacyMcpMigration(servers: Record<string, unknown>, workspa
     for (const key of ["disabled", "directTools"]) if (row[key] !== undefined && typeof row[key] !== "boolean") fields.push(key);
     if (row.url !== undefined && row.command !== undefined) fields.push("transport");
     const id = "import_" + createHash("sha256").update(JSON.stringify([workspace.id, name])).digest("hex").slice(0, 32);
-    const common = { id, name, workspaceId: workspace.id, agentIds: [], enabled: row.disabled !== true, allowHttp: false, timeoutSeconds: 30 };
+    const common = { id, name, workspaceId: workspace.id, enabled: row.disabled !== true, allowHttp: false, timeoutSeconds: 30 };
     let candidate: McpConnectionInput;
     if (typeof row.url === "string") {
       let url: URL;
