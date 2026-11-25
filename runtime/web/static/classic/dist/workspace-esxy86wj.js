@@ -1,4 +1,4 @@
-import{t,o,n,i,r,e}from"./app-1vedzwvv.js";import{Zt,Xt,en,tn,nn}from"./app-n8nzkwkj.js";import{ce,tr}from"./app-g66x9f38.js";import{f}from"./app-jq9cbedb.js";import{m}from"./app-y300gnye.js";import{s}from"./app-3fbwg9z4.js";function q(d,u){let b=(w)=>String(w||"").split(/\r?\n/).map((a)=>a.trim()).filter(Boolean);return{roots:b(d),ignorePatterns:b(u)}}function L(d){return{roots:Array.isArray(d?.roots)?d.roots.join(`
+import{t,o,n,i,r,e}from"./app-1vedzwvv.js";import{Zt,Xt,en,tn,nn}from"./app-n8nzkwkj.js";import{ce,tr}from"./app-g66x9f38.js";import{m}from"./app-dknp27pq.js";import{f}from"./app-z2mfx7dw.js";import{s}from"./app-3fbwg9z4.js";function q(d,u){let b=(w)=>String(w||"").split(/\r?\n/).map((a)=>a.trim()).filter(Boolean);return{roots:b(d),ignorePatterns:b(u)}}function L(d){return{roots:Array.isArray(d?.roots)?d.roots.join(`
 `):"",ignorePatterns:Array.isArray(d?.ignorePatterns)?d.ignorePatterns.join(`
 `):""}}function G({setStatus:d}){let[u,b]=t(""),[w,a]=t(""),[I,z]=t(null),[v,A]=t(null),[g,M]=t(null),[D,y]=t(""),[x,E]=t("load"),h=n(!0),S=r((l)=>{let p=L(l);b(p.roots),a(p.ignorePatterns),z(l)},[]);o(()=>(h.current=!0,Xt().then((l)=>{if(!h.current)return;S(l.policy),A(l.status||null),y("")}).catch((l)=>{if(!h.current)return;let p=String(l?.message||l);y(p),d?.(p,"error")}).finally(()=>{if(h.current)E("")}),()=>{h.current=!1}),[S,d]);let C=i(()=>q(u,w),[u,w]),R=I!==null&&JSON.stringify(C)!==JSON.stringify(I),_=r(async(l)=>{E(l),y("");try{if(l==="preview"){let p=await en(C);if(h.current)M(p.preview||null)}else if(l==="save"){let p=await tn(C);if(h.current)S(p.policy),A(p.status||null),M(null),d?.("Workspace indexing policy saved. Refresh queued.")}else{let p=await nn();if(h.current)A(p.status||null),d?.("Workspace index refresh queued.")}}catch(p){if(!h.current)return;let W=String(p?.message||p);y(W),d?.(W,"error")}finally{if(h.current)E("")}},[S,C,d]),T=Boolean(x);return e`
         <section class="workspace-indexing-settings" aria-labelledby="workspace-indexing-heading" aria-busy=${T?"true":"false"}>
@@ -53,7 +53,7 @@ import{t,o,n,i,r,e}from"./app-1vedzwvv.js";import{Zt,Xt,en,tn,nn}from"./app-n8nz
                 </div>
             `}
         </section>
-    `}function j(d={}){let u=d.workspaceSettings||{};return{webTerminalEnabled:u.webTerminalEnabled!==!1,vncAllowDirect:u.vncAllowDirect!==!1,sanitizeSvgFences:u.sanitizeSvgFences!==!1,treeMaxDepth:u.treeMaxDepth??4,treeMaxEntries:u.treeMaxEntries??5000}}function re({settingsData:d,setStatus:u,mergeSettingsData:b}){let w=m("workspace"),{t:a}=s(),[I,z]=t(!0),[v,A]=t(!0),[g,M]=t(!0),[D,y]=t(4),[x,E]=t(5000),[h,S]=t(60),[C,R]=t(3),[_,T]=t(!1),[l,p]=t(!1),W=n(""),P=n(null),F=n(null),N=n(null),H=n(!0);o(()=>(H.current=!0,()=>{if(H.current=!1,P.current)clearTimeout(P.current);if(F.current)clearTimeout(F.current);if(N.current)clearTimeout(N.current)}),[]);let O=r((c)=>{let k=j(c),J=ce();z(k.webTerminalEnabled),A(k.vncAllowDirect),M(k.sanitizeSvgFences),y(k.treeMaxDepth),E(k.treeMaxEntries),S(J.refreshIntervalSec),R(J.folderPreviewDepth),W.current=JSON.stringify(k)},[]);o(()=>{O(d||{})},[d,O]);let B=i(()=>JSON.stringify(j({workspaceSettings:{webTerminalEnabled:I,vncAllowDirect:v,sanitizeSvgFences:g,treeMaxDepth:D,treeMaxEntries:x}})),[I,v,g,D,x]);o(()=>{if(B===W.current)return;if(P.current)clearTimeout(P.current);return P.current=setTimeout(async()=>{if(!H.current)return;try{let c=await Zt(JSON.parse(B));if(!H.current||!c?.ok||!c?.settings)return;if(W.current=B,b?.({workspaceSettings:c.settings}),u?.(null),T(!0),F.current)clearTimeout(F.current);F.current=setTimeout(()=>{if(H.current)T(!1)},4000)}catch(c){u?.(String(c?.message||c),"error")}},800),()=>{if(P.current)clearTimeout(P.current)}},[B,b,u]);let V=r((c)=>{let k=tr(c);if(S(k.refreshIntervalSec),R(k.folderPreviewDepth),p(!0),N.current)clearTimeout(N.current);N.current=setTimeout(()=>{if(H.current)p(!1)},3000)},[]);return e`
+    `}function j(d={}){let u=d.workspaceSettings||{};return{webTerminalEnabled:u.webTerminalEnabled!==!1,vncAllowDirect:u.vncAllowDirect!==!1,sanitizeSvgFences:u.sanitizeSvgFences!==!1,treeMaxDepth:u.treeMaxDepth??4,treeMaxEntries:u.treeMaxEntries??5000}}function re({settingsData:d,setStatus:u,mergeSettingsData:b}){let w=f("workspace"),{t:a}=s(),[I,z]=t(!0),[v,A]=t(!0),[g,M]=t(!0),[D,y]=t(4),[x,E]=t(5000),[h,S]=t(60),[C,R]=t(3),[_,T]=t(!1),[l,p]=t(!1),W=n(""),P=n(null),F=n(null),N=n(null),H=n(!0);o(()=>(H.current=!0,()=>{if(H.current=!1,P.current)clearTimeout(P.current);if(F.current)clearTimeout(F.current);if(N.current)clearTimeout(N.current)}),[]);let O=r((c)=>{let k=j(c),J=ce();z(k.webTerminalEnabled),A(k.vncAllowDirect),M(k.sanitizeSvgFences),y(k.treeMaxDepth),E(k.treeMaxEntries),S(J.refreshIntervalSec),R(J.folderPreviewDepth),W.current=JSON.stringify(k)},[]);o(()=>{O(d||{})},[d,O]);let B=i(()=>JSON.stringify(j({workspaceSettings:{webTerminalEnabled:I,vncAllowDirect:v,sanitizeSvgFences:g,treeMaxDepth:D,treeMaxEntries:x}})),[I,v,g,D,x]);o(()=>{if(B===W.current)return;if(P.current)clearTimeout(P.current);return P.current=setTimeout(async()=>{if(!H.current)return;try{let c=await Zt(JSON.parse(B));if(!H.current||!c?.ok||!c?.settings)return;if(W.current=B,b?.({workspaceSettings:c.settings}),u?.(null),T(!0),F.current)clearTimeout(F.current);F.current=setTimeout(()=>{if(H.current)T(!1)},4000)}catch(c){u?.(String(c?.message||c),"error")}},800),()=>{if(P.current)clearTimeout(P.current)}},[B,b,u]);let V=r((c)=>{let k=tr(c);if(S(k.refreshIntervalSec),R(k.folderPreviewDepth),p(!0),N.current)clearTimeout(N.current);N.current=setTimeout(()=>{if(H.current)p(!1)},3000)},[]);return e`
         <div class="settings-section">
             <${G} setStatus=${u} />
 
@@ -95,7 +95,7 @@ import{t,o,n,i,r,e}from"./app-1vedzwvv.js";import{Zt,Xt,en,tn,nn}from"./app-n8nz
             <h3 style="margin-top:20px">${a("settings.workspace.guardrails")}</h3>
             <div class="settings-row settings-dense-row">
                 <label>${a("settings.workspace.maxDepth")}</label>
-                <${f}
+                <${m}
                     label=${a("settings.workspace.maxDepthAria")}
                     value=${D}
                     min=${1}
@@ -108,7 +108,7 @@ import{t,o,n,i,r,e}from"./app-1vedzwvv.js";import{Zt,Xt,en,tn,nn}from"./app-n8nz
             </div>
             <div class="settings-row settings-dense-row">
                 <label>${a("settings.workspace.maxEntries")}</label>
-                <${f}
+                <${m}
                     label=${a("settings.workspace.maxEntriesAria")}
                     value=${x}
                     min=${250}
@@ -124,7 +124,7 @@ import{t,o,n,i,r,e}from"./app-1vedzwvv.js";import{Zt,Xt,en,tn,nn}from"./app-n8nz
             <h3 style="margin-top:20px">${a("settings.workspace.thisBrowser")}</h3>
             <div class="settings-row settings-dense-row">
                 <label>${a("settings.workspace.refreshInterval")}</label>
-                <${f}
+                <${m}
                     label=${a("settings.workspace.refreshIntervalAria")}
                     value=${h}
                     min=${15}
@@ -137,7 +137,7 @@ import{t,o,n,i,r,e}from"./app-1vedzwvv.js";import{Zt,Xt,en,tn,nn}from"./app-n8nz
             </div>
             <div class="settings-row settings-dense-row">
                 <label>${a("settings.workspace.folderDepth")}</label>
-                <${f}
+                <${m}
                     label=${a("settings.workspace.folderDepthAria")}
                     value=${C}
                     min=${0}
@@ -152,5 +152,5 @@ import{t,o,n,i,r,e}from"./app-1vedzwvv.js";import{Zt,Xt,en,tn,nn}from"./app-n8nz
         </div>
     `}export{re as WorkspaceSection};
 
-//# debugId=1D508C43EF8BF9ED64756E2164756E21
-//# sourceMappingURL=workspace-z4ppgfwb.js.map
+//# debugId=1429C7367EAE8AC864756E2164756E21
+//# sourceMappingURL=workspace-esxy86wj.js.map
