@@ -24,12 +24,12 @@ for (const engine of ['chromium', 'webkit']) for (const width of [390, 1280]) fo
     const requests: { path: string; body: any }[] = [], errors: string[] = [];
     let config = { approved_models: ['retired/model'] };
     const available = [
-      { id:'fixture/gpt-6.1-sol', tier:3, family:'gpt', classificationRule:'gpt-6-1-sol' },
-      { id:'another/gpt-5.4-mini', tier:2, family:'gpt', classificationRule:'gpt-mini' },
+      { id:'fixture/gpt-6.1-terra', tier:3, family:'gpt', classificationRule:'default' },
+      { id:'zed/gpt-5.4-mini', tier:2, family:'gpt', classificationRule:'gpt-mini' },
       ...Array.from({ length: 24 }, (_, i) => ({ id:`fixture/gpt-5.4-mini-${String(i).padStart(2,'0')}`, tier:2, family:'gpt', classificationRule:'gpt-mini' })),
     ];
     const payload = () => ({ ok:true, source:'native', config, available,
-      models:[...available.map(({ id }) => ({ id, name: id.endsWith('sol') ? 'GPT Sol' : undefined })), {id:'fixture/unknown', reason:'Not classified'}],
+      models:[...available.map(({ id }) => ({ id, name: id.endsWith('terra') ? 'GPT Terra' : undefined })), {id:'fixture/unknown', reason:'Unavailable for Delegate'}],
       candidates: available.filter(row => config.approved_models.includes(row.id)).sort((a,b) => a.tier-b.tier),
     });
     let rejectSave = false;
@@ -81,31 +81,40 @@ for (const engine of ['chromium', 'webkit']) for (const width of [390, 1280]) fo
       expect(await results.getByRole('button',{name:/unknown/}).count()).toBe(0);
       expect(await whitelist.getByRole('button',{name:'Remove retired/model from whitelist'}).isVisible()).toBe(true);
       expect(requests.some(request => request.body)).toBe(false);
-      await search.fill('FIXTURE sol');
-      expect(await results.locator('code').allTextContents()).toEqual(['fixture/gpt-6.1-sol']);
-      const add = results.getByRole('button',{name:'Add fixture/gpt-6.1-sol to whitelist'});
+      await search.fill('FIXTURE Terra');
+      expect(await results.locator('code').allTextContents()).toEqual(['fixture/gpt-6.1-terra']);
+      const add = results.getByRole('button',{name:'Add fixture/gpt-6.1-terra to whitelist'});
       await add.focus(); await page.keyboard.press('Space');
-      await page.getByText('Added fixture/gpt-6.1-sol.',{exact:true}).waitFor();
-      expect(requests.find(request => request.path.endsWith('/config'))?.body).toEqual({add_model:'fixture/gpt-6.1-sol'});
-      expect(await results.getByRole('button',{name:'fixture/gpt-6.1-sol is on the whitelist'}).getAttribute('aria-disabled')).toBe('true');
-      await search.fill('another');
-      await results.getByRole('button',{name:'Add another/gpt-5.4-mini to whitelist'}).click();
-      await page.getByText('Added another/gpt-5.4-mini.',{exact:true}).waitFor();
-      expect(await whitelist.getByRole('heading').allTextContents()).toEqual(['Tier 2','Tier 3','Unavailable']);
+      await page.getByText('Added fixture/gpt-6.1-terra.',{exact:true}).waitFor();
+      expect(requests.find(request => request.path.endsWith('/config'))?.body).toEqual({add_model:'fixture/gpt-6.1-terra'});
+      expect(await results.getByRole('button',{name:'fixture/gpt-6.1-terra is on the whitelist'}).getAttribute('aria-disabled')).toBe('true');
+      await search.fill('zed');
+      await results.getByRole('button',{name:'Add zed/gpt-5.4-mini to whitelist'}).click();
+      await page.getByText('Added zed/gpt-5.4-mini.',{exact:true}).waitFor();
+      expect(await whitelist.locator('code').allTextContents()).toEqual(['fixture/gpt-6.1-terra', 'retired/model', 'zed/gpt-5.4-mini']);
+      expect(await whitelist.getByText('Rank 3', {exact:true}).isVisible()).toBe(true);
+      expect(await whitelist.getByText('GPT Terra', {exact:true}).count()).toBe(0);
+      const writes = requests.filter(r => r.path.endsWith('/config')).length;
+      const sort = page.getByLabel('Sort whitelist');
+      await sort.selectOption('rank');
+      expect(await whitelist.locator('code').allTextContents()).toEqual(['zed/gpt-5.4-mini', 'fixture/gpt-6.1-terra', 'retired/model']);
+      await sort.selectOption('name');
+      expect(await whitelist.locator('code').allTextContents()).toEqual(['fixture/gpt-6.1-terra', 'retired/model', 'zed/gpt-5.4-mini']);
+      expect(requests.filter(r => r.path.endsWith('/config')).length).toBe(writes);
       rejectSave = true;
-      const remove = whitelist.getByRole('button',{name:'Remove fixture/gpt-6.1-sol from whitelist'});
+      const remove = whitelist.getByRole('button',{name:'Remove fixture/gpt-6.1-terra from whitelist'});
       await remove.click();
       await page.getByRole('alert').filter({hasText:'Fixture save rejected'}).waitFor();
       expect(await remove.count()).toBe(1);
       rejectSave = false;
       await remove.focus();
       await page.keyboard.press('Space');
-      await page.getByText('Removed fixture/gpt-6.1-sol.',{exact:true}).waitFor();
-      expect(await whitelist.getByRole('heading').allTextContents()).toEqual(['Tier 2','Unavailable']);
+      await page.getByText('Removed fixture/gpt-6.1-terra.',{exact:true}).waitFor();
+      expect(await whitelist.locator('code').allTextContents()).toEqual(['retired/model', 'zed/gpt-5.4-mini']);
       expect(await search.evaluate(el => el === document.activeElement)).toBe(true);
       await search.fill('NoSuchModel');
       expect(await results.getByText('No models match your search.').isVisible()).toBe(true);
-      const controls = await page.locator('.delegate-settings :is(input,button)').evaluateAll(nodes => nodes.map(node => {
+      const controls = await page.locator('.delegate-settings :is(input,select,button)').evaluateAll(nodes => nodes.map(node => {
         const r = node.getBoundingClientRect(); return { left: r.left, right: r.right, label: node.tagName === 'BUTTON' || Boolean((node as HTMLInputElement).labels?.length) };
       }));
       for (const control of controls) { expect(control.left).toBeGreaterThanOrEqual(0); expect(control.right).toBeLessThanOrEqual(width); expect(control.label).toBe(true); }

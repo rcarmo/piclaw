@@ -50,9 +50,20 @@ for (const [id, tier, rule] of [
   expect(classifyModel(model('fixture', id))).toMatchObject({ status: 'classified', tier, rule, confidence: 'exact-policy' });
 });
 
-for (const id of ['gpt-6.1-sol-unknown', 'gpt-6-unannounced', 'unknown-model', 'mai-code-2-pro', 'mai-code-20', 'mai-code-3']) test(`unclassified models stay denied: ${id}`, () => {
-  expect(classifyModel(model('github-copilot', id))).toMatchObject({ status: 'unclassified', tier: null, rule: null });
-  expect(buildModelCandidates([model('github-copilot', id)], { approved_models: [`github-copilot/${id}`] })).toEqual([]);
+test('unmatched available models get the default rank and still need exact approval', () => {
+  const sol = model('github-copilot', 'gpt-6.1-sol');
+  const terra = model('github-copilot', 'gpt-6.1-terra');
+  const router = model('openrouter', 'openai/gpt-6.1-terra-pro:batch');
+  const catalogue = [router, terra, sol];
+  for (const candidate of [terra, router]) {
+    expect(classifyModel(candidate)).toMatchObject({ status: 'default', tier: 3, rule: 'default', confidence: 'default' });
+    expect(buildModelCandidates([candidate])).toEqual([]);
+    expect(buildModelCandidates([], { approved_models: [candidate.fullId] })).toEqual([]);
+  }
+  expect(buildModelCandidates(catalogue, { approved_models: [terra.fullId] }).map(candidate => candidate.id)).toEqual([terra.fullId]);
+  expect(buildModelCandidates(catalogue, { approved_models: catalogue.map(candidate => candidate.fullId) }).map(candidate => candidate.id))
+    .toEqual([sol.fullId, terra.fullId, router.fullId]);
+  expect(migrateLegacyDelegateConfig(catalogue, { searchable_providers: ['github-copilot', 'openrouter'] })?.approved_models).toEqual([sol.fullId]);
 });
 
 test('approved candidates keep metadata, deduplicate exact IDs and sort deterministically', () => {
