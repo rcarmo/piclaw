@@ -62,10 +62,10 @@ describe('canonical offline native contract', () => {
   test('qualification targets current SDK pins and rejects historical-version drift', async () => {
     const rootPackage=JSON.parse(readFileSync(join(ROOT,'package.json'),'utf8'));
     const enginePackage=JSON.parse(readFileSync(join(ROOT,'runtime/durable-engine/package.json'),'utf8'));
-    expect(contract.sdkVersion).toBe('1.6.0');
+    expect(contract.sdkVersion).toBe('1.6.1');
     expect(rootPackage.dependencies['@earendil-works/pi-coding-agent']).toBe(contract.sdkVersion);
     expect(enginePackage.dependencies['@earendil-works/pi-durable']).toBe(contract.sdkVersion);
-    const provenance=JSON.parse(readFileSync(join(ROOT,'qualification/native/provenance-1.6.0.json'),'utf8'));
+    const provenance=JSON.parse(readFileSync(join(ROOT,'qualification/native/provenance-1.6.1.json'),'utf8'));
     expect(provenance.packages.every((pkg:{version:string})=>pkg.version===contract.sdkVersion)).toBe(true);
     await expect(nativePreflight({...contract,sdkVersion:'1.3.0'},{})).rejects.toThrow('SDK qualification target must match');
     expect(contract.catalogDependencies).toBe('qualification/native/node_modules');

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createMcpExtension, createToolSearchExtension, createCodemodeExtension } from "@earendil-works/pi-coding-agent";
-import { checkMcpPublic160, matchNegativeDiagnostics, MCP_GIT_HEAD, MCP_VERSION, missingSeams } from "../../../scripts/check-earendil-mcp-public-160.ts";
+import { checkMcpPublic161, matchNegativeDiagnostics, missingSeams } from "../../../scripts/check-earendil-mcp-public-160.ts";
 import historicalHarnessEvidence from "../../../docs/design/earendil-agent-harness-integration-adr/evidence/receipts/earendil-harness-compatibility-schema6.json";
 
 const root = resolve(import.meta.dir, "../../..");
@@ -12,29 +12,29 @@ const family = ["chord", "pi-agent-core", "pi-ai", "pi-codemode", "pi-coding-age
 
 const closure = [...family, '@earendil-works/pi-schema']; // SDK-owned exact dependency, no redundant host override.
 // Current target checks are unconditional; historical archive receipts remain immutable.
-test("exact 1.6.0 root closure includes SDK schema and excludes durable", () => {
+test("exact 1.6.1 root closure includes SDK schema and excludes durable", () => {
   for (const name of ["chord", "pi-agent-core", "pi-ai", "pi-coding-agent"].map(name => "@earendil-works/" + name)) {
-    expect(pkg.dependencies[name], name).toBe("1.6.0");
+    expect(pkg.dependencies[name], name).toBe("1.6.1");
   }
-  for (const name of family) expect(pkg.overrides[name], name).toBe("1.6.0");
+  for (const name of family) expect(pkg.overrides[name], name).toBe("1.6.1");
   // Parse Bun's JSON-with-trailing-delimiters lock and inspect package values.
   const parsed = JSON.parse(lock.replace(/,\s*([}\]])/g, "$1"));
   const resolved = Object.values(parsed.packages).map((entry: any) => entry[0] as string).filter(id => id.startsWith("@earendil-works/"));
-  expect(resolved.sort()).toEqual(closure.map(name => name + "@1.6.0").sort());
+  expect(resolved.sort()).toEqual(closure.map(name => name + "@1.6.1").sort());
   for (const name of ["chord", "pi-agent-core", "pi-ai", "pi-coding-agent"].map(name => "@earendil-works/" + name)) {
-    expect(parsed.workspaces[""].dependencies[name], name).toBe("1.6.0");
+    expect(parsed.workspaces[""].dependencies[name], name).toBe("1.6.1");
   }
   for (const name of closure) {
     const installed = JSON.parse(readFileSync(resolve(root, "node_modules", name, "package.json"), "utf8"));
     expect(installed.name).toBe(name);
-    expect(installed.version, name).toBe("1.6.0");
+    expect(installed.version, name).toBe("1.6.1");
   }
   expect(JSON.stringify({ dependencies: pkg.dependencies, devDependencies: pkg.devDependencies, overrides: pkg.overrides })).not.toContain("pi-durable");
   expect(lock).not.toContain("pi-durable");
   expect(existsSync(resolve(root, "node_modules/@earendil-works/pi-durable"))).toBe(false);
 });
 
-test("1.6.0 native MCP composition excludes the retired session constructor and generic adapter", () => {
+test("1.6.1 native MCP composition excludes the retired session constructor and generic adapter", () => {
   expect(pkg.dependencies["pi-mcp-adapter"]).toBe("github:piclaw-bot/pi-mcp-adapter#dddfcf630508f42c169889c11dee94e69b746e7c");
   expect(existsSync(resolve(root, "runtime/src/agent-pool/session.ts"))).toBe(false);
   expect(existsSync(resolve(root, 'runtime/durable-engine/src/host-mcp.ts'))).toBe(false);
@@ -55,14 +55,12 @@ test("1.6.0 native MCP composition excludes the retired session constructor and 
   expect(historicalHarnessEvidence.currentRuntime.productionActivation).toBe(false);
 });
 
-test("1.6.0 public SDK, MCP and ToolLoadout.getPromptGuidelines types compile with all ten measured gaps retained", () => {
-  expect(MCP_VERSION).toBe("1.6.0");
-  expect(MCP_GIT_HEAD).toBe("faac585884ae2c013a6b1400f3e9e77f10b34bac");
-  const receipt = checkMcpPublic160(root);
-  const fresh = JSON.parse(readFileSync(resolve(root, "docs/design/earendil-agent-harness-integration-adr/evidence/receipts/earendil-160-mcp-public.json"), "utf8"));
+test("1.6.1 public SDK, MCP and ToolLoadout.getPromptGuidelines types compile with all ten measured gaps retained", () => {
+  const receipt = checkMcpPublic161(root);
+  const fresh = JSON.parse(readFileSync(resolve(root, "docs/design/earendil-agent-harness-integration-adr/evidence/receipts/earendil-161-mcp-public.json"), "utf8"));
   expect(receipt).toEqual(fresh.compile);
-  expect(receipt).toMatchObject({ version: "1.6.0", referenceGitHead: "faac585884ae2c013a6b1400f3e9e77f10b34bac", positive: "pass", scope: "public_type_contract_only", nativeParity: "not_qualified", productionActivation: false });
-  expect(receipt.packages).toEqual(["pi-coding-agent", "pi-mcp", "pi-codemode"].map(name => ({ name: "@earendil-works/" + name, version: "1.6.0" })));
+  expect(receipt).toMatchObject({ version: "1.6.1", referenceGitHead: "ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe", positive: "pass", scope: "public_type_contract_only", nativeParity: "not_qualified", productionActivation: false });
+  expect(receipt.packages).toEqual(["pi-coding-agent", "pi-mcp", "pi-codemode"].map(name => ({ name: "@earendil-works/" + name, version: "1.6.1" })));
   expect(receipt.negative).toEqual([
     { symbol: "lazy", code: "TS2353", requirement: "MCP-08" },
     { symbol: "statusObserver", code: "TS2353", requirement: "MCP-12" },
@@ -79,7 +77,7 @@ test("1.6.0 public SDK, MCP and ToolLoadout.getPromptGuidelines types compile wi
   expect(receipt.negativeSourceSha256).toMatch(/^[0-9a-f]{64}$/);
 }, 65_000);
 
-test("1.6.0 diagnostic matching rejects missing, extra, changed and ambiguous gaps", () => {
+test("1.6.1 diagnostic matching rejects missing, extra, changed and ambiguous gaps", () => {
   const lines = missingSeams.map(row => `error ${row.code}: ${row.symbol}`);
   expect(matchNegativeDiagnostics(lines.join("\n"))).toEqual(missingSeams);
   expect(() => matchNegativeDiagnostics(lines.slice(1).join("\n"))).toThrow("Expected exactly 10");

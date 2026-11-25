@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createTempWorkspace } from "../helpers.js";
 const version = JSON.parse(readFileSync(join(import.meta.dir, "../../../node_modules/@earendil-works/pi-coding-agent/package.json"), "utf8")).version;
-test("candidate dependency target is exactly 1.6.0", () => { expect(version).toBe("1.6.0"); });
+test("candidate dependency target is exactly 1.6.1", () => { expect(version).toBe("1.6.1"); });
 async function run(fixture: string, args: string[], env: Record<string, string> = {}, cwd?: string) {
   const child = Bun.spawn([process.execPath, "--no-env-file", "--preload", join(import.meta.dir, "fixtures/earendil-120-offline-guard.ts"), join(import.meta.dir, "fixtures", fixture), ...args], {
     cwd, env: { PATH: process.env.PATH, HOME: "/nonexistent", PI_OFFLINE: "1", PI_TELEMETRY: "0", OTEL_SDK_DISABLED: "true", PICLAW_DB_IN_MEMORY: "1", ...env }, stdin: "ignore", stdout: "pipe", stderr: "pipe",
@@ -20,15 +20,15 @@ async function run(fixture: string, args: string[], env: Record<string, string> 
 // Core bridge leases were retired by the outbound cutover. Standalone SDK
 // transport/tool/OAuth probes below remain active; archived bridge fixtures stay intact.
 for (const exposure of ["deferred", "codemode"]) {
-  test(`1.6.0 candidate real MCP/tool pipeline: ${exposure}`, async () => {
+  test(`1.6.1 candidate real MCP/tool pipeline: ${exposure}`, async () => {
     const ws = createTempWorkspace("candidate-120-public-");
     try {
       const result = await run("mcp-public-runtime-120.ts", [exposure], { MCP_PUBLIC_FIXTURE_ROOT: ws.workspace });
-      expect(result).toMatchObject({ version: "1.6.0", exposure, scriptedResponses: 14, networkAttempts: 0, nestedPolicyAndParentId: true, hiddenInvocationBlocked: true, sessionAndHistoryPreserved: true, transportsClosed: true });
+      expect(result).toMatchObject({ version: "1.6.1", exposure, scriptedResponses: 14, networkAttempts: 0, nestedPolicyAndParentId: true, hiddenInvocationBlocked: true, sessionAndHistoryPreserved: true, transportsClosed: true });
     } finally { ws.cleanup(); }
   }, 25_000);
 }
-test("1.6.0 public OAuth callback path/state isolation on owned loopback", async () => {
+test("1.6.1 public OAuth callback path/state isolation on owned loopback", async () => {
   const child = Bun.spawn([process.execPath, "--no-env-file", "--preload", join(import.meta.dir, "fixtures/earendil-120-callback-guard.ts"), join(import.meta.dir, "fixtures/earendil-120-callback.ts")], {
     env: { PATH: process.env.PATH, HOME: "/nonexistent", PI_OFFLINE: "1", OTEL_SDK_DISABLED: "true" }, stdin: "ignore", stdout: "pipe", stderr: "pipe",
   });
@@ -40,18 +40,18 @@ test("1.6.0 public OAuth callback path/state isolation on owned loopback", async
   } finally { clearTimeout(timer); if (child.exitCode === null) child.kill("SIGKILL"); await child.exited; }
 }, 15_000);
 for (const mode of ["disabled-trusted", "disabled-untrusted", "exposure", "invalid-extra", "replacement"]) {
-  test(`1.6.0 public project MCP override: ${mode}`, async () => {
+  test(`1.6.1 public project MCP override: ${mode}`, async () => {
     const ws = createTempWorkspace("candidate-120-overrides-");
     try {
       const result = await run("earendil-120-overrides.ts", [mode], { CANDIDATE_102_ROOT: ws.workspace });
-      expect(result).toMatchObject({ version: "1.6.0", mode, configUnmodified: true, guard: { networkAttempts: 0, childProcessAttempts: 0 } });
+      expect(result).toMatchObject({ version: "1.6.1", mode, configUnmodified: true, guard: { networkAttempts: 0, childProcessAttempts: 0 } });
     } finally { ws.cleanup(); }
   }, 25_000);
 }
-test("1.6.0 native transport close failure is retained as a teardown blocker", async () => {
+test("1.6.1 native transport close failure is retained as a teardown blocker", async () => {
   const ws = createTempWorkspace("candidate-120-close-failure-");
   try {
     const result = await run("earendil-120-close-failure.ts", [], { CANDIDATE_102_ROOT: ws.workspace });
-    expect(result).toMatchObject({ version: "1.6.0", closeFailureObserved: true, reloadResolved: true, firstTransportClosed: false, secondTransportClosed: true, surfacedErrors: 0 });
+    expect(result).toMatchObject({ version: "1.6.1", closeFailureObserved: true, reloadResolved: true, firstTransportClosed: false, secondTransportClosed: true, surfacedErrors: 0 });
   } finally { ws.cleanup(); }
 }, 25_000);

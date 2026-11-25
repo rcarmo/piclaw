@@ -18,9 +18,9 @@ const originalFetch=globalThis.fetch;let bootstrapRequests=0;
 const deny=()=>{bootstrapRequests++;throw Error('Unexpected import network');};
 globalThis.fetch=Object.assign(deny,{preconnect:deny});
 const root=import.meta.resolve('@earendil-works/pi-ai');
-assert.equal(JSON.parse(readFileSync(fileURLToPath(new URL('../package.json',root)),'utf8')).version,'1.6.0');
-const pins=JSON.parse(readFileSync(new URL('./provider-oauth-160-hashes.json',import.meta.url),'utf8'));
-assert.equal(pins.version,'1.6.0');
+assert.equal(JSON.parse(readFileSync(fileURLToPath(new URL('../package.json',root)),'utf8')).version,'1.6.1');
+const pins=JSON.parse(readFileSync(new URL('./provider-oauth-161-hashes.json',import.meta.url),'utf8'));
+assert.equal(pins.version,'1.6.1');
 for(const[file,sha]of Object.entries(pins.files))assert.equal(createHash('sha256').update(readFileSync(fileURLToPath(new URL(file,root)))).digest('hex'),sha);
 const {builtinProviders}=await import('@earendil-works/pi-ai/providers/all');assert.equal(bootstrapRequests,0);
 const oauth=builtinProviders().find(p=>p.id===provider)?.auth.oauth;assert.ok(oauth);
@@ -117,5 +117,5 @@ try{
    results.push({provider,mode,status:'pass',requests:counts,deviceEventObserved:deviceEvent,transportCancellationObserved:abortObserved,lateEvents,lateRequests});
   }finally{clearTimeout(watchdog);clearTimeout(timer);controller.abort();}
  }
- console.log(JSON.stringify({version:'1.6.0',runtime:`Bun ${Bun.version}`,scope:'public_meta_xai_device_refresh_only',provider,results,sdkFileSha256:pins.files,bootstrapRequests,credentialPersistence:'none',inference:'not_invoked',networkGuard:'distinct_loopback_only_namespace_exact_fetch',privilegesDropped:true}));
+ console.log(JSON.stringify({version:'1.6.1',runtime:`Bun ${Bun.version}`,scope:'public_meta_xai_device_refresh_only',provider,results,sdkFileSha256:pins.files,bootstrapRequests,credentialPersistence:'none',inference:'not_invoked',networkGuard:'distinct_loopback_only_namespace_exact_fetch',privilegesDropped:true}));
 }finally{globalThis.fetch=originalFetch;}

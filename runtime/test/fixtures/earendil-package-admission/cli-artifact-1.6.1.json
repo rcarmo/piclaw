@@ -1,0 +1,37 @@
+{
+  "version": "1.6.1",
+  "gitHead": "ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe",
+  "packages": [
+    {
+      "name": "@earendil-works/pi-ai",
+      "version": "1.6.1",
+      "gitHead": null,
+      "registryGitHead": "omitted",
+      "shasum": "900f17e5d0b28a6251c78aa27407e9d12f7fcb36",
+      "integrity": "sha512-EyorgVyA2s4MxNl7YOapzOpdxrc8HUgxHEIOo8QRMK35P7PCOsSiWzMLf6ixKl3/obkg7I3wGJWHq+FdbUz43g==",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-1.6.1.tgz",
+      "treeSha256": "b11110805e588a31b7f28052554e8902b1cd0b40aedf595df91a20663ab63392",
+      "files": 902,
+      "fileCount": 902
+    },
+    {
+      "name": "@earendil-works/pi-coding-agent",
+      "version": "1.6.1",
+      "gitHead": null,
+      "registryGitHead": "omitted",
+      "shasum": "478e322b3c12ec5e1be0f1f1cea0a1831eaa47ae",
+      "integrity": "sha512-+VSb95N4PB+G7TLceg7wkbJT31BEeIBnUT9500g9a1rOsCx78CUw1YFGtLcRhS6jj8pdfm0fFwrakrMLu6lVAQ==",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-1.6.1.tgz",
+      "treeSha256": "7a7eb789ce65863e2781e3c1545225ca4bd3b03da219d198d232ec1cbeffa0ff",
+      "files": 1330,
+      "fileCount": 1330
+    }
+  ],
+  "bin": "dist/bundle/cli.js",
+  "bundleFileCount": 86,
+  "bundleSha256": "000df80bfa1275f349d170e8fada4a2676496685dbd4378debd5f0a5ffb7ab04",
+  "sdkFileSha256": {
+    "openai-chatgpt.js": "4cf9fc758a07ffe4ee022326404b5dcc86767ee4154945c0417c7f95eaecdcc2",
+    "openai-codex.js": "0b94a219ddb5982f0ee543ef03138ed0254ce6ee0a57c9d89d39c242e2eaf6f6"
+  }
+}

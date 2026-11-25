@@ -18,8 +18,8 @@ let bootstrapRequests = 0;
 const denyBootstrap = () => { bootstrapRequests++; throw new Error("Unexpected import request."); };
 globalThis.fetch = Object.assign(denyBootstrap, { preconnect: denyBootstrap });
 const root = import.meta.resolve("@earendil-works/pi-ai");
-assert.equal(JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", root)), "utf8")).version, "1.6.0");
-const sdkFileSha256 = JSON.parse(readFileSync(new URL("./provider-oauth-160-hashes.json", import.meta.url), "utf8")).files;
+assert.equal(JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", root)), "utf8")).version, "1.6.1");
+const sdkFileSha256 = JSON.parse(readFileSync(new URL("./provider-oauth-161-hashes.json", import.meta.url), "utf8")).files;
 for (const [file, hash] of Object.entries(sdkFileSha256)) assert.equal(createHash("sha256").update(readFileSync(fileURLToPath(new URL(file, root)))).digest("hex"), hash);
 const modes = ["browser-success", "browser-bad-state-first", "browser-denied", "browser-token-denied", "browser-discovery-malformed", "browser-cancel", "device-pending-success", "device-slow-down", "device-denied", "device-malformed", "device-expiry", "device-poll-cancel", "device-wait-cancel", "refresh-success", "refresh-denied", "unknown-selection", "pre-abort"];
 const gateway = "https://radius-fixture.invalid";
@@ -204,6 +204,6 @@ try {
   assert.equal(malformedRequests, 1); assert.equal(invalid.access, undefined); assert.equal(invalid.refresh, undefined); assert.equal(Number.isFinite(invalid.expires), false);
   const malformedResponse = { outcome: "sdk_invalid_credential_observed", requests: malformedRequests, credentialPersistence: "none", coreDisposition: "rejected_by_existing_serialized_write_owner_regression" };
   assert.equal(results.length, modes.length); assert.equal(new Set(results.map(row => row.mode)).size, modes.length);
-  console.log(JSON.stringify({ version: "1.6.0", runtime: `Bun ${Bun.version}`, scope: "public_radius_browser_device_refresh_methods_only", results, sdkFileSha256, malformedResponse,
+  console.log(JSON.stringify({ version: "1.6.1", runtime: `Bun ${Bun.version}`, scope: "public_radius_browser_device_refresh_methods_only", results, sdkFileSha256, malformedResponse,
     bootstrapRequests, credentialPersistence: "none", inference: "not_invoked", networkGuard: "distinct_loopback_only_os_namespace_guarded_fetch_owned_ipv4_callback" }));
 } finally { globalThis.fetch = originalFetch; }

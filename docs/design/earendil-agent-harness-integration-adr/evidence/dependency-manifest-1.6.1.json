@@ -1,0 +1,3733 @@
+{
+  "schemaVersion": 1,
+  "currentVersion": "1.6.1",
+  "referenceGitHead": "ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe",
+  "scope": "current installed Root nine-package loop including SDK-owned pi-schema; historical receipts unchanged; private engine has separate provenance",
+  "packages": [
+    {
+      "name": "@earendil-works/chord",
+      "version": "1.6.1",
+      "tarball": "https://registry.npmjs.org/@earendil-works/chord/-/chord-1.6.1.tgz",
+      "integrity": "sha512-uoMFLrKMAOnfHhGdOuJgKyYsfn160djhs+sYJbW5zQ0qgVbkFQXaUEs8YdFcaTpYsASoL5AvIGvRVC2TUD7gXw==",
+      "shasum": "f3b52042e6c75641e9b9a6192ae5ac117d268788",
+      "archiveTreeSha256": "9644fec6e78ae01b92011f79249948e7de688f9ee8bb7618dac72d5dbce9829c",
+      "archiveFileCount": 1334,
+      "archiveSha256": "185c5a0c50c701bbd7e90a790ef687290c6c0adab9422e99b65e83457f474b5b",
+      "archiveBytes": 3528302,
+      "engines": {
+        "node": ">=22.19.0"
+      },
+      "publicExports": {
+        ".": {
+          "types": "./dist/index.d.ts",
+          "import": "./dist/index.js",
+          "source": "./src/index.ts"
+        },
+        "./app": {
+          "types": "./dist/node/app/index.d.ts",
+          "import": "./dist/node/app/index.js",
+          "source": "./src/node/app/index.ts"
+        },
+        "./tui": {
+          "types": "./dist/tui/index.d.ts",
+          "import": "./dist/tui/index.js",
+          "source": "./src/tui/index.ts"
+        },
+        "./web": {
+          "types": "./dist/web/index.d.ts",
+          "import": "./dist/web/index.js",
+          "source": "./src/web/index.ts"
+        },
+        "./http": {
+          "types": "./dist/node/http/index.d.ts",
+          "import": "./dist/node/http/index.js",
+          "source": "./src/node/http/index.ts"
+        },
+        "./json": {
+          "types": "./dist/json.d.ts",
+          "import": "./dist/json.js",
+          "source": "./src/json.ts"
+        },
+        "./sync": {
+          "types": "./dist/sync/index.d.ts",
+          "import": "./dist/sync/index.js",
+          "source": "./src/sync/index.ts"
+        },
+        "./delta": {
+          "types": "./dist/delta/index.d.ts",
+          "import": "./dist/delta/index.js",
+          "source": "./src/delta/index.ts"
+        },
+        "./react": {
+          "types": "./dist/react/index.d.ts",
+          "import": "./dist/react/index.js",
+          "source": "./src/react/index.ts"
+        },
+        "./watch": {
+          "types": "./dist/watch.d.ts",
+          "import": "./dist/watch.js",
+          "source": "./src/watch.ts"
+        },
+        "./output": {
+          "types": "./dist/output.d.ts",
+          "import": "./dist/output.js",
+          "source": "./src/output.ts"
+        },
+        "./sqlite": {
+          "types": "./dist/sqlite/index.d.ts",
+          "import": "./dist/sqlite/index.js",
+          "source": "./src/sqlite/index.ts"
+        },
+        "./context": {
+          "types": "./dist/context/index.d.ts",
+          "import": "./dist/context/index.js",
+          "source": "./src/context/index.ts"
+        },
+        "./plugins": {
+          "types": "./dist/node/plugins/index.d.ts",
+          "import": "./dist/node/plugins/index.js",
+          "source": "./src/node/plugins/index.ts"
+        },
+        "./workers": {
+          "types": "./dist/node/workers/index.d.ts",
+          "import": "./dist/node/workers/index.js",
+          "source": "./src/node/workers/index.ts"
+        },
+        "./surfaces": {
+          "types": "./dist/node/surfaces/index.d.ts",
+          "import": "./dist/node/surfaces/index.js",
+          "source": "./src/node/surfaces/index.ts"
+        },
+        "./app/files": {
+          "types": "./dist/node/app/files-entry.d.ts",
+          "import": "./dist/node/app/files-entry.js",
+          "source": "./src/node/app/files-entry.ts"
+        },
+        "./compression": {
+          "types": "./dist/node/compression.d.ts",
+          "import": "./dist/node/compression.js",
+          "source": "./src/node/compression.ts"
+        },
+        "./sqlite/node": {
+          "types": "./dist/sqlite/node.d.ts",
+          "import": "./dist/sqlite/node.js",
+          "source": "./src/sqlite/node.ts"
+        },
+        "./package.json": "./package.json",
+        "./tui/launcher": {
+          "types": "./dist/node/tui/index.d.ts",
+          "import": "./dist/node/tui/index.js",
+          "source": "./src/node/tui/index.ts"
+        },
+        "./workers/child": {
+          "types": "./dist/node/workers/child.d.ts",
+          "import": "./dist/node/workers/child.js",
+          "source": "./src/node/workers/child.ts"
+        },
+        "./plugins/runtime": {
+          "types": "./dist/node/plugins/runtime.d.ts",
+          "import": "./dist/node/plugins/runtime.js",
+          "source": "./src/node/plugins/runtime.ts"
+        },
+        "./telemetry-ingest": {
+          "types": "./dist/telemetry-ingest/index.d.ts",
+          "import": "./dist/telemetry-ingest/index.js",
+          "source": "./src/telemetry-ingest/index.ts"
+        },
+        "./telemetry-sqlite": {
+          "types": "./dist/telemetry-sqlite/index.d.ts",
+          "import": "./dist/telemetry-sqlite/index.js",
+          "source": "./src/telemetry-sqlite/index.ts"
+        },
+        "./sqlite/cloudflare": {
+          "types": "./dist/sqlite/cloudflare.d.ts",
+          "import": "./dist/sqlite/cloudflare.js",
+          "source": "./src/sqlite/cloudflare.ts"
+        },
+        "./telemetry-sqlite/node": {
+          "types": "./dist/telemetry-sqlite/node.d.ts",
+          "import": "./dist/telemetry-sqlite/node.js",
+          "source": "./src/telemetry-sqlite/node.ts"
+        }
+      },
+      "main": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "dependencies": {
+        "@earendil-works/pi-schema": "1.6.1",
+        "@earendil-works/pi-telemetry": "1.6.1"
+      },
+      "lockEntry": [
+        "@earendil-works/chord@1.6.1",
+        "",
+        {
+          "dependencies": {
+            "@earendil-works/pi-schema": "1.6.1",
+            "@earendil-works/pi-telemetry": "1.6.1"
+          },
+          "peerDependencies": {
+            "esbuild": "^0.28.2",
+            "react": "^19.3.0",
+            "ws": "^8.21.0"
+          },
+          "optionalPeers": [
+            "esbuild",
+            "react",
+            "ws"
+          ]
+        },
+        "sha512-uoMFLrKMAOnfHhGdOuJgKyYsfn160djhs+sYJbW5zQ0qgVbkFQXaUEs8YdFcaTpYsASoL5AvIGvRVC2TUD7gXw=="
+      ],
+      "exportFingerprints": [
+        {
+          "condition": "/./types",
+          "target": "./dist/index.d.ts",
+          "sha256": "57b73c8bd0ad66129b0094be1438423f4b0a0d519b3aa5ca049025b80d0b9dc2"
+        },
+        {
+          "condition": "/./import",
+          "target": "./dist/index.js",
+          "sha256": "ba6d3e7732f3522dc51d00bea7d7c597cf7ae0b2fcf731f4ac8bc5bef7e9a584"
+        },
+        {
+          "condition": "/./source",
+          "target": "./src/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./app/types",
+          "target": "./dist/node/app/index.d.ts",
+          "sha256": "55321de35a9e571d49df20df6383fa56a85763c3c5619f7982840353851236da"
+        },
+        {
+          "condition": "/./app/import",
+          "target": "./dist/node/app/index.js",
+          "sha256": "3f29ba3f27da4a4a061d287abede77dc3c5ef9dcfbdbf27a70df43582f350f4c"
+        },
+        {
+          "condition": "/./app/source",
+          "target": "./src/node/app/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./tui/types",
+          "target": "./dist/tui/index.d.ts",
+          "sha256": "dace7b429539b2cb61cbb13a06a33a20d2b89962abfc67277fbc5ca77199953b"
+        },
+        {
+          "condition": "/./tui/import",
+          "target": "./dist/tui/index.js",
+          "sha256": "f90bc70a7833d5980f5876bf7f4f18330a772f3527805f2b3f8aaa835aed207b"
+        },
+        {
+          "condition": "/./tui/source",
+          "target": "./src/tui/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./web/types",
+          "target": "./dist/web/index.d.ts",
+          "sha256": "5be90830af2232f6e1d94a3a096e3cea8576b4ab96692a8e17183d163a747030"
+        },
+        {
+          "condition": "/./web/import",
+          "target": "./dist/web/index.js",
+          "sha256": "8fa8633ce33e48f20d8f462350b0bc4555470bec4bd9fe25e0f70ce4e35c34cf"
+        },
+        {
+          "condition": "/./web/source",
+          "target": "./src/web/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./http/types",
+          "target": "./dist/node/http/index.d.ts",
+          "sha256": "031f6e2e366a6e248b498f28dff248a42b5da7fc60b4f1ba54ffbfed8566f4d9"
+        },
+        {
+          "condition": "/./http/import",
+          "target": "./dist/node/http/index.js",
+          "sha256": "b5275125058e7ee5e78c2db219ffbcd7994b73ec1af52a69f6bccd62ee157363"
+        },
+        {
+          "condition": "/./http/source",
+          "target": "./src/node/http/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./json/types",
+          "target": "./dist/json.d.ts",
+          "sha256": "1e91cef3a633692f317bcb4b611d7af93dfe29ea18aafddb7e50540c0fc1407b"
+        },
+        {
+          "condition": "/./json/import",
+          "target": "./dist/json.js",
+          "sha256": "671e8953a01808904e0dcaa76c964802585fe854df154b63e6c86efa80fc33e6"
+        },
+        {
+          "condition": "/./json/source",
+          "target": "./src/json.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./sync/types",
+          "target": "./dist/sync/index.d.ts",
+          "sha256": "db0f5053eae95a67c0061f851def481b6a5e4074df3a8d27e79189b30e225638"
+        },
+        {
+          "condition": "/./sync/import",
+          "target": "./dist/sync/index.js",
+          "sha256": "0a88e2bd9421cd3445e3885ebd2d8bd0c18c02ea9eda2fe829fa0a6726d4ce98"
+        },
+        {
+          "condition": "/./sync/source",
+          "target": "./src/sync/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./delta/types",
+          "target": "./dist/delta/index.d.ts",
+          "sha256": "d539d4238c6147e89323e3ef52c14fa0b140c4fa431256efab2998da2af091c5"
+        },
+        {
+          "condition": "/./delta/import",
+          "target": "./dist/delta/index.js",
+          "sha256": "315807410ef703bc0fface181f6fef3b4449d63efeda27e1398fca2790e0d896"
+        },
+        {
+          "condition": "/./delta/source",
+          "target": "./src/delta/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./react/types",
+          "target": "./dist/react/index.d.ts",
+          "sha256": "d8f7d0ff4862f5aa7efb68955f2580c6110b343a19d21c86ddb81ec9d30f9309"
+        },
+        {
+          "condition": "/./react/import",
+          "target": "./dist/react/index.js",
+          "sha256": "0288a247646808c5a9168d197274466cee5a02e20d10cbd23b2316371e1fe061"
+        },
+        {
+          "condition": "/./react/source",
+          "target": "./src/react/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./watch/types",
+          "target": "./dist/watch.d.ts",
+          "sha256": "5a8f29616d407c854dd83a29e4bba3c1b27dc3de88178e688ddfba1516bcfeab"
+        },
+        {
+          "condition": "/./watch/import",
+          "target": "./dist/watch.js",
+          "sha256": "0ba45354b9a059c81b91ec307aec1be961c1d63e981ef064e078fb0e01e21093"
+        },
+        {
+          "condition": "/./watch/source",
+          "target": "./src/watch.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./output/types",
+          "target": "./dist/output.d.ts",
+          "sha256": "ab0c556ca2620d585688540156806f30727e664bba3a3b23e7786cc3a12a4f4d"
+        },
+        {
+          "condition": "/./output/import",
+          "target": "./dist/output.js",
+          "sha256": "29042b527f7c5b8eb703aff6a03b14a5b019848449a83bf8483c6ecd1d4ffe0c"
+        },
+        {
+          "condition": "/./output/source",
+          "target": "./src/output.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./sqlite/types",
+          "target": "./dist/sqlite/index.d.ts",
+          "sha256": "6c7e73da612a2b47f7d9c98f4ff046da1d3da122ed4005703c255ddb89d7d019"
+        },
+        {
+          "condition": "/./sqlite/import",
+          "target": "./dist/sqlite/index.js",
+          "sha256": "60d51e8aefbe7a37601d874df31f264d1e747362bdbc309ceefe33ff8cb16669"
+        },
+        {
+          "condition": "/./sqlite/source",
+          "target": "./src/sqlite/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./context/types",
+          "target": "./dist/context/index.d.ts",
+          "sha256": "93e94d9987905365ec710a35accfa11934b3f50bc8d5db87dbd91f8fad17b398"
+        },
+        {
+          "condition": "/./context/import",
+          "target": "./dist/context/index.js",
+          "sha256": "c27491f637c6718fad8d0a3aa5e1e9b0d2333cda82078466cf1d2284626dc0bd"
+        },
+        {
+          "condition": "/./context/source",
+          "target": "./src/context/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./plugins/types",
+          "target": "./dist/node/plugins/index.d.ts",
+          "sha256": "a94eead7ff7bb2f3f586bfe1700f99df755b3156d1e7311c95cd02b1ab66e96d"
+        },
+        {
+          "condition": "/./plugins/import",
+          "target": "./dist/node/plugins/index.js",
+          "sha256": "56c5665447cfc601bfeef11df55d33a6db3b4e1486347f25c0b4b7439e5ebdd1"
+        },
+        {
+          "condition": "/./plugins/source",
+          "target": "./src/node/plugins/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./workers/types",
+          "target": "./dist/node/workers/index.d.ts",
+          "sha256": "2a6d7e92a76d2b73e26e5350e4574ff8df401fc95d00e996d747a170caf8de8e"
+        },
+        {
+          "condition": "/./workers/import",
+          "target": "./dist/node/workers/index.js",
+          "sha256": "4b8a9635ee17a196d856ef50fecaa4e08469ea74bb74acbb4fb7a11e2fb0d6a3"
+        },
+        {
+          "condition": "/./workers/source",
+          "target": "./src/node/workers/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./surfaces/types",
+          "target": "./dist/node/surfaces/index.d.ts",
+          "sha256": "64c986020d1c426b114fe47e08f233384884430892646885a386442136ac7e0b"
+        },
+        {
+          "condition": "/./surfaces/import",
+          "target": "./dist/node/surfaces/index.js",
+          "sha256": "f6271d0dcaee08f6f3a6335b5870fe8f50e4be5a759e9fc6739fb79295212b41"
+        },
+        {
+          "condition": "/./surfaces/source",
+          "target": "./src/node/surfaces/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./app/files/types",
+          "target": "./dist/node/app/files-entry.d.ts",
+          "sha256": "9ce03f57631e39d70bfdfa0e519d13bae891655d4728eb5d85669aef29335e71"
+        },
+        {
+          "condition": "/./app/files/import",
+          "target": "./dist/node/app/files-entry.js",
+          "sha256": "cace13eef44b63e2a7be0ff33eaa42bb073b7428f3ffcfa5a5075c0f69476a19"
+        },
+        {
+          "condition": "/./app/files/source",
+          "target": "./src/node/app/files-entry.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./compression/types",
+          "target": "./dist/node/compression.d.ts",
+          "sha256": "f19c140ba74794c9afcaaf6014155726e574c895227b0fb329ae49935a68a8c4"
+        },
+        {
+          "condition": "/./compression/import",
+          "target": "./dist/node/compression.js",
+          "sha256": "130e82608b8876571a5d8691a4494be8f5843daca44fe70a331c789b0f06a111"
+        },
+        {
+          "condition": "/./compression/source",
+          "target": "./src/node/compression.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./sqlite/node/types",
+          "target": "./dist/sqlite/node.d.ts",
+          "sha256": "2831bf81ed0f3ae39cdca43731bf1163a943b3f654662ebb086128f3dd68d199"
+        },
+        {
+          "condition": "/./sqlite/node/import",
+          "target": "./dist/sqlite/node.js",
+          "sha256": "ad0d45b5f454adb1e591e14c5c4267beddb75a24e06b9880301b210ab85ed4b9"
+        },
+        {
+          "condition": "/./sqlite/node/source",
+          "target": "./src/sqlite/node.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./package.json",
+          "target": "./package.json",
+          "sha256": "0e243bd6d4bd86349841064a7d2b76fda6cd4f7a68dd4c6d677ac44e1cf342f6"
+        },
+        {
+          "condition": "/./tui/launcher/types",
+          "target": "./dist/node/tui/index.d.ts",
+          "sha256": "75192f707c9f29d5cc339126f0cf64ea48b9f177d1a714769309050dee3ecd0c"
+        },
+        {
+          "condition": "/./tui/launcher/import",
+          "target": "./dist/node/tui/index.js",
+          "sha256": "ca341e0e58185320543ff5fcd147357880a703a128a23daca1fdc0ebec584523"
+        },
+        {
+          "condition": "/./tui/launcher/source",
+          "target": "./src/node/tui/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./workers/child/types",
+          "target": "./dist/node/workers/child.d.ts",
+          "sha256": "32065df90d62a0bc816b7440a1453621438c6edf2e16655813be386c12177eaa"
+        },
+        {
+          "condition": "/./workers/child/import",
+          "target": "./dist/node/workers/child.js",
+          "sha256": "82a78703e04a600415415d7f2bc75df5fb79b8dee356f75c8237ee340b730832"
+        },
+        {
+          "condition": "/./workers/child/source",
+          "target": "./src/node/workers/child.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./plugins/runtime/types",
+          "target": "./dist/node/plugins/runtime.d.ts",
+          "sha256": "21112c975015bb2cfde47ccfc097cdd2ad2ff25ee5c3c187db72fbce64fca83f"
+        },
+        {
+          "condition": "/./plugins/runtime/import",
+          "target": "./dist/node/plugins/runtime.js",
+          "sha256": "d99facc3c6cad53883a3501f658c7d470f7a58bd12a12ed5f8210c051ca9e52d"
+        },
+        {
+          "condition": "/./plugins/runtime/source",
+          "target": "./src/node/plugins/runtime.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./telemetry-ingest/types",
+          "target": "./dist/telemetry-ingest/index.d.ts",
+          "sha256": "0c7fa9658e7feb54096c72ae06b99a23ed99a670868f1a3d26d0efa553b1f747"
+        },
+        {
+          "condition": "/./telemetry-ingest/import",
+          "target": "./dist/telemetry-ingest/index.js",
+          "sha256": "9681e55507ebc2f089dcae90c990b96406df7c3a6f3fd21cd232e12b333b82a9"
+        },
+        {
+          "condition": "/./telemetry-ingest/source",
+          "target": "./src/telemetry-ingest/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./telemetry-sqlite/types",
+          "target": "./dist/telemetry-sqlite/index.d.ts",
+          "sha256": "02b751ea74fa9eef129f0e4fed0eabd5025b39b8af94800a783b89f959832655"
+        },
+        {
+          "condition": "/./telemetry-sqlite/import",
+          "target": "./dist/telemetry-sqlite/index.js",
+          "sha256": "2e68bfac23d618ddc35e10420a0877699d94df6f15f0cfe2095905c9c1cff81b"
+        },
+        {
+          "condition": "/./telemetry-sqlite/source",
+          "target": "./src/telemetry-sqlite/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./sqlite/cloudflare/types",
+          "target": "./dist/sqlite/cloudflare.d.ts",
+          "sha256": "06edb899374e4674eb8bb0fbbdc6d53190df07e0d9cbe5a79ddcc91d1b1bcbfd"
+        },
+        {
+          "condition": "/./sqlite/cloudflare/import",
+          "target": "./dist/sqlite/cloudflare.js",
+          "sha256": "49eaad4430e684782b03c23c4decabb7f77a8f40974773f73529ff8e7ca19382"
+        },
+        {
+          "condition": "/./sqlite/cloudflare/source",
+          "target": "./src/sqlite/cloudflare.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./telemetry-sqlite/node/types",
+          "target": "./dist/telemetry-sqlite/node.d.ts",
+          "sha256": "3815837ac185ccdafb51244585da4a1a235355e6e73181e8fcb844acfe3b5f27"
+        },
+        {
+          "condition": "/./telemetry-sqlite/node/import",
+          "target": "./dist/telemetry-sqlite/node.js",
+          "sha256": "4e2f06a05067cab7b463020f3208918cd4f856703712d88e77f5c30c1db801d3"
+        },
+        {
+          "condition": "/./telemetry-sqlite/node/source",
+          "target": "./src/telemetry-sqlite/node.ts",
+          "status": "advertised_source_not_shipped"
+        }
+      ],
+      "provenance": {
+        "attestationUrl": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fchord@1.6.1",
+        "bundleSha256": "9f4f27492990abe8a3075c02342e6b66913ca6cb0500abbc40735a97a8aec327",
+        "statements": [
+          {
+            "_type": "https://in-toto.io/Statement/v0.1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/chord@1.6.1",
+                "digest": {
+                  "sha512": "ba83052eb28c00e9df1e119d3ae2602b262c7e7d7ad1d8e1b3eb1825b5b9cd0d2a8156e41505da504b3c61d15c693a58b004a82f902f206bd1542d93503ee05f"
+                }
+              }
+            ],
+            "predicateType": "https://github.com/npm/attestation/tree/main/specs/publish/v0.1",
+            "predicate": {
+              "name": "@earendil-works/chord",
+              "version": "1.6.1",
+              "registry": "https://registry.npmjs.org"
+            }
+          },
+          {
+            "_type": "https://in-toto.io/Statement/v1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/chord@1.6.1",
+                "digest": {
+                  "sha512": "ba83052eb28c00e9df1e119d3ae2602b262c7e7d7ad1d8e1b3eb1825b5b9cd0d2a8156e41505da504b3c61d15c693a58b004a82f902f206bd1542d93503ee05f"
+                }
+              }
+            ],
+            "predicateType": "https://slsa.dev/provenance/v1",
+            "predicate": {
+              "buildDefinition": {
+                "buildType": "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1",
+                "externalParameters": {
+                  "workflow": {
+                    "ref": "refs/tags/v1.6.1",
+                    "repository": "https://github.com/earendil-works/pi",
+                    "path": ".github/workflows/build-binaries.yml"
+                  }
+                },
+                "internalParameters": {
+                  "github": {
+                    "event_name": "push",
+                    "repository_id": "1035029907",
+                    "repository_owner_id": "207902832"
+                  }
+                },
+                "resolvedDependencies": [
+                  {
+                    "uri": "git+https://github.com/earendil-works/pi@refs/tags/v1.6.1",
+                    "digest": {
+                      "gitCommit": "ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe"
+                    }
+                  }
+                ]
+              },
+              "runDetails": {
+                "builder": {
+                  "id": "https://github.com/actions/runner/github-hosted"
+                },
+                "metadata": {
+                  "invocationId": "https://github.com/earendil-works/pi/actions/runs/45621597215/attempts/1"
+                }
+              }
+            }
+          }
+        ],
+        "verification": "registry-served statement decoded; subject digest/ref/commit matched; signature not independently verified"
+      }
+    },
+    {
+      "name": "@earendil-works/pi-ai",
+      "version": "1.6.1",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-1.6.1.tgz",
+      "integrity": "sha512-EyorgVyA2s4MxNl7YOapzOpdxrc8HUgxHEIOo8QRMK35P7PCOsSiWzMLf6ixKl3/obkg7I3wGJWHq+FdbUz43g==",
+      "shasum": "900f17e5d0b28a6251c78aa27407e9d12f7fcb36",
+      "archiveTreeSha256": "b11110805e588a31b7f28052554e8902b1cd0b40aedf595df91a20663ab63392",
+      "archiveFileCount": 902,
+      "archiveSha256": "192c407bd69c06358c68519aa6290adc8362b132bee9117480c7604456d5073b",
+      "archiveBytes": 915201,
+      "engines": {
+        "node": ">=22.19.0"
+      },
+      "publicExports": {
+        ".": {
+          "types": "./dist/index.d.ts",
+          "import": "./dist/index.js"
+        },
+        "./api/*": {
+          "types": "./dist/api/*.d.ts",
+          "import": "./dist/api/*.js"
+        },
+        "./oauth": {
+          "types": "./dist/oauth.d.ts",
+          "import": "./dist/oauth.js"
+        },
+        "./compat": {
+          "types": "./dist/compat.d.ts",
+          "import": "./dist/compat.js"
+        },
+        "./models": {
+          "types": "./dist/models.d.ts",
+          "import": "./dist/models.js"
+        },
+        "./utils/*": {
+          "types": "./dist/utils/*.d.ts",
+          "import": "./dist/utils/*.js"
+        },
+        "./bun-oauth": {
+          "types": "./dist/bun-oauth.d.ts",
+          "import": "./dist/bun-oauth.js"
+        },
+        "./lazy-oauth": {
+          "types": "./dist/lazy-oauth.d.ts",
+          "import": "./dist/lazy-oauth.js"
+        },
+        "./providers/*": {
+          "types": "./dist/providers/*.d.ts",
+          "import": "./dist/providers/*.js"
+        },
+        "./bedrock-provider": {
+          "types": "./dist/bedrock-provider.d.ts",
+          "import": "./dist/bedrock-provider.js"
+        },
+        "./session-resources": {
+          "types": "./dist/session-resources.d.ts",
+          "import": "./dist/session-resources.js"
+        },
+        "./lazy-bedrock-provider": {
+          "types": "./dist/lazy-bedrock-provider.d.ts",
+          "import": "./dist/lazy-bedrock-provider.js"
+        }
+      },
+      "main": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "dependencies": {
+        "openai": "7.59.0",
+        "partial-json": "0.1.7",
+        "@google/genai": "3.6.1",
+        "http-proxy-agent": "9.1.0",
+        "@anthropic-ai/sdk": "0.129.0",
+        "https-proxy-agent": "9.1.0",
+        "@earendil-works/pi-schema": "1.6.1",
+        "@smithy/node-http-handler": "4.12.1",
+        "@earendil-works/pi-telemetry": "1.6.1",
+        "@aws-sdk/client-bedrock-runtime": "3.1127.0",
+        "@aws-sdk/credential-provider-node": "3.972.82"
+      },
+      "lockEntry": [
+        "@earendil-works/pi-ai@1.6.1",
+        "",
+        {
+          "dependencies": {
+            "@anthropic-ai/sdk": "0.129.0",
+            "@aws-sdk/client-bedrock-runtime": "3.1127.0",
+            "@aws-sdk/credential-provider-node": "3.972.82",
+            "@earendil-works/pi-schema": "1.6.1",
+            "@earendil-works/pi-telemetry": "1.6.1",
+            "@google/genai": "3.6.1",
+            "@smithy/node-http-handler": "4.12.1",
+            "http-proxy-agent": "9.1.0",
+            "https-proxy-agent": "9.1.0",
+            "openai": "7.59.0",
+            "partial-json": "0.1.7"
+          },
+          "bin": {
+            "pi-ai": "dist/cli.js"
+          }
+        },
+        "sha512-EyorgVyA2s4MxNl7YOapzOpdxrc8HUgxHEIOo8QRMK35P7PCOsSiWzMLf6ixKl3/obkg7I3wGJWHq+FdbUz43g=="
+      ],
+      "exportFingerprints": [
+        {
+          "condition": "/./types",
+          "target": "./dist/index.d.ts",
+          "sha256": "2fbfd9594551ed0de3842613b4bef2526aa608d622f70eb0411524e802c9894e"
+        },
+        {
+          "condition": "/./import",
+          "target": "./dist/index.js",
+          "sha256": "dae2e8973404eab96233f9c36a99f0981fbb14205f07fec1b0bcbc84f476fffe"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/openai-completions.lazy.d.ts",
+          "sha256": "940f4e6991ad18271c22fdb1fa745bb9af846eedde48d828b9b066f8ace513fb"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/pi-decision.lazy.d.ts",
+          "sha256": "c2eb71d99547d3b085a517c43fdef53d93b16274b59efc1b5e2e1e13de0c61e0"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/typesafe-system-one.d.ts",
+          "sha256": "34a7548961c5e6e1650b1eb7452cc91d61db8417aaa3f4d94906ffffa732dcb2"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/anthropic-messages.lazy.d.ts",
+          "sha256": "c4579e7d50f278128e5a2b2392bf9c7288d03cfac0c0569b5f1f7c0e1278228b"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/openai-responses-shared.d.ts",
+          "sha256": "f9066a954fe0a063234eb6959326b313fb6f04899b4c784d2760bd8c7299b039"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/pi-messages.lazy.d.ts",
+          "sha256": "560e2aaab48f4a25b143aede1f13d2284a1d7551b49b28b508b3733ff883f1bc"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/system-one-shared.d.ts",
+          "sha256": "5746201efa4a52c5ff91d314d6cf359de193e23058cb38bc6e9b1945632add8b"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/strict-tool-limits.d.ts",
+          "sha256": "27ab88a8eaa578b035598461fb2dfc35ebda90b48f7a4b0bcd39ed58c432887b"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/lazy.d.ts",
+          "sha256": "c36a6837822f06afd37c044948f5da7db7b0a6d84091e97cf26f67ffad33fde8"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/mistral-conversations.d.ts",
+          "sha256": "d1502db6105c1e2cdda1605bc771d1d541e62f2a9ceff8f1bf7885a7003ec912"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/github-copilot-headers.d.ts",
+          "sha256": "117e46840a0c3c0f3702fc97e2e014980c7ff38a8e97e9b353075bfb8b56e4b0"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/transform-messages.d.ts",
+          "sha256": "c0ae533a0955a98346cc32ecfd410bd4837397b903d50e3e8765917d9ba40191"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/pi-messages.d.ts",
+          "sha256": "bc8f287ab810e9e5c3c1198e3e40683446d0cac40c2e2062dc913b48b092b6c8"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/simple-options.d.ts",
+          "sha256": "e64aa31cdd3c000aa08ab4ad7d0698395686490c89319afa435575ca584d1aea"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/llama-cpp-classify.d.ts",
+          "sha256": "299e5c9548830feac587218cc797fceb18fb1a8d2b3a6d5943758b306c94d1ce"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/azure-openai-config.d.ts",
+          "sha256": "04d1752534cf6a6a1bc1ca5b8eea136466388338fb1c13f2d8313d7f7ee9221c"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/openrouter-images.d.ts",
+          "sha256": "3c17b31b7cdc3590ff727bc27417cad5e90afcf75893a9404b177b36401cc09a"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/openai-codex-responses.lazy.d.ts",
+          "sha256": "c4d7dbd64b557173225e1e46b9863123b02d52bd503562c35127024bdaf5b62e"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/cloudflare.d.ts",
+          "sha256": "ee1e5dafb7124bd4cf92e5616f7b5aa61ce4bcf5cb7d5ea68e52cc6c8191c79d"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/google-vertex.lazy.d.ts",
+          "sha256": "bd7ab33cc0cae91b285475aa336422ef6b9b0fdfc239443ca9cd5ed3fb3ee959"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/cloudflare-workers-ai-system-one.d.ts",
+          "sha256": "a28e52dd538d594a17af465637e91bb47ea47924c88549fbb6d5da5bcd132234"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/cloudflare-ai-binding.d.ts",
+          "sha256": "4a46677ab8b7ee5db3b92aa2c91c7c301432914af4902ae519b1491af5a0e50f"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/openai-codex-responses.d.ts",
+          "sha256": "a1e45bf4733690b417c463f450c36c0c42b8060cfa14213b9281c0d35770d030"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/google-generative-ai.d.ts",
+          "sha256": "bb295d0561a997af466ce82f2934cc55cc612803f3c92544039d361e5156b795"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/pi-decision.d.ts",
+          "sha256": "5832a8c81a96d514aae447efae84c9871d15badfe35d9a5729f0a70fd6bdec2c"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/typesafe-system-one.lazy.d.ts",
+          "sha256": "4da48aa17d15b3945a1bea83b76a996ddec7ebfc7e166238cc8ba0fde12e6e9b"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/openai-prompt-cache.d.ts",
+          "sha256": "2dbf2ea17da7321bdec87a741d04cbfedece1089f573aa3ca44add2cb4cbf3bd"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/classifier-shared.d.ts",
+          "sha256": "45f010f9e5e31725f0dd9809ee8e7f3ee01c0cf25a7925455edce9eac8551699"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/bedrock-converse-stream.d.ts",
+          "sha256": "eab65b157a3320275b67af3f0d2cdc86a1aa19f8a6fe1b934fcb2fbf6fd932ff"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/anthropic-messages.d.ts",
+          "sha256": "544b0bdb05c5fe4efd015bc9c222b364fd70e0593a9b40d60d23d232ad674a5a"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/openai-decisions.d.ts",
+          "sha256": "34752ee512e8dd7e72816ef61f97a4a79eada53b9dddb8b5505450e2e1f82b4a"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/openai-responses.lazy.d.ts",
+          "sha256": "05cb457d26146e00f96223eaa23cac7a64f6f2f41e33df1866e6dc59286e64f8"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/azure-openai-responses.d.ts",
+          "sha256": "4d4828258fd70092e0defba540106f4536c3a0c03fd8bc9b407c532008f07cc7"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/openai-decisions.lazy.d.ts",
+          "sha256": "0922e56610d01182a369852164f6c9a97cbaf6002a50bdd4b09ff3742eb6b34c"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/google-generative-ai.lazy.d.ts",
+          "sha256": "bdcbc9f3999a9722f479502ca59d2e6a8fbf18d4bdf8a864eb55ce9f616e245d"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/google-vertex.d.ts",
+          "sha256": "6ce1450a8a7cfa26988f5d2397e748c15d3fb9b14f66d98f20b41883f5dd5245"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/llama-cpp-classify.lazy.d.ts",
+          "sha256": "94673493bfb80f81b896ac37923cd7f9d1ca60dd68b531ac13496bf06daf67a7"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/openai-completions.d.ts",
+          "sha256": "e5208aa356211a8e7bdae76caa7f342a04fb6b318a259dbdf6ca0f5ad156763d"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/cloudflare-workers-ai-system-one.lazy.d.ts",
+          "sha256": "b0785418c35ccd2f9b3e1d1cee76e5ab54ea01754fd984c27564ebd09438cd0d"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/google-shared.d.ts",
+          "sha256": "46fff0527512769f767997347f34756b9d73853ac65a540cab30adbae7ca67e6"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/openrouter-images.lazy.d.ts",
+          "sha256": "94f04313b4e2f0526e7614e6a083156dc4626bd3b768be54bd6e36e76e447a73"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/bedrock-converse-stream.lazy.d.ts",
+          "sha256": "614034a5cd1c6f92e841f648b483b8fe8e446a46576da29064f534ef1ebd7117"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/constrained-sampling.d.ts",
+          "sha256": "c463b212f04003cc9446044de03e318836c15f1588c9f5acac576ecff94e77c6"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/openai-responses.d.ts",
+          "sha256": "eb5a2eedb289d61733b5ae5290aa31753604b59a2cc28aceac33b8e2cdeb9b08"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/azure-openai-responses.lazy.d.ts",
+          "sha256": "de3f5825d46a10f39d3c2d9f09e2cdbe392baa37c65e9e3b7826a1f0d8f69f48"
+        },
+        {
+          "condition": "/./api/*/types",
+          "target": "./dist/api/mistral-conversations.lazy.d.ts",
+          "sha256": "e78f7fc136fad6f26a1455d8741baf26222c4a8a4b200c6a35fc83d47d34782c"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/openai-completions.lazy.js",
+          "sha256": "a3d37d272ed600ddae2a9b05884e1c11c65487c1d8aa30d0b19ba571ffc7ea76"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/bedrock-converse-stream.lazy.js",
+          "sha256": "c0627af43e438eac0d01d9853de71a0f16edf5f8be3c1640408c01352ef436ee"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/cloudflare-ai-binding.js",
+          "sha256": "4a0fba5a6cc07b1d8366cfb50a93e404a5157483a2250225477450843d2dc39d"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/openai-prompt-cache.js",
+          "sha256": "cdb4c30de4e8918994e18556529077ee5d952db0d6960bb299a76f6d8d139d2a"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/pi-decision.js",
+          "sha256": "8344942dfcdf33fdda8d0afb098565f3aed95935a8a1625c827f8d2dd1b3874c"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/openrouter-images.js",
+          "sha256": "713764512c4e79f062e8d087a7e62193847df3e47d4c51a85c6e20c50b523f70"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/llama-cpp-classify.lazy.js",
+          "sha256": "6c84b196abf0adbe46acea77acb89dbe4f027122c95eb6165bdf4b7d713253c2"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/classifier-shared.js",
+          "sha256": "31f500b97c29ea35aa2215ac1f448227b4e700433548fe075a274d8684b1aa7b"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/azure-openai-config.js",
+          "sha256": "8a55ebc297d4def398a2e27c15d2a9f3f04ce52cd47f039f645f46e2eb74abc8"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/openai-responses.lazy.js",
+          "sha256": "ff6755b78f76a83ab50aee5603eb8f5efd8b9608be449a535847d49c0be0f0ca"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/google-vertex.lazy.js",
+          "sha256": "944686a19ce1563146a82464dc35532725c006ecff1b66a3e00e5cbce41fb170"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/lazy.js",
+          "sha256": "8b8cdd13fdc49ff6e1785ecbdc8e20e86206892a18079a4349ca2910afb4d4b4"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/pi-messages.js",
+          "sha256": "64b0067005f32b8dfcf932527fc13ca43466fa4674bb164beeef08f333367c6b"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/typesafe-system-one.js",
+          "sha256": "417c4ed4fafa09fde463b767682f96c0a92b219856990305f772f26ada8c8922"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/github-copilot-headers.js",
+          "sha256": "cd09a447ea282f5df02aab057f372d48ab95d72adb1d9d74510a2b5e1c7d78b3"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/cloudflare.js",
+          "sha256": "5227d5b29a437d7371690dae10e04d704622692385738977a6f1c32f74f74298"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/pi-decision.lazy.js",
+          "sha256": "44ed2e3af411d23ed58fd91c330320524bf47a552828b5fbe02fc727278a8135"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/google-vertex.js",
+          "sha256": "823498a63b69ee5c104826f5798336a9282410447c7e7caaf790054b9342c9da"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/transform-messages.js",
+          "sha256": "5654d81fdacdf3f3e9ca9eb89c4dfa71b742b852163ecd49ba38307f876db63e"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/cloudflare-workers-ai-system-one.js",
+          "sha256": "5716639fed706375c8dd9040feb964617edebae16aeae902387682c0da04eb87"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/openrouter-images.lazy.js",
+          "sha256": "0ae9c490e8050e8e958d076a9c7ecb21715aa8bc5f85127619d822ca10bc62a6"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/openai-responses.js",
+          "sha256": "14abe6fe44bc6b40268c44c6d7372ae46bb23662db95be8b28d3d0cb905636dd"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/mistral-conversations.js",
+          "sha256": "559ea423b9ff1d25956cf84df9d97a3c0aad33d9d86a485f80a4eb49e930d01e"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/google-generative-ai.lazy.js",
+          "sha256": "5bd07bbf12fc55c73b0e2a26770f192026036aff6d9e4e39a9edda57b214d0a0"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/llama-cpp-classify.js",
+          "sha256": "c67759abb96314b8623fba15c7c77168886499ff07e4d8f0e7ddd346b0c2d614"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/simple-options.js",
+          "sha256": "7e80e985f50d968dfd4422ed501d87280236470bff996c8f05f18d220dce1e53"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/anthropic-messages.lazy.js",
+          "sha256": "8915ff69b112469fa7bf48f59eeae87bb3d82ce49d3fbddbb2acb1da9675cb39"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/typesafe-system-one.lazy.js",
+          "sha256": "9dff2f5316c78d265d02a1c908047bc890c4fa0b13769806f07f326d71adfac2"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/strict-tool-limits.js",
+          "sha256": "4fa8f0bf3c3bfcf2fca52c49d7c7e72ea2d8f52ba95fa8237f419806a695e6a8"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/google-generative-ai.js",
+          "sha256": "132f83ecc07c84242f29dee7789dbdc6f6649b7e9c1da51fb81a0cb6ecbac085"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/constrained-sampling.js",
+          "sha256": "9a619022c698206e572ba650f9da0a35e762719507adc636d957c0546aaf4429"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/anthropic-messages.js",
+          "sha256": "16436e0c45edb538d63bc79abb5728c0f330684e8ae2023ed55f249b9d9b705a"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/openai-responses-shared.js",
+          "sha256": "b3a84cba157b7284d56ecf1b32d5204076d93e41668a7f05a747d069bbff9e43"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/system-one-shared.js",
+          "sha256": "380f76c4b213a8482b1a220d33df647fb1323f58f821acdcead75d28a07bfab0"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/cloudflare-workers-ai-system-one.lazy.js",
+          "sha256": "12339f3ef1ebf42d4148098734c6e1035d704a58656f95f4cd601b1bb8f7e96c"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/openai-codex-responses.lazy.js",
+          "sha256": "cc69ef7cb93175b8ae30e9b6f749cc5c978cd0c168d0bf379ed48a3d7e9c120a"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/mistral-conversations.lazy.js",
+          "sha256": "df0028011c26593830914429185f22bc60fa942e86ac871faa361abd2eaaf83e"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/openai-decisions.js",
+          "sha256": "d901beabd6898c402ea88be7c03dd5a4397911d9cd3734caee0643ec802901f3"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/azure-openai-responses.js",
+          "sha256": "f866fd3d3dbb17ade00c0708214e6276e2625840ac6d67dfd4c0dca7b15489bf"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/pi-messages.lazy.js",
+          "sha256": "857a77e2a89923a9c88c136bc06072b9c9577574dd01da97ce2966a646f7d430"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/azure-openai-responses.lazy.js",
+          "sha256": "7ed84bd0e2dcd46223cc741b4217051e88c4972c4482e2f12367e5e5e3361dd7"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/google-shared.js",
+          "sha256": "038ae72e395f7947141dc7a217f14154dabd6c9549c72aa8ef7dc20661c2deb0"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/openai-decisions.lazy.js",
+          "sha256": "53ecd3713b1c3f1d4966e45618047acb3315aba420bd34c8c01a376b096c25c0"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/bedrock-converse-stream.js",
+          "sha256": "1d0acb39ea2e10a22562e3ea9ef047ee987c69f524ee668097490c211019d93c"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/openai-codex-responses.js",
+          "sha256": "2ad1b8b3f345b2c913fbc7ba16d1cc81e422f1a50e0db555793d14287895dbf4"
+        },
+        {
+          "condition": "/./api/*/import",
+          "target": "./dist/api/openai-completions.js",
+          "sha256": "6cf2c9b68b2557d5119dd948a91a5f986b0eebc010236b5d5907f1b96da0b06b"
+        },
+        {
+          "condition": "/./oauth/types",
+          "target": "./dist/oauth.d.ts",
+          "sha256": "0bdb6caddd0aec40d15226afccae7e4126a26bb7744847dac222e09056c32e7a"
+        },
+        {
+          "condition": "/./oauth/import",
+          "target": "./dist/oauth.js",
+          "sha256": "bcdee371a91250a4d60f56b272d03959c9f6c401e73c3a1065d0a0dd002eec1a"
+        },
+        {
+          "condition": "/./compat/types",
+          "target": "./dist/compat.d.ts",
+          "sha256": "a019947050719ef61fdca8a8aa6791df61f9706ac16ac58cfe1a150076038aae"
+        },
+        {
+          "condition": "/./compat/import",
+          "target": "./dist/compat.js",
+          "sha256": "df55dca273cb2a7053187b7b29d0fe5b91966a5099ab02d2efe38bb31c3f9738"
+        },
+        {
+          "condition": "/./models/types",
+          "target": "./dist/models.d.ts",
+          "sha256": "3f88f8bdbe64425d540c2bb3352ef551b4b5516e3a32b331b07025c0f15e3cae"
+        },
+        {
+          "condition": "/./models/import",
+          "target": "./dist/models.js",
+          "sha256": "2ff2fee9fba91b4bc823913c418c030c869dd4945cc81f667a894e019fc23808"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/diagnostics.d.ts",
+          "sha256": "ca69c6883f6a82f8e87dd87b0d8f4ef8b643cafda20eaaaf1dffb633f4fc6ce6"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/headers.d.ts",
+          "sha256": "bd1d70282dd41a73ca82cac309ff331cf9911010a53030d2b9cb218f717a8fb6"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/provider-env.d.ts",
+          "sha256": "d802442f1b94325ffe8bf5678502898be0c8f242a387166ff5d0c458f324b43a"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/event-stream.d.ts",
+          "sha256": "e26941ca8943d32b168550b06e29ae79e3c1f500ca812996357426fe800ec176"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/sleep.d.ts",
+          "sha256": "96cf8543e7e80ef1aaa4f647b690ffb295dd73c31f5708317c03ec8e1c05caa2"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/node-http-proxy.d.ts",
+          "sha256": "72f664037b3879bf80a0fb085285d741a31a1038e20dce8d357f4b077cbb519f"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/hash.d.ts",
+          "sha256": "b320808cfe8e3ded5f1ca029dbfe4aaeab3b871611fd504eec564f4cd6dcb3e2"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/identity.d.ts",
+          "sha256": "a3b69dc22cbd2fd71de51877a54bf10315c63e33138b9e20addf8ad1cc968ea4"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/estimate.d.ts",
+          "sha256": "60cb197502623a86dc56c39fae073f31d1524460ca2d32552bbb5d570d7deb96"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/sse.d.ts",
+          "sha256": "cbd37601ad033cc69f9c2bfcdca981f2e230aa46eaba0ed075c6e3e25e033528"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/retry.d.ts",
+          "sha256": "94a42e824a329cad3371f2426f6c7fd5b2fdaf4df295b574748b80a14eeb3c6b"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/openrouter-finish-reason.d.ts",
+          "sha256": "e9f5133e301c692469246278d779be1f9d46fddb0d5977e2808a180132f7e017"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/string-enum.d.ts",
+          "sha256": "0beeb39cf1306461490ee230d655a50b4408244578d3ee6a16b2d2f43a11692c"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/abort-signals.d.ts",
+          "sha256": "f2acfd9914dca5afe623342850f75676edfc14000f85588ffc1567837a83feaf"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/oauth-page.d.ts",
+          "sha256": "2ca3c4c789fa884fa7b9851b5912ca7cce0d6ddc80c4c75f32f67c50a429c6a0"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/openrouter-cost.d.ts",
+          "sha256": "45983ef9632445e42f0386b2dfb39737392e3f6020bcebc14b439a14dff44534"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/streaming-json.d.ts",
+          "sha256": "2f4c1207afd096d8e33401fc5d33edc8b583ca33ae382f1e5166739cdc8fe8bd"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/overflow.d.ts",
+          "sha256": "6e79c081c131ad1eb47201befc17b14b707e115ed066520e5db6064654c58db3"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/models-error.d.ts",
+          "sha256": "19c3f342e7533faa66ab18d00ca6b82b7f79cfbba3a1b02ed206295d34b5697f"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/abort.d.ts",
+          "sha256": "2b79d404f940a30ea6798a38092c9c86ff60a62341b10f803c06596138bad018"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/validation.d.ts",
+          "sha256": "fca07b0fc5b7b26f4e43adb698ec87d778d3ed936dccc850e18ff77a548d8d1b"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/error-body.d.ts",
+          "sha256": "574370734ade69dcd0eb29b698e462d158ec99d26a80235909d4d76c81e8425e"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/uuid.d.ts",
+          "sha256": "224e438067cbb10c53d992e10c7c1501332d0d2a00b708bd2b6784eff8909019"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/transcript.d.ts",
+          "sha256": "5db3701ae323ea1a08a5624b61b923ac1bb27c119f9afb3ae6bd118f7049075f"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/version.d.ts",
+          "sha256": "6b7fc2e1af2efef0bbdc31f438ac14443f120dc025f6861258a90a6100eca3fa"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/json-parse.d.ts",
+          "sha256": "bfea838d10b24cb14344cd92d210faf7ce8be862c1e11c0eb646447c1b2aea90"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/provider-retry.d.ts",
+          "sha256": "6502deecc7108c24b26a67170b796f3ae3057a3ce18039132e701bdff275a13b"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/model-operations.d.ts",
+          "sha256": "570e1ba5dbd96a0ba61a29b0f649ba0696c2661a67c2225406225d265091287c"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/sanitize-unicode.d.ts",
+          "sha256": "43213704832ba5e616acc2d3abffdb4eb996c73cafa18161f25f68396de231f1"
+        },
+        {
+          "condition": "/./utils/*/types",
+          "target": "./dist/utils/text.d.ts",
+          "sha256": "0be6cb40133d5930ea2ad397a934d5853fb80dd26d1edb6bbb069960331495fc"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/uuid.js",
+          "sha256": "4e444c68e031550dfd534bf2cf2f123ba5a1053dd0953005ee720ef4e0487bf5"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/model-operations.js",
+          "sha256": "56264f6289f4822db8bed91a2e47aee387bfa70383b724e58f6aa6b96a0f4358"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/openrouter-finish-reason.js",
+          "sha256": "2fa88f6b98df03d1254b5285aff017720149fe786fa38757061a8121fb5aca7d"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/sanitize-unicode.js",
+          "sha256": "77cb844b43f502cc24b25ef284ec5a6f6ac375ac994bcf688275848e1475bc80"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/error-body.js",
+          "sha256": "801ecb214fdd46b059454c515f09624c3c968eb669722dcec846b79017bd04f2"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/hash.js",
+          "sha256": "7dd6b602e479f30b32d1babeacb1fcb96bd234b13355991caa169013f7885d57"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/event-stream.js",
+          "sha256": "fe0d774b75db25ff0149d4267884bc4fd34db82d53c26843758d0eda2467ce65"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/diagnostics.js",
+          "sha256": "698070e564b12f303927b0c28845a0ec51f2f3dd29434724dcdffddd31b0b469"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/string-enum.js",
+          "sha256": "069199a4c608591902c42ffa782e47b7e4bec80a68cb85474000506b4885bd2c"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/json-parse.js",
+          "sha256": "ffb5960ed8ba38a01ea338e129dbca589088c211c9da623ffb61102a1d27ce56"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/sse.js",
+          "sha256": "fc4d385578633bf02b65f9ba25008a38e42512207b0b90eafad2e99b5ee19eb3"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/version.js",
+          "sha256": "82646493107386c85ead01d70bddd2f5452873fd1fe0d5d57145e0e731052bb5"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/openrouter-cost.js",
+          "sha256": "bbfe526825fb9338ee3ca58ee3822171736b0521e4716a9ae018fd04884e05a3"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/retry.js",
+          "sha256": "57563ceb37f1ab529be296b5567d1f76fbf0011f002be14ca3f35e38fa6c247f"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/sleep.js",
+          "sha256": "c09f7f9033a4516bfc3ec5796d587dea958c1bc0fc5d3fe4b847ca10bddbed4f"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/identity.js",
+          "sha256": "32b45824054a8a6125a7f3caedd9ff1c594f1a109fd2af4fa1b5729f4578ab62"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/provider-env.js",
+          "sha256": "e1f64c60f0fde39a3a649e541d8248a85fdeefe414ff8b4dddf5f1be962d47e6"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/estimate.js",
+          "sha256": "b5b606011ab0dce2a5db309dd812c9b8ddd0bbcbc9416de699fb9cd087cc84d6"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/abort.js",
+          "sha256": "17326034a23e443ca216f0b6ecb73db1dfd36a06698643ef77dc3ba9401f0636"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/abort-signals.js",
+          "sha256": "9f68d51e0862b3deafc21bc0349d652410a8b283688af72c937272cb7b87cdc5"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/models-error.js",
+          "sha256": "7c8f802c2c77671f4b1721a07f3fefd007a2b332b222cd644ba285b3a74d9693"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/oauth-page.js",
+          "sha256": "82ff736f89ccd7a5a780e97eba656aa73ee2a435eb231938b340ffd9167086c1"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/provider-retry.js",
+          "sha256": "98477eb5e02c33d7d46c35ed2b781a76a8f77093c4805eae59ee947cb0c388ca"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/text.js",
+          "sha256": "f27664e8761b986b64adc7c5aedf98449f68aa6b6b94e9fae43aa05b0a73aa52"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/node-http-proxy.js",
+          "sha256": "9f29307b06dd11207f7f1a30cf07801c9b12741f715b8c61b90807dfa730580a"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/headers.js",
+          "sha256": "69a355967b3e735a9b22d46f4cf41b901eb2ce29c2c438b20d46de67668533c7"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/streaming-json.js",
+          "sha256": "3691cb5d87570a0f3491cb58df90ad6d6e345066d70d4bda89c986b5ec646baf"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/overflow.js",
+          "sha256": "3e298f8bb2e78672c37e892b8f1e8cef733d2564e9eeb1296aca93d696a50f02"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/validation.js",
+          "sha256": "5d26e3a8b3621d895f96f94b917b69c3ffc0f5b882cd1a899ed490ebca284e3f"
+        },
+        {
+          "condition": "/./utils/*/import",
+          "target": "./dist/utils/transcript.js",
+          "sha256": "f01f0d0350ad47b6b91ce5ff788a3321deb40f3a7ac657cce360a91e1590f74d"
+        },
+        {
+          "condition": "/./bun-oauth/types",
+          "target": "./dist/bun-oauth.d.ts",
+          "sha256": "0bddabad787c366bd8ab5e82dd883f8479f87ea33e6ccd2faae0548a8387954b"
+        },
+        {
+          "condition": "/./bun-oauth/import",
+          "target": "./dist/bun-oauth.js",
+          "sha256": "f1f860158642e327c06fc8c3b5d566f115d4924463673d22d8a07e8e056ae593"
+        },
+        {
+          "condition": "/./lazy-oauth/types",
+          "target": "./dist/lazy-oauth.d.ts",
+          "sha256": "c15e43bad3efe08d4fb06a330d0b73d1bd4d7650c26fdf49ac0fec11cfa0f511"
+        },
+        {
+          "condition": "/./lazy-oauth/import",
+          "target": "./dist/lazy-oauth.js",
+          "sha256": "03ce10cbaea01b178e5844a9b076933456bfefdb698ce3374c9cbea1f9d59d24"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/zai.models.d.ts",
+          "sha256": "1571a7c377bc97e033766aad30d74888d4928689aa10e8364c4302b184527d2c"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/nvidia.d.ts",
+          "sha256": "3ebd2a65043811e188ac57f8a31578e657714269b0c08bebce1a5123b717fedb"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/qwen-token-plan.d.ts",
+          "sha256": "b973519bf08c39d64a23e24357f15e2c61147443fd1e2ecf58c8f5541c982f86"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/anthropic.models.d.ts",
+          "sha256": "5716a56c158d2ed854c4ea54e2d586a356886351ad7b628b611ecabaff283571"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/xiaomi-token-plan-sgp.d.ts",
+          "sha256": "9b53bd93cbf46b45049c29f679b5bd46fb94f0c05627241b171821db460e108c"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/deepseek.models.d.ts",
+          "sha256": "84c756d33897450e1349ceec787387dbdd2b3b20f07f4e5837d2896cce2590bd"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/xiaomi-token-plan-sgp.models.d.ts",
+          "sha256": "565d4e3b1da1b6a6e59ae5b82e8ce8b7b2e3b463d95175b5292d263ada9ee8c4"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/minimax.d.ts",
+          "sha256": "55ca49fb6d8ff7d99ec1cfdc2a51f90ce2b12782d088583f20b0b19f9bf13408"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/qwen-token-plan-individual-cn.models.d.ts",
+          "sha256": "8f6a963fca784c64dd87402ff77bd062e14a52a755c976fba6b32b77ef4e072b"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/openrouter.d.ts",
+          "sha256": "f0e54d25a0aa64d8cb1269d4772db97593b86b80399ac332ca0f3ca43022314f"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/openrouter.models.d.ts",
+          "sha256": "2dc5979e9b14905bd652f63c47dab776e300b33d10b1042a3072ca2a89adef1d"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/deepseek.d.ts",
+          "sha256": "53deec0dcebf303dd6002f0f0217fcf6fc4e2c3b88e1999dce3e402ab16d2fa9"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/moonshotai-cn.d.ts",
+          "sha256": "c29fae1e3a30c2bf2339a18b3c842e82f8646b8539fea308fc9c202bc75307ef"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/openrouter-api.d.ts",
+          "sha256": "429c7ba360392f3aeebc371269d565bb72c981de70e45c1601851ff8bdd80dfc"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/minimax-cn.d.ts",
+          "sha256": "c87a99c8f91b0a310366367450cf9c265b9a9fd627d324dc3b9f0a2c0517e596"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/fireworks.d.ts",
+          "sha256": "1cb255da5f8fafb7dcd058c7dcf87b24f7ec3a7c959699c4621f050b66b118c9"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/kimi-coding.d.ts",
+          "sha256": "f9b5ed5bb37a8f0483d19c21c19db96ad44ecf024942e44cb1fd64f665fd6029"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/qwen-token-plan-individual-cn.d.ts",
+          "sha256": "14087884e1f739fd86747a76899714eb378289a0494c30f25a11fa895d04f9bc"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/cerebras.models.d.ts",
+          "sha256": "7405e41f021629f7b79645b3f940c0686488339935332df5f8e5c205b61c94bf"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/github-copilot.models.d.ts",
+          "sha256": "9bf419386222c85540b548d23c98ce0b201896dc729fb2738386f3811bb8a347"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/qwen-token-plan-cn.d.ts",
+          "sha256": "bd8b9d58b231417da4159fc4f376ff3865dca6aa83fd7425d29e11632bcfd350"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/xiaomi.d.ts",
+          "sha256": "3e6eddbfc54223a54eff20fab5cc4a561b4af7d420b6f1956f8cb26e1fdedfd1"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/qwen-token-plan-cn.models.d.ts",
+          "sha256": "40b9907385a7536e592fcffb5784f6a7f85760242b859c5b32f51daeb41f9f2d"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/google-vertex.models.d.ts",
+          "sha256": "5aa5cb075dfa0df9dc59a656273fc9e11ead1d6dc9ff429c280051dad71c5817"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/mistral.models.d.ts",
+          "sha256": "edd4c3edb2d4fbcc9aa7a6380409fe40ac1d92ab4291b6ddfe796e4ab5b92788"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/opencode.models.d.ts",
+          "sha256": "8f56b0578368eb7d3e36bae2937e28957cd20ca93362af1e8f247759a3d4b4b7"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/ant-ling.models.d.ts",
+          "sha256": "6c42e276e84e815b2a96fe59dde716fa853ef6ffe9e91b1f33bcbd3170a67161"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/amazon-bedrock.d.ts",
+          "sha256": "8713e9d7ad0b55ee1b46c2f02d7cded0e9e32d5e4ebfce998febc2c4d9041d45"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/mistral.d.ts",
+          "sha256": "c121715017b5de9e3c0461e11662866b2ba442856fccb0da6b58b8491cb99c2b"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/schema-builders.d.ts",
+          "sha256": "05336395f6edccc4b61b3dab239d53b55a123ca52a266223e10641b649688c15"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/xiaomi-token-plan-ams.models.d.ts",
+          "sha256": "ff645be4cc571e4481d8d2ea4b7d66f66bf77eeda046ee743eb26febfde56031"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/model-schema.d.ts",
+          "sha256": "736fa414098e62e83284cd4019de8db9e86b3dcb52f58d2be6ee8a56bdf3e853"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/all.d.ts",
+          "sha256": "611764d15b596ee9c024704c7362a6cc88cc2341456ade2ec0473c6003751354"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/meta.d.ts",
+          "sha256": "d85eb5b9314097836777f892ca1ab06b9202615f40af0b107499aa66cdf6fc41"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/groq.models.d.ts",
+          "sha256": "4463d153d9b7934ed68fb3669da55caf2d58f8cbf7ebf1c5907f1b2013cf484a"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/cloudflare-ai-gateway.models.d.ts",
+          "sha256": "304d9663628935d84749c52e4390013680b57b839f9603975b914e7b350a5f3e"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/openai.d.ts",
+          "sha256": "98a49f218818656f8120ed5f0fb98b4980cca72531bf0eeb768376a7a3114909"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/compat-schema.d.ts",
+          "sha256": "53bdc1eef0802a22b5614cff2261a500b3eced2dd1090e906e01c9a49f0925d2"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/cloudflare-stream.d.ts",
+          "sha256": "58dcef8737fe94310bff56b5f66afc2fc2271b883514be234aaea2d67179c3b9"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/openai-codex.models.d.ts",
+          "sha256": "a52d465ce5857d1af2d35c5c834e1c02ddf2e3a11c5a1220a70937d3b3b80a31"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/huggingface.models.d.ts",
+          "sha256": "cb2a8d6ed22849cf37f5fce197e332827562b02491a95347a33c7d93d037300a"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/qwen-token-plan.models.d.ts",
+          "sha256": "cf556ae5857082817e3faa6ca83ba45cc9fd75bd697da0a4e0ca589676810622"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/xai.models.d.ts",
+          "sha256": "533c26f75a6f497cb9c541baee26ecbe5db3b1882b218e9f007e91f289996c6c"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/baseten.models.d.ts",
+          "sha256": "348ab441fd1f9aad6c2fa0a41803383d1c4492802d433a479b18683991f35bd4"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/meta.models.d.ts",
+          "sha256": "b306641f42d52cb61a8795fffff6f5c27eff3023aba0b216b50b35a7e1af6550"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/qwen-token-plan-individual.d.ts",
+          "sha256": "06797e3a11817352455d9f67a82b4b6b859c1dd572443baa77d4cce5d84dc6c2"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/cerebras.d.ts",
+          "sha256": "2deecd47264b3d8357e52f96ae357f4a4fb787ba15071faf03b3d9a33b6108e5"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/azure.d.ts",
+          "sha256": "05ae2fea997be72748d7540f38a32266c843967cdaec9151b4907e57c6d07a40"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/together.d.ts",
+          "sha256": "d059089054c45934d1c53d075ec96160521282a76f59081b8e15f2acc58c7c4e"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/opencode.d.ts",
+          "sha256": "8da53a0fdfdd4823cf165efd7ebd3dc8ad912d3d75871a8df21a34e30fbebac1"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/opencode-headers.d.ts",
+          "sha256": "429fe3674c7950eb89080f08859d7b70838b8c3b522b2b2742cebad974e37423"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/zai-coding-cn.models.d.ts",
+          "sha256": "f4beb944fa7fecb2997561640601d0bb86422f6ada631f70bb150bb7525e4fae"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/kimi-coding.models.d.ts",
+          "sha256": "f32a4f4881f8dfbf36029210ca95c8d79a13a8ed547e150aee1dca41497769c2"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/minimax.models.d.ts",
+          "sha256": "9259fb772bc21b7083d426474f71bc92d8712aabb0062ecb3b1660f47fa8d9a3"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/faux.d.ts",
+          "sha256": "3a5a7f3524b133557f577d27239fa0aa25d8167877a008b29b01a6b24be22b95"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/typesafe.d.ts",
+          "sha256": "d4103d3ce35bdf98231c2e6558acff1fad9ed94e5fbdce324a8583e7d770262a"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/xiaomi.models.d.ts",
+          "sha256": "01a4127bcf26e6486117401b9b0dc84b029c9a47513757e8936ad509b128d5b9"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/opencode-go.d.ts",
+          "sha256": "2357d0dbe203f92e064661b5fab7050a886ab9b6c648007620894745be072363"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/xiaomi-token-plan-cn.d.ts",
+          "sha256": "b13fb954ae4c7fe1c6c1a7bf032c423a9306bdc087ebf4b2f9232d3e3c65ade9"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/google-vertex.d.ts",
+          "sha256": "a9f39c96f20d6f7dda4b62f3b4f8eb2a1c7f662164d2dcdcb9a092398500b464"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/openai.models.d.ts",
+          "sha256": "439137a5bb74930434a12c513bb0139c7a9015afdf74bced0b7767312b68a3e4"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/amazon-bedrock.models.d.ts",
+          "sha256": "f9bbaccb4dfb604835a05addfe9e114b7ab554142ba14965da96756630ce0fb9"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/anthropic.d.ts",
+          "sha256": "10df95e35db5ebb4018714a7b342814f0289a0e008ee0f52266393fa9fd15f82"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/groq.d.ts",
+          "sha256": "ed8e8b0fd8dac30696c4ab0684711948f168a0763fc1a94bccba10a9a81baf86"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/openai-codex.d.ts",
+          "sha256": "8e6e5ecd856767d6c061c3c00c2aaed47352ea883108159b517649d36a103651"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/opencode-go.models.d.ts",
+          "sha256": "e53f4cad7785fa3401eb1af9344caec11804a245cebde85339a1efe265f78129"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/ant-ling.d.ts",
+          "sha256": "002424f991b58637c3ff48cfd4da4baf7d6dba1b0c526f9e03e0855be4890667"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/cloudflare-workers-ai.d.ts",
+          "sha256": "22a2214537b8ec90a4aa21132dc2bbf31a827d59181dc646ec144b0526687854"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/cloudflare-auth.d.ts",
+          "sha256": "5ae331a39af35de1c986a706383841fd79c3b7dd8c7fae258cc8ae225499f4c1"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/typesafe.models.d.ts",
+          "sha256": "b8579a2f3bf2dd435ea3f71fcde89a2a91cdd5651f85e8279d80618453aad541"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/azure.models.d.ts",
+          "sha256": "ddfca18728b322b0d396b958f4ac2a1bd3705f9283bdba8280bfb2acafeaff7f"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/moonshotai-cn.models.d.ts",
+          "sha256": "940d9549758b6aafb152493458182d2cac316a7bec8f094dc8a2e2f4383816d8"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/moonshotai.d.ts",
+          "sha256": "0cec9732a8b7f7f2b896e387e9f10b20515952700a575739e9ca7938c6210c95"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/zai.d.ts",
+          "sha256": "6f7a51e461d3fd2347e975f6d264703c4545e473faefd9dab3684d3c09717558"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/radius.models.d.ts",
+          "sha256": "7edc96239f4789846118fba9276796dacbeb9d662629043a3aa46fd184126a22"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/radius-config.d.ts",
+          "sha256": "0808faa6ebbfb2ea49fde2f5c8d528ebe3e115c894bc97d760061c6ce83443ec"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/baseten.d.ts",
+          "sha256": "5f3343c5290488107bd2aa7dc0f985ee10c186a6e2bd0cfded9b1cf3cbcb4b31"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/github-copilot.d.ts",
+          "sha256": "341c0958f024875be5f93e6f2ad7c199c411ccf53aa6e0cd07ab92d0e1a812bb"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/cloudflare-ai-gateway.d.ts",
+          "sha256": "87cbce10763094b5870c5e9167a8b32ba78b38f83d6edd5404645c703a046ee2"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/cloudflare-workers-ai.models.d.ts",
+          "sha256": "16a86e738a9bd3f081ba4d74a0d20cc252599260e4f59f76ea32cc5042dac7ee"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/vercel-ai-gateway.d.ts",
+          "sha256": "22cab4fa4a1819aeb04997071a1a6264503667e7601b70a2762cd6b295824cb7"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/together.models.d.ts",
+          "sha256": "5f1f01af7dbfc461b328d97e72d80c09383350475ef61663cf6dd248bfa1ba57"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/zai-coding-cn.d.ts",
+          "sha256": "6443a4c6bcb641d92223fbb661aac20bbc21abd0df1b22c4f70421baa6365101"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/xiaomi-token-plan-cn.models.d.ts",
+          "sha256": "8ee6488388fc7f031ac725bd5f199fa5d8b45e937c4619f99be547c7c2760085"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/fireworks.models.d.ts",
+          "sha256": "3d80673b01670d38bdf3ab5d7623d4be221f35c2ce88af967fe12e4f345cb2fb"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/xai.d.ts",
+          "sha256": "20a5b197d251df9e76652d7d9ae65317179b8f9346340456a2b17939a395d9f5"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/qwen-token-plan-individual.models.d.ts",
+          "sha256": "f8aeba3b60a82e5b73a1d08c32bf1408fd0f30b35761b09d794886a3d7237088"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/google.models.d.ts",
+          "sha256": "3f66b4a6446cfb7d3c3daa32b1db7aa1cbe4e532bed1786b49d30cdda78e2a7d"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/radius.d.ts",
+          "sha256": "76b133eb8cc4a537a16cb254cc21f0f72e3c756523b1c66c11df443ed17293c6"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/google.d.ts",
+          "sha256": "bd5b2fd5c13a8115c98295e04050d93b27266ddc8eebd57f0467a42eca2a138e"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/moonshotai.models.d.ts",
+          "sha256": "26f9e98bcaa1d33ca3db230f389d67f23c266ae5e8591f0aa333dc4bc1e12767"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/vercel-ai-gateway.models.d.ts",
+          "sha256": "5d55ff0da91c7f7da0ba9e33412cafd45b6636bbb58147abb157b7c3c5ab1121"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/huggingface.d.ts",
+          "sha256": "d495a8e91b11285b55ee9de1722ed175e1807f55820c8d5dda319f5602957246"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/xiaomi-token-plan-ams.d.ts",
+          "sha256": "de6f81d35a566af2274f954fa217c84de08589f35a687094425bb21dcbf9a2c5"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/minimax-cn.models.d.ts",
+          "sha256": "3ab4c501ea2ceaac0942885e04f950c8d8331701bdb919b1b4737cad63341703"
+        },
+        {
+          "condition": "/./providers/*/types",
+          "target": "./dist/providers/nvidia.models.d.ts",
+          "sha256": "4dc7bef5ac3ec5fe682e916066578bc12bfcc494c5f4562e8ffb006dd246e16b"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/deepseek.js",
+          "sha256": "d0a155e9c724a36c60ebabd71c47e2f7e26799e1b8b7079a835e9ccec33378f0"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/google.models.js",
+          "sha256": "cf10bc192daf6bc1727802f5099c3d12a48bcbfe7a498354dd9a040e69fc7762"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/openai.js",
+          "sha256": "9dc3881e858b0280e809ec04b8b17f22580fcb1871da2edf3cfbdfa3c13747b3"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/xiaomi-token-plan-cn.js",
+          "sha256": "201773161e1b98269671fd4f23b6b01d7d661fb029e2a6762e261c2a8cf0be09"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/qwen-token-plan-individual-cn.js",
+          "sha256": "51d071f113d725749ff3d955291ca1b28c9b8ed3d87a76f00ea5e517b93fdde0"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/github-copilot.models.js",
+          "sha256": "e858fe39d313e7a235b16493c18d7f1e0538bc9349f8945eec0386bfcb1dcb7f"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/openrouter-api.js",
+          "sha256": "3259b64988618c8839427173408c5d642a448c7aff3a502c019a73e839192e36"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/radius.models.js",
+          "sha256": "52037865a46978a32bcbeb3c96384bbe9332686dbfb827cef455d2f077adf63a"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/ant-ling.models.js",
+          "sha256": "84c0dcd8574d4afe72d871008a89de56274dc258696ab42d1077a768a7c7b075"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/xiaomi.models.js",
+          "sha256": "57742ce3e38bac583db502aa654ed86475a266ae091140f9616cd9389873ff8e"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/xiaomi.js",
+          "sha256": "e57526646b06815287d13fd320d23944e869c53e046dd4b9f4795b8240226587"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/fireworks.models.js",
+          "sha256": "9e04277934b19dcfbb3012782a7404c2007d49851fe4b9aa47532a8c1e37f527"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/xiaomi-token-plan-sgp.js",
+          "sha256": "61019ea4bd04801c227f51b69ae7da4c3c64242124e2da0f89d9971bf50ed0cd"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/zai.js",
+          "sha256": "d897597f9bd9749ccc674c34e5c3bb738d9b90911b04c7f7fc7bc66150d6ff40"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/google-vertex.models.js",
+          "sha256": "8a84c8a4b4098399dbfa2f01bfb342cc07a7dab74a7ba9cfeed619dc153f9364"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/mistral.models.js",
+          "sha256": "d790b9d691cc6d810a8841e37d7e7a82dbf38032e80d6e455364dd2230540746"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/typesafe.models.js",
+          "sha256": "d5ec8cd6a5455a4b6ad52c59d8368f85f5c44da64a0d3de9db3a0c1931c2ba80"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/baseten.js",
+          "sha256": "cf6a2d4b2ead54db5a44fe7231ca4a48df782c68c5e04a88388dcb2fb9cb5809"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/typesafe.js",
+          "sha256": "83fc7cf71dc4fe705480c7494c3d624ddf3612f63818ec11434b2ad1e3e05460"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/qwen-token-plan-individual.js",
+          "sha256": "b325260a8529a05e2fe82d5e45aba4847777bd2524a4c1f53658b786ea64e12e"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/minimax.models.js",
+          "sha256": "94f9ad085578873ebf596312438284f9bcf5c8a6a123d4e07979c17610bbb6e3"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/groq.js",
+          "sha256": "25e580e96ab18f0eaff2791ceaa1384c2d5623b0da5e0376f5aff1ee17bc32b9"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/azure.js",
+          "sha256": "365152aaae1ffde873497da5e3af4b93faebf2628ffb7a798c989be06bda7e71"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/cloudflare-ai-gateway.js",
+          "sha256": "e099b01f7df70041f7e9f5d3237f4da25eabef7e7015e77c13b465036e90ea59"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/meta.js",
+          "sha256": "f0ba7b97a407336f30cfb230c4c32bece9e0fd23b0ebdbdae11503374e5ab44c"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/opencode.models.js",
+          "sha256": "77954b67447aaf5e649b9e332c385a2751fa04e1619e50b8282baca4792258f3"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/google-vertex.js",
+          "sha256": "26c13449ea7b57d40878742db956210e70af0c89638cb87a1d9b4739f2bac59a"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/zai.models.js",
+          "sha256": "2f802c6cfc18ebb275f18e136bafc345d5522e8d1e72f9a41c5df501d5d645ee"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/compat-schema.js",
+          "sha256": "40fbaf1898631bb84aa0620fb6335b3f8751695e5ced7b1103b96387adf6442e"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/github-copilot.js",
+          "sha256": "e6805007d1f76a8d1f9a96b494751088760d8457d03b19d965980c34c5dfa183"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/anthropic.js",
+          "sha256": "55a84e43fa8ee4382c41aa6872985f098080eaf73a5b8aa4451d7ce6db8c131d"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/radius.js",
+          "sha256": "db48d2824a61b7ac3aec096422fccd6f7d46b066be0a99637d957a66472079b4"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/minimax-cn.js",
+          "sha256": "a4287d33e5dc3b91b63c18a0dae07bb3f113b11a8f748343b073b098af84113f"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/opencode.js",
+          "sha256": "04f3cacca930d54738fbd81b1cdbb9283b40706d74b37515d9561075a1fbb309"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/faux.js",
+          "sha256": "f9ec087321994cf3ffe15165a5745dc66caf1b1c29197817b82e6dba32148320"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/nvidia.js",
+          "sha256": "37cb9c92fd0523ddb7cb2a64d0a3549f81e2a9e7070c6d021897654d464aefb9"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/model-schema.js",
+          "sha256": "b9a6997ae175f1ed74af6cf950eebf2587ccab2720b452889bad692cc1b654aa"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/opencode-headers.js",
+          "sha256": "24b5878ceb19abaa3987c2526ac14afdd6fc1e796f6e187a49e71b058972a741"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/cloudflare-auth.js",
+          "sha256": "5a3aaf34dadc97773b77150be31b2327532dab92c8982c77ca8d32e1d84faa59"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/azure.models.js",
+          "sha256": "84d521cf42c0fad8730bc457cb785722176b096df9e6129407772d468f732b24"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/minimax.js",
+          "sha256": "db9842be5c86f9498355acdc12e58cc47c1c537d0bcb024d05fa2802e76f9802"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/all.js",
+          "sha256": "659c1eac079ce2bd0f695afa092c3aae16322bd25edb316cb0c2be225fc2badf"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/google.js",
+          "sha256": "a3593ee2fa77efa4f867e8ba2a8f3e1a947bf6e873552b92b554145e847e5df0"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/schema-builders.js",
+          "sha256": "33c299ca8a000cfdef6ac42994c45d10ed353e046037ef389a24c0baf78b7f8a"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/xai.models.js",
+          "sha256": "baed06118ee3d97e8969c9999f0c06a164ca0a5534c01a99fd99dbc54db444e5"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/moonshotai.js",
+          "sha256": "e8763b3bd10b596a1ad6963904b8fe82795cf6ba5a84fc24273e12976018a41c"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/xiaomi-token-plan-ams.js",
+          "sha256": "fe4bfede6558715e94e5e8997dd51fbd176bab8e651a972fe3be667218605222"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/kimi-coding.js",
+          "sha256": "aa4c115c5f57750281176a6d5d7a42e19689a5bef10dcfd11f4b4ae0e3f7c8cc"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/opencode-go.models.js",
+          "sha256": "2a6805fb41edd5e48ac401bd6a60c35b9d981a1d3630882d1f809a62929fd20a"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/vercel-ai-gateway.js",
+          "sha256": "ab6bdd6097782f102bbd81bac979e30199c368e76a01e2f34980404ce2ba727c"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/opencode-go.js",
+          "sha256": "7c14ba02605949d7c937d89cad55e2e2eed81d13086728b4173c3d3640d5d6f5"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/cerebras.models.js",
+          "sha256": "b36806464fdc12d50352b11adf5d613b08e06d0d0f53e404fb92ae7d92c885c8"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/huggingface.js",
+          "sha256": "0b98efc192c8b9bcfbfcfcd123bba32ebed01e003668f37384fbe25416b983f5"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/qwen-token-plan-individual-cn.models.js",
+          "sha256": "240b4f7a71bad40b0cde26b0894ab0ccdb86bda253de0fa785cf3e4901ec4770"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/xiaomi-token-plan-cn.models.js",
+          "sha256": "d9c6d38961661077ae40918c379031b22d3c700add5f55bf6de847efea027ddd"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/mistral.js",
+          "sha256": "9f7861fb15beb9a42b8c3031ec5ba751c68f0bcd8ce258b0922a9e52c225f3a6"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/huggingface.models.js",
+          "sha256": "a5313c8d0ecd6b127fbaf85efb70aca8f99ce8b7b0133a8df1af84ad2037f9cd"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/openrouter.js",
+          "sha256": "158f877d062114c8a283c2687ae4a30f8ba34ae43aea81de4b7f43a57e0f59f0"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/cloudflare-ai-gateway.models.js",
+          "sha256": "da583d68cdbe2efd3db873e8d75218260b581a7f2c4264bc5fe39d66ed00ffb2"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/deepseek.models.js",
+          "sha256": "96d23f1156d903719d87187a11616fa7f0f9463b4ca5484c5e6e36057d870d85"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/amazon-bedrock.models.js",
+          "sha256": "74d55ec86b8b897dd748a2f8f2fce75a539434a723352f16279d512b0487684a"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/moonshotai.models.js",
+          "sha256": "21ea92f74e495252d223b1d01d034b6c50d12304b214bd918137b9785f1755fe"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/anthropic.models.js",
+          "sha256": "ce70bb4ce4064362823edb4934a89f9f41c06fe385b61de08e1aa948392e47e0"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/qwen-token-plan.js",
+          "sha256": "7e5b375cc62907685ee10b4f8125c3fd9e668f215d6d23f734bb4142d2b5d758"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/minimax-cn.models.js",
+          "sha256": "bc4e43d7656e111639c608745ee9721b53240bebfa5cab6bb917aadf1956fa4d"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/nvidia.models.js",
+          "sha256": "d02151599cc841c6301175d06ce6a7794fe362c7d248b2fc7b38c5ca8ee73e2e"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/moonshotai-cn.js",
+          "sha256": "bb34cb02d69423877c2db14736918ee879b8a789d0f247bf92ed512714d7b078"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/qwen-token-plan.models.js",
+          "sha256": "eba8420038da8787b58d254cdb906c42c5591eac27911611a73799f2c0fe0e33"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/openrouter.models.js",
+          "sha256": "eb1097639997735d514cbe8bb7b175747b54f2847e275857fce68f79315ebf31"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/groq.models.js",
+          "sha256": "9a0e0a6cea69fa9aa927f8ed52206266a9e18a36b40dfd7ae2db94fc876833d1"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/qwen-token-plan-individual.models.js",
+          "sha256": "44c6838b3a56138ca66ec9541937cb7cec6f4a9f697ba50e4a0af7f5829e7972"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/cerebras.js",
+          "sha256": "54ad3fdb12d934bf06d69bfc7e586a7e038966eab579539583e02349860784cd"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/openai-codex.js",
+          "sha256": "769490a94a5bcb062c22e768cf0621c91fb1c5d6be3565e6a6fa765eeeabe674"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/qwen-token-plan-cn.models.js",
+          "sha256": "d119dcda8d495bd00018514dfecd4d920180115056a738e1defc69eb2a9c1a42"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/cloudflare-workers-ai.models.js",
+          "sha256": "26cc6745c56393030dac55414f0a04d6f48500c21f269dcbcc15cb7cbf13a72a"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/cloudflare-stream.js",
+          "sha256": "b815d17959fe76c2b916d16f74be51f6393939aaf640e865db514832e0fadbf4"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/radius-config.js",
+          "sha256": "0210d3d3553906de210bd1074659c4a2eb09b92778ef1066cfea54bcaf83c217"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/xiaomi-token-plan-ams.models.js",
+          "sha256": "a15c958ab381f04cc7f7be381540483a8c816f5e954bf0ead107bb407e578ac4"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/openai-codex.models.js",
+          "sha256": "7936bb7da4138b7b3598e1f2788eeea1bea7dbec3c96ee2c64a982249456db0b"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/ant-ling.js",
+          "sha256": "518587507d88641fa3ca4da014297b72a4d80900c21fe423bb513fd147836504"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/vercel-ai-gateway.models.js",
+          "sha256": "8fc9e251cdbe9fd3737c82f37cc236cc1313431b543f41496a22e757a45e2ee9"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/kimi-coding.models.js",
+          "sha256": "1bd7e6042dbad48330e4905cc28f1a78ee9ab374582f11ad510a3da0873f871a"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/xiaomi-token-plan-sgp.models.js",
+          "sha256": "5d106a0560c32fb5b7aaf8551baa58e75c4711df9d332b88ed2143278445ef12"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/zai-coding-cn.js",
+          "sha256": "3820dea6091183bafa6b0c37e2cca684fba6d50674f190db259b2765c70efa85"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/meta.models.js",
+          "sha256": "bff5a7924e04988ec78decf645d62f4731c06d4d07c217a62e1dda9ff8ff72e2"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/together.models.js",
+          "sha256": "e6719ed1b6cc9ed2371fd2f0590b9cd7c076dc5177df2ce5f3cfab86e013161e"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/zai-coding-cn.models.js",
+          "sha256": "383554e8b492f87228c55f3dcedf4a6ce99ee226c49c8fbec045c8f20e3ffd8a"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/moonshotai-cn.models.js",
+          "sha256": "d6ca5a6bfc7dc800695ff1e9c23049fc8deb68a4debaa4e448167635d1afbb77"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/amazon-bedrock.js",
+          "sha256": "2529299b0e820465cb3bcbec1ef4d4f2e3513385084e25b80c0e4c016779fa2e"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/fireworks.js",
+          "sha256": "e5aaf35df7f54f7f1684cc18c464135f3f1bf0d4a169acff9c9e91ccaf39d0fd"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/baseten.models.js",
+          "sha256": "69535143a7b40eb8647db1660711648325987b664a0a8d7cbf044c5b5c942511"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/cloudflare-workers-ai.js",
+          "sha256": "d07ebc882420d601fd54493deda1fac0a0c37c4f48a65dc7f3b93e93786969c5"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/together.js",
+          "sha256": "40a43f847c9320d1f46cc3df3a785f0bb4e246d5f49877d03f5242c033dd1528"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/xai.js",
+          "sha256": "e5d69e97c788ce044f6c225fb38c04ec5b04defa639c02abfb022b466a90b9e9"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/qwen-token-plan-cn.js",
+          "sha256": "79301d2375e2aa1b47e1e8a98657f3716d2cf7729e4263aa4354465e76776fe7"
+        },
+        {
+          "condition": "/./providers/*/import",
+          "target": "./dist/providers/openai.models.js",
+          "sha256": "5ecca7b91ac52df918ced1695c94ee247090bb5877fc211dfc8c64d09f89db9e"
+        },
+        {
+          "condition": "/./bedrock-provider/types",
+          "target": "./dist/bedrock-provider.d.ts",
+          "sha256": "4c10e21760ad77d437cbb0689a1d35dc61ea42cecbf6228d954a997a3dd0d976"
+        },
+        {
+          "condition": "/./bedrock-provider/import",
+          "target": "./dist/bedrock-provider.js",
+          "sha256": "96834cdb63f47c93cdb0cf13622c1ffa7b3d4b0866c46dc4b2a84ed1338c79b4"
+        },
+        {
+          "condition": "/./session-resources/types",
+          "target": "./dist/session-resources.d.ts",
+          "sha256": "973c50db03e0708ddb07b4df3c7a3c1427031f8eb55751ee66e2449d01774b7b"
+        },
+        {
+          "condition": "/./session-resources/import",
+          "target": "./dist/session-resources.js",
+          "sha256": "9228618eeaebc6b5a1746d28d1859b1e23f0f65e978dc9f6e20eb29d65b17e2a"
+        },
+        {
+          "condition": "/./lazy-bedrock-provider/types",
+          "target": "./dist/lazy-bedrock-provider.d.ts",
+          "sha256": "b542ad400da9ff4aad07b32a8266ae1507b58b4d26583cacdc904835c9511084"
+        },
+        {
+          "condition": "/./lazy-bedrock-provider/import",
+          "target": "./dist/lazy-bedrock-provider.js",
+          "sha256": "3ab398fefee3b596805a4db4c2e75f4678d341781929d0ba2d2d600537f6582d"
+        }
+      ],
+      "provenance": {
+        "attestationUrl": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-ai@1.6.1",
+        "bundleSha256": "328522b251a04890f5d2683acbc1640ef8be560e75dc9ad3e1a33c2c0aa6a1d2",
+        "statements": [
+          {
+            "_type": "https://in-toto.io/Statement/v0.1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-ai@1.6.1",
+                "digest": {
+                  "sha512": "132a2b815c80dace0cc4d97b60e6a9ccea5dc6b73c1d48311c420ea3c41130adf93fb3c23ac4a25b330b7fa8b12a5dffa1b920ec8df0189587abe15d6d4cf8de"
+                }
+              }
+            ],
+            "predicateType": "https://github.com/npm/attestation/tree/main/specs/publish/v0.1",
+            "predicate": {
+              "name": "@earendil-works/pi-ai",
+              "version": "1.6.1",
+              "registry": "https://registry.npmjs.org"
+            }
+          },
+          {
+            "_type": "https://in-toto.io/Statement/v1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-ai@1.6.1",
+                "digest": {
+                  "sha512": "132a2b815c80dace0cc4d97b60e6a9ccea5dc6b73c1d48311c420ea3c41130adf93fb3c23ac4a25b330b7fa8b12a5dffa1b920ec8df0189587abe15d6d4cf8de"
+                }
+              }
+            ],
+            "predicateType": "https://slsa.dev/provenance/v1",
+            "predicate": {
+              "buildDefinition": {
+                "buildType": "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1",
+                "externalParameters": {
+                  "workflow": {
+                    "ref": "refs/tags/v1.6.1",
+                    "repository": "https://github.com/earendil-works/pi",
+                    "path": ".github/workflows/build-binaries.yml"
+                  }
+                },
+                "internalParameters": {
+                  "github": {
+                    "event_name": "push",
+                    "repository_id": "1035029907",
+                    "repository_owner_id": "207902832"
+                  }
+                },
+                "resolvedDependencies": [
+                  {
+                    "uri": "git+https://github.com/earendil-works/pi@refs/tags/v1.6.1",
+                    "digest": {
+                      "gitCommit": "ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe"
+                    }
+                  }
+                ]
+              },
+              "runDetails": {
+                "builder": {
+                  "id": "https://github.com/actions/runner/github-hosted"
+                },
+                "metadata": {
+                  "invocationId": "https://github.com/earendil-works/pi/actions/runs/45621597215/attempts/1"
+                }
+              }
+            }
+          }
+        ],
+        "verification": "registry-served statement decoded; subject digest/ref/commit matched; signature not independently verified"
+      }
+    },
+    {
+      "name": "@earendil-works/pi-agent-core",
+      "version": "1.6.1",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-agent-core/-/pi-agent-core-1.6.1.tgz",
+      "integrity": "sha512-1pkZKTaO1sSY0xVw/W45ULLQRg0rOOt6oJdeTG06upAeIq1UGHA0o+MR9UN6efPi7yW48uVinlFId7fwQilxvg==",
+      "shasum": "489dc2c16efc8b42a9224eb1742645d2590e8680",
+      "archiveTreeSha256": "d21ccad1489dfed88ab8a473a450593550680624c5306d5cd0575c747a1289bd",
+      "archiveFileCount": 26,
+      "archiveSha256": "cf6fea7baf3526d8ea47d8538cd596be5b49d82e46ce9f7228b815230ffdcfd0",
+      "archiveBytes": 63443,
+      "engines": {
+        "node": ">=22.19.0"
+      },
+      "publicExports": {
+        ".": {
+          "types": "./dist/index.d.ts",
+          "import": "./dist/index.js"
+        },
+        "./package.json": "./package.json"
+      },
+      "main": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "dependencies": {
+        "@earendil-works/pi-ai": "1.6.1",
+        "@earendil-works/pi-schema": "1.6.1"
+      },
+      "lockEntry": [
+        "@earendil-works/pi-agent-core@1.6.1",
+        "",
+        {
+          "dependencies": {
+            "@earendil-works/pi-ai": "1.6.1",
+            "@earendil-works/pi-schema": "1.6.1"
+          }
+        },
+        "sha512-1pkZKTaO1sSY0xVw/W45ULLQRg0rOOt6oJdeTG06upAeIq1UGHA0o+MR9UN6efPi7yW48uVinlFId7fwQilxvg=="
+      ],
+      "exportFingerprints": [
+        {
+          "condition": "/./types",
+          "target": "./dist/index.d.ts",
+          "sha256": "3d2ae60fb1d593012f101155e15a5b1316fe00c81256d8c28240a4f3f363541d"
+        },
+        {
+          "condition": "/./import",
+          "target": "./dist/index.js",
+          "sha256": "40cb358d7f05594e9b67845a78ae50ad05e8375f0cfa8cee8a74801556c09afd"
+        },
+        {
+          "condition": "/./package.json",
+          "target": "./package.json",
+          "sha256": "05f6fc37d2bfe0246206b3014dde7185742b5dc736bbbc00f18b8fdd01d5235e"
+        }
+      ],
+      "provenance": {
+        "attestationUrl": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-agent-core@1.6.1",
+        "bundleSha256": "3bccc2b8ceee40e259c77c1b67605fa34e829d6bcc932477ef24aeb60b3b8f5a",
+        "statements": [
+          {
+            "_type": "https://in-toto.io/Statement/v0.1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-agent-core@1.6.1",
+                "digest": {
+                  "sha512": "d6991929368ed6c498d31570fd6e3950b2d0460d2b38eb7aa0975e4c6d3aba901e22ad54187034a3e311f5437a79f3e2ef25b8f2e5629e514877b7f0422971be"
+                }
+              }
+            ],
+            "predicateType": "https://github.com/npm/attestation/tree/main/specs/publish/v0.1",
+            "predicate": {
+              "name": "@earendil-works/pi-agent-core",
+              "version": "1.6.1",
+              "registry": "https://registry.npmjs.org"
+            }
+          },
+          {
+            "_type": "https://in-toto.io/Statement/v1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-agent-core@1.6.1",
+                "digest": {
+                  "sha512": "d6991929368ed6c498d31570fd6e3950b2d0460d2b38eb7aa0975e4c6d3aba901e22ad54187034a3e311f5437a79f3e2ef25b8f2e5629e514877b7f0422971be"
+                }
+              }
+            ],
+            "predicateType": "https://slsa.dev/provenance/v1",
+            "predicate": {
+              "buildDefinition": {
+                "buildType": "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1",
+                "externalParameters": {
+                  "workflow": {
+                    "ref": "refs/tags/v1.6.1",
+                    "repository": "https://github.com/earendil-works/pi",
+                    "path": ".github/workflows/build-binaries.yml"
+                  }
+                },
+                "internalParameters": {
+                  "github": {
+                    "event_name": "push",
+                    "repository_id": "1035029907",
+                    "repository_owner_id": "207902832"
+                  }
+                },
+                "resolvedDependencies": [
+                  {
+                    "uri": "git+https://github.com/earendil-works/pi@refs/tags/v1.6.1",
+                    "digest": {
+                      "gitCommit": "ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe"
+                    }
+                  }
+                ]
+              },
+              "runDetails": {
+                "builder": {
+                  "id": "https://github.com/actions/runner/github-hosted"
+                },
+                "metadata": {
+                  "invocationId": "https://github.com/earendil-works/pi/actions/runs/45621597215/attempts/1"
+                }
+              }
+            }
+          }
+        ],
+        "verification": "registry-served statement decoded; subject digest/ref/commit matched; signature not independently verified"
+      }
+    },
+    {
+      "name": "@earendil-works/pi-codemode",
+      "version": "1.6.1",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-codemode/-/pi-codemode-1.6.1.tgz",
+      "integrity": "sha512-xogcFe38Ek/9cabCz6sP52FjUKtuNDwLmqeM1aQiwOF5rg7jZ//FRpnMeYyhvRyod2UYhhf/ojfg6rRdXi0peQ==",
+      "shasum": "d6b21ad00b52409210f21244d9983b37040fabe6",
+      "archiveTreeSha256": "49822fcdf97ad97541d060486a4f57d3fe5e105151ccfea970c762b48c89e37d",
+      "archiveFileCount": 66,
+      "archiveSha256": "69b391796f465fb7a3432c8aa5b119a0b9983d3c910aa04e2619f7f294e7b7ac",
+      "archiveBytes": 106951,
+      "engines": {
+        "node": ">=22.19.0"
+      },
+      "publicExports": {
+        ".": {
+          "types": "./dist/index.d.ts",
+          "import": "./dist/index.js",
+          "source": "./src/index.ts"
+        },
+        "./source": {
+          "types": "./dist/source.d.ts",
+          "import": "./dist/source.js",
+          "source": "./src/source.ts"
+        },
+        "./worker": {
+          "types": "./dist/runtime/worker.d.ts",
+          "import": "./dist/runtime/worker.js",
+          "source": "./src/runtime/worker.ts"
+        },
+        "./portable": {
+          "types": "./dist/portable.d.ts",
+          "import": "./dist/portable.js",
+          "source": "./src/portable.ts"
+        },
+        "./cloudflare": {
+          "types": "./dist/cloudflare.d.ts",
+          "import": "./dist/cloudflare.js",
+          "source": "./src/cloudflare.ts"
+        },
+        "./declarations": {
+          "types": "./dist/declarations.d.ts",
+          "import": "./dist/declarations.js",
+          "source": "./src/declarations.ts"
+        }
+      },
+      "main": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "dependencies": {
+        "quickjs-wasi": "3.6.2"
+      },
+      "lockEntry": [
+        "@earendil-works/pi-codemode@1.6.1",
+        "",
+        {
+          "dependencies": {
+            "quickjs-wasi": "3.6.2"
+          }
+        },
+        "sha512-xogcFe38Ek/9cabCz6sP52FjUKtuNDwLmqeM1aQiwOF5rg7jZ//FRpnMeYyhvRyod2UYhhf/ojfg6rRdXi0peQ=="
+      ],
+      "exportFingerprints": [
+        {
+          "condition": "/./types",
+          "target": "./dist/index.d.ts",
+          "sha256": "729187cf092b5b8dc955f649296c39e988ecf30a0e352057064143e2a08e3282"
+        },
+        {
+          "condition": "/./import",
+          "target": "./dist/index.js",
+          "sha256": "d5f2e933e3a3465d0a9d6237a8ebf33638ee4c4bb550aa4a09d308ccc93d84ed"
+        },
+        {
+          "condition": "/./source",
+          "target": "./src/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./source/types",
+          "target": "./dist/source.d.ts",
+          "sha256": "6343b69e5d7b72d2ce9f686f00879cc8c40c3e2a9afb9132a661a2ee3dcf9f16"
+        },
+        {
+          "condition": "/./source/import",
+          "target": "./dist/source.js",
+          "sha256": "d663e1052d683a6a698cce4a53cd9d829577c112e8080ee011ad1aad34be82b9"
+        },
+        {
+          "condition": "/./source/source",
+          "target": "./src/source.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./worker/types",
+          "target": "./dist/runtime/worker.d.ts",
+          "sha256": "14e7397ad7aab084b1c5b23b9f101c079611e43e872d5b4250f2be5499a6a273"
+        },
+        {
+          "condition": "/./worker/import",
+          "target": "./dist/runtime/worker.js",
+          "sha256": "22f72950eaaa7e7e3a816db5ce1203f2a685de0328ea097278fd74b11263d813"
+        },
+        {
+          "condition": "/./worker/source",
+          "target": "./src/runtime/worker.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./portable/types",
+          "target": "./dist/portable.d.ts",
+          "sha256": "63a29db9d78d239787bf59670a467b89d5e5db66589527bafb373b78e006701d"
+        },
+        {
+          "condition": "/./portable/import",
+          "target": "./dist/portable.js",
+          "sha256": "72f8c7384c4c768a9f0dee5479d86d529a062f0c89152d9264de83fc6098b3b1"
+        },
+        {
+          "condition": "/./portable/source",
+          "target": "./src/portable.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./cloudflare/types",
+          "target": "./dist/cloudflare.d.ts",
+          "sha256": "c457da9317dc6a30e052571cd86e80f2e3b072ab9a71556ba24682aa28977c73"
+        },
+        {
+          "condition": "/./cloudflare/import",
+          "target": "./dist/cloudflare.js",
+          "sha256": "db734638eff2e3ac65a60725d57e4ddc9298f424a847724db7d112ea76d698ad"
+        },
+        {
+          "condition": "/./cloudflare/source",
+          "target": "./src/cloudflare.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./declarations/types",
+          "target": "./dist/declarations.d.ts",
+          "sha256": "b1bea7e0999912966f53f1f1f637e5b4afe4975d73ef1d0c568c313760652823"
+        },
+        {
+          "condition": "/./declarations/import",
+          "target": "./dist/declarations.js",
+          "sha256": "32a4607ab15e8e7e5f58e6979f3f7216704e716671c11442f9e9cd77c23ec75a"
+        },
+        {
+          "condition": "/./declarations/source",
+          "target": "./src/declarations.ts",
+          "status": "advertised_source_not_shipped"
+        }
+      ],
+      "provenance": {
+        "attestationUrl": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-codemode@1.6.1",
+        "bundleSha256": "8497997a31184eb6294bd79c3e5472c51ec81ad2818127bcba63285ff7de282f",
+        "statements": [
+          {
+            "_type": "https://in-toto.io/Statement/v0.1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-codemode@1.6.1",
+                "digest": {
+                  "sha512": "c6881c15edfc124ffd71a6c2cfab0fe7616350ab6e343c0b9aa78cd5a422c0e179ae0ee367ffc54699cc798ca1bd1ca87765188617ffa237e0eab45d5e2d2979"
+                }
+              }
+            ],
+            "predicateType": "https://github.com/npm/attestation/tree/main/specs/publish/v0.1",
+            "predicate": {
+              "name": "@earendil-works/pi-codemode",
+              "version": "1.6.1",
+              "registry": "https://registry.npmjs.org"
+            }
+          },
+          {
+            "_type": "https://in-toto.io/Statement/v1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-codemode@1.6.1",
+                "digest": {
+                  "sha512": "c6881c15edfc124ffd71a6c2cfab0fe7616350ab6e343c0b9aa78cd5a422c0e179ae0ee367ffc54699cc798ca1bd1ca87765188617ffa237e0eab45d5e2d2979"
+                }
+              }
+            ],
+            "predicateType": "https://slsa.dev/provenance/v1",
+            "predicate": {
+              "buildDefinition": {
+                "buildType": "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1",
+                "externalParameters": {
+                  "workflow": {
+                    "ref": "refs/tags/v1.6.1",
+                    "repository": "https://github.com/earendil-works/pi",
+                    "path": ".github/workflows/build-binaries.yml"
+                  }
+                },
+                "internalParameters": {
+                  "github": {
+                    "event_name": "push",
+                    "repository_id": "1035029907",
+                    "repository_owner_id": "207902832"
+                  }
+                },
+                "resolvedDependencies": [
+                  {
+                    "uri": "git+https://github.com/earendil-works/pi@refs/tags/v1.6.1",
+                    "digest": {
+                      "gitCommit": "ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe"
+                    }
+                  }
+                ]
+              },
+              "runDetails": {
+                "builder": {
+                  "id": "https://github.com/actions/runner/github-hosted"
+                },
+                "metadata": {
+                  "invocationId": "https://github.com/earendil-works/pi/actions/runs/45621597215/attempts/1"
+                }
+              }
+            }
+          }
+        ],
+        "verification": "registry-served statement decoded; subject digest/ref/commit matched; signature not independently verified"
+      }
+    },
+    {
+      "name": "@earendil-works/pi-coding-agent",
+      "version": "1.6.1",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-1.6.1.tgz",
+      "integrity": "sha512-+VSb95N4PB+G7TLceg7wkbJT31BEeIBnUT9500g9a1rOsCx78CUw1YFGtLcRhS6jj8pdfm0fFwrakrMLu6lVAQ==",
+      "shasum": "478e322b3c12ec5e1be0f1f1cea0a1831eaa47ae",
+      "archiveTreeSha256": "7a7eb789ce65863e2781e3c1545225ca4bd3b03da219d198d232ec1cbeffa0ff",
+      "archiveFileCount": 1330,
+      "archiveSha256": "e3b0eb54b6e1e95b60ec7c4204959bd69adc51fb1f0da3a59430bbc9a593734f",
+      "archiveBytes": 7994686,
+      "engines": {
+        "node": ">=22.19.0"
+      },
+      "publicExports": {
+        ".": {
+          "types": "./dist/index.d.ts",
+          "import": "./dist/index.js"
+        },
+        "./rpc-entry": {
+          "import": "./dist/bundle/rpc-entry.js"
+        }
+      },
+      "main": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "dependencies": {
+        "diff": "8.0.4",
+        "jiti": "2.7.0",
+        "yaml": "2.9.0",
+        "chalk": "6.0.0",
+        "ignore": "7.0.8",
+        "semver": "7.8.5",
+        "undici": "8.12.4",
+        "typebox": "1.3.27",
+        "minimatch": "11.0.3",
+        "cross-spawn": "7.0.6",
+        "highlight.js": "10.7.3",
+        "quickjs-wasi": "3.6.2",
+        "lovely-mermaid": "0.3.3",
+        "brace-expansion": "5.0.12",
+        "hosted-git-info": "9.0.3",
+        "proper-lockfile": "4.1.2",
+        "@earendil-works/pi-ai": "1.6.1",
+        "@earendil-works/pi-mcp": "1.6.1",
+        "@earendil-works/pi-tui": "1.6.1",
+        "@silvia-odwyer/photon-node": "0.3.4",
+        "@earendil-works/pi-codemode": "1.6.1",
+        "@earendil-works/pi-agent-core": "1.6.1"
+      },
+      "lockEntry": [
+        "@earendil-works/pi-coding-agent@1.6.1",
+        "",
+        {
+          "dependencies": {
+            "@earendil-works/pi-agent-core": "1.6.1",
+            "@earendil-works/pi-ai": "1.6.1",
+            "@earendil-works/pi-codemode": "1.6.1",
+            "@earendil-works/pi-mcp": "1.6.1",
+            "@earendil-works/pi-tui": "1.6.1",
+            "@silvia-odwyer/photon-node": "0.3.4",
+            "brace-expansion": "5.0.12",
+            "chalk": "6.0.0",
+            "cross-spawn": "7.0.6",
+            "diff": "8.0.4",
+            "highlight.js": "10.7.3",
+            "hosted-git-info": "9.0.3",
+            "ignore": "7.0.8",
+            "jiti": "2.7.0",
+            "lovely-mermaid": "0.3.3",
+            "minimatch": "11.0.3",
+            "proper-lockfile": "4.1.2",
+            "quickjs-wasi": "3.6.2",
+            "semver": "7.8.5",
+            "typebox": "1.3.27",
+            "undici": "8.12.4",
+            "yaml": "2.9.0"
+          },
+          "bin": {
+            "pi": "dist/bundle/cli.js"
+          }
+        },
+        "sha512-+VSb95N4PB+G7TLceg7wkbJT31BEeIBnUT9500g9a1rOsCx78CUw1YFGtLcRhS6jj8pdfm0fFwrakrMLu6lVAQ=="
+      ],
+      "exportFingerprints": [
+        {
+          "condition": "/./types",
+          "target": "./dist/index.d.ts",
+          "sha256": "b896b72effa2ee729087181a294cf93c45abc323daad2aadbda5f449acafa54a"
+        },
+        {
+          "condition": "/./import",
+          "target": "./dist/index.js",
+          "sha256": "4569157e6038be9840fa514db4b00a27fd0be9e3622cc7b49a281de6c027d7ff"
+        },
+        {
+          "condition": "/./rpc-entry/import",
+          "target": "./dist/bundle/rpc-entry.js",
+          "sha256": "636d68851ea1f76bac7dc2fe84348575cc611d17a6c6c79e65e8dc0057ca4ba3"
+        }
+      ],
+      "provenance": {
+        "attestationUrl": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-coding-agent@1.6.1",
+        "bundleSha256": "fda4d0d8b9cc4bf9afbe38eb63e9a41136f686ed0cd9b79ebf44f760264aaaaa",
+        "statements": [
+          {
+            "_type": "https://in-toto.io/Statement/v0.1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-coding-agent@1.6.1",
+                "digest": {
+                  "sha512": "f9549bf793783c1f86ed32dc7a0ef091b253df5044788067513f79d3483d6b5aceb02c7bf02530d58146b4b711852ea38fca5d7e6d1f170ada92b30bbba95501"
+                }
+              }
+            ],
+            "predicateType": "https://github.com/npm/attestation/tree/main/specs/publish/v0.1",
+            "predicate": {
+              "name": "@earendil-works/pi-coding-agent",
+              "version": "1.6.1",
+              "registry": "https://registry.npmjs.org"
+            }
+          },
+          {
+            "_type": "https://in-toto.io/Statement/v1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-coding-agent@1.6.1",
+                "digest": {
+                  "sha512": "f9549bf793783c1f86ed32dc7a0ef091b253df5044788067513f79d3483d6b5aceb02c7bf02530d58146b4b711852ea38fca5d7e6d1f170ada92b30bbba95501"
+                }
+              }
+            ],
+            "predicateType": "https://slsa.dev/provenance/v1",
+            "predicate": {
+              "buildDefinition": {
+                "buildType": "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1",
+                "externalParameters": {
+                  "workflow": {
+                    "ref": "refs/tags/v1.6.1",
+                    "repository": "https://github.com/earendil-works/pi",
+                    "path": ".github/workflows/build-binaries.yml"
+                  }
+                },
+                "internalParameters": {
+                  "github": {
+                    "event_name": "push",
+                    "repository_id": "1035029907",
+                    "repository_owner_id": "207902832"
+                  }
+                },
+                "resolvedDependencies": [
+                  {
+                    "uri": "git+https://github.com/earendil-works/pi@refs/tags/v1.6.1",
+                    "digest": {
+                      "gitCommit": "ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe"
+                    }
+                  }
+                ]
+              },
+              "runDetails": {
+                "builder": {
+                  "id": "https://github.com/actions/runner/github-hosted"
+                },
+                "metadata": {
+                  "invocationId": "https://github.com/earendil-works/pi/actions/runs/45621597215/attempts/1"
+                }
+              }
+            }
+          }
+        ],
+        "verification": "registry-served statement decoded; subject digest/ref/commit matched; signature not independently verified"
+      }
+    },
+    {
+      "name": "@earendil-works/pi-mcp",
+      "version": "1.6.1",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-mcp/-/pi-mcp-1.6.1.tgz",
+      "integrity": "sha512-qGdAuqMsXjvOURevlc5alxPO1tRthTumFiSHU+QtNfCQpFIEMaec3RZC3mdjqLxRTKHjPBkJXzYPBGdB8bf1Zg==",
+      "shasum": "88601de92f6c22fdcfc689145ca902158ee592c1",
+      "archiveTreeSha256": "695f4909a2a6e7610a9c170c9cff31a16a4dae18f054c6e1f1e0d559cce47367",
+      "archiveFileCount": 124,
+      "archiveSha256": "02760e450ce040c6767305b2cdc18420ee6208c249935695ac3945be37b1b3d6",
+      "archiveBytes": 158725,
+      "engines": {
+        "node": ">=22.19.0"
+      },
+      "publicExports": {
+        ".": {
+          "types": "./dist/index.d.ts",
+          "import": "./dist/index.js",
+          "source": "./src/index.ts"
+        },
+        "./oauth": {
+          "types": "./dist/oauth/index.d.ts",
+          "import": "./dist/oauth/index.js",
+          "source": "./src/oauth/index.ts"
+        },
+        "./testing": {
+          "types": "./dist/testing/index.d.ts",
+          "import": "./dist/testing/index.js",
+          "source": "./src/testing/index.ts"
+        }
+      },
+      "main": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "dependencies": {
+        "cross-spawn": "7.0.6"
+      },
+      "lockEntry": [
+        "@earendil-works/pi-mcp@1.6.1",
+        "",
+        {
+          "dependencies": {
+            "cross-spawn": "7.0.6"
+          }
+        },
+        "sha512-qGdAuqMsXjvOURevlc5alxPO1tRthTumFiSHU+QtNfCQpFIEMaec3RZC3mdjqLxRTKHjPBkJXzYPBGdB8bf1Zg=="
+      ],
+      "exportFingerprints": [
+        {
+          "condition": "/./types",
+          "target": "./dist/index.d.ts",
+          "sha256": "f0df90ff264ebef85fc47eb98caf4852081e5d97a2dfe43e25656448c626dddc"
+        },
+        {
+          "condition": "/./import",
+          "target": "./dist/index.js",
+          "sha256": "9e00027312e02b075e265405ec1883f462f277a9cc6f6826d5d0ec419a0b9dfc"
+        },
+        {
+          "condition": "/./source",
+          "target": "./src/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./oauth/types",
+          "target": "./dist/oauth/index.d.ts",
+          "sha256": "bef6ceb447b2456df5bd7fe598a158b9cfcda16fc89dba6ec4f91bf296cef075"
+        },
+        {
+          "condition": "/./oauth/import",
+          "target": "./dist/oauth/index.js",
+          "sha256": "490ef2589e12b8812ee23aa2ddcd67ea693e7630577ff74d2ceecbc4d06c5be2"
+        },
+        {
+          "condition": "/./oauth/source",
+          "target": "./src/oauth/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./testing/types",
+          "target": "./dist/testing/index.d.ts",
+          "sha256": "560a00fc0eb00be58c72e8030c1a5514773776304df871db135f71837fdb113b"
+        },
+        {
+          "condition": "/./testing/import",
+          "target": "./dist/testing/index.js",
+          "sha256": "1fb2f47831e8b12aadcd5b9630edd94e9a676a00ed223cf9ccfe24047877a018"
+        },
+        {
+          "condition": "/./testing/source",
+          "target": "./src/testing/index.ts",
+          "status": "advertised_source_not_shipped"
+        }
+      ],
+      "provenance": {
+        "attestationUrl": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-mcp@1.6.1",
+        "bundleSha256": "905de2dc5ca3bdc0c0ea22fb0de1d0a83778aa01df48e17f88378df3c4b65aa7",
+        "statements": [
+          {
+            "_type": "https://in-toto.io/Statement/v0.1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-mcp@1.6.1",
+                "digest": {
+                  "sha512": "a86740baa32c5e3bce5117af95ce5a9713ced6d46d853ba616248753e42d35f090a4520431a79cdd1642de6763a8bc514ca1e33c19095f360f046741f1b7f566"
+                }
+              }
+            ],
+            "predicateType": "https://github.com/npm/attestation/tree/main/specs/publish/v0.1",
+            "predicate": {
+              "name": "@earendil-works/pi-mcp",
+              "version": "1.6.1",
+              "registry": "https://registry.npmjs.org"
+            }
+          },
+          {
+            "_type": "https://in-toto.io/Statement/v1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-mcp@1.6.1",
+                "digest": {
+                  "sha512": "a86740baa32c5e3bce5117af95ce5a9713ced6d46d853ba616248753e42d35f090a4520431a79cdd1642de6763a8bc514ca1e33c19095f360f046741f1b7f566"
+                }
+              }
+            ],
+            "predicateType": "https://slsa.dev/provenance/v1",
+            "predicate": {
+              "buildDefinition": {
+                "buildType": "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1",
+                "externalParameters": {
+                  "workflow": {
+                    "ref": "refs/tags/v1.6.1",
+                    "repository": "https://github.com/earendil-works/pi",
+                    "path": ".github/workflows/build-binaries.yml"
+                  }
+                },
+                "internalParameters": {
+                  "github": {
+                    "event_name": "push",
+                    "repository_id": "1035029907",
+                    "repository_owner_id": "207902832"
+                  }
+                },
+                "resolvedDependencies": [
+                  {
+                    "uri": "git+https://github.com/earendil-works/pi@refs/tags/v1.6.1",
+                    "digest": {
+                      "gitCommit": "ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe"
+                    }
+                  }
+                ]
+              },
+              "runDetails": {
+                "builder": {
+                  "id": "https://github.com/actions/runner/github-hosted"
+                },
+                "metadata": {
+                  "invocationId": "https://github.com/earendil-works/pi/actions/runs/45621597215/attempts/1"
+                }
+              }
+            }
+          }
+        ],
+        "verification": "registry-served statement decoded; subject digest/ref/commit matched; signature not independently verified"
+      }
+    },
+    {
+      "name": "@earendil-works/pi-schema",
+      "version": "1.6.1",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-schema/-/pi-schema-1.6.1.tgz",
+      "integrity": "sha512-Q/6W4IiDdIQUochCuvXFpglTByNTFTuMYvMqXjcRiOnxOl/3mQYLAZpZTpBSRWiS4WgeV7NyH/8dQp6ipYZeNg==",
+      "shasum": "4b2481f8ed9b9e9f28e00e976915ea950e10993a",
+      "archiveTreeSha256": "60db8b62b0f3bf10698e192e1ec076faed22fa02e718e3639bb6bf0340149cda",
+      "archiveFileCount": 176,
+      "archiveSha256": "b3409305a532c0b2b69617befb197126d75d489310dfcc9c6e4d1da929a50476",
+      "archiveBytes": 145246,
+      "engines": {
+        "node": ">=22.19.0"
+      },
+      "publicExports": {
+        ".": {
+          "types": "./dist/index.d.ts",
+          "import": "./dist/index.js",
+          "source": "./src/index.ts"
+        },
+        "./formats": {
+          "types": "./dist/formats/index.d.ts",
+          "import": "./dist/formats/index.js",
+          "source": "./src/formats/index.ts"
+        }
+      },
+      "main": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "dependencies": {},
+      "lockEntry": [
+        "@earendil-works/pi-schema@1.6.1",
+        "",
+        {},
+        "sha512-Q/6W4IiDdIQUochCuvXFpglTByNTFTuMYvMqXjcRiOnxOl/3mQYLAZpZTpBSRWiS4WgeV7NyH/8dQp6ipYZeNg=="
+      ],
+      "exportFingerprints": [
+        {
+          "condition": "/./types",
+          "target": "./dist/index.d.ts",
+          "sha256": "02eed81ba78157bc2457f4da08f52e86c6d4a8a91978a042762d21e8f6892f70"
+        },
+        {
+          "condition": "/./import",
+          "target": "./dist/index.js",
+          "sha256": "2dff58fcad6a5ccf851fabf3367f5c931e9da6a6ee655a04b750d5a2c9278f9e"
+        },
+        {
+          "condition": "/./source",
+          "target": "./src/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./formats/types",
+          "target": "./dist/formats/index.d.ts",
+          "sha256": "77e7d24f2f350817fcb6a03486186e33295275b02a0e717a36fd2b4fabd91a35"
+        },
+        {
+          "condition": "/./formats/import",
+          "target": "./dist/formats/index.js",
+          "sha256": "19a3252baa0590645a990574183060dabf6f12af505b242ff4db2567df744ed5"
+        },
+        {
+          "condition": "/./formats/source",
+          "target": "./src/formats/index.ts",
+          "status": "advertised_source_not_shipped"
+        }
+      ],
+      "provenance": {
+        "attestationUrl": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-schema@1.6.1",
+        "bundleSha256": "a4a2ba771f51e5e082338956429012cdfc755dcaa4d0a74429b85d1fb51952ae",
+        "statements": [
+          {
+            "_type": "https://in-toto.io/Statement/v0.1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-schema@1.6.1",
+                "digest": {
+                  "sha512": "43fe96e08883748414a1c842baf5c5a60953072353153b8c62f32a5e371188e9f13a5ff799060b019a594e9052456892e1681e57b3721fff1d429ea2a5865e36"
+                }
+              }
+            ],
+            "predicateType": "https://github.com/npm/attestation/tree/main/specs/publish/v0.1",
+            "predicate": {
+              "name": "@earendil-works/pi-schema",
+              "version": "1.6.1",
+              "registry": "https://registry.npmjs.org"
+            }
+          },
+          {
+            "_type": "https://in-toto.io/Statement/v1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-schema@1.6.1",
+                "digest": {
+                  "sha512": "43fe96e08883748414a1c842baf5c5a60953072353153b8c62f32a5e371188e9f13a5ff799060b019a594e9052456892e1681e57b3721fff1d429ea2a5865e36"
+                }
+              }
+            ],
+            "predicateType": "https://slsa.dev/provenance/v1",
+            "predicate": {
+              "buildDefinition": {
+                "buildType": "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1",
+                "externalParameters": {
+                  "workflow": {
+                    "ref": "refs/tags/v1.6.1",
+                    "repository": "https://github.com/earendil-works/pi",
+                    "path": ".github/workflows/build-binaries.yml"
+                  }
+                },
+                "internalParameters": {
+                  "github": {
+                    "event_name": "push",
+                    "repository_id": "1035029907",
+                    "repository_owner_id": "207902832"
+                  }
+                },
+                "resolvedDependencies": [
+                  {
+                    "uri": "git+https://github.com/earendil-works/pi@refs/tags/v1.6.1",
+                    "digest": {
+                      "gitCommit": "ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe"
+                    }
+                  }
+                ]
+              },
+              "runDetails": {
+                "builder": {
+                  "id": "https://github.com/actions/runner/github-hosted"
+                },
+                "metadata": {
+                  "invocationId": "https://github.com/earendil-works/pi/actions/runs/45621597215/attempts/1"
+                }
+              }
+            }
+          }
+        ],
+        "verification": "registry-served statement decoded; subject digest/ref/commit matched; signature not independently verified"
+      }
+    },
+    {
+      "name": "@earendil-works/pi-telemetry",
+      "version": "1.6.1",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-telemetry/-/pi-telemetry-1.6.1.tgz",
+      "integrity": "sha512-3gyjVQlVrPwEq7ZCea8++prMwUkuNXM3v/mzTJ9knJAhqrYLxSVAjYzA1iC3KLq8ismmSQIcnFp++qTwQwNToA==",
+      "shasum": "5920ef12667e3b00a03cf355b822b836650d64da",
+      "archiveTreeSha256": "b5fc4c986505f8d841295cc11d4530d65390b730539a2615b2a9e52054c6cfec",
+      "archiveFileCount": 34,
+      "archiveSha256": "38b6517629455dd964c745ad5685460d207ba1da695ee9bef9b76106f4d8fe17",
+      "archiveBytes": 51971,
+      "engines": {
+        "node": ">=22.19.0"
+      },
+      "publicExports": {
+        ".": {
+          "types": "./dist/index.d.ts",
+          "import": "./dist/index.js",
+          "source": "./src/index.ts"
+        },
+        "./render": {
+          "types": "./dist/render.d.ts",
+          "import": "./dist/render.js",
+          "source": "./src/render.ts"
+        },
+        "./testing": {
+          "types": "./dist/testing/index.d.ts",
+          "import": "./dist/testing/index.js",
+          "source": "./src/testing/index.ts"
+        }
+      },
+      "main": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "dependencies": {},
+      "lockEntry": [
+        "@earendil-works/pi-telemetry@1.6.1",
+        "",
+        {},
+        "sha512-3gyjVQlVrPwEq7ZCea8++prMwUkuNXM3v/mzTJ9knJAhqrYLxSVAjYzA1iC3KLq8ismmSQIcnFp++qTwQwNToA=="
+      ],
+      "exportFingerprints": [
+        {
+          "condition": "/./types",
+          "target": "./dist/index.d.ts",
+          "sha256": "ae265b824cbd05aa245c3480257afefab629ed865d6955ac8a12b161267cb487"
+        },
+        {
+          "condition": "/./import",
+          "target": "./dist/index.js",
+          "sha256": "36c7065227f131fbfb47edf0b87085d47f661c0c0d52195d1b412161114a34bd"
+        },
+        {
+          "condition": "/./source",
+          "target": "./src/index.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./render/types",
+          "target": "./dist/render.d.ts",
+          "sha256": "a185f8b6fb369dd5cd93edc18d34f69c73e7d4850215444256da7e336bce4006"
+        },
+        {
+          "condition": "/./render/import",
+          "target": "./dist/render.js",
+          "sha256": "50d3842b269917fc75c85df7200ae0f91d57f369974f3f22f3c666ab926e1cb7"
+        },
+        {
+          "condition": "/./render/source",
+          "target": "./src/render.ts",
+          "status": "advertised_source_not_shipped"
+        },
+        {
+          "condition": "/./testing/types",
+          "target": "./dist/testing/index.d.ts",
+          "sha256": "b1103d6ad4ce9f4937ed60ad9b27cc0c6570fbd051285cd7f031b12f89d92b3e"
+        },
+        {
+          "condition": "/./testing/import",
+          "target": "./dist/testing/index.js",
+          "sha256": "134c0ff503f8a161c2f3ca88858cdf5b38d5afb3a394b5ae4adcc6412b269f83"
+        },
+        {
+          "condition": "/./testing/source",
+          "target": "./src/testing/index.ts",
+          "status": "advertised_source_not_shipped"
+        }
+      ],
+      "provenance": {
+        "attestationUrl": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-telemetry@1.6.1",
+        "bundleSha256": "4a9bda0276a148a1e2fecb384307ce8002ba03d09dfa8aef9ce551e7206324fa",
+        "statements": [
+          {
+            "_type": "https://in-toto.io/Statement/v0.1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-telemetry@1.6.1",
+                "digest": {
+                  "sha512": "de0ca3550955acfc04abb64279af3efa9accc1492e357337bff9b34c9f649c9021aab60bc525408d8cc0d620b728babc8ac9a649021c9c5a7efaa4f0430353a0"
+                }
+              }
+            ],
+            "predicateType": "https://github.com/npm/attestation/tree/main/specs/publish/v0.1",
+            "predicate": {
+              "name": "@earendil-works/pi-telemetry",
+              "version": "1.6.1",
+              "registry": "https://registry.npmjs.org"
+            }
+          },
+          {
+            "_type": "https://in-toto.io/Statement/v1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-telemetry@1.6.1",
+                "digest": {
+                  "sha512": "de0ca3550955acfc04abb64279af3efa9accc1492e357337bff9b34c9f649c9021aab60bc525408d8cc0d620b728babc8ac9a649021c9c5a7efaa4f0430353a0"
+                }
+              }
+            ],
+            "predicateType": "https://slsa.dev/provenance/v1",
+            "predicate": {
+              "buildDefinition": {
+                "buildType": "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1",
+                "externalParameters": {
+                  "workflow": {
+                    "ref": "refs/tags/v1.6.1",
+                    "repository": "https://github.com/earendil-works/pi",
+                    "path": ".github/workflows/build-binaries.yml"
+                  }
+                },
+                "internalParameters": {
+                  "github": {
+                    "event_name": "push",
+                    "repository_id": "1035029907",
+                    "repository_owner_id": "207902832"
+                  }
+                },
+                "resolvedDependencies": [
+                  {
+                    "uri": "git+https://github.com/earendil-works/pi@refs/tags/v1.6.1",
+                    "digest": {
+                      "gitCommit": "ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe"
+                    }
+                  }
+                ]
+              },
+              "runDetails": {
+                "builder": {
+                  "id": "https://github.com/actions/runner/github-hosted"
+                },
+                "metadata": {
+                  "invocationId": "https://github.com/earendil-works/pi/actions/runs/45621597215/attempts/1"
+                }
+              }
+            }
+          }
+        ],
+        "verification": "registry-served statement decoded; subject digest/ref/commit matched; signature not independently verified"
+      }
+    },
+    {
+      "name": "@earendil-works/pi-tui",
+      "version": "1.6.1",
+      "tarball": "https://registry.npmjs.org/@earendil-works/pi-tui/-/pi-tui-1.6.1.tgz",
+      "integrity": "sha512-6WQPbhuoQKCIiu5Jp4S/cFdeqdm4SbAXlgCytsY/4ycR1sqHY4nB8xPTfGUucn61hVnN7hkOzI1CWNmE8UDQ3A==",
+      "shasum": "d2c230aaeb0e6b5ae50477cb6eac86c00f0dcbd8",
+      "archiveTreeSha256": "24d8aa852f91be657f79c14dc75a33b8cd18c87147031007b3af3ef623928fd2",
+      "archiveFileCount": 204,
+      "archiveSha256": "05c28500f54c43a8005fa8dcf6caa0bb3c8fd1e1331efe730578839378f718ff",
+      "archiveBytes": 553519,
+      "engines": {
+        "node": ">=22.19.0"
+      },
+      "publicExports": null,
+      "main": "dist/index.js",
+      "types": "./dist/index.d.ts",
+      "dependencies": {
+        "marked": "18.0.11",
+        "marked-cjk-friendly": "0.1.2",
+        "get-east-asian-width": "1.6.0"
+      },
+      "lockEntry": [
+        "@earendil-works/pi-tui@1.6.1",
+        "",
+        {
+          "dependencies": {
+            "get-east-asian-width": "1.6.0",
+            "marked": "18.0.11",
+            "marked-cjk-friendly": "0.1.2"
+          }
+        },
+        "sha512-6WQPbhuoQKCIiu5Jp4S/cFdeqdm4SbAXlgCytsY/4ycR1sqHY4nB8xPTfGUucn61hVnN7hkOzI1CWNmE8UDQ3A=="
+      ],
+      "exportFingerprints": [
+        {
+          "condition": "/main",
+          "target": "dist/index.js",
+          "sha256": "a0b6f2274522c6371c9ae512fb1fa55dbaab17d70333f22a21793645a5b2bd48"
+        },
+        {
+          "condition": "/types",
+          "target": "./dist/index.d.ts",
+          "sha256": "84604ebc8f8aada353d596a6f92d299b9cb86bf99d1c3797fcac67a83aaad33c"
+        }
+      ],
+      "provenance": {
+        "attestationUrl": "https://registry.npmjs.org/-/npm/v1/attestations/@earendil-works%2fpi-tui@1.6.1",
+        "bundleSha256": "d9036029af5ff30ca37dd4c91fea1e36d55a417889e5f6848a0810cc4cdf2519",
+        "statements": [
+          {
+            "_type": "https://in-toto.io/Statement/v0.1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-tui@1.6.1",
+                "digest": {
+                  "sha512": "e9640f6e1ba840a0888aee49a784bf70575ea9d9b849b0179600b2b6c63fe32711d6ca876389c1f313d37c652e727eb58559cdee190ecc8d4258d984f140d0dc"
+                }
+              }
+            ],
+            "predicateType": "https://github.com/npm/attestation/tree/main/specs/publish/v0.1",
+            "predicate": {
+              "name": "@earendil-works/pi-tui",
+              "version": "1.6.1",
+              "registry": "https://registry.npmjs.org"
+            }
+          },
+          {
+            "_type": "https://in-toto.io/Statement/v1",
+            "subject": [
+              {
+                "name": "pkg:npm/%40earendil-works/pi-tui@1.6.1",
+                "digest": {
+                  "sha512": "e9640f6e1ba840a0888aee49a784bf70575ea9d9b849b0179600b2b6c63fe32711d6ca876389c1f313d37c652e727eb58559cdee190ecc8d4258d984f140d0dc"
+                }
+              }
+            ],
+            "predicateType": "https://slsa.dev/provenance/v1",
+            "predicate": {
+              "buildDefinition": {
+                "buildType": "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1",
+                "externalParameters": {
+                  "workflow": {
+                    "ref": "refs/tags/v1.6.1",
+                    "repository": "https://github.com/earendil-works/pi",
+                    "path": ".github/workflows/build-binaries.yml"
+                  }
+                },
+                "internalParameters": {
+                  "github": {
+                    "event_name": "push",
+                    "repository_id": "1035029907",
+                    "repository_owner_id": "207902832"
+                  }
+                },
+                "resolvedDependencies": [
+                  {
+                    "uri": "git+https://github.com/earendil-works/pi@refs/tags/v1.6.1",
+                    "digest": {
+                      "gitCommit": "ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe"
+                    }
+                  }
+                ]
+              },
+              "runDetails": {
+                "builder": {
+                  "id": "https://github.com/actions/runner/github-hosted"
+                },
+                "metadata": {
+                  "invocationId": "https://github.com/earendil-works/pi/actions/runs/45621597215/attempts/1"
+                }
+              }
+            }
+          }
+        ],
+        "verification": "registry-served statement decoded; subject digest/ref/commit matched; signature not independently verified"
+      }
+    }
+  ]
+}

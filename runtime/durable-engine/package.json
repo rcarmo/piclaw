@@ -11,12 +11,12 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@earendil-works/chord": "1.6.0",
-    "@earendil-works/pi-ai": "1.6.0",
-    "@earendil-works/pi-codemode": "1.6.0",
-    "@earendil-works/pi-durable": "1.6.0",
-    "@earendil-works/pi-mcp": "1.6.0",
-    "@earendil-works/pi-telemetry": "1.6.0",
+    "@earendil-works/chord": "1.6.1",
+    "@earendil-works/pi-ai": "1.6.1",
+    "@earendil-works/pi-codemode": "1.6.1",
+    "@earendil-works/pi-durable": "1.6.1",
+    "@earendil-works/pi-mcp": "1.6.1",
+    "@earendil-works/pi-telemetry": "1.6.1",
     "@noble/hashes": "2.4.0",
     "re2js": "2.10.0",
     "typebox": "1.4.3"
@@ -26,11 +26,11 @@
     "typescript": "7.0.2"
   },
   "overrides": {
-    "@earendil-works/chord": "1.6.0",
-    "@earendil-works/pi-ai": "1.6.0",
-    "@earendil-works/pi-codemode": "1.6.0",
-    "@earendil-works/pi-durable": "1.6.0",
-    "@earendil-works/pi-telemetry": "1.6.0",
-    "@earendil-works/pi-mcp": "1.6.0"
+    "@earendil-works/chord": "1.6.1",
+    "@earendil-works/pi-ai": "1.6.1",
+    "@earendil-works/pi-codemode": "1.6.1",
+    "@earendil-works/pi-durable": "1.6.1",
+    "@earendil-works/pi-telemetry": "1.6.1",
+    "@earendil-works/pi-mcp": "1.6.1"
   }
 }

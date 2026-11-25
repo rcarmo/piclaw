@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 assert.ok(process.versions.bun, "Bun execution required.");
-const [provider, mode, root, parentNamespace] = process.argv.slice(2);
+const [provider, mode, root, parentNamespace, release = '1.6.0', receiptHash] = process.argv.slice(2);
 assert.ok(root && parentNamespace && ["openai", "openai-codex"].includes(provider));
 assert.ok(["success", "denied", "bad-state", "cancel", "provider-only"].includes(mode));
 // Fail before CLI startup unless the caller established independent OS isolation.
@@ -20,17 +20,18 @@ for (const field of ["CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb"]) assert.m
 assert.match(processStatus, /NoNewPrivs:\s+1(?:\n|$)/);
 assert.match(processStatus, /Groups:\s*\n/);
 
+assert.ok(release === '1.6.0' || release === '1.6.1', 'Unsupported SDK evidence release.');
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent"))));
 const aiRoot = dirname(dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-ai"))));
-assert.equal(JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")).version, "1.6.0");
-assert.equal(JSON.parse(readFileSync(join(aiRoot, "package.json"), "utf8")).version, "1.6.0");
+assert.equal(JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")).version, release);
+assert.equal(JSON.parse(readFileSync(join(aiRoot, "package.json"), "utf8")).version, release);
 const digest = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
 const bundle = join(packageRoot, "dist/bundle");
 const bundleFiles = [...new Bun.Glob("**/*.js").scanSync(bundle)].sort();
 const bundleSha256 = createHash("sha256").update(bundleFiles.map(file => `${file}\0${digest(join(bundle, file))}\n`).join("")).digest("hex");
 const sdkFileSha256 = Object.fromEntries(["openai-chatgpt.js", "openai-codex.js"].map(file => [file, digest(join(aiRoot, "dist/auth/oauth", file))]));
-const artifactPath = resolve(import.meta.dir, "../../fixtures/earendil-package-admission/cli-artifact-1.6.0.json");
-assert.equal(digest(artifactPath), "9640edebe60d5954eecce994df65fc3880ff3a70cbcbcf546b80bb6d2c5edd9e", "Exact artifact evidence changed.");
+const artifactPath = resolve(import.meta.dir, `../../fixtures/earendil-package-admission/cli-artifact-${release}.json`);
+assert.equal(digest(artifactPath), release === '1.6.0' ? '9640edebe60d5954eecce994df65fc3880ff3a70cbcbcf546b80bb6d2c5edd9e' : receiptHash, "Exact artifact evidence changed.");
 const archived = JSON.parse(readFileSync(artifactPath, "utf8"));
 assert.equal(JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")).bin.pi, archived.bin);
 assert.equal(archived.bin, "dist/bundle/cli.js");
@@ -56,7 +57,7 @@ if (mode === "provider-only") {
     const authPath=join(agent,"auth.json"); assert.ok(!existsSync(authPath)||Object.keys(JSON.parse(readFileSync(authPath,"utf8"))).length===0);
     assert.equal(existsSync(launcher),false);
     const proof=JSON.parse(readFileSync(guard,"utf8")); assert.equal(proof.tokenRequests,0); assert.equal(proof.unexpected,0);
-    console.log(JSON.stringify({ version:"1.6.0", runtime:"Bun " + Bun.version, provider, mode, status:"pass", exitCode:1, diagnostic:"provider_requires_model", credentialPersistence:"none", tokenRequests:0, unexpectedFetchRequests:0, browserLauncher:"not_invoked", inference:"not_invoked", bundleSha256 }));
+    console.log(JSON.stringify({ version:release, runtime:"Bun " + Bun.version, provider, mode, status:"pass", exitCode:1, diagnostic:"provider_requires_model", credentialPersistence:"none", tokenRequests:0, unexpectedFetchRequests:0, browserLauncher:"not_invoked", inference:"not_invoked", bundleSha256 }));
   } finally { clearTimeout(timer); if(child.exitCode===null)child.kill("SIGKILL"); await child.exited; }
   process.exit(0);
 }
@@ -157,7 +158,7 @@ try {
   assert.equal(await child.exited, 0, "CLI did not exit cleanly through the restored editor.");
   exchanged = JSON.parse(readFileSync(guard, "utf8"));
   assert.equal(exchanged.unexpected, 0); assert.equal(exchanged.tokenRequests, expectedRequests);
-  console.log(JSON.stringify({ version: "1.6.0", runtime: `Bun ${Bun.version}`, provider, mode, status: "pass", cliLogin: mode === "success" ? "completed" : "rejected_or_cancelled",
+  console.log(JSON.stringify({ version: release, runtime: `Bun ${Bun.version}`, provider, mode, status: "pass", cliLogin: mode === "success" ? "completed" : "rejected_or_cancelled",
     credentialPersistence: mode === "success" ? "disposable_profile" : "none", tokenRequests: expectedRequests, unexpectedFetchRequests: 0, externalEgress: "os_namespace_denied",
     browserLauncher: "test_owned_noop", networkGuard: "distinct_loopback_only_os_namespace_and_stable_preload", cliExit: "restored_editor_quit_0",
     inference: "not_invoked", codexBrowserChoiceVerified: provider === "openai-codex", hostIdVerified: provider === "openai", bundleFileCount: bundleFiles.length, bundleSha256, sdkFileSha256 }));
