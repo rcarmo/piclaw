@@ -16,6 +16,7 @@ export type TaskModelRequestScope = Pick<Runtime, "taskId" | "conversationId" | 
   readonly toolCallId?: string;
 };
 const requests = new AsyncLocalStorage<TaskModelRequestScope & { readonly sdkSignal: AbortSignal }>();
+const generationContextReaders = new WeakMap<TaskModelRequestScope, (context: Context) => ReturnType<Runtime["context"]>>();
 
 /** Trusted Core composition only. Identity is passive metadata, never an execution grant; callers fence its signal and source. */
 export function currentTaskExecutionScope(): TaskModelRequestScope | undefined { return requests.getStore(); }
@@ -32,6 +33,19 @@ export function taskModelRequestScope(signal: AbortSignal | undefined): TaskMode
 export function taskModelHookScope(api: Pick<TaskModelRequestScope, "taskId" | "conversationId">): TaskModelRequestScope | undefined {
   const scope = requests.getStore();
   return scope?.taskKind === "pi.generation" && scope.taskId === api.taskId && scope.conversationId === api.conversationId ? scope : undefined;
+}
+
+/** Read through the SDK invocation so prompt hooks share its existing context
+ * range. This is a read of the current committed tail, never the pinned cutoff
+ * or a grant to append; prompt materialisation still proves the prefix and tail. */
+export function readGenerationContext(api: Pick<TaskModelRequestScope, "taskId" | "conversationId">, context: Context) {
+  const scope = taskModelHookScope(api);
+  if (!scope) return;
+  const read = generationContextReaders.get(scope);
+  if (!read) return;
+  scope.signal.throwIfAborted();
+  context.abortSignal?.throwIfAborted();
+  return read(context);
 }
 
 /** Match the current SDK tool body, including its actual model/nested call ID. */
@@ -92,7 +106,13 @@ export function withTaskModelRequestScope(registry: RegistryReader, cancellation
           taskKind: definition.name, phase, ...(checkpointHash ? { checkpointHash } : {}),
           ...(typeof toolCallId === 'string' && toolCallId ? { toolCallId } : {}),
         });
-        return requests.run(scope, () => execute(record, runtime, context));
+        if (!valid || definition.name !== "pi.generation" || phase !== "request") {
+          return requests.run(scope, () => execute(record, runtime, context));
+        }
+        generationContextReaders.set(scope, ctx => runtime.context(scope.conversationId, ctx));
+        try {
+          return await requests.run(scope, () => execute(record, runtime, context));
+        } finally { generationContextReaders.delete(scope); }
       },
     ]));
     const result = { ...task, definition: { ...definition, phases } };

@@ -4,6 +4,13 @@ import { buildPreview, createToolTitleTracker } from "./agent-utils.js";
 import type { ToolCallSummaryResolver } from "../../../tool-call-summary.js";
 import { optimizerFactContextKind, optimizerOperationKind } from "./optimizer-activity.js";
 
+/** Count LF-delimited lines without allocating every substring in the output. */
+function countOutputLines(text: string): number {
+  let lines = 1;
+  for (let at = text.indexOf("\n"); at !== -1; at = text.indexOf("\n", at + 1)) lines++;
+  return lines;
+}
+
 /** Projection of the public pi-durable conversation watch onto existing web events. */
 export interface NativeTurnViewChannel {
   publishInput?(sourceId:string):void;
@@ -16,7 +23,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
   let runId: number | undefined, base: Record<string, unknown> | undefined;
   let thought = "", draft = "", completedThought = "", completedDraft = "", partialThought = "", partialDraft = "";
   let operationId = "", lastTool: Record<string, unknown> | undefined;
-  const tools = new Map<string, { signature: string; payload: Record<string, unknown> }>();
+  const tools = new Map<string, { signature: string; output: string; payload: Record<string, unknown> }>();
   const delegates = new Map<string, ReturnType<typeof readNativeDelegateProgress>>();
   const titles = createToolTitleTracker();
   let queuedIds=new Set<number>();
@@ -67,7 +74,11 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
     for(const id of queuedIds)if(!nextQueuedIds.has(id))channel.broadcastEvent("agent_followup_consumed",{chat_jid:chat,row_id:id});
     queuedIds=nextQueuedIds;queued=inbox.length;
     if (!live.run) {
-      runId = undefined; optimizerFrontier = 0; titles.clear();
+      runId = undefined; operationId = ""; optimizerFrontier = 0; titles.clear();
+      // The buffer store owns expand/readback. This projection has no further
+      // use for the previous turn's full strings, signatures or tool payloads.
+      thought = draft = completedThought = completedDraft = partialThought = partialDraft = "";
+      lastTool = undefined; tools.clear(); delegates.clear();
       if (live.compactions?.length) {
         base = undefined;
         status({ type: "intent", state: "active", title: "Compacting context", phase: "compaction", intent_key: "compaction",
@@ -142,7 +153,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
     const activeTools = slots.filter((slot: any) => slot.status !== "done").map((slot: any) => ({
       tool_call_id: slot.callId, tool_name: slot.name, title: titles.remember(slot.callId, slot.name, slot.arguments ?? (calls.get(slot.callId) as any)?.arguments, summaries), status: slot.status,
       ...(slot.arguments ? { tool_args: slot.arguments } : {}),
-      ...(slot.output ? { output_preview: slot.output.slice(-4000), output_preview_lines: slot.output.split("\n").length } : {}),
+      ...(slot.output ? { output_preview: slot.output.slice(-4000), output_preview_lines: countOutputLines(slot.output) } : {}),
     }));
     let currentTool: Record<string, unknown> | undefined;
     for (const slot of slots) {
@@ -153,14 +164,16 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
       const call: any = calls.get(slot.callId);
       const args = slot.arguments ?? call?.arguments;
       // Diagnostics and live/committed slot shape changes are not UI activity.
-      const signature = JSON.stringify([slot.name, slot.status, args, output]);
+      const signature = JSON.stringify([slot.name, slot.status, args]);
       const previous = tools.get(slot.callId);
-      if (previous?.signature === signature) { currentTool = previous.payload; continue; }
+      // Compare the actual string; serialising the entire output on each frame
+      // allocates another full copy even when the displayed tail did not move.
+      if (previous?.signature === signature && previous.output === output) { currentTool = previous.payload; continue; }
       currentTool = { type: output || slot.status === "done" ? "tool_status" : "tool_call", title: titles.remember(slot.callId, slot.name, args, summaries), tool_call_id: slot.callId, tool_name: slot.name,
         tool_args: args, status: slot.status, active_tools: activeTools, active_tool_count: activeTools.length, last_event_at: new Date().toISOString(),
         ...(delegateProgress.length ? { delegate_progress: delegateProgress } : {}),
-        ...(output ? { output_preview: output.slice(-16000), output_preview_lines: output.split("\n").length } : {}) };
-      tools.set(slot.callId, { signature, payload: currentTool });
+        ...(output ? { output_preview: output.slice(-16000), output_preview_lines: countOutputLines(output) } : {}) };
+      tools.set(slot.callId, { signature, output, payload: currentTool });
       status(currentTool);
     }
     if (currentTool) lastTool = { ...currentTool, active_tools: activeTools, active_tool_count: activeTools.length };
