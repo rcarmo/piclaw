@@ -687,6 +687,22 @@ for (const method of ["stream", "streamSimple", "complete", "completeSimple"] as
   });
 }
 
+test("chat transcript detachment preserves JSON projection and provider ownership", async () => {
+  const f = await fixture();
+  const ctx = structuredClone(context);
+  const message = ctx.messages[0]!;
+  const metadata = { empty: undefined, array: [undefined, -0, 'unchanged'], ...JSON.parse('{"__proto__":{"own":true}}') };
+  Object.defineProperty(message, 'fixtureMetadata', { value: metadata, enumerable: true });
+  const expected = JSON.parse(JSON.stringify(metadata));
+  const pending = f.models.completeSimple(f.model, ctx);
+  metadata.array[2] = 'caller changed';
+  expect((await pending).stopReason).toBe('toolUse');
+  const captured = (f.captured().context as { messages: Record<string, unknown>[] }).messages.find(item => Object.hasOwn(item, 'fixtureMetadata'));
+  expect(captured?.fixtureMetadata).toEqual(expected);
+  expect(Object.hasOwn(captured?.fixtureMetadata as object, '__proto__')).toBe(true);
+  expect(Object.getPrototypeOf(captured?.fixtureMetadata)).toBe(Object.prototype);
+});
+
 test("image capability: authorization, real post-auth fence, and accepted SQLite recovery", async () => {
   const image = { type: "image" as const, data: "c3ludGhldGlj", mimeType: "image/png" };
   // Registration starts a background availability refresh even with refreshOnCreate:false.

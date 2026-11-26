@@ -1,7 +1,7 @@
 import type { HostCodexModelServices } from "./host-codex-model-services.js";
 import { createLogger } from "../../src/utils/logger.js";
 import { taskModelRequestScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
-import { isPromise } from "node:util/types";
+import { isPromise, isProxy } from "node:util/types";
 import { classifyModelFailure, modelFailureDetail, type ModelFailure, type ModelFailurePhase } from "./host-model-failure.js";
 import { modelFailureUpstreamMessage, type ModelFailureEvidence } from "./host-model-failure-evidence.js";
 const log = createLogger("durable.models");
@@ -82,6 +82,39 @@ function data<T>(value: T): T {
     if (typeof item === "function") throw new Error("Callbacks are not qualified");
     return item;
   }));
+}
+const cannotCopy = Symbol("requires JSON projection");
+/** Detach plain transcript/payload containers without encoding their strings a
+ * second time. Exotic values still go through the existing JSON-only guard. */
+function copyRequestData<T>(value: T): T {
+  const ancestors = new Set<object>();
+  const copy = (item: unknown): unknown => {
+    if (item === null || typeof item === "string" || typeof item === "boolean") return item;
+    if (typeof item === "number" && Number.isFinite(item)) return item === 0 ? 0 : item;
+    if (!item || typeof item !== "object" || isProxy(item) || ancestors.has(item)) return cannotCopy;
+    const array = Array.isArray(item);
+    if (Object.getPrototypeOf(item) !== (array ? Array.prototype : Object.prototype) || "toJSON" in item) return cannotCopy;
+    const keys = Object.keys(item);
+    if (array && keys.length !== item.length) return cannotCopy;
+    const result: Record<string, unknown> | unknown[] = array ? [] : {};
+    ancestors.add(item);
+    try {
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i]!;
+        if (array && key !== String(i)) return cannotCopy;
+        const descriptor = Object.getOwnPropertyDescriptor(item, key);
+        if (!descriptor || !("value" in descriptor)) return cannotCopy;
+        if (descriptor.value === undefined && !array) continue;
+        const child = descriptor.value === undefined ? null : copy(descriptor.value);
+        if (child === cannotCopy) return cannotCopy;
+        // Define data properties, including __proto__, without invoking setters.
+        Object.defineProperty(result, key, { value: child, enumerable: true, writable: true, configurable: true });
+      }
+      return result;
+    } finally { ancestors.delete(item); }
+  };
+  const detached = copy(value);
+  return detached === cannotCopy ? data(value) : detached as T;
 }
 function freeze<T>(value: T): T {
   if (value && typeof value === "object") {
@@ -329,7 +362,9 @@ export function createHostModels(
         scope = taskModelRequestScope(options?.signal);
         const sourceSignal = scope?.signal ?? options?.signal;
         model = validatedChatModel(model);
-        context = freeze(data(context));
+        // This detached relay-owned snapshot is never passed to the authority
+        // hooks. Transfer it to the host at dispatch instead of serialising again.
+        context = copyRequestData(context);
         if (deferred) {
           phase = "admission";
           if (!hostModelRuntime120.streamDeferred) throw new Error("Host operation unavailable");
@@ -402,7 +437,7 @@ export function createHostModels(
             // Pi1.5 supplies this task-bound hook even without extension hooks.
             // Call it within its own island with detached data. The existing
             // host bridge does not authorise provider-body replacement.
-            const original=freeze(data(payload));
+            const original=freeze(copyRequestData(payload));
             const result=await sdkPayload(original,freeze(data(model)));
             signal.throwIfAborted();assertSource();policy.assertCurrent(ref,'chat',signal);assertPhysicalCompatible();
             if(result!==undefined&&JSON.stringify(data(result))!==JSON.stringify(original))throw Error('Provider payload replacement is not qualified');
@@ -417,7 +452,7 @@ export function createHostModels(
         } };
         // Let the SDK project tool-only image placeholders without changing the
         // committed history, provider-specific framing or accepted user inputs.
-        const request = data(context);
+        const request = context;
         // Reply metadata is an SDK-private tool detail. Only the owning native
         // generation sees it, and old replies never refill a future turn's context.
         const lastUser = request.messages.findLastIndex(message=>message.role==='user');
@@ -678,7 +713,7 @@ export function createHostModels(
       if (chatMethods.has(String(key))) return (model: Model<Api>, context: TranscriptContext, options?: SimpleStreamOptions) => {
         const safeModel = validatedChatModel(model);
         const safeOptions = requestOptions(options, !!policy.deferred);
-        const transcript=freeze(data(context)),request={...safeOptions,signal:options?.signal};
+        const transcript=freeze(copyRequestData(context)),request={...safeOptions,signal:options?.signal};
         return Reflect.apply(value, target, [safeModel, transcript, request]);
       };
       return typeof value === "function" ? value.bind(target) : value;
