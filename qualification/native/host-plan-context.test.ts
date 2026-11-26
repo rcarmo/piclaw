@@ -492,7 +492,14 @@ test("request-local Goal instructions survive shallow copies but reject forged, 
   const result = await materializePlanContext(conversation, 13 as TaskId, "web:plan", [...owned],
     [{ type: "text", text: "Current Plan" }], () => {}, context);
   expect(result).toEqual(owned); expect(result.at(-1)).toBe(owned.at(-1));
+  // Equal JSON is admissible even when a caller retains optional undefined
+  // properties. Changing JSON key order or text is still a different cutoff.
+  const equivalent = [{ ...model[0]!, optional: undefined }];
+  expect(await materializePlanContext(conversation, 13 as TaskId, "web:plan", equivalent,
+    [{ type: "text", text: "Current Plan" }], () => {}, context)).toEqual(equivalent);
   for (const request of [JSON.parse(JSON.stringify(owned)), [...owned, owned.at(-1)!],
+    [{ timestamp: 0, role: "user" as const, content: model[0]!.content } as Message],
+    [{ role: "user" as const, content: [{ type: "text" as const, text: "Edited Plan" }], timestamp: 0 }],
     withGoalSystemInstructions(model, "Trusted Goal rules", "web:other", 13),
     withGoalSystemInstructions(model, "Trusted Goal rules", "web:plan", 14)]) {
     await expect(materializePlanContext(conversation, 13 as TaskId, "web:plan", request,

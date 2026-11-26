@@ -1,6 +1,7 @@
 import { LiveDoc, type Conversation, type EntryRecord, type TaskId } from "@earendil-works/pi-durable";
 import type { Message, UserMessage } from "@earendil-works/pi-ai";
 import type { Context } from "@earendil-works/chord/context";
+import { isBoxedPrimitive, isProxy } from "node:util/types";
 
 export const hostPlanContextKind = "host.plan-context";
 export const hostGoalContextKind = "host.goal-context";
@@ -61,6 +62,27 @@ export async function materializeGoalContext(conversation: Conversation, taskId:
   request: readonly Message[], content: UserMessage["content"], identity: GoalContextIdentity, assertCurrent: () => void, context: Context): Promise<readonly Message[]> {
   return materializePromptContext(conversation, taskId, chatJid, request, content, assertCurrent, context, {kind:hostGoalContextKind, owner:"host:goal-prompt", label:"Goal", identity});
 }
+/** Prove the common case of equal, plain JSON without building either encoded
+ * string. Fall back to the existing comparison for any unproven case, including
+ * alternate JSON representations, accessors and custom serialization. */
+function samePlainJson(left: unknown, right: unknown, depth = 0): boolean {
+  if (left === null || typeof left === "string" || typeof left === "boolean" ||
+    typeof left === "number" || left === undefined) return left === right;
+  if (depth === 128 || !left || !right || typeof left !== "object" || typeof right !== "object" ||
+    isProxy(left) || isProxy(right) || isBoxedPrimitive(left) || isBoxedPrimitive(right)) return false;
+  const array = Array.isArray(left), rightArray = Array.isArray(right);
+  const prototype = array ? Array.prototype : Object.prototype;
+  if (array !== rightArray || Object.getPrototypeOf(left) !== prototype || Object.getPrototypeOf(right) !== prototype ||
+    "toJSON" in left || "toJSON" in right) return false;
+  const keys = Object.keys(left), other = Object.keys(right);
+  if (keys.length !== other.length || (array && rightArray && (keys.length !== left.length || keys.length !== right.length))) return false;
+  return keys.every((key, index) => {
+    if (key !== other[index] || (array && key !== String(index))) return false;
+    const a = Object.getOwnPropertyDescriptor(left, key), b = Object.getOwnPropertyDescriptor(right, key);
+    return !!a && !!b && "value" in a && "value" in b && samePlainJson(a.value, b.value, depth + 1);
+  });
+}
+
 async function materializePromptContext(conversation: Conversation, taskId: TaskId, chatJid: string,
   request: readonly Message[], content: UserMessage["content"], assertCurrent: () => void, context: Context,
   snapshot: {kind:string;owner:string;label:string;identity?:GoalContextIdentity}): Promise<readonly Message[]> {
@@ -70,7 +92,8 @@ async function materializePromptContext(conversation: Conversation, taskId: Task
   const encoded = (messages: readonly Message[]) => JSON.stringify(messages);
   const composed = splitGoalSystemInstructions(request, chatJid, taskId);
   request = composed.messages;
-  if (request.length > view.messages.length || encoded(view.messages.slice(0, request.length)) !== encoded(request))
+  const prefix = view.messages.slice(0, request.length);
+  if (request.length > view.messages.length || (!samePlainJson(prefix, request) && encoded(prefix) !== encoded(request)))
     throw Error(`Unknown ${snapshot.label} request cutoff`);
   let trailing = 0;
   for (let index = view.entries.length - 1; index >= 0; index--) {
