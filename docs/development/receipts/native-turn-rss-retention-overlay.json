@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "sourceParent": "5550b054d3c6e08cfe9b6f7ce3493f6e611344bc",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlay": "docs/development/receipts/delegate-whitelist-retention-overlay.json",
+  "previousOverlaySha256": "c0246fa9d090cf0427a10e8a5189d50e321b5dc664c509fbff7ff242a3c26059",
+  "scope": "Native turn RSS allocation reductions only; original paths, deletions and retirement accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/host-models.ts",
+      "beforeSha256": "910ab2a3dc704a85ab68ad7ab189cab1655db5950e9b46e40ea309a7f6a98696",
+      "afterSha256": "f90bc5a5f14c0eacca91b455a734e5488e21e311cba47e1cb35cb8a414f03932",
+      "purpose": "Detach plain JSON requests without encoding transcript text and avoid re-encoding unchanged frozen provider-hook results."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-plan-context.ts",
+      "beforeSha256": "2c861195447520c053dd19f7c229691548817a9826bf32c07fe2f4da76dfd86f",
+      "afterSha256": "ec02d622e3407da76dbf0ea8c958aab4618e9f334a2c9cfafac7beeefa1b5904",
+      "purpose": "Reuse the live SDK context and prove the exact Plan and Goal request prefix without encoding both full transcripts."
+    }
+  ]
+}
