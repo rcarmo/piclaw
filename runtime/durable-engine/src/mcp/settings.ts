@@ -32,8 +32,8 @@ export function createMcpSettingsHandler(service:ReturnType<typeof createApplica
    if(current?.revision!==config.revision||current.accessEpoch!==config.accessEpoch)throw new McpConnectionConflictError('The connection changed; reload before signing in or out.');
   };
   try{
-   check();await principal!.listTargets();check();
-   const snapshot=()=>({ok:true,workspaceId:service.workspaceId,connections:service.connections.list().map(row=>({...row,status:service.mcp.status(row.id)})),agents:database.query<{id:string;label:string},[]>('SELECT branch_id AS id,agent_name AS label FROM chat_branches WHERE archived_at IS NULL ORDER BY agent_name,branch_id').all(),migration:service.migration,defaults:{recall:defaultMcpRecallSettings()}});
+   check();
+   const snapshot=()=>({ok:true,connections:service.connections.list().map(row=>({...row,status:service.mcp.status(row.id)})),migration:service.migration,defaults:{recall:defaultMcpRecallSettings()}});
    const url=new URL(request.url),cookieName=(id:string)=>'mcp_oauth_'+createHash('sha256').update(id).digest('hex').slice(0,20);
    const callback=(id:string)=>{const target=new URL(base+'/oauth/callback',url.origin);target.searchParams.set('id',id);return target.href;};
    const cookie=(id:string,value:string,expire=false)=>`${cookieName(id)}=${value}; Path=${base}/oauth/callback; HttpOnly; SameSite=Lax; Max-Age=${expire?0:600}${url.protocol==='https:'?'; Secure':''}`;
@@ -48,14 +48,15 @@ export function createMcpSettingsHandler(service:ReturnType<typeof createApplica
    if(request.method==='GET')return json(snapshot());if(request.method!=='POST')return json({error:'Method not allowed'},405);
    const input=await readSettingsBody(request);check();const id=typeof input.id==='string'?input.id:'',previous=service.connections.credential(id);
    if(input.action==='save'){
-    if(!object(input.connection)||typeof input.connection.id!=='string'||!Number.isInteger(input.expectedRevision))throw new McpSettingsBodyError(400,'Connection and expected revision required.');
+    const fields=input.connection;
+    if(!object(fields)||typeof fields.id!=='string'||!Number.isInteger(input.expectedRevision)||['workspaceId','agentIds','access'].some(key=>Object.hasOwn(fields,key)))throw new McpSettingsBodyError(400,'Connection and expected revision required.');
     const clear=input.clear??[],removeEnvironment=input.removeEnvironment??[];
     if(!Array.isArray(clear)||clear.length>clearable.size||clear.some(key=>typeof key!=='string'||!clearable.has(key)))throw new McpSettingsBodyError(400,'Choose valid connection fields to clear.');
     if(!Array.isArray(removeEnvironment)||removeEnvironment.length>128||removeEnvironment.some(key=>typeof key!=='string'||mcpEnvironmentNameIssue(key)))throw new McpSettingsBodyError(400,'Use valid environment names to remove saved entries.');
-    const prior=service.connections.credential(input.connection.id),value={...prior,...input.connection};delete value.revision;delete value.accessEpoch;
-    if(prior?.env&&input.connection.env===undefined)value.env=prior.env;
-    if(prior?.bearerTokenKeychain&&input.connection.bearerTokenKeychain===undefined)value.bearerTokenKeychain=prior.bearerTokenKeychain;
-    if(prior?.oauth&&object(input.connection.oauth))value.oauth={...prior.oauth,...input.connection.oauth};
+    const prior=service.connections.credential(fields.id),value={...prior,...fields,workspaceId:prior?.workspaceId??service.workspaceId};delete value.revision;delete value.accessEpoch;
+    if(prior?.env&&fields.env===undefined)value.env=prior.env;
+    if(prior?.bearerTokenKeychain&&fields.bearerTokenKeychain===undefined)value.bearerTokenKeychain=prior.bearerTokenKeychain;
+    if(prior?.oauth&&object(fields.oauth))value.oauth={...prior.oauth,...fields.oauth};
     if(clear.includes('workdir'))delete value.workdir;
     if(clear.includes('environment'))delete value.env;
     else if(removeEnvironment.length&&object(value.env)){value.env={...value.env};for(const key of removeEnvironment)delete value.env[key];}

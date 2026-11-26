@@ -39,7 +39,7 @@ const scripts = {
 async function measure(count:number,mode:typeof modeOptions[number],strategy:'broad'|'targeted',pass:number){
  const dir=mkdtempSync(join(tmpdir(),'mcp-context-bench-')),file=join(dir,'bench.sqlite');
  const db=new Database(file,{create:true});db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL');
- const connectionStore=new McpConnectionStore(db,()=>{}),config=await connectionStore.save({...owner,workspaceId:'bench',agentIds:['agent'],enabled:true,transport:'http',url:'https://fixture.invalid/mcp',auth:'none',allowHttp:false,timeoutSeconds:2,recall:{...defaultMcpRecallSettings(),mode}});
+ const connectionStore=new McpConnectionStore(db,()=>{}),config=await connectionStore.save({...owner,workspaceId:'bench',enabled:true,transport:'http',url:'https://fixture.invalid/mcp',auth:'none',allowHttp:false,timeoutSeconds:2,recall:{...defaultMcpRecallSettings(),mode}});
  let calls=0,requestBytes=0,estimatedTokens=0,emittedBytes=0,rounds=0,checkpointBytes=0;
  const sizeCheckpoints=()=>db.query<{n:number},[]>(`SELECT coalesce(sum(octet_length(r.content)),0) n FROM document_revisions r JOIN documents d ON d.id=r.document_id WHERE json_extract(d.record,'$.kind') IN ('pi.codemode.run','pi.codemode.journal')`).get()!.n;
  const client={async callTool(name:string){assert.equal(name,'records_0');calls++;return {content:[{type:'text',text:json}],structuredContent:data};}} as unknown as McpClient;
@@ -47,7 +47,7 @@ async function measure(count:number,mode:typeof modeOptions[number],strategy:'br
  const sandbox=new CodemodeSandbox();let harness:Harness|undefined;
  registry.install(defineExtension({name:'fixture.benchmark',tools:[createMcpCodemodeTool(sandbox)],hooks:[hook(ToolTask,{afterTool(call){if(call.name==='codemode')checkpointBytes=Math.max(checkpointBytes,sizeCheckpoints());}})]}));
  registry.install(mcpToolsExtension(config,catalog(count),async()=>client));
- registry.install(createMcpRecallExtension({workspaceId:'bench',harness:()=>harness!,connections:connectionStore,identityOf:async()=>({owner:'bench:agent',agentId:'agent'}),database:applicationRetainedDatabase(db,()=>{})}));
+ registry.install(createMcpRecallExtension({harness:()=>harness!,connections:connectionStore,identityOf:async()=>({owner:'bench:agent',agentId:'agent'}),database:applicationRetainedDatabase(db,()=>{})}));
  const request=(handler:(text:string)=>ReturnType<typeof fauxAssistantMessage>)=> ({messages}:TranscriptContext)=>{
    rounds++;requestBytes+=Buffer.byteLength(JSON.stringify(messages));estimatedTokens+=messages.reduce((total,message)=>total+estimateMessageTokens(message),0);
    const tool=messages.findLast(message=>message.role==='toolResult');

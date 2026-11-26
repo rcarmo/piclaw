@@ -15,8 +15,9 @@ afterAll(async()=>{for(const browser of browsers.values())await browser.close();
 for(const engine of ['chromium','webkit'])for(const width of [1280,390,320])for(const colorScheme of ['light','dark'] as const)
 browserTest(`Classic cutover ${engine}/${width}/${colorScheme}: reference-safe MCP after optimiser removal`,async()=>{
  const workspaceId='fixture_workspace',mcpPosts:any[]=[];let revision=1;
- let connection:any={id:'fixture',name:'fixture',workspaceId,agentIds:[],enabled:false,transport:'http',url:'https://fixture.invalid/mcp',auth:'bearer',bearerTokenKeychain:'SAVED_REFERENCE_NOT_IN_BROWSER',allowHttp:false,timeoutSeconds:30,recall:defaultMcpRecallSettings(),access:{kind:'workspaces',grants:[{workspaceId,agentIds:['default']},{workspaceId:'foreign_workspace',agentIds:['foreign_agent']}]}};
- const mcpSnapshot=()=>{const{bearerTokenKeychain,...publicRow}=connection;return{ok:true,workspaceId,connections:[{...publicRow,revision,hasSavedCredentials:!!bearerTokenKeychain,environmentNames:[],needsCredentialApproval:false}],agents:[{id:'default',label:'Default'}],defaults:{recall:defaultMcpRecallSettings()}};};
+ let connection:any={id:'fixture',name:'fixture',workspaceId,enabled:false,transport:'http',url:'https://fixture.invalid/mcp',auth:'bearer',bearerTokenKeychain:'SAVED_REFERENCE_NOT_IN_BROWSER',allowHttp:false,timeoutSeconds:30,recall:defaultMcpRecallSettings()};
+ const second={...connection,id:'extra',name:'other_server',enabled:true,auth:'none',bearerTokenKeychain:undefined};
+ const mcpSnapshot=()=>{return{ok:true,connections:[connection,second].map(({bearerTokenKeychain,workspaceId,...row})=>({...row,revision,hasSavedCredentials:!!bearerTokenKeychain,environmentNames:[],needsCredentialApproval:false}))};};
  const server=Bun.serve({hostname:'127.0.0.1',port:0,async fetch(req){
   const path=new URL(req.url).pathname;
   if(path==='/fixture.js')return new Response(bundle,{headers:{'Content-Type':'text/javascript'}});
@@ -31,23 +32,41 @@ browserTest(`Classic cutover ${engine}/${width}/${colorScheme}: reference-safe M
  }});
  const page=await browsers.get(engine)!.newPage({viewport:{width,height:900},hasTouch:width<600,colorScheme});
  await page.addInitScript(()=>Object.defineProperty(globalThis.crypto,'randomUUID',{configurable:true,value:undefined}));
- const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+ const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(5000);
  await page.route('**/*',route=>new URL(route.request().url()).origin===server.url.origin?route.continue():route.abort());
  const checkWidth=async()=>{const dimensions=await page.evaluate(()=>({width:document.documentElement.clientWidth,scroll:document.documentElement.scrollWidth}));expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.width+1);};
  try{
-  await page.goto(server.url.href);await page.getByLabel('Name',{exact:true}).waitFor();expect(await page.evaluate(()=>typeof crypto.randomUUID)).toBe('undefined');expect(await page.getByLabel('Bearer token keychain reference').inputValue()).toBe('');expect(await page.locator('body').innerText()).not.toContain('SAVED_REFERENCE_NOT_IN_BROWSER');expect(mcpPosts).toEqual([]);
+  await page.goto(server.url.href);
+  await page.waitForFunction(()=>{const name=document.querySelector<HTMLInputElement>('input[id$="name"]');return name?.value==='fixture'&&!name.disabled;});expect(await page.evaluate(()=>typeof crypto.randomUUID)).toBe('undefined');expect(await page.getByLabel('Bearer token keychain reference').inputValue()).toBe('');expect(await page.locator('body').innerText()).not.toContain('SAVED_REFERENCE_NOT_IN_BROWSER');expect(mcpPosts).toEqual([]);
   await page.getByLabel('Name',{exact:true}).fill('renamed');const save=page.getByRole('button',{name:'Save connection',exact:true});if(width<600)await save.tap();else{await save.focus();await page.keyboard.press('Space');}
-  await page.waitForFunction(()=>!(document.querySelector('input[id$="name"]') as HTMLInputElement)?.disabled);expect(mcpPosts).toHaveLength(1);expect(mcpPosts[0].connection).not.toHaveProperty('bearerTokenKeychain');expect(mcpPosts[0].approveCredentialReuse).toBe(false);expect(connection.bearerTokenKeychain).toBe('SAVED_REFERENCE_NOT_IN_BROWSER');expect(connection.recall).toEqual(defaultMcpRecallSettings());expect(connection.access.grants).toEqual([{workspaceId:'foreign_workspace',agentIds:['foreign_agent']},{workspaceId,agentIds:['default']}]);
+  await page.getByRole('heading',{name:'Server settings: renamed',exact:true}).waitFor();
+  await page.waitForFunction(()=>!(document.querySelector('input[id$="name"]') as HTMLInputElement)?.disabled);expect(mcpPosts).toHaveLength(1);expect(mcpPosts[0].connection).not.toHaveProperty('bearerTokenKeychain');expect(mcpPosts[0].approveCredentialReuse).toBe(false);expect(connection.bearerTokenKeychain).toBe('SAVED_REFERENCE_NOT_IN_BROWSER');expect(connection.recall).toEqual(defaultMcpRecallSettings());for(const field of ['workspaceId','agentIds','access','recall'])expect(mcpPosts[0].connection).not.toHaveProperty(field);
   const name=page.getByLabel('Name',{exact:true});await name.fill('unsaved edit');
   const reconnect=page.getByRole('button',{name:'Reconnect',exact:true});await reconnect.focus();await page.keyboard.press('Enter');
   await page.waitForFunction(()=>(document.querySelector('input[id$="name"]') as HTMLInputElement)?.value==='unsaved edit'&&!(document.querySelector('input[id$="name"]') as HTMLInputElement)?.disabled);
   expect(mcpPosts.at(-1).action).toBe('reconnect');
-  page.once('dialog',dialog=>dialog.dismiss());await page.getByRole('button',{name:'New connection',exact:true}).click();expect(await name.inputValue()).toBe('unsaved edit');
-  await page.getByRole('button',{name:'New connection',exact:true}).focus();
-  expect(await page.getByRole('button',{name:'New connection',exact:true}).evaluate(node=>node===document.activeElement)).toBe(true);
+  const picker=page.getByLabel('Server',{exact:true});
+  expect(await picker.locator('option').allTextContents()).toEqual(['Choose a server','renamed — Disabled','other_server']);
+  page.once('dialog',dialog=>dialog.dismiss());await picker.selectOption('extra');
+  expect(await picker.inputValue()).toBe('fixture');expect(await name.inputValue()).toBe('unsaved edit');
+  page.once('dialog',dialog=>dialog.accept());await picker.selectOption('extra');
+  await page.getByRole('heading',{name:'Server settings: other_server'}).waitFor();
+  expect(await name.inputValue()).toBe('other_server');expect(await name.count()).toBe(1);
+  await picker.selectOption('fixture');await page.waitForFunction(()=>(document.querySelector('input[id$="name"]') as HTMLInputElement)?.value==='renamed');
+  const add=page.getByRole('button',{name:'Add server',exact:true});await add.focus();await page.keyboard.press('Enter');
+  await page.getByRole('heading',{name:'New server',exact:true}).waitFor();
+  await page.waitForFunction(()=>{
+   const name=document.querySelector<HTMLInputElement>('input[id$="name"]');
+   const picker=document.querySelector<HTMLSelectElement>('select[id$="server"]');
+   return name?.value===''&&picker?.value==='';
+  });
+  expect(await name.inputValue()).toBe('');expect(await picker.inputValue()).toBe('');
+  expect(await add.evaluate(node=>node===document.activeElement)).toBe(true);
+  await picker.selectOption('fixture');
+  await page.getByRole('heading',{name:'Server settings: renamed'}).waitFor();
+  for(const label of ['Workspace','Access','Selected Agents','Recall'])expect(await page.getByLabel(label,{exact:true}).count()).toBe(0);
   mcpPosts.splice(1);
-  await page.getByLabel('Default',{exact:true}).uncheck();await save.click();await page.getByRole('alert').filter({hasText:'Select at least one Agent'}).waitFor();expect(mcpPosts).toHaveLength(1);
-  await page.getByLabel('Transport',{exact:true}).selectOption('stdio');await page.getByLabel('Command',{exact:true}).fill('[123]');await page.getByLabel('Access',{exact:true}).selectOption('workspace');await save.click();await page.getByRole('alert').filter({hasText:'Command must be a valid JSON string array'}).waitFor();expect(mcpPosts).toHaveLength(1);await checkWidth();
+  await page.getByLabel('Transport',{exact:true}).selectOption('stdio');await page.getByLabel('Command',{exact:true}).fill('[123]');await save.click();await page.getByRole('alert').filter({hasText:'Command must be a valid JSON string array'}).waitFor();expect(mcpPosts).toHaveLength(1);await checkWidth();
   expect(await page.getByText('Optimisation mode',{exact:true}).count()).toBe(0);expect(errors).toEqual([]);
  }finally{await page.close();server.stop(true);}
 },30000);

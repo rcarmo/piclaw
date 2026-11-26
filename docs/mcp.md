@@ -6,16 +6,16 @@ This page covers outbound connections. The inbound CLI/control MCP server is out
 
 ## Add a connection
 
-Open **Settings → MCP**, select **New connection**, and enter a name containing letters, digits or underscores. Choose Streamable HTTP or POSIX stdio, the access scope, authentication and timeout. Save the connection, then check its discovery status.
+Open **Settings → MCP**. Use **Server** to choose an existing server, or **Add server** to start a new one. The editor below the picker shows only that server. Enter a name containing letters, digits or underscores, choose Streamable HTTP or POSIX stdio, then set the connection details and timeout. Save the connection and check its discovery status.
 
 - HTTP supports explicit anonymous access, a bearer token reference, or OAuth.
 - Stdio takes a JSON array of executable arguments, an absolute working directory and an optional environment object. It runs without a shell or ambient host credentials.
-- Stdio has one execution workspace. HTTP can have explicit workspace and Agent grants, or an all-workspaces grant.
-- Names must be unique where workspace grants overlap. Up to 100 connections can be configured.
+- Stdio still runs on the configured instance with its bound working directory and command credentials.
+- New server names must be unique in the instance. Up to 100 servers can be configured.
 
 The adapter exposes tool calls, resource and template listings, and resource reads. The pinned SDK negotiates MCP `2025-11-25`, `2025-06-18`, `2025-03-26` and `2024-11-05`. Legacy HTTP+SSE, protocol prompt list/get, sampling, elicitation and resource subscriptions are not exposed. Protocol prompts are distinct from Piclaw’s Code Mode guidance.
 
-An empty **Selected Agents** list does not save as a broad grant. Choose **This workspace, all Agents** explicitly if that is the intended scope. SDK tool filters and Delegate capability limits still apply. Task-owned children and unrouted SDK forks do not acquire MCP access through their parent.
+Enabled servers are available instance-wide. Older workspace and Agent grants no longer limit enabled servers. Disabled servers stay disabled; credentials and server IDs are unchanged. SDK tool filters and Delegate capability limits still apply. Task-owned children and unrouted SDK forks do not acquire MCP access through their parent.
 
 Saving a configuration does not interrupt or replay a tool effect. Revision checks reject stale saves and removals. **Reconnect** repeats discovery, not the last tool call.
 
@@ -52,7 +52,7 @@ The callback binds the connection/workspace/endpoint, redirect URL, browser cook
 
 ## Discover and call tools
 
-MCP tools and resources are available through Code Mode, not declared inline in model requests. Use `searchTools()` to find tools for the task and `describeTool()` to inspect a specific schema. Discovery and invocation both enforce the current Agent grant. The old `mcp({tool,args})` proxy and engine-switching controls are retired.
+MCP tools and resources are available through Code Mode, not declared inline in model requests. Use `searchTools()` to find tools for the task and `describeTool()` to inspect a specific schema. Discovery and invocation both check the current connection and conversation authority. The old `mcp({tool,args})` proxy and engine-switching controls are retired.
 
 For a server named `knowledge` with a remote `read` tool:
 
@@ -67,13 +67,13 @@ Code Mode receives the original structured value. Keep discovery and filtering i
 
 To use resources, search for the server’s **List resources and URI templates** and **Read a discovered resource URI** helpers. Inspect their schemas and use the discovered names. For example, call the read helper with `{uri: "memory://catalog"}` when the server advertises that URI.
 
-Tool discovery, resource reads and calls recheck the current grant. A cached schema does not grant authority. Setup retries use1/5/15-second delays where appropriate; an unsuccessful or uncertain remote effect is not replayed.
+Tool discovery, resource reads and calls recheck current authority. A cached schema does not grant authority. Setup retries use1/5/15-second delays where appropriate; an unsuccessful or uncertain remote effect is not replayed.
 
 ## Recall and retained outputs
 
 Per-connection recall defaults **Off**. **Observe** records eligible retained copies without shortening model output; **Active** can shorten eligible MCP-only script results. Both keep committed source history intact. Errors and uncertain/truncated results remain unchanged.
 
-Recall requires the original owner, visible SDK branch history and current connection grant/credential epoch. Another Agent, workspace, sibling fork or revoked grant cannot retrieve the copy. Retention and item/byte limits apply to the index. Pinning only exempts an item from age expiry.
+Recall requires the original owner, visible SDK branch history and a current enabled connection with matching credential identity. Making a server instance-wide does not share its retained copies with other conversations. Retention and item/byte limits apply to the index. Pinning only exempts an item from age expiry.
 
 Code mode can search or page through an original without rerunning it:
 
@@ -85,7 +85,7 @@ const page = await tools.mcp_recall_retrieve({
 return { matches, page };
 ```
 
-`mcp_recall_manage` lists/stats, pins or forgets scoped copies. **Forget recall** in Settings removes this connection's retained copies in the current workspace. Original SDK history and other workspaces' copies remain.
+`mcp_recall_manage` lists/stats, pins or forgets scoped copies. Forgetting a copy leaves original SDK history intact.
 
 Existing non-MCP tool-output copies remain readable through `read_tool_output` and `search_tool_output`, with their original owner, branch and expiry checks. They are never recreated or pruned by the MCP adapter. Historical optimisation and Oversight records remain in the SDK journal; no new optimisation or Oversight work is created.
 
@@ -120,7 +120,7 @@ Stable IDs let an interrupted initial metadata import resume. Capacity and malfo
 
 The existing authenticated Core surface serves:
 
-- `GET /agent/settings/mcp`: redacted connections, status, Agent choices and migration diagnostics.
+- `GET /agent/settings/mcp`: redacted servers, status and migration diagnostics.
 - `POST /agent/settings/mcp`: `save`, `remove`, `reconnect`, `sign_in`, `sign_out` or `forget_recall`.
 - `GET /agent/settings/mcp/oauth/callback`: browser/state-bound OAuth completion.
 - `/agent/addons/api/token-optimizer/config`: instance-wide token optimisation and task oversight settings, and scoped maintenance actions.

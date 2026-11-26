@@ -67,7 +67,7 @@ export function mcpToolAlias(config:McpToolOwner,method:'tool'|'resource',remote
   const digest=createHash('sha256').update(JSON.stringify([config.id,config.name,destination,method,remote])).digest('hex').slice(0,24);
   return `mcp__v2_${label}_${digest}_v2`;
 }
-/** Register actual MCP tools behind code mode. Every call rechecks the grant and credential revision. */
+/** Register actual MCP tools behind code mode. Every call rechecks source authority and credential revision. */
 export function mcpToolsExtension(config:McpToolOwner,tools:readonly McpTool[],clientFor:(conversationId:ConversationId,context:Context) => Promise<McpClient>,onFailure?:(error:Error)=>void,authority?:Pick<McpAuthority,'invoke'>) {
   const details=(tool:string)=>({mcpConnectionId:config.id,mcpConnectionRevision:config.revision??0,mcpServer:config.name,mcpTool:tool});
   const registered = tools.map(tool => defineTool({

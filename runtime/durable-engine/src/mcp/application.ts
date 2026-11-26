@@ -22,7 +22,7 @@ export function createApplicationMcp(options:{root:Database;workspaceRoot:string
  let closed=false;
  const check=()=>{options.assertOwner();if(closed)throw Error('Application MCP adapter is closed');};
  const database=applicationRetainedDatabase(options.root,check),connections=new McpConnectionStore(options.root,check,mcpCredentialRevision);
- // MCP grants use the persisted branch lifetime, never its renameable friendly handle.
+ // MCP still requires an owned conversation, never a caller-provided friendly handle.
  async function identity(id:ConversationId,harness=options.harness()){
   check();const mapped=await options.bindings(harness);check();
   const bindings=mapped.filter(binding=>options.root.query('SELECT 1 FROM chat_branches WHERE chat_jid=? AND branch_id=? AND archived_at IS NULL').get(binding.chatJid,binding.branchId));
@@ -31,8 +31,8 @@ export function createApplicationMcp(options:{root:Database;workspaceRoot:string
    child=true;const parent=current.owner?.conversationId??current.parent?.conversationId;current=parent?await harness.commit(tx=>tx.conversation(parent),context):undefined;
   }return undefined;
  }
- const mcp=createMcpRuntime({workspaceId,registry:options.registry,store:connections,assertOwner:check,assertCleanupOwner:options.assertCleanupOwner,async resolveAgent(id){const owner=await identity(id);return owner?{agentId:owner.agentId,readOnly:owner.readOnly}:undefined;},captureSource:options.captureSource,connect(config,grant,signal){return connectMcpConnection(config,check,grant,signal,{id:workspaceId,root:workspaceRoot});}});
- const recall=createMcpRecallExtension({workspaceId,harness:options.harness,connections,database,async identityOf(id){const owner=await identity(id);check();if(!owner||owner.readOnly)throw Error('MCP recall identity unavailable');return{owner:JSON.stringify([workspaceId,environmentRevision,owner.binding.chatJid]),agentId:owner.agentId};}});
+ const mcp=createMcpRuntime({registry:options.registry,store:connections,assertOwner:check,assertCleanupOwner:options.assertCleanupOwner,async resolveAgent(id){const owner=await identity(id);return owner?{readOnly:owner.readOnly}:undefined;},captureSource:options.captureSource,connect(config,grant,signal){return connectMcpConnection(config,check,grant,signal,{id:workspaceId,root:workspaceRoot});}});
+ const recall=createMcpRecallExtension({harness:options.harness,connections,database,async identityOf(id){const owner=await identity(id);check();if(!owner||owner.readOnly)throw Error('MCP recall identity unavailable');return{owner:JSON.stringify([workspaceId,environmentRevision,owner.binding.chatJid]),agentId:owner.agentId};}});
  options.registry.install(recall);
  let migration:Awaited<ReturnType<typeof importLegacyMcpOnce>>|undefined;
  return{workspaceId,environmentRevision,connections,mcp,identity,get migration(){return migration;},

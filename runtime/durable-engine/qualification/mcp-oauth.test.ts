@@ -18,7 +18,7 @@ async function fixture(){
   if(url.pathname==='/mcp'){if(!['Bearer SYNTHETIC_ACCESS','Bearer SYNTHETIC_ROTATED'].includes(req.headers.get('authorization')??''))return new Response(null,{status:401,headers:{'www-authenticate':`Bearer resource_metadata="${issuer}/.well-known/oauth-protected-resource"`}});if(req.method==='GET')return new Response(null,{status:405});if(req.method==='DELETE')return new Response(null,{status:200});const rpc=await req.json() as {id?:number;method:string};if(rpc.id===undefined)return new Response(null,{status:202});return Response.json({jsonrpc:'2.0',id:rpc.id,result:rpc.method==='initialize'?{protocolVersion:'2025-03-26',capabilities:{tools:{}},serverInfo:{name:'oauth',version:'1'}}:{tools:[]}});}
   return new Response(null,{status:404});
  }});issuer=server.url.origin;cleanup.push(async()=>{server.stop(true);});
- const config:McpConnection={id:crypto.randomUUID(),name:'oauth',workspaceId:'workspace',agentIds:[],enabled:true,transport:'http',url:issuer+'/mcp',credentialUrl:issuer+'/mcp',auth:'oauth',allowHttp:true,timeoutSeconds:2,revision:1,accessEpoch:crypto.randomUUID()};
+ const config:McpConnection={id:crypto.randomUUID(),name:'oauth',workspaceId:'workspace',enabled:true,transport:'http',url:issuer+'/mcp',credentialUrl:issuer+'/mcp',auth:'oauth',allowHttp:true,timeoutSeconds:2,revision:1,accessEpoch:crypto.randomUUID()};
  const guard=()=>{if(!owner)throw Error('owner revoked');};
  return{config,guard,vault:new McpOAuthVault(config,guard),redirect:'http://localhost:3120/agent/settings/mcp/oauth/fixture/callback',setChallenge:(s:string)=>{challenge=s;},get exchanges(){return exchanges;},get refreshes(){return refreshes;},holdRefresh(gate:Promise<void>){refreshGate=gate;},revoke(){owner=false;}};
 }

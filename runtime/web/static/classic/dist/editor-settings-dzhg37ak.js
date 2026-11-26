@@ -1,4 +1,4 @@
-import{t,r,e}from"./app-1vedzwvv.js";import{Ct,Ie,f}from"./app-jq9cbedb.js";import{C}from"./app-jjd9y3e1.js";import{m}from"./app-y300gnye.js";import{s}from"./app-3fbwg9z4.js";function g(o,i){try{let c=localStorage.getItem(o);return c===null?i:c==="true"}catch{return i}}function d(o,i){try{localStorage.setItem(o,String(i))}catch(c){}}function k(o,i){try{return localStorage.getItem(o)||i}catch{return i}}function x(o,i){try{localStorage.setItem(o,i)}catch(c){}}function F(o,i,c,a){try{return Ie(localStorage.getItem(o),{fallback:i,min:c,max:a})}catch{return Ie(i,{fallback:i,min:c,max:a})}}function z(o,i){try{localStorage.setItem(o,String(i))}catch(c){}}function P(){let o=m("editor"),{t:i}=s(),[c,a]=t(()=>g("piclaw_vim_mode",!1)),[p,v]=t(()=>g("piclaw_show_whitespace",!0)),[h,u]=t(()=>g("piclaw_md_live_preview",!0)),[_,S]=t(()=>F("piclaw_editor_font_size",13,10,24)),[y,b]=t(()=>k("piclaw_editor_font_family","")),E=r((n,l,I)=>{let w=!l;I(w),d(n,w)},[]);return e`
+import{t,r,e}from"./app-1vedzwvv.js";import{Ct,Ie,m}from"./app-dknp27pq.js";import{C}from"./app-jjd9y3e1.js";import{f}from"./app-z2mfx7dw.js";import{s}from"./app-3fbwg9z4.js";function g(o,i){try{let c=localStorage.getItem(o);return c===null?i:c==="true"}catch{return i}}function d(o,i){try{localStorage.setItem(o,String(i))}catch(c){}}function k(o,i){try{return localStorage.getItem(o)||i}catch{return i}}function x(o,i){try{localStorage.setItem(o,i)}catch(c){}}function F(o,i,c,a){try{return Ie(localStorage.getItem(o),{fallback:i,min:c,max:a})}catch{return Ie(i,{fallback:i,min:c,max:a})}}function z(o,i){try{localStorage.setItem(o,String(i))}catch(c){}}function P(){let o=f("editor"),{t:i}=s(),[c,a]=t(()=>g("piclaw_vim_mode",!1)),[p,v]=t(()=>g("piclaw_show_whitespace",!0)),[h,u]=t(()=>g("piclaw_md_live_preview",!0)),[_,S]=t(()=>F("piclaw_editor_font_size",13,10,24)),[y,b]=t(()=>k("piclaw_editor_font_family","")),E=r((n,l,I)=>{let w=!l;I(w),d(n,w)},[]);return e`
         <div class="settings-section">
             <h3>${i("settings.editor.heading")}</h3>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
@@ -24,7 +24,7 @@ import{t,r,e}from"./app-1vedzwvv.js";import{Ct,Ie,f}from"./app-jq9cbedb.js";impo
             </div>
             <div class="settings-row settings-dense-row">
                 <label>${i("settings.editor.fontSize")}</label>
-                <${f}
+                <${m}
                     label=${i("settings.editor.fontSizeAria")}
                     value=${_}
                     min=${10}
@@ -44,5 +44,5 @@ import{t,r,e}from"./app-1vedzwvv.js";import{Ct,Ie,f}from"./app-jq9cbedb.js";impo
         </div>
     `}C({id:"editor",label:"Editor",icon:Ct,component:P,order:150});
 
-//# debugId=18817D85A6306B3864756E2164756E21
-//# sourceMappingURL=editor-settings-5ekamyzv.js.map
+//# debugId=12B876C56A4B090364756E2164756E21
+//# sourceMappingURL=editor-settings-dzhg37ak.js.map

@@ -2,14 +2,6 @@ import { html, useCallback, useEffect, useMemo, useRef, useState } from '../../v
 import { useSettingsFieldIds } from './field-ids.js';
 import { NumberStepper } from './number-stepper.js';
 
-const DEFAULT_RECALL = () => ({
-    mode: 'off',
-    maxAgeDays: 7,
-    maxItems: 128,
-    maxBytes: 8 * 1024 * 1024,
-    profiles: [],
-});
-
 function parseJsonArray(raw: string, fallback: string[] = []): string[] {
     const value = raw.trim();
     if (!value) return fallback;
@@ -42,16 +34,11 @@ function parseJsonObject(raw: string, fallback: Record<string, string> = {}): Re
 // Non-secret metadata IDs follow the existing upload/notification fallback for
 // LAN HTTP, where browsers do not expose crypto.randomUUID.
 const connectionId=()=>globalThis.crypto?.randomUUID?globalThis.crypto.randomUUID():`mcp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-function createConnectionDraft(workspaceId: string, source: any = null, recallDefaults = DEFAULT_RECALL()) {
+function createConnectionDraft(source: any = null) {
     const data = source || {};
-    const recall = { ...DEFAULT_RECALL(), ...(recallDefaults || {}), ...(data.recall || {}) };
     return {
         id: data.id || connectionId(),
         name: data.name || '',
-        workspaceId: data.workspaceId || workspaceId || 'workspace',
-        access: data.access || null,
-        grantMode: data.access?.kind === 'all' ? 'all' : (data.access?.grants?.find(grant => grant.workspaceId === (data.workspaceId || workspaceId))?.agentIds ?? (data.agentIds?.length ? data.agentIds : 'all')) === 'all' ? 'workspace' : 'agents',
-        agentIds: Array.isArray(data.access?.grants?.find(grant => grant.workspaceId === (data.workspaceId || workspaceId))?.agentIds) ? [...data.access.grants.find(grant => grant.workspaceId === (data.workspaceId || workspaceId)).agentIds] : Array.isArray(data.agentIds) ? [...data.agentIds] : [],
         enabled: data.enabled !== false,
         transport: data.transport || 'http',
         url: data.url || '',
@@ -77,40 +64,21 @@ function createConnectionDraft(workspaceId: string, source: any = null, recallDe
         clearEnvironment: false,
         removeEnvironment: [] as string[],
         environmentNames: Array.isArray(data.environmentNames) ? data.environmentNames : [],
-        recall,
     };
 }
 
-function normalizeRecallInput(value: any) {
-    const input = value && typeof value === 'object' ? value : {};
-    const recall = { ...DEFAULT_RECALL(), ...input };
-    return {
-        mode: recall.mode === 'observe' || recall.mode === 'active' ? recall.mode : 'off',
-        maxAgeDays: Number(recall.maxAgeDays || 7),
-        maxItems: Number(recall.maxItems || 128),
-        maxBytes: Number(recall.maxBytes || 8 * 1024 * 1024),
-        profiles: Array.isArray(recall.profiles) ? recall.profiles : [],
-    };
-}
-
-function toConnectionSavePayload(draft: any, fallbackWorkspace: string): Record<string, any> {
+function toConnectionSavePayload(draft: any): Record<string, any> {
     const payload: Record<string, any> = {
         id: draft.id,
         name: String(draft.name || '').trim(),
-        workspaceId: String(draft.workspaceId || fallbackWorkspace || 'workspace'),
-        agentIds: Array.from(new Set((draft.agentIds || []).filter(Boolean))),
         enabled: Boolean(draft.enabled),
         transport: draft.transport || 'http',
         url: String(draft.url || '').trim(),
         auth: draft.auth || 'bearer',
         allowHttp: Boolean(draft.allowHttp),
         timeoutSeconds: Number(draft.timeoutSeconds || 30),
-        recall: normalizeRecallInput(draft.recall),
     };
 
-    if (draft.grantMode === 'agents' && !payload.agentIds.length) throw Error('Select at least one Agent, or explicitly choose all Agents in this workspace.');
-    const otherGrants = draft.access?.kind === 'workspaces' ? draft.access.grants.filter(grant => grant.workspaceId !== payload.workspaceId) : [];
-    payload.access = draft.grantMode === 'all' ? {kind:'all'} : {kind:'workspaces',grants:[...otherGrants,{workspaceId:payload.workspaceId,agentIds:draft.grantMode === 'agents' ? payload.agentIds : 'all'}]};
     if (payload.transport === 'stdio') {
         const command = parseJsonArray(String(draft.commandText || ''), Array.isArray(draft.command) ? draft.command : []);
         if (command.length) payload.command = command;
@@ -155,19 +123,23 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
-    const [workspaceId, setWorkspaceId] = useState('');
-    const [agents, setAgents] = useState<any[]>([]);
     const [connections, setConnections] = useState<any[]>([]);
     const [migration, setMigration] = useState<any>(null);
-    const [defaults, setDefaults] = useState({ recall: DEFAULT_RECALL() });
     const [selectedId, setSelectedId] = useState<string | null>(null);
-    const [draft, setDraft] = useState<any>(() => createConnectionDraft('workspace'));
+    const [draft, setDraft] = useState<any>(() => createConnectionDraft());
 
     const loadedDraft = useRef<any>(null);
+    const draftServer = useRef<any>(undefined);
     const [revisionConflict, setRevisionConflict] = useState(false);
     const dirty = loadedDraft.current !== null && JSON.stringify(draft) !== JSON.stringify(loadedDraft.current);
     const confirmDiscard = () => !dirty || confirm('Discard unsaved MCP connection changes?');
-    const loadDraft = (value: any) => { loadedDraft.current = value; setDraft(value); setRevisionConflict(false); };
+    const loadDraft = (server: any) => {
+        const value = createConnectionDraft(server);
+        draftServer.current = server;
+        loadedDraft.current = value;
+        setDraft(value);
+        setRevisionConflict(false);
+    };
     const selectedConnection = useMemo(() => connections.find((connection) => connection.id === selectedId) || null, [connections, selectedId]);
 
     const loadSettings = useCallback(async (resetDraft = false) => {
@@ -180,12 +152,9 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
                 throw new Error(payload?.error || `MCP settings failed (${response.status})`);
             }
             const nextConnections = Array.isArray(payload.connections) ? payload.connections : [];
-            setWorkspaceId(payload.workspaceId || 'workspace');
-            setAgents(Array.isArray(payload.agents) ? payload.agents : []);
             if (resetDraft) loadedDraft.current = null;
             setConnections(nextConnections);
             setMigration(payload.migration || null);
-            setDefaults({ recall: normalizeRecallInput(payload.defaults?.recall || DEFAULT_RECALL()) });
             setSelectedId((current) => {
                 if (current && nextConnections.some((connection) => connection.id === current)) return current;
                 return nextConnections[0]?.id || null;
@@ -202,17 +171,16 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
     useEffect(() => { void loadSettings(); }, [loadSettings]);
 
     useEffect(() => {
-        if (!dirty || !loadedDraft.current) loadDraft(createConnectionDraft(workspaceId, selectedConnection, defaults.recall));
-    }, [defaults.recall, selectedConnection, workspaceId]);
+        if (!loadedDraft.current || (!dirty && draftServer.current !== selectedConnection)) loadDraft(selectedConnection);
+    }, [selectedConnection]);
 
     const selectConnection = (connection: any) => {
-        if (!confirmDiscard()) return;
+        if (!confirmDiscard()) return false;
         setSelectedId(connection?.id ?? null);
-        loadDraft(createConnectionDraft(workspaceId, connection, defaults.recall));
+        loadDraft(connection ?? null);
         setError('');
+        return true;
     };
-
-    const noConnectionOpen = !selectedConnection && !selectedId;
 
     const saveDraft = useCallback(async () => {
         const name = String(draft.name || '').trim();
@@ -230,7 +198,7 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
         setError('');
         setStatus?.('Saving MCP connection…', 'info');
         try {
-            const connection = toConnectionSavePayload(draft, workspaceId);
+            const connection = toConnectionSavePayload(draft);
             const clear: string[] = [];
             if (connection.transport === 'stdio') {
                 if (!connection.workdir) clear.push('workdir');
@@ -265,7 +233,7 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
         } finally {
             setSaving(false);
         }
-    }, [draft, loadSettings, selectedConnection, selectedId, setStatus, workspaceId]);
+    }, [draft, loadSettings, selectedConnection, selectedId, setStatus]);
 
     const removeSelected = useCallback(async () => {
         if (!selectedConnection || !confirmDiscard()) return;
@@ -362,29 +330,6 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
         } finally { setSaving(false); }
     }, [loadSettings, selectedConnection, setStatus, saving]);
 
-    const forgetRecall = useCallback(async () => {
-        if (!selectedConnection || saving || !confirm('Forget retained MCP recall copies for this connection? Original SDK history is unchanged.')) return;
-        setSaving(true);
-        try {
-            const response = await fetch('/agent/settings/mcp', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'forget_recall', id: selectedConnection.id }),
-            });
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok || !payload?.ok) {
-                throw new Error(payload?.error || 'Could not clear MCP recall history.');
-            }
-            setStatus?.('MCP recall history was cleared.', 'success');
-            await loadSettings();
-        } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            setError(message);
-            setStatus?.(message, 'error');
-        } finally { setSaving(false); }
-    }, [loadSettings, selectedConnection, setStatus, saving]);
-
     const canEdit = !loading && !saving;
 
     return html`
@@ -405,29 +350,18 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
             `}
 
             <div class="settings-row settings-dense-row">
-                <label>Workspace</label>
-                <span class="settings-hint" style="margin:0">${workspaceId || 'current workspace'}</span>
+                <label for=${fieldId('server')}>Server</label>
+                <select id=${fieldId('server')} value=${selectedId ?? ''} disabled=${!canEdit || !connections.length} onChange=${(event) => {
+                    const picker = event.currentTarget as HTMLSelectElement;
+                    if (!selectConnection(connections.find(connection => connection.id === picker.value))) picker.value = selectedId ?? '';
+                }}>
+                    <option value="" disabled>${connections.length ? 'Choose a server' : 'No servers configured'}</option>
+                    ${connections.map(connection => html`<option key=${connection.id} value=${connection.id}>${connection.name}${connections.some(other => other !== connection && other.name === connection.name) ? ' (' + connection.id + ')' : ''}${connection.enabled ? '' : ' — Disabled'}</option>`)}
+                </select>
+                <button type="button" class="settings-btn" onClick=${() => selectConnection(null)} disabled=${!canEdit}>Add server</button>
             </div>
-
-            <div class="settings-row" style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
-                <label style="min-width:140px">Connections</label>
-                <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
-                    ${connections.map((connection) => html`
-                        <button
-                            type="button"
-                            key=${connection.id}
-                            class=${`settings-btn ${selectedId === connection.id ? 'primary' : ''}`}
-                            aria-pressed=${selectedId === connection.id}
-                            onClick=${() => selectConnection(connection)}
-                            disabled=${saving}
-                        >
-                            ${connection.name || 'Unnamed'}
-                        </button>
-                    `)}
-                    <button type="button" class="settings-btn" onClick=${() => selectConnection(null)} disabled=${saving}>New connection</button>
-                </div>
-            </div>
-
+            <p class="settings-hint">Enabled servers are available in Code Mode across this instance.</p>
+            <h4>${selectedConnection ? 'Server settings: ' + selectedConnection.name : 'New server'}</h4>
             <div class="settings-row settings-dense-row settings-dense-row-checkbox">
                 <label class="settings-dense-check" for=${fieldId('new-connection-toggle')}>
                     <input id=${fieldId('new-connection-toggle')} type="checkbox" checked=${Boolean(draft.enabled)} disabled=${!canEdit} onChange=${(event) => setDraft((prev) => ({ ...prev, enabled: (event.currentTarget as HTMLInputElement).checked }))} />
@@ -438,35 +372,6 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
             <div class="settings-row settings-dense-row">
                 <label for=${fieldId('name')}>Name</label>
                 <input id=${fieldId('name')} type="text" value=${draft.name || ''} disabled=${!canEdit} onInput=${(event) => setDraft((prev) => ({ ...prev, name: (event.currentTarget as HTMLInputElement).value }))} placeholder="my-mcp-server" />
-            </div>
-
-            <div class="settings-row settings-dense-row">
-                <label for=${fieldId('workspace')}>Workspace</label>
-                <input id=${fieldId('workspace')} type="text" value=${draft.workspaceId || workspaceId || 'workspace'} disabled=${true} />
-            </div>
-
-            <div class="settings-row settings-dense-row">
-                <label for=${fieldId('grant-mode')}>Access</label>
-                <select id=${fieldId('grant-mode')} value=${draft.grantMode} disabled=${!canEdit} onChange=${event=>setDraft(previous=>({...previous,grantMode:event.currentTarget.value}))}>
-                    <option value="workspace">This workspace, all Agents</option><option value="agents">Selected Agents in this workspace</option><option value="all">All workspaces and Agents</option>
-                </select>
-            </div>
-            <div class="settings-row settings-dense-row">
-                <label for=${fieldId('agentIds')}>Selected Agents</label>
-                <div id=${fieldId('agentIds')} style="display:flex; flex-wrap:wrap; gap:8px; min-height:32px;">
-                    ${agents.length === 0 ? html`<span class="settings-hint" style="margin:0">No agents reported.</span>` : agents.map((agent) => { const checked = draft.agentIds.includes(agent.id); return html`
-                        <label key=${agent.id} class="settings-dense-check" style="padding:4px 8px; border:1px solid var(--border-color, rgba(255,255,255,0.12)); border-radius:999px;">
-                            <input type="checkbox" checked=${checked} disabled=${!canEdit || draft.grantMode !== 'agents'} onChange=${(event) => {
-                                const isChecked = (event.currentTarget as HTMLInputElement).checked;
-                                setDraft((prev) => ({
-                                    ...prev,
-                                    agentIds: isChecked ? Array.from(new Set([...prev.agentIds, agent.id])) : prev.agentIds.filter((id) => id !== agent.id),
-                                }));
-                            }} />
-                            <span>${agent.label || agent.id}</span>
-                        </label>
-                    `; })}
-                </div>
             </div>
 
             <div class="settings-row settings-dense-row">
@@ -565,69 +470,10 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
                 <span class="settings-hint" style="margin:0">Seconds</span>
             </div>
 
-            <div class="settings-row settings-dense-row">
-                <label>Recall</label>
-                <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
-                    <select value=${String(draft.recall?.mode || 'off')} disabled=${!canEdit} onChange=${(event) => setDraft((prev) => ({ ...prev, recall: { ...normalizeRecallInput(prev.recall), mode: (event.currentTarget as HTMLSelectElement).value as 'off' | 'observe' | 'active' } }))}>
-                        <option value="off">Off</option>
-                        <option value="observe">Observe</option>
-                        <option value="active">Active</option>
-                    </select>
-
-                </div>
-            </div>
-            <div class="settings-row settings-dense-row">
-                <label>Retention</label>
-                <${NumberStepper}
-                    id=${fieldId('recall-retention')}
-                    label="Recall retention days"
-                    value=${Number(draft.recall?.maxAgeDays || 7)}
-                    min=${1}
-                    max=${90}
-                    fallback=${7}
-                    width="88px"
-                    disabled=${!canEdit}
-                    onChange=${(value) => setDraft((prev) => ({ ...prev, recall: { ...normalizeRecallInput(prev.recall), maxAgeDays: Number(value || 7) } }))}
-                />
-                <span class="settings-hint" style="margin:0">days</span>
-            </div>
-            <div class="settings-row settings-dense-row">
-                <label>Recall size</label>
-                <${NumberStepper}
-                    id=${fieldId('recall-max-items')}
-                    label="Recall max items"
-                    value=${Number(draft.recall?.maxItems || 128)}
-                    min=${1}
-                    max=${256}
-                    fallback=${128}
-                    width="90px"
-                    disabled=${!canEdit}
-                    onChange=${(value) => setDraft((prev) => ({ ...prev, recall: { ...normalizeRecallInput(prev.recall), maxItems: Number(value || 128) } }))}
-                />
-                <span class="settings-hint" style="margin:0">items</span>
-            </div>
-            <div class="settings-row settings-dense-row">
-                <label>Recall max bytes</label>
-                <${NumberStepper}
-                    id=${fieldId('recall-max-bytes')}
-                    label="Recall max bytes"
-                    value=${Number(draft.recall?.maxBytes || 8 * 1024 * 1024)}
-                    min=${4096}
-                    max=${16 * 1024 * 1024}
-                    step=${1024}
-                    fallback=${8 * 1024 * 1024}
-                    width="115px"
-                    disabled=${!canEdit}
-                    onChange=${(value) => setDraft((prev) => ({ ...prev, recall: { ...normalizeRecallInput(prev.recall), maxBytes: Number(value || 8 * 1024 * 1024) } }))}
-                />
-                <span class="settings-hint" style="margin:0">bytes</span>
-            </div>
-
             <div class="settings-row settings-dense-row" style="gap:8px; flex-wrap:wrap;">
                 <button type="button" class="settings-btn" disabled=${!canEdit || !draft.name} onClick=${saveDraft}>${saving ? 'Saving…' : 'Save connection'}</button>
                 <button type="button" class="settings-btn" disabled=${!selectedConnection || saving} onClick=${reconnectSelected}>Reconnect</button>
                 <button type="button" class="settings-btn danger" disabled=${!selectedConnection || saving} onClick=${removeSelected}>Remove</button>
-                <button type="button" class="settings-btn" disabled=${!selectedConnection || saving} onClick=${forgetRecall}>Forget recall</button>
             </div>
 
             ${selectedConnection?.status && html`
@@ -644,7 +490,6 @@ export function McpSection({ setStatus }: {setStatus?:(message:string|null,kind?
                     </label>
                 </div>
             `}
-            ${noConnectionOpen && html`<p class="settings-hint">Choose an MCP connection or create a new one.</p>`}
         </div>
     `;
 }
