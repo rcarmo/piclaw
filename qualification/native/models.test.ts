@@ -917,8 +917,22 @@ test("optional observer mutations never change provider terminal or usage eviden
     if ("partial" in event) { event.partial.usage.input = 999; event.partial.content.length = 0; }
     if (event.type === "done") { event.message.usage.input = 999; event.message.content.length = 0; }
   });
-  f.policy.observeUsage = message => { settled = structuredClone(message); };
-  const result = await f.models.completeSimple(f.model, context);
+  f.policy.observeUsage = message => {
+    settled = structuredClone(message);
+    message.usage.input = 777; message.content.length = 0;
+  };
+  const stream = f.models.streamSimple(f.model, context);
+  const seen: string[] = [];
+  for await (const event of stream) {
+    seen.push(event.type);
+    if (event.type === "text_delta") {
+      expect(event.partial.content).toEqual(f.message.content);
+      expect(event.partial.usage).toEqual(f.message.usage);
+      event.partial.usage.input = 888; event.partial.content.length = 0;
+    }
+  }
+  const result = await stream.result();
+  expect(seen).toEqual(["text_delta", "done"]);
   expect(result.content).toEqual(f.message.content); expect(result.usage).toEqual(f.message.usage);
   expect(settled?.content).toEqual(f.message.content); expect(settled?.usage).toEqual(f.message.usage);
   expect(f.calls()).toBe(1);

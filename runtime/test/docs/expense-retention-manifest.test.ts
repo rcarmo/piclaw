@@ -14,7 +14,10 @@ const a2ui=JSON.parse(a2uiBytes.toString('utf8'));
 const delegatePath='docs/development/receipts/delegate-whitelist-retention-overlay.json';
 const delegateBytes=readFileSync(resolve(root,delegatePath));
 const delegate=JSON.parse(delegateBytes.toString('utf8'));
-const rss=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/native-turn-rss-retention-overlay.json'),'utf8'));
+const rssPath='docs/development/receipts/native-turn-rss-retention-overlay.json';
+const rssBytes=readFileSync(resolve(root,rssPath));
+const rss=JSON.parse(rssBytes.toString('utf8'));
+const output=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/native-output-rss-retention-overlay.json'),'utf8'));
 const sha=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
 test('removal/retention witness binds every original Core path through explicit later source transformations',()=>{
  expect(sha(manifestBytes)).toBe(overlay.baseManifestSha256);
@@ -35,7 +38,11 @@ test('removal/retention witness binds every original Core path through explicit 
  expect(rss.rows.map((row:{path:string})=>row.path)).toEqual([
   'runtime/durable-engine/src/host-models.ts', 'runtime/durable-engine/src/host-plan-context.ts',
  ]);
- const layers=[overlay,removal,mcpAudit,a2ui,delegate,rss].map(layer=>{
+ expect(output.previousOverlay).toBe(rssPath);
+ expect(output.previousOverlaySha256).toBe(sha(rssBytes));
+ expect(output.baseManifestSha256).toBe(overlay.baseManifestSha256);
+ expect(output.rows.map((row:{path:string})=>row.path)).toEqual(['runtime/durable-engine/src/host-models.ts']);
+ const layers=[overlay,removal,mcpAudit,a2ui,delegate,rss,output].map(layer=>{
   expect(layer.version).toBe(1);
   const rows=new Map<string,{beforeSha256:string;afterSha256:string;purpose:string}>(layer.rows.map((row:any)=>[row.path,row]));
   expect(rows.size).toBe(layer.rows.length);
