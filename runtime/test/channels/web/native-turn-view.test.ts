@@ -66,9 +66,12 @@ test("distinct completed outputs with the same preview still update the tool sta
       CREATE TABLE messages(id,chat_jid,thread_id);
       INSERT INTO messages VALUES('input','chat',NULL);
       INSERT INTO piclaw_durable_bindings_v1 VALUES('op',1,'input','chat',2,3);`);
-    const previews: unknown[] = [];
+    const previews: unknown[] = [], lines: unknown[] = [];
     const render = createNativeTurnView(database, { broadcastEvent(event, data) {
-      if (event === 'agent_status' && data.tool_name === 'bash') previews.push(data.output_preview);
+      if (event === 'agent_status' && data.tool_name === 'bash') {
+        previews.push(data.output_preview);
+        lines.push(data.output_preview_lines);
+      }
     } }, 'chat');
     const suffix = 'x'.repeat(16000);
     const frame = (output: string) => ({ conversation: { id: 2 }, entries: [], docs: { 'pi.live': {
@@ -81,6 +84,7 @@ test("distinct completed outputs with the same preview still update the tool sta
     render({ conversation: { id: 2 }, entries: [], docs: { 'pi.live': {} } });
     render(frame('B\n' + suffix));
     expect(previews).toEqual([suffix, suffix, suffix]);
+    expect(lines).toEqual([1, 2, 2]);
   } finally { database.close(); }
 });
 
