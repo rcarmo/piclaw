@@ -84,9 +84,9 @@ function data<T>(value: T): T {
   }));
 }
 const cannotCopy = Symbol("requires JSON projection");
-/** Detach plain transcript/payload containers without encoding their strings a
+/** Detach plain JSON containers without encoding their strings a
  * second time. Exotic values still go through the existing JSON-only guard. */
-function copyRequestData<T>(value: T): T {
+function copyJsonData<T>(value: T): T {
   const ancestors = new Set<object>();
   const copy = (item: unknown): unknown => {
     if (item === null || typeof item === "string" || typeof item === "boolean") return item;
@@ -293,10 +293,10 @@ export function createHostModels(
   const projectMessage = (message: AssistantMessage, model: Model<Api>): AssistantMessage => {
     if(message.provider!==model.provider||message.model!==model.id||message.api!==model.api)throw Error("Model response owner changed");
     const { deferred, ...rest } = message;
-    if (!deferred) return data(rest);
+    if (!deferred) return copyJsonData(rest);
     if (!policy.deferred) throw new Error("Deferred authority unavailable");
     if (deferred.provider !== model.provider || deferred.modelId !== model.id || deferred.api !== model.api) throw new Error("Wrong deferred owner");
-    return { ...data(rest), deferred: publicHandle(policy.deferred.project(deferred, model), model) };
+    return { ...copyJsonData(rest), deferred: publicHandle(policy.deferred.project(deferred, model), model) };
   };
   const deferredAdmission = async (model: Model<Api>, handle: DeferredHandle,
     options: DeferredFetchOptions | undefined, operation: DeferredOperation) => {
@@ -336,7 +336,7 @@ export function createHostModels(
       const failed=()=>log.warn("Native usage observation failed", { operation: "durable_model.usage_failed", taskId: scope?.taskId, conversationId: scope?.conversationId });
       try {
         let observation:AssistantMessage;
-        try { observation=data(message); }
+        try { observation=copyJsonData(message); }
         catch {
           // Unsupported output metadata must not erase already validated usage.
           let reported=terminalUsage;
@@ -364,7 +364,7 @@ export function createHostModels(
         model = validatedChatModel(model);
         // This detached relay-owned snapshot is never passed to the authority
         // hooks. Transfer it to the host at dispatch instead of serialising again.
-        context = copyRequestData(context);
+        context = copyJsonData(context);
         if (deferred) {
           phase = "admission";
           if (!hostModelRuntime120.streamDeferred) throw new Error("Host operation unavailable");
@@ -374,8 +374,8 @@ export function createHostModels(
           for await (const event of stream) {
             if (event.type === "error") { providerError = event.error; captureTerminalUsage(event.error); providerFailure = classifyModelFailure("provider", event.error); observeUsage(event.error); throw new Error("Host request failed"); }
             if (event.type === "done") { captureTerminalUsage(event.message); observeUsage(event.message); }
-          output.push("message" in event ? { ...data({ ...event, message: undefined }), message: projectMessage(event.message, model) }
-              : "partial" in event ? { ...data({ ...event, partial: undefined }), partial: projectMessage(event.partial, model) } : data(event));
+          output.push("message" in event ? { ...copyJsonData({ ...event, message: undefined }), message: projectMessage(event.message, model) }
+              : "partial" in event ? { ...copyJsonData({ ...event, partial: undefined }), partial: projectMessage(event.partial, model) } : data(event));
           }
           const result = await stream.result();
           if (result.stopReason === "error" || result.stopReason === "aborted") { providerError = result; captureTerminalUsage(result); providerFailure = classifyModelFailure("provider", result); observeUsage(result); throw new Error("Host request failed"); }
@@ -437,7 +437,7 @@ export function createHostModels(
             // Pi1.5 supplies this task-bound hook even without extension hooks.
             // Call it within its own island with detached data. The existing
             // host bridge does not authorise provider-body replacement.
-            const original=freeze(copyRequestData(payload));
+            const original=freeze(copyJsonData(payload));
             const result=await sdkPayload(original,freeze(data(model)));
             signal.throwIfAborted();assertSource();policy.assertCurrent(ref,'chat',signal);assertPhysicalCompatible();
             // An unchanged result is the same deeply frozen, detached value.
@@ -494,7 +494,7 @@ export function createHostModels(
           assertEventCurrent();
           if (observer && !observerDetached) {
             try {
-              const observed: unknown = observer.onEvent(data(event));
+              const observed: unknown = observer.onEvent(copyJsonData(event));
               if (isPromise(observed)) {
                 void Promise.prototype.catch.call(observed, () => {});
                 throw new TypeError("Model event observer must be synchronous");
@@ -506,7 +506,7 @@ export function createHostModels(
             }
           }
           if (event.type === "error" || event.type === "done") continue;
-          output.push("partial" in event ? { ...data({ ...event, partial: undefined }), partial: projectMessage(event.partial, model) } : data(event));
+          output.push("partial" in event ? { ...copyJsonData({ ...event, partial: undefined }), partial: projectMessage(event.partial, model) } : data(event));
         }
         const result = await stream.result();
         captureTerminalUsage(result);
@@ -715,7 +715,7 @@ export function createHostModels(
       if (chatMethods.has(String(key))) return (model: Model<Api>, context: TranscriptContext, options?: SimpleStreamOptions) => {
         const safeModel = validatedChatModel(model);
         const safeOptions = requestOptions(options, !!policy.deferred);
-        const transcript=freeze(copyRequestData(context)),request={...safeOptions,signal:options?.signal};
+        const transcript=freeze(copyJsonData(context)),request={...safeOptions,signal:options?.signal};
         return Reflect.apply(value, target, [safeModel, transcript, request]);
       };
       return typeof value === "function" ? value.bind(target) : value;
