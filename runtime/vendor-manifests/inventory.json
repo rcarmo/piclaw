@@ -360,8 +360,8 @@
     },
     {
       "path": "runtime/web/static/common/js/vendor/diagram-sanitizer-license.meta.json",
-      "bytes": 1145,
-      "sha256": "55eec51022027654d459d3e865b4ab12088805921effb8cd7b5a9e05d8bf8b6f",
+      "bytes": 1143,
+      "sha256": "1d4470c697e0c001b6fb7b71ac69c4cd145527b6858a49f252b53941b5490e32",
       "manifests": [],
       "provenance": "unrecorded"
     },
@@ -425,8 +425,8 @@
     },
     {
       "path": "runtime/web/static/common/js/vendor/pele.js",
-      "bytes": 753107,
-      "sha256": "b6992a0cd71731b843aa4af0eb8b8c1b905974160733102f5f735a9295988cbc",
+      "bytes": 754883,
+      "sha256": "67f734cce88fb9bb66dfe41838cf18dc08535b48c749870e687dea2e0715ceaa",
       "manifests": [
         "runtime/vendor-manifests/pele.json"
       ],
@@ -434,8 +434,8 @@
     },
     {
       "path": "runtime/web/static/common/js/vendor/pele.meta.json",
-      "bytes": 1216,
-      "sha256": "99de615cc082c00846f6a1102ece48025c5051be8fb621b62853343a6a7d7f64",
+      "bytes": 1215,
+      "sha256": "fecb59c286cd416dbc19a42c4162ab2a074bcf7e527cb87797f48a81ce456bec",
       "manifests": [],
       "provenance": "unrecorded"
     },
