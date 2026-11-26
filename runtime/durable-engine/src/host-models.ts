@@ -1,7 +1,7 @@
 import type { HostCodexModelServices } from "./host-codex-model-services.js";
 import { createLogger } from "../../src/utils/logger.js";
 import { taskModelRequestScope, type TaskModelRequestScope } from "./task-model-boundary-shim.js";
-import { isPromise, isProxy } from "node:util/types";
+import { isBoxedPrimitive, isPromise, isProxy } from "node:util/types";
 import { classifyModelFailure, modelFailureDetail, type ModelFailure, type ModelFailurePhase } from "./host-model-failure.js";
 import { modelFailureUpstreamMessage, type ModelFailureEvidence } from "./host-model-failure-evidence.js";
 const log = createLogger("durable.models");
@@ -91,7 +91,7 @@ function copyRequestData<T>(value: T): T {
   const copy = (item: unknown): unknown => {
     if (item === null || typeof item === "string" || typeof item === "boolean") return item;
     if (typeof item === "number" && Number.isFinite(item)) return item === 0 ? 0 : item;
-    if (!item || typeof item !== "object" || isProxy(item) || ancestors.has(item)) return cannotCopy;
+    if (!item || typeof item !== "object" || isProxy(item) || isBoxedPrimitive(item) || ancestors.has(item)) return cannotCopy;
     const array = Array.isArray(item);
     if (Object.getPrototypeOf(item) !== (array ? Array.prototype : Object.prototype) || "toJSON" in item) return cannotCopy;
     const keys = Object.keys(item);
