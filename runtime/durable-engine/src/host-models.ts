@@ -440,7 +440,9 @@ export function createHostModels(
             const original=freeze(copyRequestData(payload));
             const result=await sdkPayload(original,freeze(data(model)));
             signal.throwIfAborted();assertSource();policy.assertCurrent(ref,'chat',signal);assertPhysicalCompatible();
-            if(result!==undefined&&JSON.stringify(data(result))!==JSON.stringify(original))throw Error('Provider payload replacement is not qualified');
+            // An unchanged result is the same deeply frozen, detached value.
+            // Only a new object needs the existing exact JSON comparison.
+            if(result!==undefined&&result!==original&&JSON.stringify(data(result))!==JSON.stringify(original))throw Error('Provider payload replacement is not qualified');
             return codex?.options.onPayload?codex.options.onPayload(payload,actual):payload;
           }}:{}), transformHeaders: async (headers: Record<string, string | null>) => {
           signal.throwIfAborted(); assertSource();
