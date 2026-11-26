@@ -1,0 +1,20 @@
+{
+  "title": "Reduce runtime of a deterministic utility",
+  "baseline": "REPLACE_WITH_FULL_GIT_COMMIT",
+  "editable": ["src/utility.ts"],
+  "correctness": "bun run check:fixture",
+  "assertions": ["Output matches the approved golden fixture byte for byte"],
+  "benchmark": "bun run bench:fixture",
+  "environment": "Record the isolated host, runtime, warm/cold order, fixed seed and load conditions.",
+  "inputSha256": {
+    "benchmark harness": "REPLACE_WITH_SHA256",
+    "correctness script": "REPLACE_WITH_SHA256",
+    "golden fixture": "REPLACE_WITH_SHA256"
+  },
+  "metric": {"name": "latency", "unit": "ms", "direction": "lower", "minImprovement": 1},
+  "repetitions": 5,
+  "maxExperiments": 4,
+  "maxExperimentMs": 120000,
+  "maxPeakBytes": 536870912,
+  "deadline": "REPLACE_WITH_UTC_DEADLINE_ENDING_IN_Z"
+}
