@@ -8,8 +8,8 @@ Track Piclaw memory measurements over time with the repo commit context that pro
 - Record the Git commit hash that best matches the measured code.
 - If the workspace is not clean, mark the entry as `dirty` and describe why.
 - Regenerate the SVG chart with:
-  - `bun run runtime/scripts/render-memory-progress-chart.ts --template docs/performance/memory-progress.template.json --input docs/performance/memory-footprint-history.md --output docs/performance/memory-progress-2026-11-24.svg`
-- The [updated chart](memory-progress-2026-11-24.svg) keeps matched synthetic comparisons separate from the historical live-service timeline. The April SVG and PNG remain historical artifacts.
+  - `bun run runtime/scripts/render-memory-progress-chart.ts --template docs/performance/memory-progress.template.json --input docs/performance/memory-footprint-history.md --output docs/performance/memory-progress-2026-11-25.svg`
+- The [updated chart](memory-progress-2026-11-25.svg) keeps post-reload readiness and matched synthetic comparisons separate from the historical live-service timeline. The 24 November and April charts remain historical artifacts.
 - Prefer two measurement types:
   - **live-service snapshot** — running `piclaw.service` after restart/settle
   - **fresh-process cold-session benchmark** — isolated one-shot measurement of session bootstrap cost
@@ -56,7 +56,15 @@ Track Piclaw memory measurements over time with the repo commit context that pro
 | 2026-04-17T22:32:00Z* | `0943907f` | yes | Real web-chat cold-session benchmark after Azure provider-bootstrap + session-shim split | 169 ms | 26.9 MB | 41 | Backfilled from the focused source-tree harness run during the Azure cold-path tranche. This step moved Azure provider registration off ordinary session bootstrap and into the async provider-bootstrap/session-shim path, materially reducing cold-path elapsed time while also dropping active-tool count. |
 | 2026-04-17T22:38:00Z* | `0943907f` | yes | Real web-chat cold-session benchmark after splitting Azure image helpers out of the provider module | 175 ms | 26.3 MB | 41 | Backfilled from the follow-up source-tree harness run after moving `/image` and `/flux` into `runtime/extensions/integrations/azure-openai-images.ts`. RSS improved a bit further, while elapsed time stayed within the same noise band as the prior Azure provider-bootstrap split. |
 
-## Current installed-service observation
+## Installed-service readiness
+
+| Timestamp (UTC) | Commit | PID | Process RSS (MiB) | PSS (MiB) | Heap used (MiB) | External (MiB) | Cgroup current (MiB) | VmHWM (MiB) |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| 2026-11-25T17:15:38.831Z | `5d850c4d5d6ba4e8e1cf5df86d5488c7c43874dc` | 175642 | 313.86 | 315.43 | 61.07 | 24.50 | 284.80 | 322.33 |
+
+Smith LXC, user `piclaw.service`, installed Core 3.3.4, Bun 1.4.4 and separate Root/private Earendil 1.6.1 graphs. Built from the exact clean merged source ([#2102](https://github.com/rcarmo/piclaw/pull/2102)); package fingerprints and the served Classic bundle matched. Systemd started the process at 17:14:59 UTC and Classic bound at 17:15:38.683 UTC. The existing `post-web-start` snapshot recorded 329,105,408 bytes of process RSS; all values in the table are from that snapshot. PSS and RSS are sampled separately; cgroup memory is a different counter. Active chats were not reported. This is a startup readiness observation; there was no controlled idle or workload measurement. No restart or traffic was triggered to obtain this sample for the report. An [earlier restart on SDK 1.6.0](https://github.com/rcarmo/piclaw/issues/394#issuecomment-7156429128) is separate evidence, not a matched baseline.
+
+## Historical installed-service observation
 
 On 24 November 2026 at 13:49:19 UTC, Smith's existing `piclaw.service` process, PID 3923744, reported 712.48 MiB RSS, 711.36 MiB PSS, 686.79 MiB anonymous RSS and 2,989.93 MiB lifetime peak RSS. The service cgroup separately reported 861.95 MiB current memory. Heap metrics and idle state were not verified. This is a read-only observation of the service that restarted on 23 November, not a fresh idle run or a measurement of current main.
 

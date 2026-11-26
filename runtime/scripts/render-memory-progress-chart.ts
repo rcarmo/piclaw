@@ -329,24 +329,32 @@ function renderLiveTimeline(rows: LiveRow[], chart: ChartArea): string {
   if (rows.length === 0) return "";
 
   const rssValues = rows.map((row) => row.rssMb);
-  const pssValues = rows.map((row) => row.pssMb ?? row.rssMb);
+  const pssValues = rows.flatMap(row => row.pssMb === null ? [] : [row.pssMb]);
   const maxValue = niceCeil(Math.max(...rssValues, ...pssValues), 4);
   const axisX = chart.x - 34;
   const grid = renderGrid(chart, maxValue, 4, axisX);
   const step = rows.length > 1 ? chart.width / Math.max(1, rows.length - 1) : 0;
   const rssPath = buildPath(rssValues, maxValue, chart);
-  const pssPath = buildPath(pssValues, maxValue, chart);
+  const pssPaths: string[] = [];
+  for (let first = 0, end = 0; first < rows.length; first = end + 1) {
+    end = first;
+    while (end < rows.length && rows[end].pssMb !== null) end += 1;
+    if (end - first > 1) {
+      pssPaths.push(buildPath(rows.slice(first, end).map(row => row.pssMb!), maxValue, {
+        ...chart, x: chart.x + step * first, width: step * (end - first - 1),
+      }));
+    }
+  }
 
   const parts: string[] = [grid];
   parts.push(`<path d="${rssPath}" fill="none" stroke="#60a5fa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`);
-  parts.push(`<path d="${pssPath}" fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>`);
+  if (pssPaths.length) parts.push(`<path d="${pssPaths.join(" ")}" fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>`);
 
   rows.forEach((row, index) => {
     const x = rows.length > 1 ? chart.x + step * index : chart.x + chart.width / 2;
     const rssY = yForValue(row.rssMb, maxValue, chart);
-    const pssY = yForValue(row.pssMb ?? row.rssMb, maxValue, chart);
     parts.push(`<circle cx="${x.toFixed(1)}" cy="${rssY.toFixed(1)}" r="5.5" fill="#60a5fa"/>`);
-    parts.push(`<circle cx="${x.toFixed(1)}" cy="${pssY.toFixed(1)}" r="4.5" fill="#a78bfa"/>`);
+    if (row.pssMb !== null) parts.push(`<circle cx="${x.toFixed(1)}" cy="${yForValue(row.pssMb, maxValue, chart).toFixed(1)}" r="4.5" fill="#a78bfa"/>`);
     parts.push(`<text x="${x.toFixed(1)}" y="${(rssY - 10).toFixed(1)}" text-anchor="middle" class="value">${escapeXml(formatNumber(row.rssMb))}</text>`);
     parts.push(`<text x="${x.toFixed(1)}" y="${chart.y + chart.height + 24}" text-anchor="middle" class="small">${escapeXml(formatTimeLabel(row.timestamp))}</text>`);
     parts.push(`<text x="${x.toFixed(1)}" y="${chart.y + chart.height + 40}" text-anchor="middle" class="tiny">${escapeXml(liveScenarioLabel(row.scenario))}</text>`);
@@ -390,7 +398,21 @@ function renderMatchedRss(markdown: string, top: number): { height: number; svg:
   return { height: height + 12, svg: `<g transform="translate(40 ${top})"><rect width="1120" height="${height}" rx="18" fill="#111827" stroke="#1f2937"/><text x="20" y="29" class="h2">Matched synthetic RSS comparisons · MiB</text><text x="20" y="51" class="small">Independent fixtures; only compare within a row. Separate from live service history.</text>${renderLegendItem(855, 23, "#60a5fa", "Baseline")}${renderLegendItem(960, 23, "#34d399", "Candidate")}${ticks}${bars}</g>` };
 }
 
-function renderSvg(config: TemplateConfig, inputPath: string, coldRows: ColdRow[], liveRows: LiveRow[], matched: { height: number; svg: string }): string {
+function renderReadinessCard(markdown: string): string {
+  const latest = parseMarkdownTableSection(markdown, "## Installed-service readiness")
+    .sort((a, b) => b["Timestamp (UTC)"].localeCompare(a["Timestamp (UTC)"]))[0];
+  if (!latest) return "";
+  const rss = parseNumberCell(latest["Process RSS (MiB)"]);
+  if (rss === null) throw new Error("Latest installed-service readiness row has no process RSS.");
+  const commit = stripMarkdown(latest.Commit).slice(0, 8);
+  const day = latest["Timestamp (UTC)"].slice(0, 10);
+  return `<text x="832" y="132" class="small">Installed service at readiness</text>
+  <text x="832" y="172" class="metric">${formatNumber(rss, 2)} MiB RSS</text>
+  <text x="832" y="194" class="body">${escapeXml(day)} · ${escapeXml(commit)}</text>
+  <text x="832" y="212" class="small">Post-web-start sample; idle unmeasured</text>`;
+}
+
+function renderSvg(config: TemplateConfig, inputPath: string, coldRows: ColdRow[], liveRows: LiveRow[], matched: { height: number; svg: string }, readinessCard: string): string {
   if (coldRows.length === 0) throw new Error("No fresh-process cold-session benchmark rows found in memory history.");
   if (liveRows.length === 0) throw new Error("No live-service snapshot rows found in memory history.");
 
@@ -424,14 +446,14 @@ function renderSvg(config: TemplateConfig, inputPath: string, coldRows: ColdRow[
     `Live service: ${formatNumber(firstLive.rssMb)} MB RSS at ${formatTimeLabel(firstLive.timestamp)} → ${formatNumber(latestLive.rssMb)} MB at ${formatTimeLabel(latestLive.timestamp)} (${liveRssChange}); peak was ${formatNumber(peakLive.rssMb)} MB at ${formatTimeLabel(peakLive.timestamp)}.`,
     latestPostStart
       ? `Fresh post-start sample from the latest restart: ${formatNumber(latestPostStart.rssMb)} MB RSS / ${formatNumber(latestPostStart.heapUsedMb)} MB heap / ${formatNumber(latestPostStart.externalMb)} MB external.`
-      : `Latest live snapshot: ${formatNumber(latestLive.rssMb)} MB RSS / ${formatNumber(latestLive.pssMb ?? latestLive.rssMb)} MB PSS / ${formatNumber(latestLive.heapUsedMb ?? 0)} MB heap / ${formatNumber(latestLive.externalMb ?? 0)} MB external.`,
+      : `Last historical live snapshot: ${formatNumber(latestLive.rssMb)} MB RSS; PSS ${latestLive.pssMb === null ? "not recorded" : formatNumber(latestLive.pssMb) + " MB"}.`,
     `Interpretation: the middle row is ordered experimental progression, while the bottom row is the actual chronological live-service memory history.`,
   ];
 
   const totalHeight = config.height + matched.height;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${config.width}" height="${totalHeight}" viewBox="0 0 ${config.width} ${totalHeight}" role="img" aria-labelledby="title desc">
   <title id="title">${escapeXml(config.title)}</title>
-  <desc id="desc">Cold-session experiments, historical live-service memory and separate matched synthetic comparisons from ${escapeXml(inputPath)}.</desc>
+  <desc id="desc">Cold-session experiments, historical live-service memory, ${readinessCard ? "a separate installed-service readiness sample, " : ""}and matched synthetic comparisons from ${escapeXml(inputPath)}.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#0f172a"/>
@@ -463,7 +485,7 @@ function renderSvg(config: TemplateConfig, inputPath: string, coldRows: ColdRow[
   <rect x="0" y="0" width="${config.width}" height="${totalHeight}" fill="url(#bg)"/>
 
   <text x="40" y="48" class="h1">${escapeXml(config.title)}</text>
-  <text x="40" y="74" class="body">${escapeXml(config.subtitle_prefix)} · latest commit ${escapeXml(subtitleCommit)} · ${displayedColdRows.length} cold experiment steps · ${liveRows.length} live snapshots</text>
+  <text x="40" y="74" class="body">${escapeXml(config.subtitle_prefix)} · latest historical commit ${escapeXml(subtitleCommit)} · ${displayedColdRows.length} cold experiments · ${liveRows.length} historical snapshots</text>
 
   <g filter="url(#shadow)">
     <rect x="40" y="100" width="350" height="128" rx="18" fill="#111827" stroke="#1f2937"/>
@@ -479,11 +501,11 @@ function renderSvg(config: TemplateConfig, inputPath: string, coldRows: ColdRow[
   <text x="447" y="168" class="metric" fill="#a78bfa">${escapeXml(liveRssChange)}</text>
   <text x="447" y="190" class="body">${escapeXml(formatNumber(firstLive.rssMb))} → ${escapeXml(formatNumber(latestLive.rssMb))} MB RSS · ${escapeXml(livePeakDrop)} from ${escapeXml(formatNumber(peakLive.rssMb))} MB peak</text>
 
-  <text x="832" y="132" class="small">${escapeXml(config.live_summary_title)}</text>
+  ${readinessCard || `<text x="832" y="132" class="small">${escapeXml(config.live_summary_title)}</text>
   <text x="832" y="162" class="small">Live settled</text>
   <text x="832" y="184" class="metric">${escapeXml(formatNumber(latestLive.rssMb))} MB</text>
   <text x="832" y="204" class="body">PSS ${escapeXml(formatNumber(latestLive.pssMb ?? latestLive.rssMb))} · heap ${escapeXml(formatNumber(latestLive.heapUsedMb ?? 0))} · external ${escapeXml(formatNumber(latestLive.externalMb ?? 0))}</text>
-  ${latestPostStart ? `<text x="832" y="222" class="small">Fresh post-start ${escapeXml(formatNumber(latestPostStart.rssMb))} RSS · heap ${escapeXml(formatNumber(latestPostStart.heapUsedMb))} · ext ${escapeXml(formatNumber(latestPostStart.externalMb))}</text>` : ""}
+  ${latestPostStart ? `<text x="832" y="222" class="small">Fresh post-start ${escapeXml(formatNumber(latestPostStart.rssMb))} RSS · heap ${escapeXml(formatNumber(latestPostStart.heapUsedMb))} · ext ${escapeXml(formatNumber(latestPostStart.externalMb))}</text>` : ""}`}
 
   <g filter="url(#shadow)">
     <rect x="40" y="240" width="550" height="330" rx="22" fill="#111827" stroke="#1f2937"/>
@@ -503,7 +525,7 @@ function renderSvg(config: TemplateConfig, inputPath: string, coldRows: ColdRow[
   <g filter="url(#shadow)">
     <rect x="40" y="600" width="1120" height="250" rx="22" fill="#111827" stroke="#1f2937"/>
   </g>
-  <text x="60" y="634" class="h2">Live-service memory timeline</text>
+  <text x="60" y="634" class="h2">Historical live-service memory timeline</text>
   <text x="60" y="654" class="small">Actual chronological service history from the live-snapshot table</text>
   ${renderLegendItem(840, 632, "#60a5fa", "RSS")}
   ${renderLegendItem(920, 632, "#a78bfa", "PSS")}
@@ -533,7 +555,7 @@ function main() {
 
   const coldRows = parseColdRows(markdown);
   const liveRows = parseLiveRows(markdown);
-  const svg = renderSvg(template, path.relative(projectRoot, inputPath), coldRows, liveRows, renderMatchedRss(markdown, template.height - 5));
+  const svg = renderSvg(template, path.relative(projectRoot, inputPath), coldRows, liveRows, renderMatchedRss(markdown, template.height - 5), renderReadinessCard(markdown));
   writeFileSync(outputPath, svg.replace(/[ \t]+$/gm, "") + "\n");
   console.log(JSON.stringify({ output: path.relative(projectRoot, outputPath), cold_rows: coldRows.length, live_rows: liveRows.length }, null, 2));
 }
