@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "sourceParent": "458bce20ea281c946cd08221c1cb1dde7916edac",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlay": "docs/development/receipts/native-turn-rss-retention-overlay.json",
+  "previousOverlaySha256": "961ea239c0769781e9c7d085a93c95a2f30b0d38250464c7f9530e1fd71828f5",
+  "scope": "Native model output detachment only; original paths, deletions and retirement accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/host-models.ts",
+      "beforeSha256": "f90bc5a5f14c0eacca91b455a734e5488e21e311cba47e1cb35cb8a414f03932",
+      "afterSha256": "b53c012e2d1f40f54a525e342e3b4a4b511ffebdc91fe11647b4b000b8c5b451",
+      "purpose": "Detach model output containers and observers without producing duplicate strings for cumulative partials and terminal output."
+    }
+  ]
+}
