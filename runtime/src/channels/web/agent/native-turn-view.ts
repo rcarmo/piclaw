@@ -4,6 +4,13 @@ import { buildPreview, createToolTitleTracker } from "./agent-utils.js";
 import type { ToolCallSummaryResolver } from "../../../tool-call-summary.js";
 import { optimizerFactContextKind, optimizerOperationKind } from "./optimizer-activity.js";
 
+/** Count LF-delimited lines without allocating every substring in the output. */
+function countOutputLines(text: string): number {
+  let lines = 1;
+  for (let at = text.indexOf("\n"); at !== -1; at = text.indexOf("\n", at + 1)) lines++;
+  return lines;
+}
+
 /** Projection of the public pi-durable conversation watch onto existing web events. */
 export interface NativeTurnViewChannel {
   publishInput?(sourceId:string):void;
@@ -146,7 +153,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
     const activeTools = slots.filter((slot: any) => slot.status !== "done").map((slot: any) => ({
       tool_call_id: slot.callId, tool_name: slot.name, title: titles.remember(slot.callId, slot.name, slot.arguments ?? (calls.get(slot.callId) as any)?.arguments, summaries), status: slot.status,
       ...(slot.arguments ? { tool_args: slot.arguments } : {}),
-      ...(slot.output ? { output_preview: slot.output.slice(-4000), output_preview_lines: slot.output.split("\n").length } : {}),
+      ...(slot.output ? { output_preview: slot.output.slice(-4000), output_preview_lines: countOutputLines(slot.output) } : {}),
     }));
     let currentTool: Record<string, unknown> | undefined;
     for (const slot of slots) {
@@ -165,7 +172,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
       currentTool = { type: output || slot.status === "done" ? "tool_status" : "tool_call", title: titles.remember(slot.callId, slot.name, args, summaries), tool_call_id: slot.callId, tool_name: slot.name,
         tool_args: args, status: slot.status, active_tools: activeTools, active_tool_count: activeTools.length, last_event_at: new Date().toISOString(),
         ...(delegateProgress.length ? { delegate_progress: delegateProgress } : {}),
-        ...(output ? { output_preview: output.slice(-16000), output_preview_lines: output.split("\n").length } : {}) };
+        ...(output ? { output_preview: output.slice(-16000), output_preview_lines: countOutputLines(output) } : {}) };
       tools.set(slot.callId, { signature, output, payload: currentTool });
       status(currentTool);
     }
