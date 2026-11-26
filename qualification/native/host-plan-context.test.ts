@@ -9,6 +9,7 @@ import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite
 import { BunSqliteDatabase } from "../../runtime/durable-engine/src/bun-sqlite.js";
 import { materializePlanContext, hostPlanContextKind, materializeGoalContext, hostGoalContextKind, withGoalSystemInstructions, type GoalContextIdentity } from "../../runtime/durable-engine/src/host-plan-context.js";
 import { projectPublicHistory } from "../../runtime/durable-engine/src/session-tree.js";
+import { readGenerationContext, withTaskModelRequestScope } from "../../runtime/durable-engine/src/task-model-boundary-shim.js";
 import { context, barrier } from "./src/fixture.js";
 import { awaitWithContext } from "../../runtime/durable-engine/qualification/context.ts";
 // Match the public Root provider's normalization brand, not the private engine's.
@@ -91,7 +92,8 @@ async function fixture(variant: {goal?:boolean; mixed?:boolean; identity?:()=>Go
   };
   models.setProvider(createProvider({ id: model.provider, models: [model], api: { stream, streamSimple: stream },
     auth: { apiKey: { name: "Synthetic only", resolve: async () => ({ auth: {}, source: "fixture" }) } } }));
-  const options = { models, registry, settings: { retry: { enabled: false }, compaction: { enabled: false, keepRecentTokens: variant.keepRecentTokens ?? 1 } } };
+  const options = { models, registry: withTaskModelRequestScope(registry), settings: { contextRetentionMs: 0,
+    retry: { enabled: false }, compaction: { enabled: false, keepRecentTokens: variant.keepRecentTokens ?? 1 } } };
   const open = async () => {
     database = new BunSqliteDatabase(join(dir, "history.sqlite"));
     return Harness.open(await SqliteStorage.open(database), options, context);
@@ -120,6 +122,28 @@ test("Plan changes after a tool append a snapshot without moving the previous re
     expect(snapshots(await f.entries())).toHaveLength(2);
     expect(JSON.stringify(f.requests[1])).toContain("ORIGINAL"); expect(JSON.stringify(f.requests[1])).toContain("UPDATED");
     expect(f.failures).toEqual([]);
+  } finally { await f.close(); }
+});
+
+test("mixed Goal and Plan share the live scheduler context through a tool round and owner reopen", async () => {
+  const f = await fixture({ mixed: true });
+  try {
+    f.state.wrap = original => new Proxy(original, { get(target, key) {
+      if (key === "context") return () => { throw Error("Detached context read inside generation"); };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    f.state.replies.push("- [x] UPDATED");
+    expect((await f.run()).status).toBe("done");
+    await f.reopen();
+    expect((await f.run("after reopen")).status).toBe("done");
+    expect(f.failures).toEqual([]);
+    expect(f.requests).toHaveLength(3);
+    prefix(f.requests[0]!, f.requests[1]!);
+    prefix(f.requests[1]!, f.requests[2]!);
+    expect(snapshots(await f.entries())).toHaveLength(2);
+    expect(goalSnapshots(await f.entries())).toHaveLength(1);
+    expect(readGenerationContext({ taskId: f.state.taskId, conversationId: f.conversation.id }, context)).toBeUndefined();
   } finally { await f.close(); }
 });
 

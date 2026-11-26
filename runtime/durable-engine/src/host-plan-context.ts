@@ -2,6 +2,7 @@ import { LiveDoc, type Conversation, type EntryRecord, type TaskId } from "@eare
 import type { Message, UserMessage } from "@earendil-works/pi-ai";
 import type { Context } from "@earendil-works/chord/context";
 import { isBoxedPrimitive, isProxy } from "node:util/types";
+import { readGenerationContext } from "./task-model-boundary-shim.js";
 
 export const hostPlanContextKind = "host.plan-context";
 export const hostGoalContextKind = "host.goal-context";
@@ -87,7 +88,7 @@ async function materializePromptContext(conversation: Conversation, taskId: Task
   request: readonly Message[], content: UserMessage["content"], assertCurrent: () => void, context: Context,
   snapshot: {kind:string;owner:string;label:string;identity?:GoalContextIdentity}): Promise<readonly Message[]> {
   assertCurrent();
-  const view = await conversation.context(context);
+  const view = await (readGenerationContext({ conversationId: conversation.id, taskId }, context) ?? conversation.context(context));
   assertCurrent();
   const encoded = (messages: readonly Message[]) => JSON.stringify(messages);
   const composed = splitGoalSystemInstructions(request, chatJid, taskId);
