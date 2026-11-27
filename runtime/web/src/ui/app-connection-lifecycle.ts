@@ -188,6 +188,8 @@ export function runBackstopRefreshTick(options: RunBackstopRefreshTickOptions): 
   if (isAgentActive) refreshQueueState();
   void refreshAgentStatus().then(status => {
     if (status && shouldRefreshContext(status)) refreshContextUsage();
-  }).catch(() => { /* The next tick or reconnect can recover. */ });
+  }).catch(() => {
+    console.warn('Agent status refresh unavailable; the next tick can recover.');
+  });
   refreshAutoresearchStatus();
 }
