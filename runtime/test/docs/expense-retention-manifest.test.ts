@@ -21,6 +21,8 @@ const outputPath='docs/development/receipts/native-output-rss-retention-overlay.
 const outputBytes=readFileSync(resolve(root,outputPath));
 const output=JSON.parse(outputBytes.toString('utf8'));
 const correlation=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/native-input-correlation-retention-overlay.json'),'utf8'));
+const transportBytes=readFileSync(resolve(root,'docs/development/receipts/a2ui-prompt-transport-removal-retention-overlay.json'));
+const transport=JSON.parse(transportBytes.toString('utf8'));
 const sha=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
 test('removal/retention witness binds every original Core path through explicit later source transformations',()=>{
  expect(sha(manifestBytes)).toBe(overlay.baseManifestSha256);
@@ -51,7 +53,13 @@ test('removal/retention witness binds every original Core path through explicit 
  expect(correlation.rows.map((row:{path:string})=>row.path)).toEqual([
   'runtime/durable-engine/src/application-bootstrap.ts','runtime/durable-engine/src/host-bindings.ts',
  ]);
- const layers=[overlay,removal,mcpAudit,a2ui,delegate,rss,output,correlation].map(layer=>{
+ expect(transport.previousOverlay).toBe('docs/development/receipts/native-input-correlation-retention-overlay.json');
+ expect(transport.previousOverlaySha256).toBe(sha(readFileSync(resolve(root,transport.previousOverlay))));
+ expect(transport.baseManifestSha256).toBe(overlay.baseManifestSha256);
+ expect(transport.rows.map((row:{path:string})=>row.path)).toEqual([
+  'runtime/durable-engine/src/application-bootstrap.ts','runtime/durable-engine/src/host-models.ts',
+ ]);
+ const layers=[overlay,removal,mcpAudit,a2ui,delegate,rss,output,correlation,transport].map(layer=>{
   expect(layer.version).toBe(1);
   const rows=new Map<string,{beforeSha256:string;afterSha256:string;purpose:string}>(layer.rows.map((row:any)=>[row.path,row]));
   expect(rows.size).toBe(layer.rows.length);

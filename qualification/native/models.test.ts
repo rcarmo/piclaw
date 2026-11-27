@@ -1441,3 +1441,47 @@ test('classifier response cannot publish data after its captured policy is revok
  const result=await f.models.classify(f.models.getModelOfType('classifier',ref.provider,ref.id)!,classifierContext);
  expect(f.calls()).toBe(1);expect(result.stopReason).toBe('error');expect(result.answers).toEqual({});expect(result.usage?.totalTokens).toBe(5);
 });
+
+test('legacy A2UI filtering preserves cache controls and stable system/tool prefixes in preview and dispatch', async () => {
+  const {Database}=await import('bun:sqlite');
+  const {initializeDatabaseSchema}=await import('../../runtime/src/db/connection.js');
+  const {storeA2uiInputMetadata}=await import('../../runtime/src/channels/web/a2ui/input-metadata.js');
+  const {CLASSIC_A2UI_RENDERER_CAPABILITIES}=await import('../../runtime/src/channels/web/a2ui/capabilities.js');
+  const {defineTask}=await import('../../runtime/durable-engine/qualification/durable.js');
+  using db=new Database(':memory:');initializeDatabaseSchema(db);
+  db.query('INSERT INTO chats(jid) VALUES(?)').run('web:cache');
+  db.query('INSERT INTO messages(id,chat_jid,content,is_bot_message) VALUES(?,?,?,0)').run('old','web:cache','old human input');
+  db.transaction(()=>storeA2uiInputMetadata(db,{chatJid:'web:cache',sourceId:'old',conversationId:34},undefined,CLASSIC_A2UI_RENDERER_CAPABILITIES))();
+  const suffix='\n\nA2UI renderer metadata:\n'+JSON.stringify({a2uiRendererCapabilities:CLASSIC_A2UI_RENDERER_CAPABILITIES});
+  const original={messages:[{role:'system' as const,content:'Stable system instructions',timestamp:0},
+    {role:'user' as const,content:'old human input'+suffix,timestamp:1},
+    {role:'user' as const,content:[{type:'text' as const,text:'old human input'+suffix},{type:'image' as const,data:'AA==',mimeType:'image/png'}],timestamp:2},
+    {role:'user' as const,content:'fresh human input',timestamp:3},
+    {role:'user' as const,content:'[User]: old human input'+suffix+'\n\n[Assistant]: answer\n\nSummarize',timestamp:4},
+    {role:'toolResult' as const,toolName:'call_a2ui_renderer',toolCallId:'old-renderer',content:[{type:'text' as const,text:'requested function response'}],isError:false,timestamp:5,
+      details:{a2uiPrivateRendererReplyMetadata:JSON.stringify({a2uiRendererDataModel:{version:'1.0',surfaces:{}}})}}],tools:context.tools};
+  const originalBytes=JSON.stringify(original),f=await fixture(false,false,false,true);
+  const previews:string[]=[],requests:string[]=[],cacheOptions:unknown[]=[];
+  f.policy.previewRequest=async(_model,transcript)=>{previews.push(JSON.stringify(transcript.messages));return {status:'bounded',maxOutputTokens:100,reserveTokens:100,authIndependent:true};};
+  const signal=new AbortController().signal;
+  const options={signal,cacheRetention:'long' as const,sessionId:'unchanged-cache-session',identity:{version:'1',userAgent:{custom:'unchanged-client'}}};
+  const task=defineTask({name:'pi.generation',version:1,initial:()=>({phase:'request' as const}),phases:{async request(){
+    await f.models.previewSimple!(f.model,original,options);
+    expect((await f.models.streamSimple(f.model,original,options).result()).stopReason).toBe('toolUse');
+    const sent=f.captured();requests.push(JSON.stringify(sent.context));
+    cacheOptions.push({cacheRetention:sent.options.cacheRetention,sessionId:sent.options.sessionId,identity:sent.options.identity});
+    expect(sent.context.messages.filter((message:any)=>message.role==='user').map((message:any)=>message.content)).toEqual(['old human input',[{type:'text',text:'old human input'},{type:'image',data:'AA==',mimeType:'image/png'}],'fresh human input','[User]: old human input\n\n[Assistant]: answer\n\nSummarize']);
+    const reply=sent.context.messages.find((message:any)=>message.role==='toolResult');
+    expect(reply.content).toEqual([{type:'text',text:'requested function response'}]);expect(reply.details).toBeUndefined();
+    expect(sent.context.messages.filter((message:any)=>message.role==='system')).toEqual(normalizeContext(original).messages.filter(message=>message.role==='system'));
+  }},async abort(){}});
+  const registry=createRegistry(),reader={subscribe:registry.subscribe.bind(registry),snapshot(){const snapshot=registry.snapshot();return new Proxy(snapshot,{get(target,key){if(key==='task')return(name:string)=>name==='pi.generation'?task:target.task(name);const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;}});}};
+  const execute=withTaskModelRequestScope(reader).snapshot().task('pi.generation')!.definition.phases.request as Function;
+  const record={id:12,conversationId:34,kind:'pi.generation',version:1,input:{},state:{status:'running',checkpoint:{phase:'request'}}};
+  await execute(record,{taskId:12,conversationId:34,signal},durableContext);
+  await execute(record,{taskId:12,conversationId:34,signal},durableContext);
+  expect(requests[0]).toBe(requests[1]);expect(previews[0]).toBe(previews[1]);
+  expect(previews.every(value=>!value.includes('a2uiRendererCapabilities')&&!value.includes('a2uiPrivateRendererReplyMetadata')&&!value.includes('A2UI renderer metadata:'))).toBe(true);
+  expect(cacheOptions).toEqual(Array.from({length:2},()=>({cacheRetention:'long',sessionId:options.sessionId,identity:options.identity})));
+  expect(JSON.stringify(original)).toBe(originalBytes);
+});

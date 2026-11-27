@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { initializeDatabaseSchema } from '../../../src/db/connection.js';
+import { hashCanonicalRequest } from '../../../src/service-effects/contracts/common.js';
+import { projectA2uiPromptInput } from '../../../src/channels/web/a2ui/transport-metadata.js';
 import { projectPublicA2uiInput, storeA2uiInputMetadata } from '../../../src/channels/web/a2ui/input-metadata.js';
 import { CLASSIC_A2UI_RENDERER_CAPABILITIES } from '../../../src/channels/web/a2ui/capabilities.js';
 import { readApplicationMessagePayload } from '../../../durable-engine/src/accepted-payload-recovery.ts';
@@ -25,7 +27,7 @@ function fixture(chatJid = 'chat') {
   return {db,proof,bind,entry,read};
 }
 
-test('A2UI input metadata is an immutable projection for the exact recipient, outside timeline content', () => {
+test('renderer negotiation never enters fresh accepted input and legacy projections stay read-only', () => {
   using db = new Database(':memory:');
   initializeDatabaseSchema(db);
   db.exec('PRAGMA foreign_keys=ON');
@@ -40,18 +42,27 @@ test('A2UI input metadata is an immutable projection for the exact recipient, ou
   expect(write).toThrow();
   db.transaction(write)();
   expect(() => db.transaction(write)()).toThrow();
-  // The accepted model input includes the exact ordered envelope. Public projection
-  // must neither rewrite it nor move metadata into the shared instruction prefix.
+  expect((db.query('SELECT metadata FROM a2ui_input_metadata').get() as {metadata:string}).metadata).not.toContain('a2uiRendererCapabilities');
+  // Older releases persisted this suffix. New admission must use only user
+  // text; filtering old history must leave its immutable records unchanged.
   const privatePayload=`Continue\n\nA2UI renderer metadata:\n${JSON.stringify({a2uiRendererDataModel:metadata,
-    a2uiRendererCapabilities:{'1.0':{supportedCatalogIds:['https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json']}},
     a2uiRendererMessage:rendererMessage})}`;
-  expect(readApplicationMessagePayload(db,'inc',sender,ref)).toBe(privatePayload);
+  expect(readApplicationMessagePayload(db,'inc',sender,ref)).toBe('Continue');
   expect(projectPublicA2uiInput(db,sender,privatePayload)).toBe('Continue');
   expect(projectPublicA2uiInput(db,{...sender,conversationId:24},privatePayload)).toBe('Continue');
-  expect(readApplicationMessagePayload(db,'inc',sender,ref)).toBe(privatePayload);
+  const before=db.serialize();
+  expect(projectA2uiPromptInput(privatePayload)).toBe('Continue');
+  // Filtering is independent of the current conversation, so forked/inherited
+  // histories cannot reintroduce the old suffix or trigger history-table scans.
+  expect(projectA2uiPromptInput('Continue')).toBe('Continue');
+  const requestId='old-request',requestHash=hashCanonicalRequest({type:'input',requestId,content:privatePayload});
+  expect(readApplicationMessagePayload(db,'inc',{...sender,requestId,requestHash},ref)).toBe(privatePayload);
+  expect(db.serialize()).toEqual(before);
   const literal='Literal heading\n\nA2UI renderer metadata:\n{"test":true}';
   db.query(`INSERT INTO messages (id,chat_jid,is_bot_message,content) VALUES (?, ?, 0, ?)`).run('literal',sender.chatJid,literal);
   expect(projectPublicA2uiInput(db,{...sender,sourceId:'literal'},literal)).toBe(literal);
+  expect(projectA2uiPromptInput(literal)).toBe(literal);
+  expect(projectA2uiPromptInput('Example\n\nA2UI renderer metadata:\nnot JSON')).toBe('Example\n\nA2UI renderer metadata:\nnot JSON');
   expect(readApplicationMessagePayload(db,'inc',sender,`queued-source:${sender.sourceId}`)).toBe(readApplicationMessagePayload(db,'inc',sender,ref));
   expect(readApplicationMessagePayload(db,'inc',{...sender,conversationId:24},ref)).toBe('Continue');
   expect(readApplicationMessagePayload(db,'inc',{chatJid:sender.chatJid,sourceId:sender.sourceId},ref)).toBe('Continue');

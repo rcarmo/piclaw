@@ -1,5 +1,6 @@
 import type { Database } from 'bun:sqlite';
-import { projectA2uiAgentInput } from '../../src/channels/web/a2ui/input-metadata.js';
+import { hashCanonicalRequest } from "../../src/service-effects/contracts/common.js";
+import { A2UI_METADATA_HEADING } from "../../src/channels/web/a2ui/transport-metadata.js";
 
 /** Correlation lookup only. The existing binding port still verifies the input
  * hash and current source authority before accepting these SDK-owned bytes. */
@@ -16,12 +17,22 @@ const acceptedIntentPayloadRecoverySql = `SELECT e.record,b.conversation_id,b.op
 /** Existing projection selection and SDK fallback; callers fence ownership and
  * the binding port checks the returned bytes against the accepted request hash. */
 export function readApplicationMessagePayload(root: Database, incarnation: string,
-  input: { chatJid: string; sourceId: string; conversationId?: number }, ref: string): string {
+  input: { chatJid: string; sourceId: string; conversationId?: number; requestId?: string; requestHash?: string }, ref: string): string {
   const row = (/^message-row:[1-9][0-9]*$/.test(ref)
     ? root.query("SELECT id, content FROM messages WHERE rowid=? AND chat_jid=?").get(Number(ref.slice(12)), input.chatJid)
     : ref === `queued-source:${input.sourceId}`
       ? root.query("SELECT id, content FROM messages WHERE id=? AND chat_jid=?").get(input.sourceId, input.chatJid) : null) as { id: string; content: string } | null;
-  if (row?.id === input.sourceId) return projectA2uiAgentInput(root, input, row.content);
+  if (row?.id === input.sourceId) {
+    if (!input.requestId || !input.requestHash || hashCanonicalRequest({type:"input",requestId:input.requestId,content:row.content}) === input.requestHash) return row.content;
+    // Old accepted requests included renderer metadata in their immutable hash.
+    // Recover those exact bytes only for correlation, never for fresh admission.
+    const saved = root.query("SELECT metadata FROM a2ui_input_metadata WHERE chat_jid=? AND message_id=? AND conversation_id=?")
+      .get(input.chatJid,input.sourceId,input.conversationId ?? null) as {metadata:string} | null;
+    if (saved) {
+      const legacy = `${row.content}\n\n${A2UI_METADATA_HEADING}${saved.metadata}`;
+      if (hashCanonicalRequest({type:"input",requestId:input.requestId,content:legacy}) === input.requestHash) return legacy;
+    }
+  }
   // Mutable/missing projections cannot replace the SDK accepted payload.
   // Steering acceptance uses the intent binding, not the primary binding.
   // Read only SDK-accepted bytes and reject ambiguous correlations.

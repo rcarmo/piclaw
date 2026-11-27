@@ -3,7 +3,7 @@ import { Type } from 'typebox';
 import { CallRendererFunctionMessageSchema } from '@a2ui/web_core/v1_0';
 import { boundedRpcJson, MAX_RPC_VALUE } from '../../src/channels/web/a2ui/rpc-json.js';
 import { readAcceptedRendererPeer, readA2uiSurfaceOwner } from '../../src/channels/web/a2ui/input-metadata.js';
-import { A2UI_RENDERER_TOOL, A2UI_PRIVATE_REPLY_METADATA, MAX_A2UI_METADATA_BYTES } from '../../src/channels/web/a2ui/transport-metadata.js';
+import { A2UI_RENDERER_TOOL } from '../../src/channels/web/a2ui/transport-metadata.js';
 import { rendererRpcError, type RendererRpcBroker } from '../../src/channels/web/a2ui/renderer-rpc.js';
 import { CLASSIC_A2UI_CATALOG, isA2uiSurfaceBlock } from '../../src/channels/web/a2ui/surface.js';
 import { getMessageByRowIdFromDatabase } from '../../src/db/messages.js';
@@ -57,18 +57,15 @@ export function createHostA2uiRendererTool(options: Omit<Parameters<typeof creat
           || owner?.post_id !== source.post_id || owner.conversation_id !== api.conversationId) throw Error('A2UI renderer surface changed');
       };
       try { checkSurface(); } catch { return error('The requested surface is not active in the accepted thread.'); }
-      const {message:response,metadata} = await options.renderer.invoke(peer.hash,chatJid,api.conversationId,{message,source},() => {
+      const {message:response} = await options.renderer.invoke(peer.hash,chatJid,api.conversationId,{message,source},() => {
         checkTurn();
         if (readAcceptedRendererPeer(options.root,recipient)?.hash !== peer.hash || resolveAcceptedMessageThread(options.root,primary) !== threadId)
           throw Error('A2UI renderer turn changed');
         checkSurface();
       },context.abortSignal);
       checkTurn();
-      const encoded=metadata ? JSON.stringify(metadata) : undefined;
-      if (encoded && Buffer.byteLength(encoded)>MAX_A2UI_METADATA_BYTES) throw Error('A2UI renderer reply metadata is too large');
-      return {isError:'error' in response || !!response.rendererFunctionResponse.error,output:[{type:'text' as const,text:JSON.stringify(response)}],
-        ...(encoded ? {details:{[A2UI_PRIVATE_REPLY_METADATA]:encoded}} : {}),
-      };
+      return {isError:'error' in response || !!response.rendererFunctionResponse.error,
+        output:[{type:'text' as const,text:JSON.stringify(response)}]};
     },
   });
 }
