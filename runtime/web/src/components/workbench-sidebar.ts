@@ -117,17 +117,6 @@ function formatSessionPickerModel(chat): string {
   return model;
 }
 
-/** Context use of one chat from /agent/context: tokens, window and percent. */
-async function fetchSessionContext(chatJid: string) {
-  const response = await fetch(`/agent/context?chat_jid=${encodeURIComponent(chatJid)}`, {
-    credentials: 'same-origin',
-    cache: 'no-store',
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!response.ok) throw new Error(`Session context HTTP ${response.status}`);
-  return response.json();
-}
-
 /** Context use refreshes this often while the Sessions view is visible. */
 export const SESSIONS_CONTEXT_INTERVAL_MS = 60000;
 /** At most this many rows read their context per refresh. */
@@ -143,6 +132,89 @@ export function resolveSessionRowContext(chat, fetched): { percent: number; labe
   const compact = (value) => (value >= 1000 ? `${Math.round(value / 100) / 10}k` : String(Math.round(value)));
   const detail = Number.isFinite(tokens) && Number.isFinite(window) && window > 0 ? ` (${compact(tokens)} / ${compact(window)} tokens)` : '';
   return { percent, label: `Context ${Math.round(percent)}%${detail}` };
+}
+
+export type SessionContextRecord = {
+  percent: number | null;
+  tokens: number | null;
+  contextWindow: number | null;
+  revision: string | null;
+};
+
+function nonemptyRevision(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+type SessionContextPayload = {
+  percent?: number | null;
+  tokens?: number | null;
+  contextWindow?: number | null;
+  revision?: string | null;
+};
+type SessionContextLoadResult = {
+  cancelled: boolean;
+  notModified: boolean;
+  value: SessionContextPayload | null;
+};
+type SessionContextLoaderResult = SessionContextPayload | SessionContextLoadResult | null;
+export type SessionContextLoader = (
+  chatJid: string,
+  revision: string | null,
+  isCancelled?: () => boolean,
+) => SessionContextLoaderResult | Promise<SessionContextLoaderResult>;
+type SessionContextRequest = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+export async function fetchSessionContext(
+  chatJid: string,
+  revision: string | null,
+  isCancelled: () => boolean = () => false,
+  request: SessionContextRequest = fetch,
+): Promise<SessionContextLoadResult> {
+  const validator = nonemptyRevision(revision);
+  const response = await request(`/agent/context?chat_jid=${encodeURIComponent(chatJid)}`, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: validator ? { 'If-None-Match': JSON.stringify(validator) } : undefined,
+    signal: AbortSignal.timeout(15000),
+  });
+  if (isCancelled()) return { cancelled: true, notModified: false, value: null };
+  if (response.status === 304) {
+    if (!validator) throw new Error('Session context HTTP 304 without a known validator');
+    return { cancelled: false, notModified: true, value: null };
+  }
+  if (!response.ok) throw new Error(`Session context HTTP ${response.status}`);
+  const value = await response.json();
+  return { cancelled: isCancelled(), notModified: false, value };
+}
+
+/** Refresh one scoped context read, validating warm rows with their own successful revision. */
+export async function refreshSessionRowContext(
+  chatJid: string,
+  committed: SessionContextRecord | null,
+  loadContext: SessionContextLoader = fetchSessionContext,
+  isCancelled: () => boolean = () => false,
+): Promise<{ changed: boolean; value: SessionContextRecord | null; cancelled: boolean }> {
+  const validator = nonemptyRevision(committed?.revision);
+  const loaded = await loadContext(chatJid, validator, isCancelled);
+  const wrapped = loaded && typeof loaded === 'object' && ('notModified' in loaded || 'cancelled' in loaded);
+  const result = wrapped
+    ? loaded as SessionContextLoadResult
+    : { cancelled: false, notModified: false, value: loaded as SessionContextPayload | null };
+  if (result.cancelled || isCancelled()) return { changed: false, value: committed, cancelled: true };
+  if (result.notModified) {
+    if (!validator) throw new Error('Session context HTTP 304 without a known validator');
+    return { changed: false, value: committed, cancelled: false };
+  }
+  const value = {
+    percent: result.value?.percent ?? null,
+    tokens: result.value?.tokens ?? null,
+    contextWindow: result.value?.contextWindow ?? null,
+    revision: nonemptyRevision(result.value?.revision),
+  };
+  const changed = !committed || committed.percent !== value.percent
+    || committed.tokens !== value.tokens || committed.contextWindow !== value.contextWindow
+    || committed.revision !== value.revision;
+  return { changed, value, cancelled: false };
 }
 
 /** Other active sessions that get a live preview, current session excluded. */
@@ -248,7 +320,8 @@ export function WorkbenchSidebar({
   const asideRef = useRef(null);
   const searchRef = useRef(null);
   const [previews, setPreviews] = useState(() => new Map());
-  const [contexts, setContexts] = useState(() => new Map());
+  const contexts = useRef(new Map());
+  const [, redrawContexts] = useState(0);
   const retainedPreviewsRef = useRef(new Map());
   const [now, setNow] = useState(() => Date.now());
 
@@ -475,6 +548,8 @@ export function WorkbenchSidebar({
 
   // Sessions data refreshes only while the Sessions view is laid out in a visible tab.
   const sessionsVisible = shown && view === 'sessions';
+  const contextScopeRef = useRef({ chatJid: currentChatJid, visible: sessionsVisible });
+  contextScopeRef.current = { chatJid: currentChatJid, visible: sessionsVisible };
   const isShown = useCallback(() => {
     if (!sessionsVisible || typeof document === 'undefined' || document.visibilityState === 'hidden') return false;
     return Boolean(asideRef.current?.getClientRects?.().length);
@@ -554,7 +629,7 @@ export function WorkbenchSidebar({
     };
   }, [isShown, loadSessionStatus, previewTargetsKey, sessionsVisible]);
 
-  // Context use per row: rows the list does not size are read from /agent/context while visible.
+  // Context use per row: rows the list does not size are reconciled while visible.
   const contextTargetsKey = useMemo(() => resolveSessionPopupChats(activeChatAgents, currentChatJid)
     .filter((chat) => !chat?.archived_at && resolveSessionContextPercent(chat) == null)
     .map((chat) => chat.chat_jid)
@@ -563,25 +638,32 @@ export function WorkbenchSidebar({
 
   useEffect(() => {
     const targets = contextTargetsKey ? contextTargetsKey.split('\n') : [];
+    const eligible = new Set(targets);
+    let pruned = false;
+    for (const jid of contexts.current.keys()) if (!eligible.has(jid)) {
+      contexts.current.delete(jid);
+      pruned = true;
+    }
+    if (pruned) redrawContexts((version) => version + 1);
     if (!sessionsVisible || targets.length === 0) return undefined;
     let cancelled = false;
     let inFlight = false;
+    const scopeChanged = () => cancelled || !isShown()
+      || !contextScopeRef.current.visible || contextScopeRef.current.chatJid !== currentChatJid;
     const poll = async () => {
-      if (inFlight || !isShown()) return;
+      if (inFlight || scopeChanged()) return;
       inFlight = true;
       try {
         for (const jid of targets) {
-          if (cancelled) return;
+          if (scopeChanged()) return;
           try {
-            const usage = await loadSessionContext(jid);
-            if (cancelled) return;
-            setContexts((previous) => {
-              const current = previous.get(jid);
-              if (current && current.percent === usage?.percent && current.tokens === usage?.tokens) return previous;
-              const next = new Map(previous);
-              next.set(jid, { percent: usage?.percent ?? null, tokens: usage?.tokens ?? null, contextWindow: usage?.contextWindow ?? null });
-              return next;
-            });
+            const result = await refreshSessionRowContext(
+              jid, contexts.current.get(jid) ?? null, loadSessionContext, scopeChanged,
+            );
+            if (scopeChanged() || result.cancelled) return;
+            if (!result.changed) continue;
+            contexts.current.set(jid, result.value);
+            redrawContexts((version) => version + 1);
           } catch (error) {
             // Keep the last known value; an unreadable chat shows no meter.
             console.debug('[sessions] Context use unavailable; keeping the last value.', jid, error);
@@ -739,7 +821,7 @@ export function WorkbenchSidebar({
                 const age = formatSessionActivityAge(chat.last_activity_at, now);
                 const live = !current ? previews.get(jid) : null;
                 const reply = live ? '' : cleanSessionPreviewText(chat.last_reply);
-                const context = resolveSessionRowContext(chat, contexts.get(jid));
+                const context = resolveSessionRowContext(chat, contexts.current.get(jid));
                 return html`
                   <li key=${jid} class=${`sessions-sidebar-item${current ? ' current' : ''}${chat.is_active ? ' active' : ''}${menuFor === jid ? ' menu-open' : ''}`}
                     onContextMenu=${(event) => { event.preventDefault(); setMenuFor(jid); }}>
