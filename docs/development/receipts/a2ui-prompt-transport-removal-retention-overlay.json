@@ -16,8 +16,14 @@
     {
       "path": "runtime/durable-engine/src/host-models.ts",
       "beforeSha256": "b53c012e2d1f40f54a525e342e3b4a4b511ffebdc91fe11647b4b000b8c5b451",
-      "afterSha256": "57b3d5ffe6ac4c4df5ad3ca3b4f8132f68da48b2974b8d41d585a30fe31992a2",
+      "afterSha256": "eeb8171c59b691d23f0e7fcb563d661496190399b8606a4405d390c6bd09ead6",
       "purpose": "Remove automatic renderer envelopes from provider and preview transcripts without changing system/tool prefixes or cache controls."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-runtime.ts",
+      "beforeSha256": "506c3f6a0ce9944e733a98c540cdfffcef69540a0af8d8cffc760ae15bf676fd",
+      "purpose": "Use source-owned accepted input projection for SDK generation, compaction and preview without rewriting stored history.",
+      "afterSha256": "f69c4f1c3ab802f6f375286041b80994b6c3adbee6cf8e02ee0239e3783b14ef"
     }
   ]
 }

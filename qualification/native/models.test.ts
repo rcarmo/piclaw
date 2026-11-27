@@ -3,7 +3,7 @@ import "./src/test-guard.js";
 import { expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { Harness, createRegistry, defineExtension, defineTool } from "../../runtime/durable-engine/qualification/durable.ts";
+import { Harness, MemoryStorage, createRegistry, defineExtension, defineTool, type ContextView, type EntryRecord } from "../../runtime/durable-engine/qualification/durable.ts";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
 import { BunSqliteDatabase } from "../../runtime/durable-engine/src/index.js";
 import { context as durableContext } from "./src/fixture.js";
@@ -18,6 +18,9 @@ import type { HostModelEventObserver } from "../../runtime/durable-engine/src/ho
 import { HostCodexModelServices } from '../../runtime/durable-engine/src/host-codex-model-services.js';
 import { addLogSink, removeLogSink, type LogRecord } from "../../runtime/src/utils/logger.js";
 import { createHostBuiltinTools } from "../../runtime/durable-engine/src/host-builtins.js";
+import { projectA2uiContext } from "../../runtime/durable-engine/src/host-a2ui-context.js";
+import { projectModelContext } from "../../runtime/durable-engine/src/host-model-context.js";
+import { A2UI_METADATA_HEADING } from "../../runtime/src/channels/web/a2ui/transport-metadata.js";
 
 // These ESM-only public exports have no require condition; resolve from root.
 const root = new URL("../../package.json", import.meta.url).href;
@@ -1442,7 +1445,7 @@ test('classifier response cannot publish data after its captured policy is revok
  expect(f.calls()).toBe(1);expect(result.stopReason).toBe('error');expect(result.answers).toEqual({});expect(result.usage?.totalTokens).toBe(5);
 });
 
-test('legacy A2UI filtering preserves cache controls and stable system/tool prefixes in preview and dispatch', async () => {
+test('unidentified A2UI metadata examples are preserved with stable cache controls and prefixes', async () => {
   const {Database}=await import('bun:sqlite');
   const {initializeDatabaseSchema}=await import('../../runtime/src/db/connection.js');
   const {storeA2uiInputMetadata}=await import('../../runtime/src/channels/web/a2ui/input-metadata.js');
@@ -1470,7 +1473,8 @@ test('legacy A2UI filtering preserves cache controls and stable system/tool pref
     expect((await f.models.streamSimple(f.model,original,options).result()).stopReason).toBe('toolUse');
     const sent=f.captured();requests.push(JSON.stringify(sent.context));
     cacheOptions.push({cacheRetention:sent.options.cacheRetention,sessionId:sent.options.sessionId,identity:sent.options.identity});
-    expect(sent.context.messages.filter((message:any)=>message.role==='user').map((message:any)=>message.content)).toEqual(['old human input',[{type:'text',text:'old human input'},{type:'image',data:'AA==',mimeType:'image/png'}],'fresh human input','[User]: old human input\n\n[Assistant]: answer\n\nSummarize']);
+    const users=sent.context.messages.filter((message:any)=>message.role==='user').map((message:any)=>message.content);
+    expect(users).toEqual(['old human input'+suffix,[{type:'text',text:'old human input'+suffix},{type:'image',data:'AA==',mimeType:'image/png'}],'fresh human input','[User]: old human input'+suffix+'\n\n[Assistant]: answer\n\nSummarize']);
     const reply=sent.context.messages.find((message:any)=>message.role==='toolResult');
     expect(reply.content).toEqual([{type:'text',text:'requested function response'}]);expect(reply.details).toBeUndefined();
     expect(sent.context.messages.filter((message:any)=>message.role==='system')).toEqual(normalizeContext(original).messages.filter(message=>message.role==='system'));
@@ -1481,7 +1485,138 @@ test('legacy A2UI filtering preserves cache controls and stable system/tool pref
   await execute(record,{taskId:12,conversationId:34,signal},durableContext);
   await execute(record,{taskId:12,conversationId:34,signal},durableContext);
   expect(requests[0]).toBe(requests[1]);expect(previews[0]).toBe(previews[1]);
-  expect(previews.every(value=>!value.includes('a2uiRendererCapabilities')&&!value.includes('a2uiPrivateRendererReplyMetadata')&&!value.includes('A2UI renderer metadata:'))).toBe(true);
+  expect(previews.every(value=>value.includes('A2UI renderer metadata:')&&value.includes('a2uiRendererCapabilities')&&!value.includes('a2uiPrivateRendererReplyMetadata'))).toBe(true);
+  expect(requests.every(value=>value.includes('[User]: old human input')&&value.includes('A2UI renderer metadata:'))).toBe(true);
   expect(cacheOptions).toEqual(Array.from({length:2},()=>({cacheRetention:'long',sessionId:options.sessionId,identity:options.identity})));
   expect(JSON.stringify(original)).toBe(originalBytes);
+});
+
+test('A2UI context projects only the proven source in preview, generation and summary input', async () => {
+  const { Database } = await import('bun:sqlite');
+  const { initializeDatabaseSchema } = await import('../../runtime/src/db/connection.js');
+  const { projectPublicA2uiInput, storeA2uiInputMetadata } = await import('../../runtime/src/channels/web/a2ui/input-metadata.js');
+  using db = new Database(':memory:');
+  initializeDatabaseSchema(db);
+  const f = await fixture();
+  const harness = await Harness.open(new MemoryStorage(), { models: f.models, registry: createRegistry() }, durableContext);
+  try {
+    const root = await harness.root(durableContext, { agent: { model: { provider: ref.provider, modelId: ref.id } } });
+    const chatJid = 'web:projection';
+    const legacy = { chatJid, sourceId: 'legacy', conversationId: root.id };
+    const literal = { ...legacy, sourceId: 'literal' };
+    const visible = 'Continue';
+    const rendererData = { version: '1.0' as const, surfaces: { form: { value: 'renderer state' } } };
+    const payload = `${visible}\n\n${A2UI_METADATA_HEADING}${JSON.stringify({ a2uiRendererDataModel: rendererData })}`;
+    db.transaction(() => {
+      db.query('INSERT INTO chats(jid) VALUES(?)').run(chatJid);
+      const insert = db.query('INSERT INTO messages(id,chat_jid,content,is_bot_message) VALUES(?,?,?,0)');
+      insert.run(legacy.sourceId, chatJid, visible);
+      insert.run(literal.sourceId, chatJid, payload);
+      storeA2uiInputMetadata(db, legacy, rendererData);
+      storeA2uiInputMetadata(db, literal, rendererData);
+    })();
+    const dbBefore = db.serialize();
+    const user = { role: 'user' as const, content: payload, timestamp: 1 };
+    const tail = await root.commit(async tx => {
+      await tx.appendEntry(root.id, { kind: 'host.accepted', data: legacy, model: [{ ...user }] });
+      await tx.appendEntry(root.id, { kind: 'host.system-fixture', model: [{ role: 'system', content: 'Stable instructions', timestamp: 2 }] });
+      await tx.appendEntry(root.id, { kind: 'host.accepted', data: literal, model: [{ ...user }] });
+      await tx.appendEntry(root.id, { kind: 'pi.assistant', model: [{ ...f.message, timestamp: 3 }] });
+      return tx.appendEntry(root.id, { kind: 'pi.tool-result', model: [{ role: 'toolResult', toolName: 'fixture_tool', toolCallId: 'call-1',
+        content: [{ type: 'text', text: 'Tool response' }], details: { fixture: true }, isError: false, timestamp: 4 }] });
+    }, durableContext);
+    const fork = await root.fork(tail.id, { ownership: { kind: 'ownerless' } }, durableContext);
+    expect(fork.id).not.toBe(root.id);
+    const raw = await fork.context(durableContext);
+    const before = JSON.stringify(raw);
+    const [old, human] = raw.entries.filter(entry => entry.kind === 'host.accepted');
+    expect(old!.model![0]).toEqual(human!.model![0]!);
+    expect(old!.model![0]).not.toBe(human!.model![0]);
+    const sources: unknown[] = [];
+    const project: NonNullable<Parameters<typeof projectA2uiContext>[1]> = (source, content) => {
+      sources.push({ source, content });
+      return projectPublicA2uiInput(db, source, content);
+    };
+    const generation = projectA2uiContext(raw, project);
+    expect(sources).toEqual([{ source: legacy, content: payload }, { source: literal, content: payload }]);
+    expect(generation).not.toBe(raw);
+    expect(generation.entries).toBe(raw.entries);
+    for (const [index, original] of raw.contributions.entries()) {
+      if (raw.entries[index] !== old) {
+        expect(generation.contributions[index]).toBe(original);
+        continue;
+      }
+      const replacement = generation.contributions[index]![0]!;
+      expect(generation.contributions[index]).not.toBe(original);
+      expect(original[0]).toBe(old!.model![0]);
+      expect(replacement).not.toBe(original[0]);
+      expect(replacement).toEqual({ ...user, content: visible });
+      expect(generation.messages[raw.messages.indexOf(original[0]!)]).toBe(replacement);
+    }
+    expect(raw.messages[0]?.role).toBe('system'); // SDK orders it ahead of the first accepted entry.
+    for (const [index, message] of raw.messages.entries()) {
+      if (message !== old!.model![0]) expect(generation.messages[index]).toBe(message);
+    }
+    expect(generation.messages.some(message => message.role === 'toolResult')).toBe(true);
+    // Compaction takes a prefix of contributions before producing one serialized user prompt.
+    const summaryInput = (view: ContextView) => view.contributions.slice(0, 3).flat()
+      .flatMap(message => message.role === 'user' ? [`[User]: ${message.content}`] : []).join('\n\n');
+    expect(summaryInput(raw)).toBe(`[User]: ${payload}\n\n[User]: ${payload}`);
+    expect(summaryInput(generation)).toBe(`[User]: ${visible}\n\n[User]: ${payload}`);
+
+    const previewView = projectA2uiContext(await fork.context(durableContext), project);
+    const preview = await projectModelContext(previewView, {
+      conversationId: fork.id, agent: await fork.agent(durableContext), env: undefined, read: harness,
+    }, durableContext);
+    let previewUsers: unknown;
+    f.policy.previewRequest = async (_model, transcript) => {
+      previewUsers = transcript.messages.filter(message => message.role === 'user').map(message => message.content);
+      return { status: 'bounded', maxOutputTokens: 100, reserveTokens: 100, authIndependent: true };
+    };
+    await f.models.previewSimple!(f.model, { messages: [...preview] });
+    expect(previewUsers).toEqual([visible, payload]);
+    expect((await f.models.completeSimple(f.model, { messages: [...generation.messages] })).stopReason).toBe('toolUse');
+    const sent = f.captured().context as HostTranscript;
+    expect(sent.messages.filter(message => message.role === 'user').map(message => message.content)).toEqual([visible, payload]);
+    expect(JSON.stringify(raw)).toBe(before);
+    expect(JSON.stringify(await fork.context(durableContext))).toBe(before);
+    expect(db.serialize()).toEqual(dbBefore);
+  } finally { await harness.close(durableContext); }
+});
+
+test('A2UI context rejects ambiguous references, edits and invalid source identifiers without copying the view', () => {
+  const user = Object.freeze({ role: 'user' as const, content: `Example\n\n${A2UI_METADATA_HEADING}{}`, timestamp: 1 });
+  const entry: EntryRecord = Object.freeze({ kind: 'host.accepted', id: 1 as EntryRecord['id'], conversationId: 7 as EntryRecord['conversationId'],
+    data: Object.freeze({ chatJid: 'web:projection', sourceId: 'source', conversationId: 7 }), model: Object.freeze([user]) });
+  const secondId = 2 as EntryRecord['id'];
+  const view = (entries: ContextView['entries'], contributions: ContextView['contributions']): ContextView =>
+    ({ head: undefined, entries, contributions, messages: contributions.flat() });
+  const fresh = { ...user, content: 'Fresh human text' };
+  const blockText = { ...user, content: [{ type: 'text' as const, text: user.content }] };
+  const system = { ...user, role: 'system' as const };
+  const edited = { ...user }; // Equal bytes but not the entry's original object.
+  const foreign = { ...entry, id: secondId, kind: 'pi.user' };
+  const skipped = [
+    view([entry], []),
+    view([{ ...entry, kind: 'host.accepted.example' }], [[user]]),
+    view([{ ...entry, data: undefined }], [[user]]),
+    view([{ ...entry, data: { chatJid: '', sourceId: 'source', conversationId: 7 } }], [[user]]),
+    view([{ ...entry, data: { chatJid: 'web:projection', sourceId: ' ', conversationId: 7 } }], [[user]]),
+    view([{ ...entry, data: { chatJid: 'web:projection', sourceId: 'source', conversationId: 8 } }], [[user]]),
+    view([{ ...entry, conversationId: 0 as EntryRecord['conversationId'],
+      data: { chatJid: 'web:projection', sourceId: 'source', conversationId: 0 } }], [[user]]),
+    view([{ ...entry, model: [fresh] }], [[fresh]]),
+    view([{ ...entry, model: [blockText] }], [[blockText]]),
+    view([{ ...entry, model: [system] }], [[system]]),
+    view([entry], [[edited]]),
+    view([entry, { ...foreign, model: undefined, edits: [{ target: entry.id, action: 'replace', messages: [user] }] }], [[user], []]),
+    view([entry, foreign], [[user], []]), // Omitted contribution, but still another original owner.
+    view([entry, { ...foreign, model: undefined }], [[user], [user]]), // Another contribution owns the reference.
+    view([entry, { ...entry, id: secondId }], [[user], [user]]), // Both entries otherwise qualify.
+  ];
+  const mustNotProject = () => { throw Error('Unproven A2UI source reached callback'); };
+  for (const sample of skipped) expect(projectA2uiContext(sample, mustNotProject)).toBe(sample);
+  const original = view([entry], [[user]]);
+  expect(projectA2uiContext(original)).toBe(original);
+  expect(projectA2uiContext(original, (_source, content) => content)).toBe(original);
 });

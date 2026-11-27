@@ -20,7 +20,7 @@ import { awaitWithContext, BACKGROUND_CONTEXT, withAbortSignal } from "@earendil
 import type { PreviewModels } from "./host-model-context.js";
 import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
 import { transformMessages } from "@earendil-works/pi-ai/api/transform-messages";
-import { A2UI_RENDERER_TOOL, projectA2uiPromptInput } from '../../src/channels/web/a2ui/transport-metadata.js';
+import { A2UI_RENDERER_TOOL } from '../../src/channels/web/a2ui/transport-metadata.js';
 
 export interface ModelRef { provider: string; id: string; type?: ModelType }
 type Operation = "chat" | "generateImages" | "classify";
@@ -199,27 +199,13 @@ export function createHostModels(
   approved: readonly ModelRef[],
   policy: HostModelPolicy,
 ): PreviewModels {
-  const projectA2uiMessages = (messages: Message[]): Message[] => {
+  const stripPrivateRendererDetails = (messages: Message[]): Message[] => {
     let projected: Message[] | undefined;
     for (const [index, message] of messages.entries()) {
       if (message.role === "toolResult" && message.toolName === A2UI_RENDERER_TOOL && message.details !== undefined) {
         const { details: _details, ...reply } = message;
         projected ??= [...messages]; projected[index] = reply;
       }
-      if (message.role !== "user") continue;
-      let content = message.content;
-      if (typeof content === "string") content = projectA2uiPromptInput(content);
-      else {
-        const original = content;
-        let parts: typeof original | undefined;
-        for (const [partIndex, part] of original.entries()) {
-          if (part.type !== "text") continue;
-          const text = projectA2uiPromptInput(part.text);
-          if (text !== part.text) { parts ??= [...original]; parts[partIndex] = { ...part, text }; }
-        }
-        content = parts ?? original;
-      }
-      if (content !== message.content) { projected ??= [...messages]; projected[index] = { ...message, content }; }
     }
     return projected ?? messages;
   };
@@ -284,7 +270,7 @@ export function createHostModels(
     const snapshot = freeze(data(physical));
     const {cost:_observationalCost,...capabilities}=snapshot;
     const frame = JSON.stringify(capabilities);
-    const transcript = normalizeHostContext({ messages: data(projectA2uiMessages(context.messages)) });
+    const transcript = normalizeHostContext({ messages: data(stripPrivateRendererDetails(context.messages)) });
     const result = await awaitWithContext(Promise.resolve().then(() => {
       signal.throwIfAborted();
       return policy.previewRequest!(snapshot, transcript, { ...safe, signal });
@@ -389,7 +375,7 @@ export function createHostModels(
         // This detached relay-owned snapshot is never passed to the authority
         // hooks. Transfer it to the host at dispatch instead of serialising again.
         context = copyJsonData(context);
-        context.messages = projectA2uiMessages(context.messages);
+        context.messages = stripPrivateRendererDetails(context.messages);
         if (deferred) {
           phase = "admission";
           if (!hostModelRuntime120.streamDeferred) throw new Error("Host operation unavailable");

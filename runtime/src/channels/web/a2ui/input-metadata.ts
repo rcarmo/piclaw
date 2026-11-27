@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
 import { takeA2uiRendererErrors } from './renderer-errors.js';
-import { A2UI_METADATA_HEADING, MAX_A2UI_METADATA_BYTES } from './transport-metadata.js';
+import { A2UI_METADATA_HEADING, MAX_A2UI_METADATA_BYTES, projectA2uiPromptInput } from './transport-metadata.js';
 import { CLASSIC_A2UI_CATALOG, isA2uiSurfaceBlock, type A2uiSnapshot, type A2uiSurfaceBlock } from './surface.js';
 import { validateA2uiDraftEdits, type A2uiActionMessage } from './action.js';
 import { InvalidA2uiDraftError, type A2uiDraftPatch } from './drafts.js';
@@ -130,15 +130,14 @@ export function readAcceptedRendererPeer(database: Database, recipient: Recipien
 /** Public SDK history must not expose the private suffix used for model input. */
 export function projectPublicA2uiInput(database: Database, recipient: Recipient, content: string): string {
   if (!recipient.chatJid.startsWith('web:')) return content;
-  const marker=`\n\n${A2UI_METADATA_HEADING}`;
-  const split=content.lastIndexOf(marker);
-  if (split<0) return content;
+  if (!content.includes(A2UI_METADATA_HEADING)) return content;
   // Fresh accepted input is already the visible user text. Never interpret a
   // literal heading/JSON example supplied by the human as transport metadata.
   const row=database.query('SELECT content FROM messages WHERE chat_jid=? AND id=? AND is_bot_message=0')
     .get(recipient.chatJid,recipient.sourceId) as {content:string|null} | null;
-  if (row?.content===content) return content;
+  if (row?.content===content || row?.content === null || row === null) return content;
   const stored=readMetadata(database,recipient);
-  if (stored!==undefined && content.slice(split+marker.length)===stored) return content.slice(0,split);
-  return row ? row.content ?? '' : content.slice(0,split);
+  // Without the bound metadata row there is no legacy projection authority.
+  // Preserve the bytes rather than reconstructing history from a heading.
+  return stored===undefined ? content : projectA2uiPromptInput(content,{sourceContent:row.content,metadata:stored});
 }

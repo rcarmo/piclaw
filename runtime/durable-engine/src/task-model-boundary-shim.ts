@@ -2,7 +2,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { canonicalJson } from "../../src/utils/canonical-json.js";
 import {withAbortSignal,type Context} from "@earendil-works/chord/context";
-import type { AnyTask, RegistryReader, RegistrySnapshot, TaskDefinition, TaskRuntime, ConversationId, ToolRegistration } from "@earendil-works/pi-durable";
+import type { AnyTask, RegistryReader, RegistrySnapshot, TaskDefinition, TaskRuntime, ConversationId, ToolRegistration, ContextView } from "@earendil-works/pi-durable";
+import { projectA2uiContext } from "./host-a2ui-context.js";
 
 type Runtime = TaskRuntime<any, any, any, any>;
 type Definition = TaskDefinition<any, any, any, any>;
@@ -64,7 +65,7 @@ export function taskModelToolScope(api: Pick<TaskModelRequestScope, 'taskId' | '
  * cancellation forwards only to invocation/model/tool signals. SDK commit contexts
  * and abort handlers remain intact so durable abort/cleanup can still be joined.
  */
-export function withTaskModelRequestScope(registry: RegistryReader, cancellationFor?: (conversationId:ConversationId)=>Promise<AbortSignal|undefined>): RegistryReader {
+export function withTaskModelRequestScope(registry: RegistryReader, cancellationFor?: (conversationId:ConversationId)=>Promise<AbortSignal|undefined>, publicInputText?: (source:{chatJid:string;sourceId:string;conversationId:number},content:string)=>string): RegistryReader {
   const wrapped = new WeakMap<AnyTask, AnyTask>();
   const wrap = (task: AnyTask): AnyTask => {
     const previous = wrapped.get(task);
@@ -106,13 +107,22 @@ export function withTaskModelRequestScope(registry: RegistryReader, cancellation
           taskKind: definition.name, phase, ...(checkpointHash ? { checkpointHash } : {}),
           ...(typeof toolCallId === 'string' && toolCallId ? { toolCallId } : {}),
         });
-        if (!valid || definition.name !== "pi.generation" || phase !== "request") {
-          return requests.run(scope, () => execute(record, runtime, context));
+        const projectContext = valid && (definition.name === "pi.generation" && phase === "request"
+          || definition.name === "pi.compaction" && (phase === "select" || phase === "summarize"));
+        const generationRequest = valid && definition.name === "pi.generation" && phase === "request";
+        const originalContext = runtime.context;
+        if (projectContext) {
+          runtime.context = async function (this: Runtime, ...args: Parameters<Runtime["context"]>): Promise<ContextView> {
+            return projectA2uiContext(await Reflect.apply(originalContext, this, args), publicInputText);
+          };
         }
-        generationContextReaders.set(scope, ctx => runtime.context(scope.conversationId, ctx));
+        if (generationRequest) generationContextReaders.set(scope, ctx => runtime.context(scope.conversationId, ctx));
         try {
           return await requests.run(scope, () => execute(record, runtime, context));
-        } finally { generationContextReaders.delete(scope); }
+        } finally {
+          if (generationRequest) generationContextReaders.delete(scope);
+          if (projectContext) runtime.context = originalContext;
+        }
       },
     ]));
     const result = { ...task, definition: { ...definition, phases } };

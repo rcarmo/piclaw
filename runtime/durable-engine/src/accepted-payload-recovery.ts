@@ -32,8 +32,12 @@ export function readApplicationMessagePayload(root: Database, incarnation: strin
       const legacy = `${row.content}\n\n${A2UI_METADATA_HEADING}${saved.metadata}`;
       if (hashCanonicalRequest({type:"input",requestId:input.requestId,content:legacy}) === input.requestHash) return legacy;
     }
+    // A present source row is current admission authority. Its edited bytes must
+    // not be replaced with sealed SDK evidence; that evidence is only a passive
+    // fallback when the projection is genuinely missing.
+    throw Error('Host payload hash conflict');
   }
-  // Mutable/missing projections cannot replace the SDK accepted payload.
+  // A missing projection can use only the immutable SDK-accepted payload.
   // Steering acceptance uses the intent binding, not the primary binding.
   // Read only SDK-accepted bytes and reject ambiguous correlations.
   const params = [input.chatJid, input.sourceId, ref, incarnation];

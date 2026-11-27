@@ -57,7 +57,7 @@ test('removal/retention witness binds every original Core path through explicit 
  expect(transport.previousOverlaySha256).toBe(sha(readFileSync(resolve(root,transport.previousOverlay))));
  expect(transport.baseManifestSha256).toBe(overlay.baseManifestSha256);
  expect(transport.rows.map((row:{path:string})=>row.path)).toEqual([
-  'runtime/durable-engine/src/application-bootstrap.ts','runtime/durable-engine/src/host-models.ts',
+  'runtime/durable-engine/src/application-bootstrap.ts','runtime/durable-engine/src/host-models.ts','runtime/durable-engine/src/host-runtime.ts',
  ]);
  const layers=[overlay,removal,mcpAudit,a2ui,delegate,rss,output,correlation,transport].map(layer=>{
   expect(layer.version).toBe(1);
