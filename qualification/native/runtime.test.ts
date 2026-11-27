@@ -1370,6 +1370,23 @@ test("runtime: native context reader follows branch, trailing content and reset 
   expect(f.base.host.modelCalls).toBe(0);
 }));
 
+test("runtime: native context usage follows committed edits and a reset on the same live owner", () => fixture(async f => {
+  const id = f.options.existingConversationIds[0]!;
+  const binding = { incarnation: "copy-A", chatJid: "web:runtime", branchId: "existing-main", conversationId: id };
+  const conversation = (await f.runtime.coreExtensionHarness().conversation(id, context))!;
+  const read = () => f.runtime.readSessionContextUsage(binding);
+  const original = await conversation.commit(tx => tx.appendEntry(id, { kind: "pi.user",
+    model: [{ role: "user", content: "a".repeat(500), timestamp: 1 }] }), context);
+  const first = await Promise.all([read(), read(), read()]);
+  expect(first.map(value => value.tokens)).toEqual([143, 143, 143]);
+  await conversation.commit(tx => tx.appendEntry(id, { kind: "qualification.edit",
+    edits: [{ target: original.id, action: "replace", messages: [{ role: "user", content: "abc", timestamp: 1 }] }] }), context);
+  expect((await read()).tokens).toBe(1);
+  await conversation.reset(undefined, context);
+  expect((await read()).tokens).toBe(0);
+  expect(f.base.host.modelCalls).toBe(0);
+}));
+
 test("runtime: native context reader fails closed on stale incarnation, binding and mid-read ownership", () => fixture(async f => {
   const binding = { incarnation: "copy-A", chatJid: "web:runtime", branchId: "existing-main", conversationId: f.options.existingConversationIds[0]! };
   expect((await f.runtime.readSessionContextUsage(binding)).contextWindow).toBeGreaterThan(0);
