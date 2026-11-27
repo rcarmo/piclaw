@@ -1,7 +1,7 @@
 import type { Database } from 'bun:sqlite';
 import { takeA2uiRendererErrors } from './renderer-errors.js';
-import { A2UI_METADATA_HEADING, MAX_A2UI_METADATA_BYTES } from './transport-metadata.js';
-import { isA2uiSurfaceBlock, type A2uiSnapshot, type A2uiSurfaceBlock } from './surface.js';
+import { A2UI_METADATA_HEADING, MAX_A2UI_METADATA_BYTES, projectA2uiPromptInput } from './transport-metadata.js';
+import { CLASSIC_A2UI_CATALOG, isA2uiSurfaceBlock, type A2uiSnapshot, type A2uiSurfaceBlock } from './surface.js';
 import { validateA2uiDraftEdits, type A2uiActionMessage } from './action.js';
 import { InvalidA2uiDraftError, type A2uiDraftPatch } from './drafts.js';
 import { negotiateClassicA2ui, type ClassicA2uiRendererCapabilities } from './capabilities.js';
@@ -81,20 +81,22 @@ export function readA2uiRendererDataModel(database: Database, chatJid: string, c
   return { version: '1.0', surfaces };
 }
 
-/** Native input metadata is separate from the user-visible message and its content blocks. */
+/** Private renderer authority/snapshots, never user text or SDK model input.
+ * Capability negotiation is an authority grant, not a serialized prompt envelope. */
 export function storeA2uiInputMetadata(database: Database, recipient: Recipient, model?: A2uiRendererDataModel, capabilities?: ClassicA2uiRendererCapabilities, peer?: AcceptedRendererPeer, message?: A2uiActionMessage): void {
   if (!database.inTransaction) throw Error('A2UI input metadata requires the source admission transaction');
   const dataModel = model && Object.keys(model.surfaces).length ? model : undefined;
-  const envelope={a2uiRendererDataModel:dataModel,a2uiRendererCapabilities:capabilities,a2uiRendererMessage:message};
+  const envelope={a2uiRendererDataModel:dataModel,a2uiRendererMessage:message};
+  const renderer = peer ?? (capabilities ? {catalogues:capabilities['1.0'].supportedCatalogIds} : undefined);
   const base=JSON.stringify(envelope);
   const room=MAX_A2UI_METADATA_BYTES - Buffer.byteLength(base);
   if (room<0) throw Error('A2UI input metadata exceeds its size limit');
   const errors=takeA2uiRendererErrors(database,recipient.chatJid,recipient.conversationId,room-32);
-  if (base==='{}' && !errors.length) return;
+  if (base==='{}' && !errors.length && !renderer) return;
   const metadata=errors.length ? JSON.stringify({...envelope,a2uiRendererErrors:errors}) : base;
   const result = database.query(`INSERT INTO a2ui_input_metadata (chat_jid, message_id, conversation_id, metadata, renderer_peer)
     SELECT chat_jid, id, ?, ?, ? FROM messages WHERE chat_jid=? AND id=? AND is_bot_message=0`)
-    .run(recipient.conversationId, metadata, peer ? JSON.stringify(peer) : null, recipient.chatJid, recipient.sourceId);
+    .run(recipient.conversationId, metadata, renderer ? JSON.stringify(renderer) : null, recipient.chatJid, recipient.sourceId);
   if (result.changes !== 1) throw Error('A2UI metadata source disappeared');
 }
 
@@ -107,34 +109,35 @@ function readMetadata(database: Database, recipient: Omit<Recipient, 'conversati
 
 /** Only transport metadata written in the accepted source transaction can grant catalogue support. */
 export function hasA2uiRendererOffer(database: Database, recipient: Recipient): boolean {
-  const metadata = readMetadata(database, recipient);
-  try { return metadata !== undefined && !!negotiateClassicA2ui(JSON.parse(metadata)); }
-  catch { return false; }
+  const row = database.query('SELECT metadata,renderer_peer FROM a2ui_input_metadata WHERE chat_jid=? AND message_id=? AND conversation_id=?')
+    .get(recipient.chatJid,recipient.sourceId,recipient.conversationId) as {metadata:string;renderer_peer:string|null} | null;
+  if (!row) return false;
+  try {
+    const catalogues = row.renderer_peer ? JSON.parse(row.renderer_peer).catalogues : undefined;
+    if (Array.isArray(catalogues) && catalogues.includes(CLASSIC_A2UI_CATALOG)) return true;
+    // Read-only compatibility for previously accepted grants, not new storage.
+    return !!negotiateClassicA2ui(JSON.parse(row.metadata));
+  } catch { return false; }
 }
 
 export function readAcceptedRendererPeer(database: Database, recipient: Recipient): AcceptedRendererPeer | undefined {
   const row = database.query('SELECT renderer_peer FROM a2ui_input_metadata WHERE chat_jid=? AND message_id=? AND conversation_id=?')
     .get(recipient.chatJid,recipient.sourceId,recipient.conversationId) as {renderer_peer: string | null} | null;
-  return row?.renderer_peer ? JSON.parse(row.renderer_peer) as AcceptedRendererPeer : undefined;
-}
-
-/** The native SDK accepts text here. Serialize the canonical metadata envelope only in its input, never in the timeline. */
-export function projectA2uiAgentInput(database: Database, recipient: Omit<Recipient, 'conversationId'> & { conversationId?: number }, content: string): string {
-  const metadata = readMetadata(database, recipient);
-  return metadata ? `${content}\n\n${A2UI_METADATA_HEADING}${metadata}` : content;
+  const peer = row?.renderer_peer ? JSON.parse(row.renderer_peer) as Partial<AcceptedRendererPeer> : undefined;
+  return peer && typeof peer.hash==='string' && Array.isArray(peer.catalogues) ? peer as AcceptedRendererPeer : undefined;
 }
 
 /** Public SDK history must not expose the private suffix used for model input. */
 export function projectPublicA2uiInput(database: Database, recipient: Recipient, content: string): string {
   if (!recipient.chatJid.startsWith('web:')) return content;
-  const marker=`\n\n${A2UI_METADATA_HEADING}`;
-  const split=content.lastIndexOf(marker);
-  if (split<0) return content;
-  const stored=readMetadata(database,recipient);
-  if (stored!==undefined && content.slice(split+marker.length)===stored) return content.slice(0,split);
-  // An ordinary visible message can contain the heading literally. Only use
-  // the fail-closed recovery projection when the authoritative source is gone.
+  if (!content.includes(A2UI_METADATA_HEADING)) return content;
+  // Fresh accepted input is already the visible user text. Never interpret a
+  // literal heading/JSON example supplied by the human as transport metadata.
   const row=database.query('SELECT content FROM messages WHERE chat_jid=? AND id=? AND is_bot_message=0')
     .get(recipient.chatJid,recipient.sourceId) as {content:string|null} | null;
-  return row ? row.content ?? '' : content.slice(0,split);
+  if (row?.content===content || row?.content === null || row === null) return content;
+  const stored=readMetadata(database,recipient);
+  // Without the bound metadata row there is no legacy projection authority.
+  // Preserve the bytes rather than reconstructing history from a heading.
+  return stored===undefined ? content : projectA2uiPromptInput(content,{sourceContent:row.content,metadata:stored});
 }

@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { initializeDatabaseSchema } from '../../../src/db/connection.js';
+import { hashCanonicalRequest } from '../../../src/service-effects/contracts/common.js';
+import { projectA2uiPromptInput } from '../../../src/channels/web/a2ui/transport-metadata.js';
 import { projectPublicA2uiInput, storeA2uiInputMetadata } from '../../../src/channels/web/a2ui/input-metadata.js';
 import { CLASSIC_A2UI_RENDERER_CAPABILITIES } from '../../../src/channels/web/a2ui/capabilities.js';
 import { readApplicationMessagePayload } from '../../../durable-engine/src/accepted-payload-recovery.ts';
@@ -8,6 +10,7 @@ import { readApplicationMessagePayload } from '../../../durable-engine/src/accep
 function fixture(chatJid = 'chat') {
   const db = new Database(':memory:');
   db.exec(`CREATE TABLE messages(id TEXT,chat_jid TEXT,content TEXT);
+    CREATE TABLE a2ui_input_metadata(chat_jid TEXT,message_id TEXT,conversation_id INTEGER,metadata TEXT);
     CREATE TABLE submissions(id INTEGER PRIMARY KEY,record TEXT);
     CREATE TABLE entries(id INTEGER PRIMARY KEY,record TEXT);`);
   for (const table of ['piclaw_durable_bindings_v1','piclaw_durable_intent_bindings_v1'])
@@ -25,7 +28,7 @@ function fixture(chatJid = 'chat') {
   return {db,proof,bind,entry,read};
 }
 
-test('A2UI input metadata is an immutable projection for the exact recipient, outside timeline content', () => {
+test('renderer negotiation never enters fresh accepted input and legacy projections stay read-only', () => {
   using db = new Database(':memory:');
   initializeDatabaseSchema(db);
   db.exec('PRAGMA foreign_keys=ON');
@@ -40,24 +43,37 @@ test('A2UI input metadata is an immutable projection for the exact recipient, ou
   expect(write).toThrow();
   db.transaction(write)();
   expect(() => db.transaction(write)()).toThrow();
-  // The accepted model input includes the exact ordered envelope. Public projection
-  // must neither rewrite it nor move metadata into the shared instruction prefix.
+  const stored=(db.query('SELECT metadata FROM a2ui_input_metadata').get() as {metadata:string}).metadata;
+  expect(stored).not.toContain('a2uiRendererCapabilities');
+  // Older releases persisted this suffix. New admission must use only user
+  // text; filtering old history must leave its immutable records unchanged.
   const privatePayload=`Continue\n\nA2UI renderer metadata:\n${JSON.stringify({a2uiRendererDataModel:metadata,
-    a2uiRendererCapabilities:{'1.0':{supportedCatalogIds:['https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json']}},
     a2uiRendererMessage:rendererMessage})}`;
-  expect(readApplicationMessagePayload(db,'inc',sender,ref)).toBe(privatePayload);
+  expect(readApplicationMessagePayload(db,'inc',sender,ref)).toBe('Continue');
   expect(projectPublicA2uiInput(db,sender,privatePayload)).toBe('Continue');
-  expect(projectPublicA2uiInput(db,{...sender,conversationId:24},privatePayload)).toBe('Continue');
-  expect(readApplicationMessagePayload(db,'inc',sender,ref)).toBe(privatePayload);
+  expect(projectPublicA2uiInput(db,{...sender,conversationId:24},privatePayload)).toBe(privatePayload);
+  const before=db.serialize();
+  // An SDK prompt by itself has no trusted source identity: preserve it. Only
+  // exact bytes correlated to the source row and stored metadata may project.
+  expect(projectA2uiPromptInput(privatePayload)).toBe(privatePayload);
+  expect(projectA2uiPromptInput(privatePayload,{sourceContent:'Continue',metadata:stored})).toBe('Continue');
+  expect(projectA2uiPromptInput('Continue')).toBe('Continue');
+  const requestId='old-request',requestHash=hashCanonicalRequest({type:'input',requestId,content:privatePayload});
+  expect(readApplicationMessagePayload(db,'inc',{...sender,requestId,requestHash},ref)).toBe(privatePayload);
+  expect(db.serialize()).toEqual(before);
   const literal='Literal heading\n\nA2UI renderer metadata:\n{"test":true}';
   db.query(`INSERT INTO messages (id,chat_jid,is_bot_message,content) VALUES (?, ?, 0, ?)`).run('literal',sender.chatJid,literal);
   expect(projectPublicA2uiInput(db,{...sender,sourceId:'literal'},literal)).toBe(literal);
+  expect(projectA2uiPromptInput(literal)).toBe(literal);
+  expect(projectA2uiPromptInput('Example\n\nA2UI renderer metadata:\nnot JSON')).toBe('Example\n\nA2UI renderer metadata:\nnot JSON');
+  const synthesizedCompaction='[User]: Human example\n\nA2UI renderer metadata:\n{"test":true}\n\n[Assistant]: Summary';
+  expect(projectA2uiPromptInput(synthesizedCompaction)).toBe(synthesizedCompaction);
   expect(readApplicationMessagePayload(db,'inc',sender,`queued-source:${sender.sourceId}`)).toBe(readApplicationMessagePayload(db,'inc',sender,ref));
   expect(readApplicationMessagePayload(db,'inc',{...sender,conversationId:24},ref)).toBe('Continue');
   expect(readApplicationMessagePayload(db,'inc',{chatJid:sender.chatJid,sourceId:sender.sourceId},ref)).toBe('Continue');
   expect(db.query('SELECT content,content_blocks FROM messages WHERE rowid=?').get(lastInsertRowid)).toEqual({content:'Continue',content_blocks:null});
   db.query('DELETE FROM messages WHERE rowid=?').run(lastInsertRowid);
-  expect(projectPublicA2uiInput(db,sender,privatePayload)).toBe('Continue');
+  expect(projectPublicA2uiInput(db,sender,privatePayload)).toBe(privatePayload);
   expect(db.query('SELECT COUNT(*) AS count FROM a2ui_input_metadata').get()).toEqual({count:0});
 });
 
@@ -80,6 +96,19 @@ describe('accepted payload recovery from SDK primary and steering bindings', () 
       expect(() => f.read(24)).toThrow('Unverified SDK accepted payload');
       expect(f.read(23)).toBe(payload);
     } finally { f.db.close(); }
+  });
+  test('rejects changed source-row replay instead of substituting sealed SDK bytes', () => {
+    const f=fixture(); try {
+      const requestHash=hashCanonicalRequest({type:'input',requestId:f.proof.requestId,content:'accepted steering input'});
+      f.db.query('INSERT INTO messages VALUES(?,?,?)').run('steer','chat','edited steering input');
+      f.bind('piclaw_durable_bindings_v1',{requestHash});
+      f.entry({data:{...f.proof,requestHash}});
+      expect(()=>readApplicationMessagePayload(f.db,'inc',{chatJid:'chat',sourceId:'steer',conversationId:23,
+        requestId:f.proof.requestId,requestHash},f.proof.payloadRef)).toThrow('Host payload hash conflict');
+      f.db.query('DELETE FROM messages WHERE id=? AND chat_jid=?').run('steer','chat');
+      expect(readApplicationMessagePayload(f.db,'inc',{chatJid:'chat',sourceId:'steer',conversationId:23,
+        requestId:f.proof.requestId,requestHash},f.proof.payloadRef)).toBe('accepted steering input');
+    } finally {f.db.close();}
   });
   test('retains primary accepted-input recovery', () => {
     const f=fixture(); try {f.bind('piclaw_durable_bindings_v1');f.entry();expect(f.read()).toBe('accepted steering input');} finally {f.db.close();}

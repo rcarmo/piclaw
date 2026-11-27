@@ -8,7 +8,8 @@ import { handleA2uiRpc } from '../../../../src/channels/web/a2ui/rpc.js';
 import { a2uiActionEvaluationSite } from '../../../../src/channels/web/a2ui/rpc-json.js';
 import { CLASSIC_A2UI_RENDERER_CAPABILITIES } from '../../../../src/channels/web/a2ui/capabilities.js';
 import { publishAgentA2ui } from '../../../../src/channels/web/a2ui/publish.js';
-import { projectA2uiAgentInput, readA2uiRendererDataModel, storeA2uiInputMetadata } from '../../../../src/channels/web/a2ui/input-metadata.js';
+import { projectA2uiPromptInput } from '../../../../src/channels/web/a2ui/transport-metadata.js';
+import { readA2uiRendererDataModel, storeA2uiInputMetadata } from '../../../../src/channels/web/a2ui/input-metadata.js';
 import { applyA2uiMessages, compileA2uiExpress } from '../../../../src/channels/web/a2ui/express.js';
 import { buildA2uiAction, type A2uiActionRequest } from '../../../../src/channels/web/a2ui/action.js';
 import type { A2uiSnapshot } from '../../../../src/channels/web/a2ui/surface.js';
@@ -79,7 +80,7 @@ test('a stored agent surface submits once to its own source thread even on concu
   expect((await f.send({ ...f.payload, request_id: crypto.randomUUID() })).status).toBe(409);
 });
 
-test('a synced submission preserves the full updated model only in the owning agent input', async () => {
+test('a synced submission keeps the full updated model outside user input', async () => {
   const f = await fixture({sync:true});
   f.routeTo(32);
   expect((await f.send()).status).toBe(400);
@@ -99,8 +100,8 @@ test('a synced submission preserves the full updated model only in the owning ag
   expect(source.content_blocks).toBeNull();
   const recipient = {chatJid:chat,sourceId:source.id,conversationId:31};
   const metadata = {a2uiRendererDataModel:{version:'1.0',surfaces:{[f.payload.message.action.surfaceId]:{value:'hello',onlyInModel:'Full model'}}}};
-  expect(projectA2uiAgentInput(getDb(),recipient,source.content)).toContain(JSON.stringify(metadata));
-  expect(projectA2uiAgentInput(getDb(),{...recipient,conversationId:32},source.content)).toBe(source.content);
+  expect(projectA2uiPromptInput(source.content)).toBe(source.content);
+  expect(getDb().query('SELECT metadata FROM a2ui_input_metadata WHERE chat_jid=? AND message_id=?').get(chat,source.id)).toEqual({metadata:JSON.stringify(metadata)});
   expect(readA2uiRendererDataModel(getDb(),chat,31).surfaces).toEqual({});
 });
 
