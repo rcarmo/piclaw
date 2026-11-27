@@ -142,9 +142,11 @@ test("snapshot module imports with a partial non-browser window", async () => {
   const original = Object.getOwnPropertyDescriptor(globalThis, "window");
   try {
     Object.defineProperty(globalThis, "window", { configurable: true, value: { location: { href: "http://fixture/" } } });
-    const { importFresh } = await import("../helpers");
-    const module = await importFresh("../../web/src/ui/agent-ui-snapshot.ts", import.meta.url);
+    const moduleUrl = new URL("../../web/src/ui/agent-ui-snapshot.ts", import.meta.url);
+    moduleUrl.searchParams.set("fresh", `${Date.now()}-${crypto.randomUUID()}`);
+    const module = await import(moduleUrl.href);
     expect(typeof module.getAgentUiSnapshot).toBe("function");
+    expect(module.currentUiChatJid()).toBe("web:default");
   } finally {
     if (original) Object.defineProperty(globalThis, "window", original);
     else Reflect.deleteProperty(globalThis, "window");

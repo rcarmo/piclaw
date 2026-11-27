@@ -23,7 +23,10 @@ const output=JSON.parse(outputBytes.toString('utf8'));
 const correlationPath='docs/development/receipts/native-input-correlation-retention-overlay.json';
 const correlationBytes=readFileSync(resolve(root,correlationPath));
 const correlation=JSON.parse(correlationBytes.toString('utf8'));
-const context=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/native-context-rss-retention-overlay.json'),'utf8'));
+const contextPath='docs/development/receipts/native-context-rss-retention-overlay.json';
+const contextBytes=readFileSync(resolve(root,contextPath));
+const context=JSON.parse(contextBytes.toString('utf8'));
+const scopedContext=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/scoped-context-rss-retention-overlay.json'),'utf8'));
 const sha=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
 test('removal/retention witness binds every original Core path through explicit later source transformations',()=>{
  expect(sha(manifestBytes)).toBe(overlay.baseManifestSha256);
@@ -60,7 +63,19 @@ test('removal/retention witness binds every original Core path through explicit 
  expect(context.rows.map((row:{path:string})=>row.path)).toEqual([
   'runtime/durable-engine/src/host-models.ts','runtime/durable-engine/src/host-runtime.ts',
  ]);
- const layers=[overlay,removal,mcpAudit,a2ui,delegate,rss,output,correlation,context].map(layer=>{
+ expect(scopedContext.previousOverlay).toBe(contextPath);
+ expect(scopedContext.previousOverlaySha256).toBe(sha(contextBytes));
+ expect(scopedContext.baseManifestSha256).toBe(overlay.baseManifestSha256);
+ expect(scopedContext.rows.map((row:{path:string})=>row.path)).toEqual([
+  'runtime/durable-engine/src/host-runtime.ts',
+  'runtime/src/agent-pool.ts',
+  'runtime/src/agent-pool/runtime-facade.ts',
+  'runtime/src/channels/web/agent/agent-status.ts',
+  'runtime/src/channels/web/core/web-channel-contracts.ts',
+  'runtime/src/channels/web/endpoints/channel-endpoint-context-factory.ts',
+  'runtime/web/src/api.ts',
+ ]);
+ const layers=[overlay,removal,mcpAudit,a2ui,delegate,rss,output,correlation,context,scopedContext].map(layer=>{
   expect(layer.version).toBe(1);
   const rows=new Map<string,{beforeSha256:string;afterSha256:string;purpose:string}>(layer.rows.map((row:any)=>[row.path,row]));
   expect(rows.size).toBe(layer.rows.length);

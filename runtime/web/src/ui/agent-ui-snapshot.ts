@@ -25,9 +25,10 @@ const fresh = (entry?: Entry) =>
 export const AGENT_UI_POLL_MS = 5000;
 export function currentUiChatJid(): string {
   if (typeof window === "undefined") return "web:default";
+  const href = (window as any).location?.href;
   return (
     (window as any).__piclawCurrentChatJid ||
-    new URL(location.href).searchParams.get("chat_jid") ||
+    (href ? new URL(href).searchParams.get("chat_jid") : null) ||
     "web:default"
   );
 }
