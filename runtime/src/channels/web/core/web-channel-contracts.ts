@@ -71,7 +71,8 @@ export interface AgentStatusContext {
   getBuffer(turnId: string, panel: "thought" | "draft"): WebAgentBufferEntry | undefined;
   getContextUsageForChat(
     chatJid: string
-  ): Promise<{ tokens: number | null; contextWindow: number | null; percent: number | null; sessionGeneration?: string } | null>;
+  ): Promise<{ tokens: number | null; contextWindow: number | null; percent: number | null; sessionGeneration?: string; revision?: string } | null>;
+  getContextRevisionForChat?(chatJid: string): Promise<string | null>;
   getSessionTreeSummaryForChat?(chatJid: string): Promise<{ leafId: string | null; total: number } | null>;
   getTokenUsageForChat(chatJid: string): AgentTokenUsageContext | null;
   /** Last message time and latest reply excerpt per chat, for session lists. */

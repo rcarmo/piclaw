@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { AgentRuntimeFacade, type AgentRuntimeFacadeOptions } from '../../../src/agent-pool/runtime-facade.js';
 import { handleAgentContextRequest, type AgentStatusContext } from '../../../src/channels/web/agent/agent-status.js';
 import { publicContextUsage } from '../../../src/channels/web/context-usage.js';
 import { createWebChannelEndpointContexts } from '../../../src/channels/web/endpoints/channel-endpoint-context-factory.js';
@@ -52,6 +53,56 @@ test('explicit tree summary remains exact and opt-in; no second tree cache is in
     expect((await response.json()).sessionTree).toEqual({ leafId: `public-head-${i}`, total: 900000 + i });
   }
   expect(reads).toBe(2);
+});
+
+test.each(['before', 'during'] as const)('same native tail cannot match after generation changes %s the probe', async (timing) => {
+  const nativeRevision = JSON.stringify(['fixture-incarnation', 1, 42, 100]);
+  let fullReads = 0;
+  let rotateOnProbe = false;
+  const binding = {
+    sessionId: 'generation-1', branchId: 'main', readPosition: async () => '42',
+    readContextUsage: async () => { fullReads++; return { tokens: 12, contextWindow: 100, revision: nativeRevision }; },
+    readContextRevision: async () => {
+      if (rotateOnProbe) { current = replacement; rotateOnProbe = false; }
+      return nativeRevision;
+    },
+  };
+  const replacement = { ...binding, sessionId: 'generation-2' };
+  let current = binding;
+  const agentPool = new AgentRuntimeFacade({
+    pool: new Map(), authPath: '', getDurableSession: chat => chat === 'web:test' ? current : undefined,
+    modelRegistry: {} as AgentRuntimeFacadeOptions['modelRegistry'],
+    modelRuntime: {} as AgentRuntimeFacadeOptions['modelRuntime'],
+  });
+  const contexts = createWebChannelEndpointContexts({ agentPool, json: Response.json } as any, {
+    defaultChatJid: 'web:test', defaultAgentId: 'default', getIdentitySnapshot: () => ({} as any),
+  });
+  const ctx = { ...contexts.agentStatus(), getTokenUsageForChat: () => null };
+  const request = (tag?: string) => handleAgentContextRequest(new Request('https://fixture/agent/context', {
+    headers: tag === undefined ? undefined : { 'If-None-Match': tag },
+  }), ctx);
+
+  const first = await request();
+  const original = await first.json();
+  expect(original.sessionGeneration).toBe('generation-1');
+  expect(first.headers.get('ETag')).toBe(`"${original.revision}"`);
+  expect(fullReads).toBe(1);
+
+  if (timing === 'before') current = replacement;
+  else rotateOnProbe = true;
+  const fresh = await request(first.headers.get('ETag')!);
+  expect(fresh.status).toBe(200);
+  const updated = await fresh.json();
+  expect(updated).toEqual({ ...original, sessionGeneration: 'generation-2', revision: updated.revision });
+  expect(updated.revision).toMatch(/^[a-f0-9]{64}$/);
+  expect(updated.revision).not.toBe(original.revision);
+  expect(fresh.headers.get('ETag')).toBe(`"${updated.revision}"`);
+  expect(fullReads).toBe(2);
+
+  const hit = await request(fresh.headers.get('ETag')!);
+  expect(hit.status).toBe(304);
+  expect(hit.body).toBeNull();
+  expect(fullReads).toBe(2);
 });
 
 test('failed native display reads retain identity and clear estimates without reading stored usage', async () => {

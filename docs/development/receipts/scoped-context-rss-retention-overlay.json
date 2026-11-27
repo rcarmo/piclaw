@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "sourceParent": "e1538d71e86a74744c5e3f2e50de91e42893486c",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlay": "docs/development/receipts/native-context-rss-retention-overlay.json",
+  "previousOverlaySha256": "0547609648868f225c98991e29c9972e9b7aa7649900cf6393a4704259c26b5e",
+  "scope": "Retained-source changes for passive Classic reads and scoped Sessions context revalidation only; original paths, deletions and retirement accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/host-runtime.ts",
+      "beforeSha256": "e96d80d7a2b3be0305be6115ebeb490a3997b6ddaf9926140f96ecdab7c36395",
+      "afterSha256": "713e5f92c88100d88d5b761e33e55b94eafbe302c1ec70ef44e5bd69b13cc844",
+      "purpose": "Read the latest entry ID directly for session position and expose a transcript-free context revision keyed by incarnation, conversation, tail, and model context window."
+    },
+    {
+      "path": "runtime/src/agent-pool.ts",
+      "beforeSha256": "cf4fa16235bdba7d9300bb23b7ef46f1d12af566059f55b54cbb6597994b6a70",
+      "afterSha256": "6e5b49f68db67c5cd0f0740e2c40944eae014bf1c224e6a0366c6ed72e950580",
+      "purpose": "Forward per-chat context revision reads to the runtime facade and expose the optional revision on context usage results."
+    },
+    {
+      "path": "runtime/src/agent-pool/runtime-facade.ts",
+      "beforeSha256": "1adf37474310a6b1154e8bfd9371aa7743708479ee9f9d45f1214f7e60acce7b",
+      "afterSha256": "635a25162ef240a1e476b4c175d9927556d1440d953ba323a5bd1eac8ecb35ca",
+      "purpose": "Bind durable context revisions to the host session generation and discard standalone revision results if that generation changes during the read."
+    },
+    {
+      "path": "runtime/src/channels/web/agent/agent-status.ts",
+      "beforeSha256": "b80453f8099b633b5d89510a54896095d29c0c51ae19e0891225dc86767d5be0",
+      "afterSha256": "585deb886eb67dcabce730db8c1b63909b2f54529a7aa4c57760e196eef51a68",
+      "purpose": "Omit context estimation from passive UI snapshots and return 304 for matching context-only requests using tags that include public token usage counters."
+    },
+    {
+      "path": "runtime/src/channels/web/core/web-channel-contracts.ts",
+      "beforeSha256": "a4fa7f6da4cc0bf630c47a7ab240dd8c88bea535add2392463a9682694c53b49",
+      "afterSha256": "cd6dbf46ac7ffaf29abb9527b3c295fe08d761669119527e00ceec50192a0595",
+      "purpose": "Declare the optional revision on context usage results and a separate lightweight per-chat revision reader for status endpoints."
+    },
+    {
+      "path": "runtime/src/channels/web/endpoints/channel-endpoint-context-factory.ts",
+      "beforeSha256": "fc0e55528fd0f4a4036d5af1423859cd9571defb724f088af577aa6c01fa5539",
+      "afterSha256": "3bed0113aa777c008df9ad1e9802199f3fd93939bbd524020004f5326c5bacec",
+      "purpose": "Wire the web status endpoint to the agent pool revision reader without calling the full context usage reader."
+    },
+    {
+      "path": "runtime/web/src/api.ts",
+      "beforeSha256": "88839faa6665d646ce153c5b071a52d44a86b479fd84664d7d1e2f09446fdfaf",
+      "afterSha256": "c53d0ce67648f2968d594db0a9cc739989ed9154ff5a83ba8aeff0fddcba6039",
+      "purpose": "Request passive status and model snapshots without context estimates and forward the scoped revision in status for meter reconciliation."
+    }
+  ]
+}

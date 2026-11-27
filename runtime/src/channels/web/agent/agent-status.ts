@@ -7,6 +7,7 @@ export type { AgentStatusContext, TokenUsageCounterSummary, LatestTokenUsageCoun
 import { getAddonApiHealthSnapshot } from "../../../addons/addon-api-health.js";
 import { appendServerTiming, measureAsync, measureSync } from "../http/server-timing.js";
 import { publicContextUsage } from "../context-usage.js";
+import { createHash } from "node:crypto";
 
 
 function resolveChatJid(req: Request, defaultChatJid: string): string {
@@ -239,6 +240,25 @@ export function handleAgentStatusRequest(req: Request, ctx: AgentStatusContext):
   });
 }
 
+function isKnownContextRevision(revision: unknown): revision is string {
+  return typeof revision === "string" && revision.trim().length > 0;
+}
+
+function contextRevision(revision: string, cacheUsage: unknown): string {
+  // The token ledger can settle after history advances. Include the same
+  // public counters as the full snapshot so those changes are not missed.
+  return createHash('sha256').update(JSON.stringify([revision, cacheUsage])).digest('hex');
+}
+
+async function readContextRevision(chatJid: string, ctx: AgentStatusContext): Promise<string | null> {
+  // The facade includes the host session generation and fences the native read
+  // against changes in ownership or generation.
+  const revision = await ctx.getContextRevisionForChat?.(chatJid);
+  return isKnownContextRevision(revision)
+    ? contextRevision(revision, formatTokenUsageContext(ctx.getTokenUsageForChat(chatJid)))
+    : null;
+}
+
 /** Build shared context and latest-run usage metadata for an authorised chat. */
 export async function buildAgentContextSnapshot(chatJid: string, ctx: AgentStatusContext,
   options: { includeTree?: boolean } = {}): Promise<Record<string, unknown>> {
@@ -251,9 +271,13 @@ export async function buildAgentContextSnapshot(chatJid: string, ctx: AgentStatu
   if (!usage) {
     return { tokens: null, contextWindow: null, percent: null, sessionGeneration: null, contextUpdate: "replace", cacheUsage, ...sessionTree };
   }
+  const sessionGeneration = usage.sessionGeneration ?? null;
+  const revision = readTrimmedString(sessionGeneration) && isKnownContextRevision(usage.revision)
+    ? contextRevision(usage.revision, cacheUsage) : null;
   return {
     ...publicContextUsage(usage),
-    sessionGeneration: usage.sessionGeneration ?? null,
+    ...(revision !== null ? { revision } : {}),
+    sessionGeneration,
     contextUpdate: "replace",
     cacheUsage,
     ...sessionTree,
@@ -264,9 +288,24 @@ export async function buildAgentContextSnapshot(chatJid: string, ctx: AgentStatu
 export async function handleAgentContextRequest(req: Request, ctx: AgentStatusContext): Promise<Response> {
   const { result, durationMs } = await measureAsync(async () => {
     const chatJid = resolveChatJid(req, ctx.defaultChatJid);
-    return ctx.json(await buildAgentContextSnapshot(chatJid, ctx, {
-      includeTree: new URL(req.url).searchParams.get("include_tree") === "1",
-    }));
+    const includeTree = new URL(req.url).searchParams.get("include_tree") === "1";
+    const ifNoneMatch = req.headers.get("If-None-Match");
+    // Opt in with one exact strong tag. The context revision doesn't cover the tree.
+    if (req.method === "GET" && !includeTree && ifNoneMatch && /^"[a-f0-9]{64}"$/.test(ifNoneMatch)) {
+      const revision = await readContextRevision(chatJid, ctx).catch(() => null);
+      if (revision !== null && ifNoneMatch === `"${revision}"`) {
+        return new Response(null, {
+          status: 304,
+          headers: { ETag: ifNoneMatch, "Cache-Control": "private, no-store" },
+        });
+      }
+    }
+
+    const snapshot = await buildAgentContextSnapshot(chatJid, ctx, { includeTree });
+    const response = ctx.json(snapshot);
+    response.headers.set("Cache-Control", "private, no-store");
+    if (!includeTree && typeof snapshot.revision === "string") response.headers.set("ETag", `"${snapshot.revision}"`);
+    return response;
   });
   return appendServerTiming(result, {
     name: "agent_context",
@@ -305,17 +344,22 @@ export async function handleAgentUiSnapshotRequest(req: Request, ctx: AgentStatu
   getProjectRepository?(chatJid: string): unknown;
 }): Promise<Response> {
   const chatJid = resolveChatJid(req, ctx.defaultChatJid);
+  const includeContext = new URL(req.url).searchParams.get('context') !== '0';
   const { result, durationMs } = await measureAsync(async () => {
     const completed = await ctx.getProviderReadyCompletedForInstance(req);
     const status = buildAgentStatusSnapshot(chatJid, ctx);
     const sections = await Promise.allSettled([
       ctx.getAvailableModels(chatJid, { includeCatalogue: false, includeProviderDiagnostics: false }),
-      buildAgentContextSnapshot(chatJid, ctx),
+      includeContext ? buildAgentContextSnapshot(chatJid, ctx) : null,
       extra.getSystemMetrics(),
     ]);
     const [model, context, metrics] = sections;
+    const revision = includeContext
+      ? context.status === 'fulfilled' && typeof context.value?.revision === 'string' ? context.value.revision : null
+      : await readContextRevision(chatJid, ctx).catch(() => null);
     return ctx.json({
       status,
+      ...(revision === null ? {} : { context_revision: revision }),
       model: model.status === 'fulfilled' ? {
         ...(model.value as Record<string, unknown>),
         oobe: { provider_ready_completed_instance: completed },

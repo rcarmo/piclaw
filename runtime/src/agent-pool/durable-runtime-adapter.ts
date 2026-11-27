@@ -49,6 +49,7 @@ export interface DurableSessionReport {
 export interface DurableContextUsage {
   readonly tokens: number | null;
   readonly contextWindow: number | null;
+  readonly revision?: string;
 }
 
 export type DurableAbortScope = {
@@ -70,6 +71,7 @@ export function durableAbortScopeKey(scope: DurableAbortScope): string {
 
 export interface DurableSessionPositionPort {
   readonly readContextUsage?: () => Promise<DurableContextUsage>;
+  readonly readContextRevision?: () => Promise<string>;
   readonly readMetadata?: () => Promise<DurableSessionMetadata>;
   readonly readReport?: () => Promise<DurableSessionReport>;
   readonly sessionId: string;
@@ -161,6 +163,7 @@ export interface DurableConversationState {
 export interface DurableConversationRuntimePort {
   readSessionState?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<DurableSessionState>;
   readSessionContextUsage?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<DurableContextUsage>;
+  readSessionContextRevision?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<string>;
   resetSession?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<void>;
   compactSession?(binding: DurableConversationBinding & { readonly incarnation: string }, instructions?: string): Promise<{ compacted: boolean }>;
   reconcileMaintenance?(binding: DurableConversationBinding & { readonly incarnation: string }): Promise<void>;
@@ -214,6 +217,7 @@ export function createDurableConversationAdapter(options: {
   const wait = (options.wait ?? runtime.wait)?.bind(runtime), submitIntent = runtime.submitIntent?.bind(runtime);
   const readState = runtime.readSessionState?.bind(runtime);
   const readContextUsage = runtime.readSessionContextUsage?.bind(runtime);
+  const readContextRevision = runtime.readSessionContextRevision?.bind(runtime);
   const setThinkingLevel = runtime.setSessionThinkingLevel?.bind(runtime);
   const setModel = runtime.setSessionModel?.bind(runtime);
   const reset = runtime.resetSession?.bind(runtime);
@@ -248,6 +252,7 @@ export function createDurableConversationAdapter(options: {
       return Object.freeze({ sessionId, branchId,
         readState: () => readState(target),
         readContextUsage: readContextUsage ? () => readContextUsage(target) : undefined,
+        readContextRevision: readContextRevision ? () => readContextRevision(target) : undefined,
         readPosition: async () => (await readState(target)).position,
         readModel: async () => (await readState(target)).model,
         readThinkingLevel: async () => (await readState(target)).thinkingLevel,

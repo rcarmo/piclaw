@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "sourceParent": "fe5da86167ea7b066383ec6c3804a7a13a02fbc7",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlay": "docs/development/receipts/native-input-correlation-retention-overlay.json",
+  "previousOverlaySha256": "0fa0c6ec58b2c934e0fd81dc774f268582a66372ea590b9cbf45e045b1a18fca",
+  "scope": "Active native transcript RSS only; original paths, deletions and retirement accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/host-models.ts",
+      "beforeSha256": "b53c012e2d1f40f54a525e342e3b4a4b511ffebdc91fe11647b4b000b8c5b451",
+      "afterSha256": "025bd14eabfe42af40b16adb686eceb7dd2fce926ce9edbb0c58dc3a2ff575d7",
+      "purpose": "Detach request-preview transcript containers without re-encoding immutable text."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-runtime.ts",
+      "beforeSha256": "506c3f6a0ce9944e733a98c540cdfffcef69540a0af8d8cffc760ae15bf676fd",
+      "afterSha256": "e96d80d7a2b3be0305be6115ebeb490a3997b6ddaf9926140f96ecdab7c36395",
+      "purpose": "Reuse exact numeric estimates for each committed conversation tail without retaining transcript bodies."
+    }
+  ]
+}

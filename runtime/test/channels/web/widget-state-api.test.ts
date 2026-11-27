@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { setImmediate } from "node:timers/promises";
 import { WEB_RUNTIME_CONFIG } from "../../../src/core/config.js";
 import {
   PICLAW_STATE_SCHEMA,
@@ -107,6 +108,62 @@ describe("widget state API", () => {
     }
   });
 
+  test.each([
+    ["request abort", "context"],
+    ["request abort", "queue"],
+    ["reader cancellation", "context"],
+    ["reader cancellation", "queue"],
+  ] as const)("state SSE stops snapshot work on %s during the %s read", async (disconnect, blockedRead) => {
+    const previous = WEB_RUNTIME_CONFIG.widgetToken;
+    WEB_RUNTIME_CONFIG.widgetToken = "widget-test-token";
+    const started = Promise.withResolvers<void>();
+    const held = Promise.withResolvers<void>();
+    const abort = new AbortController();
+    const calls: string[] = [];
+    const recordRead = async (read: "context" | "queue", chatJid: string) => {
+      calls.push(`${read}:${chatJid}`);
+      if (read === blockedRead && chatJid === "web:default") {
+        started.resolve();
+        await held.promise;
+      }
+    };
+    try {
+      const channel = makeChannel();
+      channel.agentPool.listActiveChats = () => [{ chat_jid: "web:default" }, { chat_jid: "web:other" }];
+      channel.agentPool.getContextUsageForChat = async (chatJid: string) => {
+        await recordRead("context", chatJid);
+        return null;
+      };
+      channel.readNativeQueue = async (chatJid: string) => {
+        await recordRead("queue", chatJid);
+        return [];
+      };
+      channel.getAgentStatus = (chatJid: string) => {
+        calls.push(`status:${chatJid}`);
+        return null;
+      };
+      const response = await handleWidgetStateRoutes(channel, new Request("https://example.test/api/state/events", {
+        headers: { Authorization: "Bearer widget-test-token" }, signal: abort.signal,
+      }), "/api/state/events");
+      const reader = response!.body!.getReader();
+      const result = reader.read();
+      await started.promise;
+      if (disconnect === "request abort") abort.abort();
+      else await reader.cancel();
+      expect(await result).toEqual({ done: true, value: undefined });
+
+      held.resolve();
+      // All fake reads settle in microtasks after release; let the snapshot resume before asserting.
+      await setImmediate();
+      expect(calls).toEqual(blockedRead === "context" ? ["context:web:default"] : ["context:web:default", "queue:web:default"]);
+      expect(await reader.read()).toEqual({ done: true, value: undefined });
+    } finally {
+      abort.abort();
+      held.resolve();
+      WEB_RUNTIME_CONFIG.widgetToken = previous;
+    }
+  });
+
   test("opens state SSE with the piclaw.state.v1 event", async () => {
     const previous = WEB_RUNTIME_CONFIG.widgetToken;
     WEB_RUNTIME_CONFIG.widgetToken = "widget-test-token";
@@ -132,10 +189,24 @@ describe("widget state API", () => {
 });
 
 
-test("state context does not revive same-generation stored tokens after ownership failure", async () => {
+test("state context isolates an ownership failure without reviving stored tokens", async () => {
   const channel = makeChannel();
-  channel.agentPool.getContextUsageForChat = async () => { throw Error("Stale owner"); };
+  const listActiveChats = channel.agentPool.listActiveChats;
+  channel.agentPool.listActiveChats = () => [...listActiveChats(), { chat_jid: "web:other" }];
+  const readContext = channel.agentPool.getContextUsageForChat;
+  channel.agentPool.getContextUsageForChat = async (chatJid: string) => {
+    if (chatJid === "web:default") throw Error("Stale owner");
+    return readContext();
+  };
   channel.getContextUsage = () => { throw Error("stored context must not be consulted"); };
   const state = await buildPiclawStateSnapshot(channel);
-  expect(state.chats[0]?.context).toEqual({ tokens: null, contextWindow: null, percent: null, sessionGeneration: "session-1",contextUpdate:"replace" });
+  expect(state.chats.map(chat => chat.chat_jid)).toEqual(["web:default", "web:other"]);
+  expect(state.chats[0]?.context).toEqual({ tokens: null, contextWindow: null, percent: null, sessionGeneration: "session-1", contextUpdate: "replace" });
+  expect(state.chats[1]?.context?.tokens).toBe(123);
+});
+
+test("state snapshot still rejects a failed queue read", async () => {
+  const channel = makeChannel();
+  channel.readNativeQueue = async () => { throw Error("Queue unavailable"); };
+  await expect(buildPiclawStateSnapshot(channel)).rejects.toThrow("Queue unavailable");
 });

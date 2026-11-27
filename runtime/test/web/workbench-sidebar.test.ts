@@ -10,6 +10,8 @@ import {
   buildArchivedSessions,
   resolveInitialWorkbenchView,
   selectSessionsPreviewTargets,
+  fetchSessionContext,
+  refreshSessionRowContext,
 } from '../../web/src/components/workbench-sidebar.js';
 
 const chats = [
@@ -115,6 +117,78 @@ test('session rows size their context from the list, else from /agent/context, w
   expect(resolveSessionRowContext({}, { tokens: 500, contextWindow: 1000 })?.percent).toBe(50);
   expect(resolveSessionRowContext({}, { percent: null, tokens: null, contextWindow: null })).toBeNull();
   expect(resolveSessionRowContext({}, undefined)).toBeNull();
+});
+
+test('the default session context loader uses the scoped URL and validator with global fetch', async () => {
+  const previousFetch = globalThis.fetch;
+  const requests: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
+  const replies = [
+    new Response(JSON.stringify({ tokens: 200, contextWindow: 100000, percent: 0.2, revision: 'revision-a' })),
+    new Response(null, { status: 304 }),
+  ];
+  globalThis.fetch = async (url, init) => {
+    requests.push([url, init]);
+    return replies.shift()!;
+  };
+  try {
+    const cold = await refreshSessionRowContext('web:cold', null);
+    expect(cold.value).toEqual({ tokens: 200, contextWindow: 100000, percent: 0.2, revision: 'revision-a' });
+
+    const unchanged = await refreshSessionRowContext('web:cold', cold.value);
+    expect(unchanged).toEqual({ changed: false, cancelled: false, value: cold.value });
+    expect(requests).toHaveLength(2);
+    expect(requests[0][0]).toBe('/agent/context?chat_jid=web%3Acold');
+    expect(requests[1][0]).toBe(requests[0][0]);
+    expect(requests[0][1]?.headers).toBeUndefined();
+    expect(requests[1][1]?.headers).toEqual({ 'If-None-Match': '"revision-a"' });
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('session context validators stay chat-scoped and unsupported revisions are never invented', async () => {
+  const headers: unknown[] = [];
+  const replies = [
+    new Response(JSON.stringify({ tokens: 1, revision: 'same-revision' })),
+    new Response(JSON.stringify({ tokens: 2, revision: 'same-revision' })),
+    new Response(null, { status: 304 }),
+    new Response(JSON.stringify({ tokens: 3 })),
+    new Response(JSON.stringify({ tokens: 4 })),
+  ];
+  const request = async (_url: string, init: any) => { headers.push(init.headers); return replies.shift()!; };
+  const load = (jid: string, revision: string | null, cancelled?: () => boolean) => fetchSessionContext(jid, revision, cancelled, request);
+  const first = await refreshSessionRowContext('web:a', null, load);
+  await refreshSessionRowContext('web:b', null, load);
+  await refreshSessionRowContext('web:a', first.value, load);
+  const unsupported = await refreshSessionRowContext('web:legacy', null, load);
+  await refreshSessionRowContext('web:legacy', unsupported.value, load);
+  expect(unsupported.value?.revision).toBeNull();
+  expect(headers).toEqual([undefined, undefined, { 'If-None-Match': '"same-revision"' }, undefined, undefined]);
+});
+
+test('failed or cancelled session context reads do not replace the committed record', async () => {
+  const committed = { percent: 1, tokens: 1, contextWindow: 100, revision: 'old' };
+  const denied = (jid: string, revision: string | null, cancelled?: () => boolean) =>
+    fetchSessionContext(jid, revision, cancelled, async () => new Response(null, { status: 403 }));
+  await expect(refreshSessionRowContext('web:denied', committed, denied)).rejects.toThrow('Session context HTTP 403');
+  const unsolicited = (jid: string, revision: string | null, cancelled?: () => boolean) =>
+    fetchSessionContext(jid, revision, cancelled, async () => new Response(null, { status: 304 }));
+  await expect(refreshSessionRowContext('web:unsolicited', null, unsolicited)).rejects.toThrow('without a known validator');
+  await expect(refreshSessionRowContext('web:unsolicited', null, () => ({ cancelled: false, notModified: true, value: null }))).rejects.toThrow('without a known validator');
+
+  let finish!: (value: any) => void;
+  let cancelled = false;
+  const request = async () => ({ status: 200, ok: true, json: () => new Promise((resolve) => { finish = resolve; }) }) as any;
+  const pending = refreshSessionRowContext(
+    'web:stale', committed,
+    (jid, revision, isCancelled) => fetchSessionContext(jid, revision, isCancelled, request),
+    () => cancelled,
+  );
+  await Promise.resolve();
+  await Promise.resolve();
+  cancelled = true;
+  finish({ percent: 9, tokens: 9, contextWindow: 100, revision: 'new' });
+  expect(await pending).toEqual({ changed: false, cancelled: true, value: committed });
 });
 
 test('the activity bar visibility is a stored preference and menu commands are window events', () => {

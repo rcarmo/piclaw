@@ -6,6 +6,7 @@ export interface AgentUiSnapshot {
   status: any;
   model: any;
   context: any;
+  context_revision?: string;
   metrics: any;
   agent_name: string;
   errors: string[];
@@ -17,54 +18,87 @@ interface Entry {
   generation: number;
   inFlight?: Promise<AgentUiSnapshot>;
 }
-const entries = new Map<string, Entry>();
+type ChatEntry = { full?: Entry; passive?: Entry; requested: number; fullRequestTicket?: number; publishedRepository: number };
+const entries = new Map<string, ChatEntry>();
+const fresh = (entry?: Entry) =>
+  Boolean(entry?.value && entry.completedAt > 0 && Date.now() - entry.completedAt < AGENT_UI_POLL_MS - 250);
 export const AGENT_UI_POLL_MS = 5000;
 export function currentUiChatJid(): string {
   if (typeof window === "undefined") return "web:default";
+  const href = (window as any).location?.href;
   return (
     (window as any).__piclawCurrentChatJid ||
-    new URL(location.href).searchParams.get("chat_jid") ||
+    (href ? new URL(href).searchParams.get("chat_jid") : null) ||
     "web:default"
   );
 }
 export function invalidateAgentUiSnapshot(chatJid = currentUiChatJid()): void {
-  const entry = entries.get(chatJid);
-  if (entry) {
+  const chat = entries.get(chatJid);
+  for (const entry of [chat?.full, chat?.passive]) {
+    if (!entry) continue;
     entry.completedAt = 0;
     entry.generation++;
   }
 }
+/** Return the exact successful full payload when this revision is still valid.
+ * This deliberately does not require the full entry to be fresh: a periodic
+ * lightweight observation may reuse it after its ordinary polling TTL. */
+export function successfulAgentContextForRevision(chatJid: string, revision: unknown): any | undefined {
+  if (typeof revision !== 'string' || !revision) return undefined;
+  const full = entries.get(chatJid)?.full;
+  // Invalidation clears completedAt. Keep the object for identities, but never
+  // let a response from before that boundary satisfy a periodic observation.
+  if (!full?.value || full.completedAt <= 0) return undefined;
+  if (!full.value.context || full.value.context_revision !== revision) return undefined;
+  return full.value.context;
+}
+
+/** Reconcile a missed update without fetching unchanged context just because its TTL expired. */
+export function needsAgentContextRefresh(chatJid: string, revision: unknown): boolean {
+  // Without a revision (older server or failed lightweight read), retain the
+  // ordinary recovery path. Do not treat unknown as an unchanged context.
+  if (typeof revision !== 'string' || !revision) return true;
+  const full = entries.get(chatJid)?.full;
+  if (successfulAgentContextForRevision(chatJid, revision) !== undefined) return false;
+  if (full?.inFlight) return false;
+  if (full) full.completedAt = 0;
+  return true;
+}
+
+export function getAgentUiFullRequestTicket(chatJid: string): number | undefined {
+  return entries.get(chatJid)?.fullRequestTicket;
+}
+
 export function getAgentUiSnapshot(
   chatJid = currentUiChatJid(),
+  includeContext = true,
 ): Promise<AgentUiSnapshot> {
-  let entry = entries.get(chatJid);
-  if (!entry) {
-    // Do not retain passive data for an unbounded history of visited chats.
+  let chat = entries.get(chatJid);
+  if (!chat) {
+    // The limit counts chats, not demand scopes. Keep only active requests.
     if (entries.size >= 32)
       for (const [key, item] of entries) {
-        if (!item.inFlight) {
+        if (!item.full?.inFlight && !item.passive?.inFlight) {
           entries.delete(key);
           break;
         }
       }
-    entry = { completedAt: 0, generation: 0 };
-    entries.set(chatJid, entry);
+    chat = { requested: 0, publishedRepository: 0 };
+    entries.set(chatJid, chat);
   }
-  if (entry.inFlight) return entry.inFlight;
-  // Leave 250ms for interval/async scheduling skew: a five-second tick must
-  // not miss freshness by a millisecond and defer the next update to ten.
-  if (
-    entry.value &&
-    entry.completedAt > 0 &&
-    Date.now() - entry.completedAt < AGENT_UI_POLL_MS - 250
-  )
-    return Promise.resolve(entry.value);
-  const state = entry,
-    generation = state.generation,
-    startedAt = Date.now();
+  // Passive consumers may use a full response already requested by a real
+  // context consumer. A full request must never join a passive response.
+  if (!includeContext && chat.full?.inFlight) return chat.full.inFlight;
+  if (!includeContext && fresh(chat.full)) return Promise.resolve(chat.full!.value!);
+  const scope = includeContext ? 'full' : 'passive';
+  const state = chat[scope] ??= { completedAt: 0, generation: 0 };
+  if (state.inFlight) return state.inFlight;
+  if (fresh(state)) return Promise.resolve(state.value!);
+  const generation = state.generation, startedAt = Date.now(), ticket = ++chat.requested;
+  if (includeContext) chat.fullRequestTicket = ticket;
   state.inFlight = (async () => {
     const response = await fetch(
-      `/agent/status?chat_jid=${encodeURIComponent(chatJid)}&ui=1`,
+      `/agent/status?chat_jid=${encodeURIComponent(chatJid)}&ui=1${includeContext ? '' : '&context=0'}`,
       {
         credentials: "same-origin",
         cache: "no-store",
@@ -79,7 +113,7 @@ export function getAgentUiSnapshot(
       // An event invalidated this response while its body was pending. All
       // joiners await one replacement rather than applying pre-event state.
       state.inFlight = undefined;
-      return getAgentUiSnapshot(chatJid);
+      return getAgentUiSnapshot(chatJid, includeContext);
     }
     for (const key of ["status", "model", "context", "metrics"] as const) {
       if (
@@ -88,7 +122,10 @@ export function getAgentUiSnapshot(
       )
         next[key] = state.value[key];
     }
-    setChatProjectRepository(chatJid, next.project_repository ?? null);
+    if (ticket > chat.publishedRepository) {
+      chat.publishedRepository = ticket;
+      setChatProjectRepository(chatJid, next.project_repository ?? null);
+    }
     state.value = next;
     state.completedAt = startedAt;
     return next;

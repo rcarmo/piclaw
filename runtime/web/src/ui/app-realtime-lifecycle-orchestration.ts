@@ -4,7 +4,8 @@ import { useSseConnection } from './use-sse-connection.js';
 import { handleAppSseEvent, invalidateAppPreviewTrailingFlushes } from './app-sse-events.js';
 import { runBackstopRefreshTick } from './app-connection-lifecycle.js';
 import { watchReturnToApp } from './app-resume.js';
-import { invalidateAgentUiSnapshot } from './agent-ui-snapshot.js';
+import { invalidateAgentUiSnapshot, needsAgentContextRefresh } from './agent-ui-snapshot.js';
+import { createVisibleInterval } from './visible-interval.js';
 
 interface RefBox<T> {
   current: T;
@@ -22,6 +23,49 @@ export function shouldInvalidateAgentStatusSnapshot(eventType: string, data?: an
 
 export function resolveBackstopIntervalMs(isAgentActive: boolean): number {
   return isAgentActive ? 15_000 : 60_000;
+}
+
+type VisibleIntervalRuntime = Pick<NonNullable<Parameters<typeof createVisibleInterval>[2]>, 'document' | 'window'>;
+type ConnectedBackstopOptions = Omit<Parameters<typeof runBackstopRefreshTick>[0], 'shouldRefreshContext'> & {
+  intervalMs: number;
+  currentChatJid: string;
+  activeChatJidRef: RefBox<string>;
+};
+
+export function startConnectedBackstop(options: ConnectedBackstopOptions, runtime: VisibleIntervalRuntime = {}): () => void {
+  const doc = runtime.document ?? document;
+  let disposed = false;
+  let scopeRevision = 0;
+  const visibilityChanged = () => {
+    if (doc.visibilityState === 'hidden') scopeRevision++;
+  };
+  doc.addEventListener('visibilitychange', visibilityChanged);
+
+  const stopInterval = createVisibleInterval(() => {
+    if (disposed || doc.visibilityState === 'hidden' || options.activeChatJidRef.current !== options.currentChatJid) return;
+    const tickRevision = scopeRevision;
+    runBackstopRefreshTick({
+      viewStateRef: options.viewStateRef,
+      isAgentActive: options.isAgentActive,
+      refreshTimeline: options.refreshTimeline,
+      refreshQueueState: options.refreshQueueState,
+      refreshAgentStatus: options.refreshAgentStatus,
+      shouldRefreshContext: status => !disposed &&
+        tickRevision === scopeRevision &&
+        doc.visibilityState !== 'hidden' &&
+        options.activeChatJidRef.current === options.currentChatJid &&
+        needsAgentContextRefresh(options.currentChatJid, status.context_revision),
+      refreshContextUsage: options.refreshContextUsage,
+      refreshAutoresearchStatus: options.refreshAutoresearchStatus,
+    });
+  }, options.intervalMs, { ...runtime, document: doc, refreshOnVisible: false });
+
+  return () => {
+    disposed = true;
+    scopeRevision++;
+    stopInterval();
+    doc.removeEventListener('visibilitychange', visibilityChanged);
+  };
 }
 
 interface UseRealtimeLifecycleOrchestrationOptions {
@@ -345,20 +389,19 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
   const isAgentActive = agentStatus !== null;
   useEffect(() => {
     if (connectionStatus !== 'connected') return;
-    const intervalMs = resolveBackstopIntervalMs(isAgentActive);
-    const interval = setInterval(() => {
-      runBackstopRefreshTick({
-        viewStateRef,
-        isAgentActive,
-        refreshTimeline,
-        refreshQueueState,
-        refreshAgentStatus,
-        refreshContextUsage,
-        refreshAutoresearchStatus,
-      });
-    }, intervalMs);
-    return () => clearInterval(interval);
-  }, [connectionStatus, isAgentActive, refreshAgentStatus, refreshAutoresearchStatus, refreshContextUsage, refreshQueueState, refreshTimeline, viewStateRef]);
+    return startConnectedBackstop({
+      intervalMs: resolveBackstopIntervalMs(isAgentActive),
+      viewStateRef,
+      isAgentActive,
+      refreshTimeline,
+      refreshQueueState,
+      refreshAgentStatus,
+      refreshContextUsage,
+      refreshAutoresearchStatus,
+      currentChatJid,
+      activeChatJidRef,
+    });
+  }, [activeChatJidRef, connectionStatus, currentChatJid, isAgentActive, refreshAgentStatus, refreshAutoresearchStatus, refreshContextUsage, refreshQueueState, refreshTimeline, viewStateRef]);
 
   useEffect(() => {
     let refreshPending = false;

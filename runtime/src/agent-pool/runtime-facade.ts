@@ -138,6 +138,13 @@ function modelCostRate(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function sessionContextRevision(sessionGeneration: string, nativeRevision: unknown): string | null {
+  // The host can replace a session without changing the native context bounds.
+  return typeof nativeRevision === "string" && nativeRevision.trim()
+    ? JSON.stringify([sessionGeneration, nativeRevision])
+    : null;
+}
+
 /** Structured model option returned to the web model picker. */
 export interface AvailableModelOption {
   label: string;
@@ -702,12 +709,24 @@ export class AgentRuntimeFacade {
 
   private async readDurableContextUsage(binding: DurableSessionPositionPort) {
     if (!binding.readContextUsage) throw new Error("Durable context reader unavailable");
+    const sessionGeneration = binding.sessionId;
     const usage = await binding.readContextUsage();
+    const revision = sessionContextRevision(sessionGeneration, usage.revision);
     const window = usage.contextWindow;
     const contextWindow = typeof window === "number" && Number.isFinite(window) && window > 0 ? window : null;
     const tokens = typeof usage.tokens === "number" && Number.isFinite(usage.tokens) && usage.tokens >= 0 ? usage.tokens : null;
     return { tokens, contextWindow, percent: tokens !== null && contextWindow !== null ? tokens / contextWindow * 100 : null,
-      sessionGeneration: binding.sessionId, tokensAreAuthoritative: true as const };
+      sessionGeneration, tokensAreAuthoritative: true as const,
+      ...(revision !== null ? { revision } : {}) };
+  }
+
+  async getContextRevisionForChat(chatJid: string): Promise<string | null> {
+    const binding = this.getDurableSession(chatJid);
+    if (!binding?.readContextRevision) return null;
+    const sessionGeneration = binding.sessionId;
+    const revision = await binding.readContextRevision();
+    return this.getDurableSession(chatJid)?.sessionId === sessionGeneration
+      ? sessionContextRevision(sessionGeneration, revision) : null;
   }
 
   async getContextUsageForChat(chatJid: string): Promise<{
@@ -715,6 +734,7 @@ export class AgentRuntimeFacade {
     contextWindow: number | null;
     percent: number | null;
     sessionGeneration?: string;
+    revision?: string;
     /** Unknown counts from this reader must not be replaced by stored estimates. */
     tokensAreAuthoritative?: true;
   } | null> {

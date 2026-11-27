@@ -16,7 +16,7 @@ import { estimateContextTokens } from "@earendil-works/pi-ai/utils/estimate";
 const log = createLogger("durable.runtime");
 import { getSupportedThinkingLevels, type ModelThinkingLevel } from "@earendil-works/pi-ai";
 // Native conversation runtime, explicitly composed with fenced host authority by application-bootstrap.
-import { configure, AgentDoc, AssistantEntry, ResetEntry, InboxDoc, LiveDoc, UsageDoc, Harness, type HarnessOptions, type HarnessInspection, type Storage, type ConversationId, type SubmissionId, type TaskId, type CompactionResult, type SubmissionRecord, type EntryRecord, type Cursor } from "@earendil-works/pi-durable";
+import { configure, AgentDoc, AssistantEntry, ResetEntry, InboxDoc, LiveDoc, UsageDoc, Harness, type HarnessOptions, type HarnessInspection, type Storage, type ConversationId, type SubmissionId, type TaskId, type CompactionResult, type SubmissionRecord, type EntryRecord, type EntryId, type Cursor } from "@earendil-works/pi-durable";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { awaitWithContext, withAbortSignal, withoutAbortSignal, type Context } from "@earendil-works/chord/context";
 import type { CurrentPiclawServiceWorkStore, FinishHarnessRequest } from "../../../runtime/src/service-effects/current-piclaw/service-work-store.js";
@@ -289,6 +289,9 @@ export class HostConversationRuntime {
   // Lifecycle joins only: not an input queue or admission/dedup authority.
   private readonly active = new Set<Promise<unknown>>();
   private readonly observations = new AbortController();
+  // The estimate belongs to a committed tail, including appended edits, resets
+  // and head markers. Only a scalar promise survives; never keep a view here.
+  private readonly contextEstimates = new Map<ConversationId, { tail: EntryId; tokens: Promise<number> }>();
   private observe<T>(body: () => Promise<T>): Promise<T> {
     this.fence();
     const promise = body();
@@ -520,9 +523,9 @@ export class HostConversationRuntime {
       const conversation = await reader.conversation();
       const state = await conversation.commit(async tx => {
         reader.check();
-        const page = await tx.scanEntries({ conversationId: reader.binding.conversationId as ConversationId, order: "descending" }, 1); reader.check();
+        const tail = await tx.latestEntryId(conversation.id); reader.check();
         const agent = await tx.doc(AgentDoc, reader.binding.conversationId as ConversationId); reader.check();
-        return { position: page.items[0] ? String(page.items[0].id) : null,
+        return { position: tail === undefined ? null : String(tail),
           model: agent.model ? `${agent.model.provider}/${agent.model.modelId}` : null,
           thinkingLevel: agent.thinkingLevel ?? null };
       }, this.context); reader.check();
@@ -543,6 +546,26 @@ export class HostConversationRuntime {
       return { backend: "durable", conversationId: reader.binding.conversationId, extensions: agent.extensions.map(extension => extension.name), tools };
     });
   }
+  private async contextUsageBounds(reader: ReturnType<HostConversationRuntime["sessionReader"]>) {
+    const conversation = await reader.conversation();
+    // Capture the persisted choice with the tail, without resolving the agent loadout.
+    const { tail, modelRef } = await conversation.commit(async tx => {
+      reader.check();
+      const tail = await tx.latestEntryId(conversation.id); reader.check();
+      const { model } = await tx.doc(AgentDoc, conversation.id); reader.check();
+      return { tail, modelRef: model && { provider: model.provider, modelId: model.modelId } };
+    }, this.context); reader.check();
+    const model = modelRef && currentHarnessModels(this.options.harnessOptions).getModel(modelRef.provider, modelRef.modelId);
+    const window = model?.contextWindow;
+    const contextWindow = typeof window === "number" && Number.isFinite(window) && window > 0 ? window : null;
+    const revision = JSON.stringify([reader.binding.incarnation, conversation.id, tail ?? null, contextWindow]);
+    return { conversation, tail, contextWindow, revision };
+  }
+  /** Compare metadata without loading the transcript bodies. */
+  readSessionContextRevision(binding: Parameters<HostConversationRuntime["readSessionContextUsage"]>[0]): Promise<string> {
+    const reader = this.sessionReader(binding);
+    return this.observe(async () => (await this.contextUsageBounds(reader)).revision);
+  }
   /** Read-only current-head context estimate for the compose tracker. The SDK
    * uses the last eligible provider usage plus trailing message estimates and
    * drops usage that predates a reset/compaction prefix. No generation occurs.
@@ -550,16 +573,26 @@ export class HostConversationRuntime {
   async readSessionContextUsage(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<import("../../src/agent-pool/durable-runtime-adapter.js").DurableContextUsage> {
     const reader = this.sessionReader(binding);
     return this.observe(async () => {
-      const conversation = await reader.conversation();
-      const view = await conversation.context(this.context); reader.check();
-      const agent = await conversation.agent(this.context); reader.check();
-      const model = agent.model && currentHarnessModels(this.options.harnessOptions).getModel(agent.model.provider, agent.model.modelId);
-      const measured = estimateContextTokens(view.messages).tokens;
+      const { conversation, tail, contextWindow, revision } = await this.contextUsageBounds(reader); reader.check();
+      let measured = 0;
+      if (tail !== undefined) {
+        let estimate = this.contextEstimates.get(conversation.id);
+        if (estimate?.tail !== tail) {
+          const tokens = conversation.context(this.context, { at: tail }).then(view => estimateContextTokens(view.messages).tokens);
+          estimate = { tail, tokens };
+          if (!this.contextEstimates.has(conversation.id) && this.contextEstimates.size >= 128) {
+            this.contextEstimates.delete(this.contextEstimates.keys().next().value!);
+          }
+          this.contextEstimates.set(conversation.id, estimate);
+          void tokens.catch(() => {
+            if (this.contextEstimates.get(conversation.id)?.tokens === tokens) this.contextEstimates.delete(conversation.id);
+          });
+        }
+        measured = await estimate.tokens; reader.check();
+      }
       const tokens = Number.isFinite(measured) && measured >= 0 ? measured : null;
-      const window = model?.contextWindow;
-      const contextWindow = typeof window === "number" && Number.isFinite(window) && window > 0 ? window : null;
       reader.check();
-      return { tokens, contextWindow };
+      return { tokens, contextWindow, revision };
     });
   }
   /** Read-only native reporting. No model calls, estimates, or legacy session hydration. */

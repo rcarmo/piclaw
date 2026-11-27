@@ -124,32 +124,33 @@ test('handleConnectionStatusChangeEvent skips the initial reconnect bundle durin
   ]);
 });
 
-test('runBackstopRefreshTick refreshes queue only when agent is active', () => {
+test('backstop reads context only after a changed revision and refreshes the queue while active', async () => {
   const calls: string[] = [];
-  const run = (isAgentActive: boolean) => {
+  const run = async (isAgentActive: boolean, revision: string) => {
     runBackstopRefreshTick({
       viewStateRef: { current: { currentHashtag: null, searchQuery: null, searchOpen: false } },
       isAgentActive,
       refreshTimeline: () => { calls.push(`timeline:${isAgentActive}`); },
       refreshQueueState: () => { calls.push(`queue:${isAgentActive}`); },
-      refreshAgentStatus: () => { calls.push(`status:${isAgentActive}`); },
+      refreshAgentStatus: async () => { calls.push(`status:${isAgentActive}`); return { context_revision: revision }; },
+      shouldRefreshContext: status => status.context_revision !== 'unchanged',
       refreshContextUsage: () => { calls.push(`context:${isAgentActive}`); },
       refreshAutoresearchStatus: () => { calls.push(`autoresearch:${isAgentActive}`); },
     });
+    await Promise.resolve();
   };
 
-  run(true);
-  run(false);
+  await run(true, 'unchanged');
+  await run(false, 'changed');
 
   expect(calls).toEqual([
     'timeline:true',
     'queue:true',
     'status:true',
-    'context:true',
     'autoresearch:true',
     'timeline:false',
     'status:false',
-    'context:false',
     'autoresearch:false',
+    'context:false',
   ]);
 });

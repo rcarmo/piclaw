@@ -73,7 +73,11 @@ function methodNotAllowedResponse(): Response {
   });
 }
 
-export async function buildPiclawStateSnapshot(channel: WebChannelLike): Promise<PiclawStateSnapshot> {
+export async function buildPiclawStateSnapshot(
+  channel: WebChannelLike,
+  signal?: AbortSignal,
+): Promise<PiclawStateSnapshot> {
+  signal?.throwIfAborted();
   const identity = getIdentityConfig();
   const activeChats = channel.agentPool.listActiveChats();
   const chats: WidgetStateChat[] = [];
@@ -84,10 +88,14 @@ export async function buildPiclawStateSnapshot(channel: WebChannelLike): Promise
     if (!chatJid) continue;
     const generation = () => channel.agentPool.getSessionGenerationForChat?.(chatJid) ?? null;
     const before = generation();
+    // The SDK reads cannot be interrupted here; check for disconnect after each one settles.
     const runtimeContext = await channel.agentPool.getContextUsageForChat(chatJid).catch(() => null);
+    signal?.throwIfAborted();
     const current = generation();
     const context = before === current && runtimeContext && (!current || runtimeContext.sessionGeneration === current)
       ? runtimeContext : current ? {tokens:null,contextWindow:null,percent:null,sessionGeneration:current,contextUpdate:'replace'} : null;
+    const queue = await channel.readNativeQueue!(chatJid);
+    signal?.throwIfAborted();
     chats.push({
       chat_jid: chatJid,
       agent_name: typeof record.agent_name === "string" ? record.agent_name : null,
@@ -98,7 +106,7 @@ export async function buildPiclawStateSnapshot(channel: WebChannelLike): Promise
       root_chat_jid: typeof record.root_chat_jid === "string" ? record.root_chat_jid : null,
       is_active: Boolean(record.is_active),
       has_side_session: Boolean(record.has_side_session),
-      queued_followups: (await channel.readNativeQueue!(chatJid)).length,
+      queued_followups: queue.length,
       status: channel.getAgentStatus(chatJid),
       context: publicContextUsage(context),
     });
@@ -136,49 +144,55 @@ export async function handleWidgetStateRoutes(
     return await snapshotJsonResponse(channel);
   }
 
-  return handleWidgetStateEvents(channel);
+  return handleWidgetStateEvents(channel, req.signal);
 }
 
 function encodeSse(eventType: string, data: unknown): Uint8Array {
   return new TextEncoder().encode(`event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-function handleWidgetStateEvents(channel: WebChannelLike): Response {
-  let closed = false;
+function handleWidgetStateEvents(channel: WebChannelLike, requestSignal: AbortSignal): Response {
+  const lifecycle = new AbortController();
+  let inFlight = false;
   let snapshotTimer: Timer | null = null;
   let heartbeatTimer: Timer | null = null;
+  let onAbort: (() => void) | undefined;
+  const stop = () => {
+    if (lifecycle.signal.aborted) return;
+    lifecycle.abort();
+    if (snapshotTimer) clearInterval(snapshotTimer);
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    if (onAbort) requestSignal.removeEventListener('abort', onAbort);
+  };
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
+      const end = () => { stop(); controller.close(); };
+      onAbort = end;
+      if (requestSignal.aborted) { end(); return; }
+      requestSignal.addEventListener('abort', end, { once: true });
+      const hasRoom = () => !lifecycle.signal.aborted && (controller.desiredSize ?? 0) > 0;
       const sendSnapshot = async () => {
-        if (closed) return;
+        // Snapshots describe current state; queuing historical ticks only
+        // repeats expensive reads and keeps data a slow client cannot use.
+        if (inFlight || !hasRoom()) return;
+        inFlight = true;
         try {
-          controller.enqueue(encodeSse(STATE_EVENT_NAME, await buildPiclawStateSnapshot(channel)));
+          const snapshot = await buildPiclawStateSnapshot(channel, lifecycle.signal);
+          if (hasRoom()) controller.enqueue(encodeSse(STATE_EVENT_NAME, snapshot));
         } catch {
-          closed = true;
-          if (snapshotTimer) clearInterval(snapshotTimer);
-          if (heartbeatTimer) clearInterval(heartbeatTimer);
+          if (!lifecycle.signal.aborted) end();
+        } finally {
+          inFlight = false;
         }
       };
-
-      void sendSnapshot();
       snapshotTimer = setInterval(() => { void sendSnapshot(); }, STATE_EVENTS_INTERVAL_MS);
       heartbeatTimer = setInterval(() => {
-        if (closed) return;
-        try {
-          controller.enqueue(new TextEncoder().encode(`: heartbeat ${Date.now()}\n\n`));
-        } catch {
-          closed = true;
-          if (snapshotTimer) clearInterval(snapshotTimer);
-          if (heartbeatTimer) clearInterval(heartbeatTimer);
-        }
+        if (hasRoom() && !inFlight) controller.enqueue(new TextEncoder().encode(`: heartbeat ${Date.now()}\n\n`));
       }, STATE_EVENTS_HEARTBEAT_MS);
+      void sendSnapshot();
     },
-    cancel() {
-      closed = true;
-      if (snapshotTimer) clearInterval(snapshotTimer);
-      if (heartbeatTimer) clearInterval(heartbeatTimer);
-    },
+    cancel: stop,
   });
 
   return new Response(stream, {
