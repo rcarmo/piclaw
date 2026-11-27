@@ -17,7 +17,10 @@ const delegate=JSON.parse(delegateBytes.toString('utf8'));
 const rssPath='docs/development/receipts/native-turn-rss-retention-overlay.json';
 const rssBytes=readFileSync(resolve(root,rssPath));
 const rss=JSON.parse(rssBytes.toString('utf8'));
-const output=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/native-output-rss-retention-overlay.json'),'utf8'));
+const outputPath='docs/development/receipts/native-output-rss-retention-overlay.json';
+const outputBytes=readFileSync(resolve(root,outputPath));
+const output=JSON.parse(outputBytes.toString('utf8'));
+const correlation=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/native-input-correlation-retention-overlay.json'),'utf8'));
 const sha=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
 test('removal/retention witness binds every original Core path through explicit later source transformations',()=>{
  expect(sha(manifestBytes)).toBe(overlay.baseManifestSha256);
@@ -42,7 +45,13 @@ test('removal/retention witness binds every original Core path through explicit 
  expect(output.previousOverlaySha256).toBe(sha(rssBytes));
  expect(output.baseManifestSha256).toBe(overlay.baseManifestSha256);
  expect(output.rows.map((row:{path:string})=>row.path)).toEqual(['runtime/durable-engine/src/host-models.ts']);
- const layers=[overlay,removal,mcpAudit,a2ui,delegate,rss,output].map(layer=>{
+ expect(correlation.previousOverlay).toBe(outputPath);
+ expect(correlation.previousOverlaySha256).toBe(sha(outputBytes));
+ expect(correlation.baseManifestSha256).toBe(overlay.baseManifestSha256);
+ expect(correlation.rows.map((row:{path:string})=>row.path)).toEqual([
+  'runtime/durable-engine/src/application-bootstrap.ts','runtime/durable-engine/src/host-bindings.ts',
+ ]);
+ const layers=[overlay,removal,mcpAudit,a2ui,delegate,rss,output,correlation].map(layer=>{
   expect(layer.version).toBe(1);
   const rows=new Map<string,{beforeSha256:string;afterSha256:string;purpose:string}>(layer.rows.map((row:any)=>[row.path,row]));
   expect(rows.size).toBe(layer.rows.length);

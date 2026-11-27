@@ -346,6 +346,15 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       }).finally(()=>{messageObservers.delete(observer);observedMessages.delete(submissionId);});
       messageObservers.add(observer);
     };
+    function nativeMessageInput(chat: string, scope: { branchId: string; conversationId: number },
+      source: { sourceId: string; sourceSeq: number; payloadRef: string }, rowId: number, publicContent: string) {
+      const requestId = `message:${rowId}:${source.sourceId}`;
+      const content = projectA2uiAgentInput(root, { chatJid: chat, sourceId: source.sourceId, conversationId: scope.conversationId }, publicContent);
+      const input: AcceptedInput = Object.freeze({incarnation:r.incarnation,conversationId:scope.conversationId as ConversationId,
+        chatJid:chat,branchId:scope.branchId,operationId:`native-message:${scope.conversationId}:${source.sourceSeq}`,sourceSeq:source.sourceSeq,
+        sourceId:source.sourceId,payloadRef:source.payloadRef,requestId,requestHash:hashCanonicalRequest({type:"input",requestId,content})});
+      return { input, content };
+    }
     const dispatch: NonNullable<WebChannelOpts["dispatchAcceptedInput"]> = (chat, messageId, rowId, whenBusy="followUp") => {
       const admission=(async()=>{
       assertLive(); config.assertAdmission?.();
@@ -358,11 +367,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       const previous = await bindings.findSource(chat,source.sourceSeq); assertLive();
       if (previous && !isNativeMessageInput(previous)) throw Error("Existing host input cannot be resubmitted");
       if (!previous && (source.state!=="pending" || !/^application:pi-durable(?::|$)/.test(source.provenanceRef))) throw Error("Unsubmitted native source required");
-      const requestId = `message:${rowId}:${messageId}`;
-      const content = projectA2uiAgentInput(root, { chatJid: chat, sourceId: messageId, conversationId: scope.conversationId }, row.content);
-      const input: AcceptedInput = Object.freeze({incarnation:r.incarnation,conversationId:scope.conversationId as ConversationId,
-        chatJid:chat,branchId:scope.branchId,operationId:`native-message:${scope.conversationId}:${source.sourceSeq}`,sourceSeq:source.sourceSeq,
-        sourceId:messageId,payloadRef:source.payloadRef,requestId,requestHash:hashCanonicalRequest({type:"input",requestId,content})});
+      const { input } = nativeMessageInput(chat, scope, source, rowId, row.content);
       // Priority intervention does not wait for an idle prompt's optional optimiser tool pick.
       assertLive();
       const id = await runtime.submitMessage(input,whenBusy); assertLive();
@@ -478,7 +483,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
           }
         };
         checkInput();
-        work.acceptSourceInTransaction(input, connection);
+        const source = work.acceptSourceInTransaction(input, connection);
         if (renderer && chat.startsWith('web:')) {
           const conversationId = scope.conversationId;
           if (renderer.submittedSurfaceId && !ownsA2uiModelSync(root, chat, `a2ui:${renderer.submittedSurfaceId}`, conversationId))
@@ -492,6 +497,10 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
           const data=renderer.capabilities ? readA2uiRendererDataModel(root,chat,conversationId,renderer) : undefined;
           storeA2uiInputMetadata(root,{chatJid:chat,sourceId:message.id,conversationId},data,renderer.capabilities,renderer.peer,owner ? action?.message : undefined);
         }
+        // Seal the projected content after renderer metadata, in the same commit
+        // as the message and EF source. SDK placement remains a separate receipt.
+        const native = nativeMessageInput(chat, scope, source, rowId, message.content);
+        bindings.bindNativeMessageInTransaction(native.input, native.content, connection);
         checkInput();
         assert();
       };

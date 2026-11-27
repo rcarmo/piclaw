@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "sourceParent": "d1183334406f5beea9645a01d7d4a213a7e73af4",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlay": "docs/development/receipts/native-output-rss-retention-overlay.json",
+  "previousOverlaySha256": "c04dfc81c8961b4e5a397a8db0bef6b36b68c50a1ca3ef830f4054c0e029c617",
+  "scope": "Native web input correlation only; original paths, deletions and retirement accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/application-bootstrap.ts",
+      "beforeSha256": "d278cc8f4ce2056eca95d98e0b1ec626fdbda52e883eec2456a7d518f6d4722e",
+      "afterSha256": "f01a6a05d97520bd74b1a865eb445e96ded4176fbc9ba8ac5dcddaa815d3c1d9",
+      "purpose": "Keep message, accepted source and canonical input correlation in the same Root commit before SDK placement."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-bindings.ts",
+      "beforeSha256": "53b7940dcf94c7222774f4ef41cf4b92a3dd82603e0ef2b8a772c3d9cabf66fc",
+      "afterSha256": "d72f8a121a18b583a59caf281f02725feaaad6bee7ea05a9248fc304cbf5c013",
+      "purpose": "Reuse exact binding validation for correlation inside the caller-owned native message acceptance transaction."
+    }
+  ]
+}
