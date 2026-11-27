@@ -82,6 +82,7 @@ export interface PendingClient {
   heartbeat: Timer;
   chatJid?: string | null;
   authorisation?: SseAuthorisation;
+  removeAbortListener?: () => void;
 }
 
 /** Interface for a container that holds SSE client lists. */
@@ -107,33 +108,57 @@ export function handleSse(channel: SseClientContainer, req?: Request, authorisat
     });
   }
 
-  let clientRef: PendingClient | null = null;
   const chatJid = authorisation?.chatJid ?? (req ? (new URL(req.url).searchParams.get("chat_jid") || "").trim() || null : null);
-
+  const signal = req?.signal;
+  let clientRef: PendingClient | undefined;
   const stream = new ReadableStream<Uint8Array>({
     start: (controller) => {
+      if (signal?.aborted) {
+        controller.close();
+        return;
+      }
+      const connected = encoder.encode(`event: connected\ndata: ${JSON.stringify({ app_asset_version: getAppAssetVersion(), ...(authorisation ? {} : getServerUiState()), ...(chatJid ? { chat_jid: chatJid } : {}) })}\n\n`);
       const heartbeat = setInterval(() => {
-        if (clientRef && !revalidateSseClient(channel, clientRef)) return;
+        const client = clientRef;
+        if (!client || !revalidateSseClient(channel, client)) return;
+        // Skip the whole heartbeat when backed up; real events still queue in order.
+        if ((controller.desiredSize ?? 0) <= 0) return;
+        const comment = encoder.encode(": heartbeat\n\n");
+        const event = encoder.encode(`event: heartbeat\ndata: ${JSON.stringify({ ts: Date.now(), ...(chatJid ? { chat_jid: chatJid } : {}) })}\n\n`);
+        if (!channel.clients.has(client)) return;
         try {
-          controller.enqueue(encoder.encode(": heartbeat\n\n"));
-          controller.enqueue(encoder.encode(`event: heartbeat\ndata: ${JSON.stringify({ ts: Date.now(), ...(chatJid ? { chat_jid: chatJid } : {}) })}\n\n`));
-        } catch {
-          clearInterval(heartbeat);
-          if (clientRef) channel.clients.delete(clientRef);
+          controller.enqueue(comment);
+          if (channel.clients.has(client)) controller.enqueue(event);
+        } catch (error) {
+          debugSuppressedError(log, "Failed to enqueue an SSE frame.", error);
+          releaseSseClient(channel, client, "Failed to close an SSE client after an enqueue error.");
         }
       }, 30000);
-      clientRef = { controller, heartbeat, chatJid, authorisation };
-      channel.clients.add(clientRef);
-      controller.enqueue(encoder.encode(`event: connected\ndata: ${JSON.stringify({ app_asset_version: getAppAssetVersion(), ...(authorisation ? {} : getServerUiState()), ...(chatJid ? { chat_jid: chatJid } : {}) })}\n\n`));
-    },
-    cancel: () => {
-      if (clientRef) {
-        clearInterval(clientRef.heartbeat);
-        channel.clients.delete(clientRef);
+      const onAbort = () => {
+        if (clientRef) releaseSseClient(channel, clientRef, "Aborted SSE client already closed.");
+      };
+      const client: PendingClient = {
+        controller, heartbeat, chatJid, authorisation,
+        removeAbortListener: signal && (() => signal.removeEventListener("abort", onAbort)),
+      };
+      clientRef = client;
+      channel.clients.add(client);
+      signal?.addEventListener("abort", onAbort, { once: true });
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
+      if (!channel.clients.has(client)) return;
+      try { controller.enqueue(connected); }
+      catch (error) {
+        debugSuppressedError(log, "Failed to enqueue an SSE frame.", error);
+        releaseSseClient(channel, client, "Failed to close an SSE client after an enqueue error.");
       }
     },
+    cancel: () => {
+      if (clientRef) releaseSseClient(channel, clientRef);
+    },
   });
-
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
@@ -144,17 +169,24 @@ export function handleSse(channel: SseClientContainer, req?: Request, authorisat
   });
 }
 
-/** Revoke before delivery and on the heartbeat, including silent/idle connections. */
-export function revalidateSseClient(channel: SseClientContainer, client: PendingClient): boolean {
-  if (isAuthorised(client.authorisation)) return true;
+/** Release a registered client once, optionally closing its existing stream. */
+export function releaseSseClient(channel: SseClientContainer, client: PendingClient, closeReason?: string): void {
+  if (!channel.clients.delete(client)) return;
+  client.removeAbortListener?.();
   clearInterval(client.heartbeat);
-  channel.clients.delete(client);
+  if (!closeReason) return;
   try { client.controller.close(); }
-  catch (error) { debugSuppressedError(log, "Revoked SSE client already closed.", error); }
+  catch (error) { debugSuppressedError(log, closeReason, error); }
+}
+
+/** Revoke before delivery, including silent and backed-up streams. */
+function revalidateSseClient(channel: SseClientContainer, client: PendingClient): boolean {
+  if (!channel.clients.has(client)) return false;
+  if (isAuthorised(client.authorisation)) return channel.clients.has(client);
+  releaseSseClient(channel, client, "Revoked SSE client already closed.");
   return false;
 }
 
-/** Encode and send an SSE event to all connected clients. */
 function projectScopedEvent(authorisation: SseAuthorisation, eventType: string, data: unknown): unknown | null {
   if (typeof authorisation.project !== "function") return data;
   try { return authorisation.project(eventType, data); }
@@ -176,29 +208,31 @@ export function broadcastEvent(channel: SseClientContainer, eventType: string, d
 
   for (const client of channel.clients) {
     if (!revalidateSseClient(channel, client)) continue;
+
+    let projected: unknown = data;
     if (eventType === 'picker_pins_changed') {
       const payload = data as { user_id?: string; operator?: boolean };
       const allowed = client.authorisation ? Boolean(client.authorisation.userId && payload?.user_id === client.authorisation.userId) : payload?.operator === true;
       if (!allowed) continue;
-      try { client.controller.enqueue(encoder.encode('event: picker_pins_changed\ndata: {}\n\n')); }
-      catch { clearInterval(client.heartbeat); channel.clients.delete(client); }
-      continue;
+      projected = {};
+    } else {
+      // Only the allowlisted public instance branding may cross the scoped-client boundary.
+      if (client.authorisation && eventType !== 'profile_update' && (!eventChatJid || !requiresChatScopedDelivery(eventType))) continue;
+      if (eventChatJid && client.chatJid !== eventChatJid) continue;
+      if (client.authorisation) {
+        projected = eventType === 'profile_update'
+          ? projectPublicBranding(data)
+          : projectScopedEvent(client.authorisation, eventType, data);
+      }
+      if (projected === null) continue;
     }
-    // Only the allowlisted public instance branding may cross the scoped-client boundary.
-    if (client.authorisation && eventType !== 'profile_update' && (!eventChatJid || !requiresChatScopedDelivery(eventType))) continue;
-    if (eventChatJid && client.chatJid !== eventChatJid) {
-      continue;
-    }
-    const projected = client.authorisation
-      ? (eventType === 'profile_update' ? projectPublicBranding(data) : projectScopedEvent(client.authorisation, eventType, data))
-      : data;
-    if (projected === null) continue;
+
     const bytes = encoder.encode(`event: ${eventType}\ndata: ${JSON.stringify(projected)}\n\n`);
-    try {
-      client.controller.enqueue(bytes);
-    } catch {
-      clearInterval(client.heartbeat);
-      channel.clients.delete(client);
+    if (!channel.clients.has(client)) continue;
+    try { client.controller.enqueue(bytes); }
+    catch (error) {
+      debugSuppressedError(log, "Failed to enqueue an SSE frame.", error);
+      releaseSseClient(channel, client, "Failed to close an SSE client after an enqueue error.");
     }
   }
 }

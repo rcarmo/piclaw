@@ -8,10 +8,7 @@
  *            throughout the web channel for real-time event delivery.
  */
 
-import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
-import { broadcastEvent, handleSse, type PendingClient, type SseClientContainer, type SseAuthorisation } from "./sse.js";
-
-const log = createLogger("web.sse-hub");
+import { broadcastEvent, handleSse, releaseSseClient, type PendingClient, type SseClientContainer, type SseAuthorisation } from "./sse.js";
 
 /** Manages SSE client connections and provides broadcast(). */
 export class SseHub implements SseClientContainer {
@@ -27,13 +24,7 @@ export class SseHub implements SseClientContainer {
 
   closeAll(): void {
     for (const client of this.clients) {
-      clearInterval(client.heartbeat);
-      try {
-        client.controller.close();
-      } catch (error) {
-        debugSuppressedError(log, "Failed to close an SSE client controller during shutdown.", error);
-      }
+      releaseSseClient(this, client, "Failed to close an SSE client controller during shutdown.");
     }
-    this.clients.clear();
   }
 }
