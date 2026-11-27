@@ -18,7 +18,7 @@ interface Entry {
   generation: number;
   inFlight?: Promise<AgentUiSnapshot>;
 }
-type ChatEntry = { full?: Entry; passive?: Entry; requested: number; publishedRepository: number };
+type ChatEntry = { full?: Entry; passive?: Entry; requested: number; fullRequestTicket?: number; publishedRepository: number };
 const entries = new Map<string, ChatEntry>();
 const fresh = (entry?: Entry) =>
   Boolean(entry?.value && entry.completedAt > 0 && Date.now() - entry.completedAt < AGENT_UI_POLL_MS - 250);
@@ -40,16 +40,33 @@ export function invalidateAgentUiSnapshot(chatJid = currentUiChatJid()): void {
     entry.generation++;
   }
 }
+/** Return the exact successful full payload when this revision is still valid.
+ * This deliberately does not require the full entry to be fresh: a periodic
+ * lightweight observation may reuse it after its ordinary polling TTL. */
+export function successfulAgentContextForRevision(chatJid: string, revision: unknown): any | undefined {
+  if (typeof revision !== 'string' || !revision) return undefined;
+  const full = entries.get(chatJid)?.full;
+  // Invalidation clears completedAt. Keep the object for identities, but never
+  // let a response from before that boundary satisfy a periodic observation.
+  if (!full?.value || full.completedAt <= 0) return undefined;
+  if (!full.value.context || full.value.context_revision !== revision) return undefined;
+  return full.value.context;
+}
+
 /** Reconcile a missed update without fetching unchanged context just because its TTL expired. */
 export function needsAgentContextRefresh(chatJid: string, revision: unknown): boolean {
   // Without a revision (older server or failed lightweight read), retain the
   // ordinary recovery path. Do not treat unknown as an unchanged context.
   if (typeof revision !== 'string' || !revision) return true;
   const full = entries.get(chatJid)?.full;
+  if (successfulAgentContextForRevision(chatJid, revision) !== undefined) return false;
   if (full?.inFlight) return false;
-  if (full?.value?.context && full.value.context_revision === revision) return false;
   if (full) full.completedAt = 0;
   return true;
+}
+
+export function getAgentUiFullRequestTicket(chatJid: string): number | undefined {
+  return entries.get(chatJid)?.fullRequestTicket;
 }
 
 export function getAgentUiSnapshot(
@@ -78,6 +95,7 @@ export function getAgentUiSnapshot(
   if (state.inFlight) return state.inFlight;
   if (fresh(state)) return Promise.resolve(state.value!);
   const generation = state.generation, startedAt = Date.now(), ticket = ++chat.requested;
+  if (includeContext) chat.fullRequestTicket = ticket;
   state.inFlight = (async () => {
     const response = await fetch(
       `/agent/status?chat_jid=${encodeURIComponent(chatJid)}&ui=1${includeContext ? '' : '&context=0'}`,

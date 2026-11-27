@@ -7,7 +7,12 @@ import { resolveScreenSizeHint } from './ui/screen-size-hint.js';
 import { isCommittedComposeInput } from './ui/compose-submission.js';
 import { a2uiDraftsFor } from './ui/a2ui-drafts.js';
 import { a2uiRendererContext, openA2uiRendererPeer } from './ui/a2ui-renderer-peer.js';
-import { getAgentUiSnapshot, currentUiChatJid } from './ui/agent-ui-snapshot.js';
+import {
+    getAgentUiSnapshot,
+    getAgentUiFullRequestTicket,
+    currentUiChatJid,
+    successfulAgentContextForRevision,
+} from './ui/agent-ui-snapshot.js';
 import type { CallAgentFunctionMessage, ErrorMessage } from '@a2ui/web_core/v1_0';
 
 export { uploadMedia, uploadWorkspaceFile } from './ui/upload-transfers.js';
@@ -535,8 +540,22 @@ export async function getAgentStatus(chatJid = null) {
  * Get context window usage (tokens, contextWindow, percent).
  * Returns null fields when the session has no usage data yet.
  */
-export async function getAgentContext(chatJid = null) {
-    const snapshot = await getAgentUiSnapshot(chatJid || currentUiChatJid());
+export async function getAgentContext(chatJid = null, { isPeriodicCurrent }: { isPeriodicCurrent?: () => boolean } = {}) {
+    const jid = chatJid || currentUiChatJid();
+    if (isPeriodicCurrent) {
+        if (!isPeriodicCurrent()) return null;
+        // Join model polling's passive read and reuse the exact context object
+        // only if the last successful full response matches its revision.
+        const fullTicket = getAgentUiFullRequestTicket(jid);
+        const passive = await getAgentUiSnapshot(jid, false);
+        if (!isPeriodicCurrent()) return null;
+        const previous = successfulAgentContextForRevision(jid, passive.context_revision);
+        if (previous !== undefined) return previous;
+        // A newer full demand already owns recovery. Don't start another full
+        // read from the older observation, even if that demand has settled.
+        if (fullTicket !== getAgentUiFullRequestTicket(jid)) return null;
+    }
+    const snapshot = await getAgentUiSnapshot(jid);
     if (!snapshot.context) throw new Error('Context unavailable');
     return snapshot.context;
 }

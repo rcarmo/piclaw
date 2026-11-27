@@ -26,6 +26,7 @@ import {
 import { prewarmTimelineSnapshots, resolveRecentTimelinePrewarmChatJids } from './app-timeline-cache.js';
 import { getTimeline } from '../api.js';
 import { mergeModelStatePayload } from './app-model-state.js';
+import { createVisibleInterval } from './visible-interval.js';
 import {
   noteAppChatActivation,
   runCoalescedAppRefresh,
@@ -48,7 +49,7 @@ interface UseChatRefreshLifecycleOptions {
   currentChatJid: string;
   currentRootChatJid: string;
   getAgentModels: (chatJid: string) => Promise<any>;
-  getAgentContext: (chatJid: string) => Promise<any>;
+  getAgentContext: (chatJid: string, options?: { isPeriodicCurrent?: () => boolean }) => Promise<any>;
   getActiveChatAgents: (chatJid: string) => Promise<any>;
   getChatBranches: (chatJid: string | null, options?: Record<string, unknown>) => Promise<any>;
   activeChatJidRef: RefBox<string>;
@@ -70,7 +71,7 @@ interface UseChatRefreshLifecycleOptions {
 
 export function startModelAndQueueRefreshEffect(options: {
   refreshModelAndQueueState: () => void;
-  refreshModelState: () => void;
+  refreshModelState: (options?: { periodic?: boolean }) => void;
   refreshActiveChatAgents: () => void;
   refreshCurrentChatBranches: () => void;
   refreshQueueState: () => void;
@@ -87,15 +88,18 @@ export function startModelAndQueueRefreshEffect(options: {
     refreshQueueState,
     runImmediately = true,
     intervalMs = 60_000,
-    scheduleInterval = (handler, delay) => setInterval(handler, delay),
-    clearScheduledInterval = (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
+    scheduleInterval = (handler, delay) => createVisibleInterval(handler, delay, { refreshOnVisible: false }),
+    clearScheduledInterval = (handle) => {
+      if (typeof handle === 'function') (handle as () => void)();
+      else clearInterval(handle as ReturnType<typeof setInterval>);
+    },
   } = options;
 
   if (runImmediately) {
     refreshModelAndQueueState();
   }
   const intervalHandle = scheduleInterval(() => {
-    refreshModelState();
+    refreshModelState({ periodic: true });
     refreshActiveChatAgents();
     refreshCurrentChatBranches();
     refreshQueueState();
@@ -203,6 +207,22 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
 
   const modelStateRef = useRef<{ chatJid: string; payload: any; revision: number }>({ chatJid: currentChatJid, payload: null, revision: 0 });
   const activatedChatRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  const explicitModelRefreshSequenceRef = useRef(0);
+  const periodicScopeRef = useRef(0);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const visibilityChanged = () => {
+      if (document.visibilityState === 'hidden') periodicScopeRef.current++;
+    };
+    document.addEventListener('visibilitychange', visibilityChanged);
+    return () => {
+      mountedRef.current = false;
+      periodicScopeRef.current++;
+      document.removeEventListener('visibilitychange', visibilityChanged);
+    };
+  }, []);
   const applyModelState = useCallback((payload: any) => {
     if (!payload || activeChatJidRef.current !== currentChatJid) return;
     const previous = modelStateRef.current.chatJid === currentChatJid ? modelStateRef.current.payload : null;
@@ -221,11 +241,29 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
 
   const getThreadSwitchTraceId = useCallback(() => getActiveAppPerfTraceId('thread-switch', currentChatJid), [currentChatJid]);
 
-  const refreshModelState = useCallback(() => {
+  const refreshModelState = useCallback((refreshOptions: { periodic?: boolean } = {}) => {
+    const periodic = refreshOptions.periodic === true;
+    const targetChatJid = currentChatJid;
+    const periodicScope = periodicScopeRef.current;
+    const scheduledRevision = modelStateRef.current.revision;
+    // Keep explicit/full work in a different coalescing lane, and fence a
+    // periodic response if an explicit request overtakes it.
+    const explicitSequence = periodic
+      ? explicitModelRefreshSequenceRef.current
+      : ++explicitModelRefreshSequenceRef.current;
+    const isPeriodicCurrent = () => (
+      mountedRef.current
+      && activeChatJidRef.current === targetChatJid
+      && document.visibilityState !== 'hidden'
+      && periodicScope === periodicScopeRef.current
+      && scheduledRevision === modelStateRef.current.revision
+      && explicitSequence === explicitModelRefreshSequenceRef.current
+    );
     return runCoalescedAppRefresh({
-      kind: 'model-state',
-      chatJid: currentChatJid,
+      kind: periodic ? 'model-state-periodic' : 'model-state',
+      chatJid: targetChatJid,
       run: async () => {
+        if (periodic && !isPeriodicCurrent()) return null;
         const traceId = getThreadSwitchTraceId();
         if (traceId) {
           markAppPerfTrace(traceId, 'runtime-hydration-start', {
@@ -233,7 +271,6 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
           });
         }
 
-        const targetChatJid = currentChatJid;
         const revision = modelStateRef.current.revision;
         const expectedSessionGeneration = getContextSessionGeneration(targetChatJid);
         const expectedRevision = getContextUsageRevision(targetChatJid);
@@ -254,11 +291,12 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
               }
               return payload;
             })(),
-            getAgentContext(targetChatJid).catch(() => null),
+            getAgentContext(targetChatJid, periodic ? { isPeriodicCurrent } : undefined).catch(() => null),
           ]);
 
+          if (!mountedRef.current) return null;
           if (activeChatJidRef.current && activeChatJidRef.current !== targetChatJid) return null;
-          if (revision !== modelStateRef.current.revision) return null;
+          if (revision !== modelStateRef.current.revision || (periodic && !isPeriodicCurrent())) return null;
           applyModelState(modelPayload);
 
           const contextPayload = normalizeContextUsage(contextPayloadRaw);
@@ -272,7 +310,8 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
             return merged;
           });
         } catch {
-          if (activeChatJidRef.current && activeChatJidRef.current !== targetChatJid) return null;
+          if (!mountedRef.current || (activeChatJidRef.current && activeChatJidRef.current !== targetChatJid)) return null;
+          if (periodic && !isPeriodicCurrent()) return null;
           // A failed/omitted snapshot is not an explicit selection clear.
           // Keep this chat's last successful metadata until recovery.
         }
@@ -454,12 +493,9 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
     runImmediately: false,
   }), [refreshActiveChatAgents, refreshCurrentChatBranches, refreshModelAndQueueState, refreshModelState, refreshQueueState]);
 
-  useEffect(() => {
-    const handle = setInterval(() => {
-      void refreshModelState();
-    }, 5_000);
-    return () => clearInterval(handle);
-  }, [refreshModelState]);
+  useEffect(() => createVisibleInterval(() => {
+    void refreshModelState({ periodic: true });
+  }, 5_000, { refreshOnVisible: false }), [refreshModelState]);
 
   return {
     updateAgentProfile,
