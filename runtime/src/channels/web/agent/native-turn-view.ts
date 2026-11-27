@@ -1,6 +1,6 @@
 import type Database from "bun:sqlite";
 import { readNativeDelegateProgress, formatNativeDelegateProgress } from "../../../agent-pool/delegate-progress.js";
-import { buildPreview, createToolTitleTracker } from "./agent-utils.js";
+import { createToolTitleTracker } from "./agent-utils.js";
 import type { ToolCallSummaryResolver } from "../../../tool-call-summary.js";
 import { optimizerFactContextKind, optimizerOperationKind } from "./optimizer-activity.js";
 
@@ -41,12 +41,12 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
   function panel(kind: "thought" | "draft", text: string) {
     const previous = kind === "thought" ? thought : draft;
     if (text === previous || !base) return;
-    const lines = text ? text.split("\n").length : 0;
+    const lines = text ? countOutputLines(text) : 0;
     const turn = base.turn_id as string;
     if (kind === "thought") { thought = text; channel.updateThoughtBuffer?.(turn, text, lines); }
     else { draft = text; channel.updateDraftBuffer?.(turn, text, lines); }
-    const preview = buildPreview(text, 8, 160);
-    channel.broadcastEvent(`agent_${kind}`, { ...base, text: preview.preview, total_lines: lines, ...(kind === "draft" ? { kind: "draft", mode: "replace" } : {}) });
+    const preview = text.split(/\r\n?|\n/, 8).join("\n");
+    channel.broadcastEvent(`agent_${kind}`, { ...base, text: preview, total_lines: lines, ...(kind === "draft" ? { kind: "draft", mode: "replace" } : {}) });
     const append = previous.length > 0 && text.startsWith(previous);
     channel.broadcastEvent(`agent_${kind}_delta`, { ...base, delta: append ? text.slice(previous.length) : text, reset: !append, ...(!append ? { text } : {}) });
   }
