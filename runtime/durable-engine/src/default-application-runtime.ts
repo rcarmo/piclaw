@@ -828,12 +828,12 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   const defaultThinking = (model: any) => getSupportedThinkingLevels(model).includes("medium") ? "medium" as const : getSupportedThinkingLevels(model)[0]!;
   // Allocate/recover the shared namespace before any accepted task or API read.
   codeReview?.addon.reviewService();
-  const check = (model: { provider: string; id: string }, signal: AbortSignal) => {
+  const check = (model: { provider: string; id: string }, signal: AbortSignal, unavailable?: () => Error) => {
     assertAdmission(); assert(); signal.throwIfAborted();
-    if (!host.modelRegistry.getAvailable().some(entry => entry.provider === model.provider && entry.id === model.id)) throw Error("Host model no longer available");
-    if (!available().some(entry => entry.provider === model.provider && entry.id === model.id)) throw Error("Host model not approved");
+    if (!host.modelRegistry.getAvailable().some(entry => entry.provider === model.provider && entry.id === model.id)) throw (unavailable?.() ?? Error("Host model no longer available"));
+    if (!available().some(entry => entry.provider === model.provider && entry.id === model.id)) throw (unavailable?.() ?? Error("Host model not approved"));
     const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
-    if (!physical || physical.provider !== model.provider || physical.id !== model.id) throw Error("Host model no longer available");
+    if (!physical || physical.provider !== model.provider || physical.id !== model.id) throw (unavailable?.() ?? Error("Host model no longer available"));
   };
   assertDreamModel = model => {
     check({ provider: model.provider, id: model.modelId }, lifetime.signal);
@@ -889,18 +889,37 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       : !Array.isArray(config.approved_models) || !config.approved_models.every(isDelegateModelId)) throw Error("Invalid Delegate whitelist");
     return config;
   };
+  const delegateSelectionError = (reason: string, parent: DelegateModelRef | undefined, config: DelegateConfig | null) => {
+    // Put live choices in the tool error only, never in the prompt or tool schema.
+    const availableIds = new Set(delegateModels().map(model => model.fullId));
+    const whitelist = [...new Set(config?.approved_models ?? [])];
+    if (!whitelist.length) {
+      if (!parent) return Error(reason);
+      const id = delegateId(parent);
+      return Error(`${reason}\n${availableIds.has(id) ? `Retry with the chat model ${id}; the whitelist is empty.`
+        : `The whitelist is empty and the chat model ${id} is currently unavailable.`}`);
+    }
+    const retry = whitelist.filter(id => availableIds.has(id));
+    const unavailable = whitelist.filter(id => !availableIds.has(id));
+    return Error([reason,
+      ...(retry.length ? [`Retry with an exact whitelisted model ID: ${JSON.stringify(retry)}`] : []),
+      ...(unavailable.length ? [`Whitelisted but currently unavailable: ${JSON.stringify(unavailable)}`] : []),
+    ].join("\n"));
+  };
   const assertDelegateSelection = (id: string, parent: DelegateModelRef | undefined, config: DelegateConfig | null) => {
     if (config?.approved_models.length) {
-      if (!config.approved_models.includes(id)) throw Error(`Delegate model ${id} is not in the whitelist`);
+      if (!config.approved_models.includes(id)) throw delegateSelectionError(`Delegate model ${id} is not in the whitelist`, parent, config);
     } else if (!parent || delegateId(parent) !== id) {
       if (!parent) throw Error("Delegate parent model required");
-      throw Error(`Delegate model ${id} does not match the chat model ${delegateId(parent)} (the whitelist is empty)`);
+      throw delegateSelectionError(`Delegate model ${id} does not match the chat model ${delegateId(parent)} (the whitelist is empty)`, parent, config);
     }
   };
   assertDelegateModel = (model, parent) => {
     assertCoreDelegate();
-    assertDelegateSelection(delegateId(model), parent, delegateConfig());
-    check({ provider: model.provider, id: model.modelId }, lifetime.signal);
+    const config = delegateConfig(), id = delegateId(model);
+    assertDelegateSelection(id, parent, config);
+    check({ provider: model.provider, id: model.modelId }, lifetime.signal,
+      () => delegateSelectionError(`Delegate model ${id} is currently unavailable`, parent, config));
   };
   const sideObservers = new Map<string, NonNullable<import("../../src/agent-pool/contracts.js").SidePromptOptions["onEvent"]>>();
   // SDK hook failures are reported but can still reach the model bridge. Keep
@@ -1132,21 +1151,20 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         const config = delegateConfig();
         let model = parent;
         if (args.model !== undefined) {
-          if (!isDelegateModelId(args.model)) throw Error("Delegate model must be an exact provider/model ID");
-          assertDelegateSelection(args.model, parent, config);
+          if (!isDelegateModelId(args.model)) throw delegateSelectionError("Delegate model must be an exact provider/model ID", parent, config);
           const slash = args.model.indexOf("/");
           model = { provider: args.model.slice(0, slash), modelId: args.model.slice(slash + 1) };
         } else if (config?.approved_models.length) {
           const candidates = buildModelCandidates(delegateModels(), config);
           const selected = (parent && candidates.find(candidate => candidate.id === delegateId(parent))) || candidates[0];
-          if (!selected) throw Error("No whitelisted Delegate model is currently available");
+          if (!selected) throw delegateSelectionError("No whitelisted Delegate model is currently available", parent, config);
           model = { provider: selected.provider, modelId: selected.modelId };
         }
         if (!model) throw Error("Delegate parent model required");
-        const { provider, modelId } = model;
-        if (!available().some(entry => entry.provider === provider && entry.id === modelId))
-          throw Error(`Delegate model ${delegateId(model)} is currently unavailable`);
         assertDelegateModel(model, parent); return model;
+      },
+      invalidModelError(parent) {
+        return delegateSelectionError("Delegate model must be an exact provider/model ID", parent, delegateConfig());
       }, assertModelCurrent: assertDelegateModel,
       modelSupportsImages(model, parent) {
         assertDelegateModel(model, parent);

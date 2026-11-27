@@ -115,7 +115,7 @@ for (const mode of ["parallel", "standard", "subset", "omitted", "full", "unknow
       }
       expect((await submission.wait(context)).status).toBe("done");
       expect(childRequests).toBe(allowed ? 2 : 0);
-      expect(captures).toBe(allowed || mode === "denied" || mode === "files-unavailable" || mode === "files-revoked" || mode === "files-image-invalid" || mode === "files-image-disabled" ? 2 : 0);
+      expect(captures).toBe(allowed || mode.startsWith("model-") || mode === "denied" || mode === "files-unavailable" || mode === "files-revoked" || mode === "files-image-invalid" || mode === "files-image-disabled" ? 2 : 0);
       const entries = (await f.root.entries({}, 100, undefined, context)).items;
       const results = entries.flatMap(entry => entry.model ?? []).filter(message => message.role === "toolResult");
       expect(results).toHaveLength(2);

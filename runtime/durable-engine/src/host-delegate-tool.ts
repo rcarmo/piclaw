@@ -2,6 +2,7 @@ import { AssistantEntry, configure, defineTool, type ModelRef, type ToolRegistra
 import { watchNativeDelegateProgress } from "./host-delegate-progress.js";
 import { validateDelegateFiles } from "./host-delegate-files.js";
 import { delegateDescription, delegateParameters } from "../../src/delegate/parameters.js";
+import { isDelegateModelId } from "../../src/delegate/policy.js";
 import { toolCallSummary } from "../../src/tool-call-summary.js";
 import { summariseDelegateCall } from "../../src/delegate/tool-summary.js";
 import type { Static } from "typebox";
@@ -16,6 +17,7 @@ export function createHostDelegateTool(options: {
   runtime(): Pick<HostConversationRuntime, "captureToolSource" | "assertCapturedSourceCurrent" | "watchOwnedDelegateChild">;
   /** Select against current host availability and Delegate Settings. */
   selectModel(args: Readonly<Record<string, unknown>>, parent: ModelRef | undefined): Promise<ModelRef>;
+  invalidModelError?(parent: ModelRef | undefined): Error;
   /** Rechecked before child creation and after settlement. */
   assertModelCurrent(model: ModelRef, parent: ModelRef | undefined): void;
   modelSupportsImages?(model: ModelRef, parent: ModelRef | undefined): boolean;
@@ -58,11 +60,6 @@ export function createHostDelegateTool(options: {
       const supported = ["prompt", "model", "tools", "task_category", "system_prompt", "files", "timeout_sec"];
       if (Object.keys(args).some(key => !supported.includes(key))) throw Error("Unsupported native Delegate option");
       if (typeof args.prompt !== "string" || !args.prompt.trim()) throw Error("Delegate prompt required");
-      if (args.model !== undefined) {
-        if (typeof args.model !== "string") throw Error("Delegate model must be an exact provider/model ID");
-        const slash = args.model.indexOf("/");
-        if (slash <= 0 || slash === args.model.length - 1) throw Error("Delegate model must be an exact provider/model ID");
-      }
       // Recheck the public declaration's defaults/bounds before allocating a child.
       if (args.files !== undefined) {
         validateDelegateFiles(args.files);
@@ -86,9 +83,14 @@ export function createHostDelegateTool(options: {
       const parent = await api.agent(context);
       const source = captured.sourceModel;
       const parentModel = source ? { provider: source.provider, modelId: source.id } : parent.model;
-      const proposed = await selectModel(args, parentModel);
+      const checkSource = () => { assertCurrent(); runtime().assertCapturedSourceCurrent(captured.inputs); };
+      if (args.model !== undefined && !isDelegateModelId(args.model)) {
+        checkSource();
+        throw options.invalidModelError?.(parentModel) ?? Error("Delegate model must be an exact provider/model ID");
+      }
+      const proposed = await selectModel(args, parentModel).catch(error => { checkSource(); throw error; });
       const model = await api.memo("model", proposed, context);
-      const check = () => { assertCurrent(); runtime().assertCapturedSourceCurrent(captured.inputs); assertModelCurrent(model, parentModel); };
+      const check = () => { checkSource(); assertModelCurrent(model, parentModel); };
       check();
       const requestId = `delegate:${api.taskId}`;
       // Reconcile accepted work before touching files. Public SDK request-ID

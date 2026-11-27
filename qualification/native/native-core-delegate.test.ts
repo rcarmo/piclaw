@@ -24,12 +24,12 @@ const sha256 = (value: string) => createHash('sha256').update(value).digest('hex
 // Freeze only the model-facing Delegate bytes from main before #2105 (5d850c4d5).
 const delegateDeclarationHash = '0509256753bfd0e28113f01ab145c0c53e2e6697b872158c4a1da17328a6823c';
 const delegateInstructionsHash = 'f5cf78b6911f3aae33229b2bc9b31bb64229adee711c426b7fce854182d4d9a4';
-type Selection = 'explicit-child' | 'explicit-parent' | 'omitted' | 'fallback-revoked' | 'unavailable-whitelist' | 'invalid-whitelist';
+type Selection = 'explicit-child' | 'explicit-parent' | 'omitted' | 'fallback-revoked' | 'unavailable-whitelist' | 'invalid-whitelist' | 'retry-approved' | 'malformed-model' | 'unavailable-request';
 const scenarios: { childModelId: string; installedLegacy: boolean; approved: boolean; credentialed: boolean; selection: Selection }[] = [];
 for (const childModelId of ['gpt-5.4-mini', 'mai-code-2', 'mai-code-2-flash', 'gpt-6.1-terra']) for (const installedLegacy of [false, true]) for (const approved of [false, true]) for (const credentialed of [false, true]) {
   scenarios.push({childModelId, installedLegacy, approved, credentialed, selection:'explicit-child'});
 }
-for (const [selection, approved] of [['omitted',false],['omitted',true],['explicit-parent',false],['explicit-parent',true],['fallback-revoked',false],['unavailable-whitelist',false],['invalid-whitelist',false]] as const) {
+for (const [selection, approved] of [['omitted',false],['omitted',true],['explicit-parent',false],['explicit-parent',true],['fallback-revoked',false],['unavailable-whitelist',false],['invalid-whitelist',false],['retry-approved',true],['malformed-model',true],['unavailable-request',true]] as const) {
   scenarios.push({childModelId:'gpt-6.1-terra', installedLegacy:false, approved, credentialed:false, selection});
 }
 for (const { childModelId, installedLegacy, approved, credentialed, selection } of scenarios) applicationTest(`Core Delegate fresh tool and Settings; child=${childModelId}; installedLegacy=${installedLegacy}; approved=${approved}; credentialed=${credentialed}; selection=${selection}`, async () => {
@@ -44,8 +44,8 @@ for (const { childModelId, installedLegacy, approved, credentialed, selection } 
   }
   process.env.PICLAW_DB_IN_MEMORY = '0'; initDatabase(); storeChatMetadata('web:default', new Date().toISOString());
   const root = getDb();
-  if (selection === 'unavailable-whitelist' || selection === 'invalid-whitelist') root.transaction(() => extensionKvSet('delegate', 'config', {
-    approved_models: [selection === 'unavailable-whitelist' ? 'missing/approved-model' : 'invalid'],
+  if (selection === 'unavailable-whitelist' || selection === 'invalid-whitelist' || selection === 'retry-approved' || selection === 'unavailable-request') root.transaction(() => extensionKvSet('delegate', 'config', {
+    approved_models: [selection === 'invalid-whitelist' ? 'invalid' : 'missing/approved-model'],
   }, 'global'))();
   const original = root.query("SELECT * FROM extension_kv WHERE extension_id='delegate'").all();
   const owner = acquireRuntimeLock({ lockPath: join(workspace, 'core-delegate.lock'), strictOwnership: true, disabled: false });
@@ -61,9 +61,12 @@ for (const { childModelId, installedLegacy, approved, credentialed, selection } 
   const expectedCandidates = approved ? [childSlug] : [];
   const expectedModel = selection === 'omitted' ? (approved ? childSlug : parentSlug)
     : selection === 'explicit-parent' ? (approved ? undefined : parentSlug)
-    : selection === 'fallback-revoked' ? parentSlug : (approved ? childSlug : undefined);
-  const requestedModel = selection === 'explicit-parent' ? parentSlug : selection === 'explicit-child' ? childSlug : undefined;
+    : selection === 'fallback-revoked' ? parentSlug : (approved && selection !== 'malformed-model' && selection !== 'unavailable-request' ? childSlug : undefined);
+  const requestedModel = selection === 'explicit-parent' || selection === 'retry-approved' ? parentSlug
+    : selection === 'explicit-child' ? childSlug : selection === 'malformed-model' ? childModelId
+    : selection === 'unavailable-request' ? 'missing/approved-model' : undefined;
   const childModels: string[] = [];
+  const retryMessages: string[] = [];
   const childEntered = Promise.withResolvers<void>(), releaseChild = Promise.withResolvers<void>();
   const host = await ModelRuntime.create({ credentials, modelsPath: null, modelsStore: { read: async () => undefined, write: async () => {}, delete: async () => {} }, refreshOnCreate: false, allowModelNetwork: false });
   let children = 0; const offered: string[][] = [];
@@ -80,8 +83,15 @@ for (const { childModelId, installedLegacy, approved, credentialed, selection } 
         declaration: JSON.stringify(tools.find(tool => tool.name === 'delegate')), tools: JSON.stringify(tools), sessionId: options?.sessionId });
     }
     const lastUser = transcript.messages.findLastIndex((message: any) => message.role === 'user');
-    const called = transcript.messages.slice(lastUser).some((message: any) => message.role === 'toolResult');
-    const content = !isChild && !called ? [{ type: 'toolCall', id: 'core-delegate', name: 'delegate', arguments: { prompt: 'CHILD_STANDALONE', ...(requestedModel ? { model: requestedModel } : {}), tools: 'read_only' } }]
+    const results = transcript.messages.slice(lastUser).filter((message: any) => message.role === 'toolResult');
+    const retryPrefix = 'Retry with an exact whitelisted model ID: ';
+    const retryLine = selection === 'retry-approved' && results.length === 1 && results[0]?.isError
+      ? results[0].content.flatMap((part: any) => part.type === 'text' ? part.text.split('\n') : []).find((line: string) => line.startsWith(retryPrefix)) : undefined;
+    const retryModel = retryLine ? (JSON.parse(retryLine.slice(retryPrefix.length)) as string[])[0] : undefined;
+    if (retryLine) retryMessages.push(...results[0].content.flatMap((part: any) => part.type === 'text' ? part.text.split('\n') : []));
+    const selectedModel = retryModel ?? requestedModel;
+    const content = !isChild && (!results.length || retryModel)
+      ? [{ type: 'toolCall', id: retryModel ? 'core-delegate-retry' : 'core-delegate', name: 'delegate', arguments: { prompt: 'CHILD_STANDALONE', ...(selectedModel ? { model: selectedModel } : {}), tools: 'read_only' } }]
       : [{ type: 'text', text: isChild ? 'CHILD_RESULT' : 'PARENT_DONE' }];
     const message: any = { role: 'assistant', api: physical.api, provider: physical.provider, model: physical.id, timestamp: Date.now(), content,
       stopReason: content[0].type === 'toolCall' ? 'toolUse' : 'stop', usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
@@ -132,8 +142,12 @@ for (const { childModelId, installedLegacy, approved, credentialed, selection } 
     }
     const deadline = Date.now() + 10000;
     while (!root.query('SELECT 1 FROM messages WHERE is_terminal_agent_reply=1').get() && Date.now() < deadline) await Bun.sleep(10);
-    expect(offered[0]).toContain('delegate'); expect(offered).toHaveLength(2);
+    expect(offered[0]).toContain('delegate'); expect(offered).toHaveLength(selection === 'retry-approved' ? 3 : 2);
     expect(childModels).toEqual(expectedModel ? [expectedModel] : []);
+    if (selection === 'retry-approved') {
+      expect(retryMessages).toContain(`Retry with an exact whitelisted model ID: ${JSON.stringify([childSlug])}`);
+      expect(retryMessages).toContain('Whitelisted but currently unavailable: ["missing/approved-model"]');
+    }
     const initialPrompt = parentContexts[0]!;
     const delegateBlock = initialPrompt.instructions.split('\n\n').find(block => block.startsWith('## Delegate tool\n'));
     expect(typeof delegateBlock).toBe('string');
@@ -149,9 +163,23 @@ for (const { childModelId, installedLegacy, approved, credentialed, selection } 
     if (!expectedModel || selection === "fallback-revoked") {
       const message = selection === 'unavailable-whitelist' ? 'No whitelisted Delegate model is currently available'
         : selection === 'invalid-whitelist' ? 'Invalid Delegate whitelist'
+        : selection === 'malformed-model' ? 'Delegate model must be an exact provider/model ID'
+        : selection === 'unavailable-request' ? 'Delegate model missing/approved-model is currently unavailable'
         : approved || selection === "fallback-revoked" ? `Delegate model ${parentSlug} is not in the whitelist`
         : `Delegate model ${childSlug} does not match the chat model ${parentSlug}`;
       expect(parentTranscript).toContain(message);
+      if (selection === 'unavailable-whitelist') {
+        expect(parentTranscript).toContain('Whitelisted but currently unavailable:');
+        expect(parentTranscript).toContain('missing/approved-model');
+        expect(parentTranscript).not.toContain('Retry with');
+      } else if (approved || selection === 'fallback-revoked') {
+        expect(parentTranscript).toContain('Retry with an exact whitelisted model ID:');
+        expect(parentTranscript).toContain(childSlug);
+      } else if (selection !== 'invalid-whitelist') {
+        expect(parentTranscript).toContain(`Retry with the chat model ${parentSlug}`);
+      } else {
+        expect(parentTranscript).not.toContain('Retry with');
+      }
     }
     // Assert outside provider callbacks: SDK error conversion must not hide a
     // swallowed callback assertion or substitute a different credential/model.
