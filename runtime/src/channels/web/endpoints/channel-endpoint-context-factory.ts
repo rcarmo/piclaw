@@ -94,6 +94,7 @@ export function createWebChannelEndpointContexts(
           getAgentStatus: (chatJid) => channel.getAgentStatus(chatJid),
           getExtensionWorkingState: (chatJid) => channel.getExtensionWorkingState?.(chatJid) ?? null,
           getBuffer: (turnId, panel) => channel.getBuffer(turnId, panel),
+          getContextRevisionForChat: chatJid => channel.agentPool.getContextRevisionForChat(chatJid),
           getContextUsageForChat: async (chatJid) => {
             const generation = () => channel.agentPool.getSessionGenerationForChat?.(chatJid) ?? null;
             const before = generation();

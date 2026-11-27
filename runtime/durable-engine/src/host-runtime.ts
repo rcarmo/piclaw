@@ -521,9 +521,9 @@ export class HostConversationRuntime {
       const conversation = await reader.conversation();
       const state = await conversation.commit(async tx => {
         reader.check();
-        const page = await tx.scanEntries({ conversationId: reader.binding.conversationId as ConversationId, order: "descending" }, 1); reader.check();
+        const tail = await tx.latestEntryId(conversation.id); reader.check();
         const agent = await tx.doc(AgentDoc, reader.binding.conversationId as ConversationId); reader.check();
-        return { position: page.items[0] ? String(page.items[0].id) : null,
+        return { position: tail === undefined ? null : String(tail),
           model: agent.model ? `${agent.model.provider}/${agent.model.modelId}` : null,
           thinkingLevel: agent.thinkingLevel ?? null };
       }, this.context); reader.check();
@@ -544,6 +544,21 @@ export class HostConversationRuntime {
       return { backend: "durable", conversationId: reader.binding.conversationId, extensions: agent.extensions.map(extension => extension.name), tools };
     });
   }
+  private async contextUsageBounds(reader: ReturnType<HostConversationRuntime["sessionReader"]>) {
+    const conversation = await reader.conversation();
+    const tail = await conversation.commit(tx => tx.latestEntryId(conversation.id), this.context); reader.check();
+    const agent = await conversation.agent(this.context); reader.check();
+    const model = agent.model && currentHarnessModels(this.options.harnessOptions).getModel(agent.model.provider, agent.model.modelId);
+    const window = model?.contextWindow;
+    const contextWindow = typeof window === "number" && Number.isFinite(window) && window > 0 ? window : null;
+    const revision = JSON.stringify([reader.binding.incarnation, conversation.id, tail ?? null, contextWindow]);
+    return { conversation, tail, contextWindow, revision };
+  }
+  /** Compare metadata without loading the transcript bodies. */
+  readSessionContextRevision(binding: Parameters<HostConversationRuntime["readSessionContextUsage"]>[0]): Promise<string> {
+    const reader = this.sessionReader(binding);
+    return this.observe(async () => (await this.contextUsageBounds(reader)).revision);
+  }
   /** Read-only current-head context estimate for the compose tracker. The SDK
    * uses the last eligible provider usage plus trailing message estimates and
    * drops usage that predates a reset/compaction prefix. No generation occurs.
@@ -551,8 +566,7 @@ export class HostConversationRuntime {
   async readSessionContextUsage(binding: { incarnation: string; chatJid: string; branchId: string; conversationId: number }): Promise<import("../../src/agent-pool/durable-runtime-adapter.js").DurableContextUsage> {
     const reader = this.sessionReader(binding);
     return this.observe(async () => {
-      const conversation = await reader.conversation();
-      const tail = await conversation.commit(tx => tx.latestEntryId(conversation.id), this.context); reader.check();
+      const { conversation, tail, contextWindow, revision } = await this.contextUsageBounds(reader); reader.check();
       let measured = 0;
       if (tail !== undefined) {
         let estimate = this.contextEstimates.get(conversation.id);
@@ -569,13 +583,9 @@ export class HostConversationRuntime {
         }
         measured = await estimate.tokens; reader.check();
       }
-      const agent = await conversation.agent(this.context); reader.check();
-      const model = agent.model && currentHarnessModels(this.options.harnessOptions).getModel(agent.model.provider, agent.model.modelId);
       const tokens = Number.isFinite(measured) && measured >= 0 ? measured : null;
-      const window = model?.contextWindow;
-      const contextWindow = typeof window === "number" && Number.isFinite(window) && window > 0 ? window : null;
       reader.check();
-      return { tokens, contextWindow };
+      return { tokens, contextWindow, revision };
     });
   }
   /** Read-only native reporting. No model calls, estimates, or legacy session hydration. */

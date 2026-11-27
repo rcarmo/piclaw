@@ -707,7 +707,15 @@ export class AgentRuntimeFacade {
     const contextWindow = typeof window === "number" && Number.isFinite(window) && window > 0 ? window : null;
     const tokens = typeof usage.tokens === "number" && Number.isFinite(usage.tokens) && usage.tokens >= 0 ? usage.tokens : null;
     return { tokens, contextWindow, percent: tokens !== null && contextWindow !== null ? tokens / contextWindow * 100 : null,
-      sessionGeneration: binding.sessionId, tokensAreAuthoritative: true as const };
+      sessionGeneration: binding.sessionId, tokensAreAuthoritative: true as const,
+      ...(usage.revision !== undefined ? { revision: usage.revision } : {}) };
+  }
+
+  async getContextRevisionForChat(chatJid: string): Promise<string | null> {
+    const binding = this.getDurableSession(chatJid);
+    if (!binding?.readContextRevision) return null;
+    const revision = await binding.readContextRevision();
+    return this.getDurableSession(chatJid)?.sessionId === binding.sessionId ? revision : null;
   }
 
   async getContextUsageForChat(chatJid: string): Promise<{
@@ -715,6 +723,7 @@ export class AgentRuntimeFacade {
     contextWindow: number | null;
     percent: number | null;
     sessionGeneration?: string;
+    revision?: string;
     /** Unknown counts from this reader must not be replaced by stored estimates. */
     tokensAreAuthoritative?: true;
   } | null> {

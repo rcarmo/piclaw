@@ -166,7 +166,8 @@ export interface RunBackstopRefreshTickOptions {
   isAgentActive: boolean;
   refreshTimeline: () => void;
   refreshQueueState: () => void;
-  refreshAgentStatus: () => void;
+  refreshAgentStatus: () => Promise<any>;
+  shouldRefreshContext: (status: any) => boolean;
   refreshContextUsage: () => void;
   refreshAutoresearchStatus: () => void;
 }
@@ -178,27 +179,15 @@ export function runBackstopRefreshTick(options: RunBackstopRefreshTickOptions): 
     refreshTimeline,
     refreshQueueState,
     refreshAgentStatus,
+    shouldRefreshContext,
     refreshContextUsage,
     refreshAutoresearchStatus,
   } = options;
 
-  const onMainTimeline = shouldRefreshMainTimeline(viewStateRef.current);
-
-  if (isAgentActive) {
-    if (onMainTimeline) {
-      refreshTimeline();
-    }
-    refreshQueueState();
-    refreshAgentStatus();
-    refreshContextUsage();
-    refreshAutoresearchStatus();
-    return;
-  }
-
-  if (onMainTimeline) {
-    refreshTimeline();
-  }
-  refreshAgentStatus();
-  refreshContextUsage();
+  if (shouldRefreshMainTimeline(viewStateRef.current)) refreshTimeline();
+  if (isAgentActive) refreshQueueState();
+  void refreshAgentStatus().then(status => {
+    if (status && shouldRefreshContext(status)) refreshContextUsage();
+  }).catch(() => { /* The next tick or reconnect can recover. */ });
   refreshAutoresearchStatus();
 }

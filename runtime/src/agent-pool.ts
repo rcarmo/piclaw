@@ -385,8 +385,13 @@ export class AgentPool {
     percent: number | null;
     sessionGeneration?: string;
     tokensAreAuthoritative?: true;
+    revision?: string;
   } | null> {
     return this.runtimeFacade.getContextUsageForChat(chatJid);
+  }
+
+  getContextRevisionForChat(chatJid: string) {
+    return this.runtimeFacade.getContextRevisionForChat(chatJid);
   }
 
   getSessionGenerationForChat(chatJid: string): string | null {

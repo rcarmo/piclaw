@@ -527,7 +527,8 @@ export async function getAgents() {
  * Get current agent status
  */
 export async function getAgentStatus(chatJid = null) {
-    return (await getAgentUiSnapshot(chatJid || currentUiChatJid(), false)).status;
+    const snapshot = await getAgentUiSnapshot(chatJid || currentUiChatJid(), false);
+  return snapshot.context_revision ? { ...snapshot.status, context_revision: snapshot.context_revision } : snapshot.status;
 }
 
 /**

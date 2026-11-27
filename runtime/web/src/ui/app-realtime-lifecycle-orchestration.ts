@@ -4,7 +4,7 @@ import { useSseConnection } from './use-sse-connection.js';
 import { handleAppSseEvent, invalidateAppPreviewTrailingFlushes } from './app-sse-events.js';
 import { runBackstopRefreshTick } from './app-connection-lifecycle.js';
 import { watchReturnToApp } from './app-resume.js';
-import { invalidateAgentUiSnapshot } from './agent-ui-snapshot.js';
+import { invalidateAgentUiSnapshot, needsAgentContextRefresh } from './agent-ui-snapshot.js';
 
 interface RefBox<T> {
   current: T;
@@ -353,12 +353,14 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
         refreshTimeline,
         refreshQueueState,
         refreshAgentStatus,
+        shouldRefreshContext: status => activeChatJidRef.current === currentChatJid &&
+          needsAgentContextRefresh(currentChatJid, status.context_revision),
         refreshContextUsage,
         refreshAutoresearchStatus,
       });
     }, intervalMs);
     return () => clearInterval(interval);
-  }, [connectionStatus, isAgentActive, refreshAgentStatus, refreshAutoresearchStatus, refreshContextUsage, refreshQueueState, refreshTimeline, viewStateRef]);
+  }, [activeChatJidRef, connectionStatus, currentChatJid, isAgentActive, refreshAgentStatus, refreshAutoresearchStatus, refreshContextUsage, refreshQueueState, refreshTimeline, viewStateRef]);
 
   useEffect(() => {
     let refreshPending = false;

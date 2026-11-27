@@ -6,6 +6,7 @@ export interface AgentUiSnapshot {
   status: any;
   model: any;
   context: any;
+  context_revision?: string;
   metrics: any;
   agent_name: string;
   errors: string[];
@@ -38,6 +39,18 @@ export function invalidateAgentUiSnapshot(chatJid = currentUiChatJid()): void {
     entry.generation++;
   }
 }
+/** Reconcile a missed update without fetching unchanged context just because its TTL expired. */
+export function needsAgentContextRefresh(chatJid: string, revision: unknown): boolean {
+  // Without a revision (older server or failed lightweight read), retain the
+  // ordinary recovery path. Do not treat unknown as an unchanged context.
+  if (typeof revision !== 'string' || !revision) return true;
+  const full = entries.get(chatJid)?.full;
+  if (full?.inFlight) return false;
+  if (full?.value?.context && full.value.context_revision === revision) return false;
+  if (full) full.completedAt = 0;
+  return true;
+}
+
 export function getAgentUiSnapshot(
   chatJid = currentUiChatJid(),
   includeContext = true,

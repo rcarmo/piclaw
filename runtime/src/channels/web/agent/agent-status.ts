@@ -7,6 +7,7 @@ export type { AgentStatusContext, TokenUsageCounterSummary, LatestTokenUsageCoun
 import { getAddonApiHealthSnapshot } from "../../../addons/addon-api-health.js";
 import { appendServerTiming, measureAsync, measureSync } from "../http/server-timing.js";
 import { publicContextUsage } from "../context-usage.js";
+import { createHash } from "node:crypto";
 
 
 function resolveChatJid(req: Request, defaultChatJid: string): string {
@@ -239,6 +240,12 @@ export function handleAgentStatusRequest(req: Request, ctx: AgentStatusContext):
   });
 }
 
+function contextRevision(revision: string, cacheUsage: unknown): string {
+  // The token ledger can settle after history advances. Include the same
+  // public counters as the full snapshot so those changes are not missed.
+  return createHash('sha256').update(JSON.stringify([revision, cacheUsage])).digest('hex');
+}
+
 /** Build shared context and latest-run usage metadata for an authorised chat. */
 export async function buildAgentContextSnapshot(chatJid: string, ctx: AgentStatusContext,
   options: { includeTree?: boolean } = {}): Promise<Record<string, unknown>> {
@@ -253,6 +260,7 @@ export async function buildAgentContextSnapshot(chatJid: string, ctx: AgentStatu
   }
   return {
     ...publicContextUsage(usage),
+    ...(usage.revision !== undefined ? { revision: contextRevision(usage.revision, cacheUsage) } : {}),
     sessionGeneration: usage.sessionGeneration ?? null,
     contextUpdate: "replace",
     cacheUsage,
@@ -309,14 +317,22 @@ export async function handleAgentUiSnapshotRequest(req: Request, ctx: AgentStatu
   const { result, durationMs } = await measureAsync(async () => {
     const completed = await ctx.getProviderReadyCompletedForInstance(req);
     const status = buildAgentStatusSnapshot(chatJid, ctx);
+    const readRevision = async () => {
+      const revision = await ctx.getContextRevisionForChat?.(chatJid);
+      return revision == null ? null : contextRevision(revision, formatTokenUsageContext(ctx.getTokenUsageForChat(chatJid)));
+    };
     const sections = await Promise.allSettled([
       ctx.getAvailableModels(chatJid, { includeCatalogue: false, includeProviderDiagnostics: false }),
       includeContext ? buildAgentContextSnapshot(chatJid, ctx) : null,
       extra.getSystemMetrics(),
     ]);
     const [model, context, metrics] = sections;
+    const revision = includeContext
+      ? context.status === 'fulfilled' && typeof context.value?.revision === 'string' ? context.value.revision : null
+      : await readRevision().catch(() => null);
     return ctx.json({
       status,
+      ...(revision === null ? {} : { context_revision: revision }),
       model: model.status === 'fulfilled' ? {
         ...(model.value as Record<string, unknown>),
         oobe: { provider_ready_completed_instance: completed },
