@@ -17,7 +17,10 @@ interface Entry {
   generation: number;
   inFlight?: Promise<AgentUiSnapshot>;
 }
-const entries = new Map<string, Entry>();
+type ChatEntry = { full?: Entry; passive?: Entry; requested: number; publishedRepository: number };
+const entries = new Map<string, ChatEntry>();
+const fresh = (entry?: Entry) =>
+  Boolean(entry?.value && entry.completedAt > 0 && Date.now() - entry.completedAt < AGENT_UI_POLL_MS - 250);
 export const AGENT_UI_POLL_MS = 5000;
 export function currentUiChatJid(): string {
   if (typeof window === "undefined") return "web:default";
@@ -28,43 +31,42 @@ export function currentUiChatJid(): string {
   );
 }
 export function invalidateAgentUiSnapshot(chatJid = currentUiChatJid()): void {
-  const entry = entries.get(chatJid);
-  if (entry) {
+  const chat = entries.get(chatJid);
+  for (const entry of [chat?.full, chat?.passive]) {
+    if (!entry) continue;
     entry.completedAt = 0;
     entry.generation++;
   }
 }
 export function getAgentUiSnapshot(
   chatJid = currentUiChatJid(),
+  includeContext = true,
 ): Promise<AgentUiSnapshot> {
-  let entry = entries.get(chatJid);
-  if (!entry) {
-    // Do not retain passive data for an unbounded history of visited chats.
+  let chat = entries.get(chatJid);
+  if (!chat) {
+    // The limit counts chats, not demand scopes. Keep only active requests.
     if (entries.size >= 32)
       for (const [key, item] of entries) {
-        if (!item.inFlight) {
+        if (!item.full?.inFlight && !item.passive?.inFlight) {
           entries.delete(key);
           break;
         }
       }
-    entry = { completedAt: 0, generation: 0 };
-    entries.set(chatJid, entry);
+    chat = { requested: 0, publishedRepository: 0 };
+    entries.set(chatJid, chat);
   }
-  if (entry.inFlight) return entry.inFlight;
-  // Leave 250ms for interval/async scheduling skew: a five-second tick must
-  // not miss freshness by a millisecond and defer the next update to ten.
-  if (
-    entry.value &&
-    entry.completedAt > 0 &&
-    Date.now() - entry.completedAt < AGENT_UI_POLL_MS - 250
-  )
-    return Promise.resolve(entry.value);
-  const state = entry,
-    generation = state.generation,
-    startedAt = Date.now();
+  // Passive consumers may use a full response already requested by a real
+  // context consumer. A full request must never join a passive response.
+  if (!includeContext && chat.full?.inFlight) return chat.full.inFlight;
+  if (!includeContext && fresh(chat.full)) return Promise.resolve(chat.full!.value!);
+  const scope = includeContext ? 'full' : 'passive';
+  const state = chat[scope] ??= { completedAt: 0, generation: 0 };
+  if (state.inFlight) return state.inFlight;
+  if (fresh(state)) return Promise.resolve(state.value!);
+  const generation = state.generation, startedAt = Date.now(), ticket = ++chat.requested;
   state.inFlight = (async () => {
     const response = await fetch(
-      `/agent/status?chat_jid=${encodeURIComponent(chatJid)}&ui=1`,
+      `/agent/status?chat_jid=${encodeURIComponent(chatJid)}&ui=1${includeContext ? '' : '&context=0'}`,
       {
         credentials: "same-origin",
         cache: "no-store",
@@ -79,7 +81,7 @@ export function getAgentUiSnapshot(
       // An event invalidated this response while its body was pending. All
       // joiners await one replacement rather than applying pre-event state.
       state.inFlight = undefined;
-      return getAgentUiSnapshot(chatJid);
+      return getAgentUiSnapshot(chatJid, includeContext);
     }
     for (const key of ["status", "model", "context", "metrics"] as const) {
       if (
@@ -88,7 +90,10 @@ export function getAgentUiSnapshot(
       )
         next[key] = state.value[key];
     }
-    setChatProjectRepository(chatJid, next.project_repository ?? null);
+    if (ticket > chat.publishedRepository) {
+      chat.publishedRepository = ticket;
+      setChatProjectRepository(chatJid, next.project_repository ?? null);
+    }
     state.value = next;
     state.completedAt = startedAt;
     return next;

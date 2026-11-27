@@ -305,12 +305,13 @@ export async function handleAgentUiSnapshotRequest(req: Request, ctx: AgentStatu
   getProjectRepository?(chatJid: string): unknown;
 }): Promise<Response> {
   const chatJid = resolveChatJid(req, ctx.defaultChatJid);
+  const includeContext = new URL(req.url).searchParams.get('context') !== '0';
   const { result, durationMs } = await measureAsync(async () => {
     const completed = await ctx.getProviderReadyCompletedForInstance(req);
     const status = buildAgentStatusSnapshot(chatJid, ctx);
     const sections = await Promise.allSettled([
       ctx.getAvailableModels(chatJid, { includeCatalogue: false, includeProviderDiagnostics: false }),
-      buildAgentContextSnapshot(chatJid, ctx),
+      includeContext ? buildAgentContextSnapshot(chatJid, ctx) : null,
       extra.getSystemMetrics(),
     ]);
     const [model, context, metrics] = sections;

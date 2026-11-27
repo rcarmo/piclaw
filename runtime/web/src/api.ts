@@ -527,7 +527,7 @@ export async function getAgents() {
  * Get current agent status
  */
 export async function getAgentStatus(chatJid = null) {
-    return (await getAgentUiSnapshot(chatJid || currentUiChatJid())).status;
+    return (await getAgentUiSnapshot(chatJid || currentUiChatJid(), false)).status;
 }
 
 /**
@@ -542,7 +542,7 @@ export async function getAgentContext(chatJid = null) {
 
 /** Passive model badge refresh; full catalogue is still fetched on demand. */
 export async function getAgentModelState(chatJid = null) {
-    const snapshot = await getAgentUiSnapshot(chatJid || currentUiChatJid());
+    const snapshot = await getAgentUiSnapshot(chatJid || currentUiChatJid(), false);
     if (!snapshot.model) throw new Error('Model state unavailable');
     return snapshot.model;
 }

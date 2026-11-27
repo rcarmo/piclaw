@@ -43,9 +43,9 @@ test("Classic status/context/model consumers share one request and reply with Vi
     await Promise.resolve();
     return Response.json(payload());
   }) as typeof fetch;
-  const [a, b, c, d] = await Promise.all([
-    getAgentStatus(jid),
+  const [b, a, c, d] = await Promise.all([
     getAgentContext(jid),
+    getAgentStatus(jid),
     getAgentModelState(jid),
     getAgentUiSnapshot(jid),
   ]);
@@ -60,6 +60,25 @@ test("Classic status/context/model consumers share one request and reply with Vi
   expect(calls).toBe(2);
   expect(next.status).toBe(d.status);
   expect(next.context).toBe(d.context);
+});
+test("passive status and model coalesce without context; explicit demand can race independently", async () => {
+  const jid = 'web:passive-context';
+  const urls: string[] = [];
+  let release!: () => void;
+  const pending = new Promise<Response>(resolve => { release = () => resolve(Response.json({ ...payload(), context: null })); });
+  globalThis.fetch = (async input => {
+    const url = new URL(String(input), 'http://fixture');
+    urls.push(url.search);
+    if (url.searchParams.get('context') === '0') return pending;
+    return Response.json(payload());
+  }) as typeof fetch;
+  const status = getAgentStatus(jid), model = getAgentModelState(jid);
+  expect(urls).toEqual(['?chat_jid=web%3Apassive-context&ui=1&context=0']);
+  expect(await getAgentContext(jid)).toEqual({ tokens: 12 });
+  release();
+  expect(await status).toEqual({ status: 'idle' });
+  expect(await model).toEqual({ current: 'fixture/one' });
+  expect(urls).toEqual(['?chat_jid=web%3Apassive-context&ui=1&context=0', '?chat_jid=web%3Apassive-context&ui=1']);
 });
 test("chat isolation and invalidation while parsing a body discard the stale reply for all joiners", async () => {
   let release!: () => void;

@@ -72,6 +72,18 @@ test("opt-in UI envelope reads all sections for the exact chat and requests only
   expect(p.agent_name).toBe("Fixture");
   expect(p.project_repository).toEqual({ repository_url: "https://github.com/example/project", source_branch_id: "root", revision: "2026-01-01T00:00:00Z:root:1" });
 });
+test("passive snapshot does not read context or its token usage", async () => {
+  const forbidden = () => { throw Error('Passive status must not load context'); };
+  const response = await handleAgentUiSnapshotRequest(new Request('http://fixture/agent/status?ui=1&chat_jid=web%3Aother&context=0'),
+    context({ getContextUsageForChat: forbidden, getTokenUsageForChat: forbidden }), {
+      getSystemMetrics: async () => ({ cpu_percent: 3 }), getAgentName: () => 'Fixture',
+    });
+  const body = await response.json();
+  expect(body.status.chat_jid).toBe('web:other');
+  expect(body.model.current).toBe('fixture/one');
+  expect(body.context).toBeNull();
+  expect(body.errors).toEqual([]);
+});
 test("failed optional sections do not discard healthy status or leak exception text", async () => {
   const res = await handleAgentUiSnapshotRequest(
     new Request("http://fixture/agent/status?ui=1"),
