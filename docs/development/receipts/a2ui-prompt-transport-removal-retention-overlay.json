@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "sourceParent": "fe5da86167ea7b066383ec6c3804a7a13a02fbc7",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlay": "docs/development/receipts/native-input-correlation-retention-overlay.json",
+  "previousOverlaySha256": "0fa0c6ec58b2c934e0fd81dc774f268582a66372ea590b9cbf45e045b1a18fca",
+  "scope": "A2UI prompt transport removal only; original paths, deletions and retirement accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/application-bootstrap.ts",
+      "beforeSha256": "f01a6a05d97520bd74b1a865eb445e96ded4176fbc9ba8ac5dcddaa815d3c1d9",
+      "afterSha256": "c55c4b3d037a4b664c864a0717254f51b4bffc874b481ad398607c83e491376b",
+      "purpose": "Accept only public user text while recovering exact previously sealed request hashes without rewriting history."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-models.ts",
+      "beforeSha256": "b53c012e2d1f40f54a525e342e3b4a4b511ffebdc91fe11647b4b000b8c5b451",
+      "afterSha256": "eeb8171c59b691d23f0e7fcb563d661496190399b8606a4405d390c6bd09ead6",
+      "purpose": "Remove automatic renderer envelopes from provider and preview transcripts without changing system/tool prefixes or cache controls."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-runtime.ts",
+      "beforeSha256": "506c3f6a0ce9944e733a98c540cdfffcef69540a0af8d8cffc760ae15bf676fd",
+      "purpose": "Use source-owned accepted input projection for SDK generation, compaction and preview without rewriting stored history.",
+      "afterSha256": "f69c4f1c3ab802f6f375286041b80994b6c3adbee6cf8e02ee0239e3783b14ef"
+    }
+  ]
+}

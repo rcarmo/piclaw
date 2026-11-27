@@ -1,6 +1,7 @@
 import{expect,test}from'bun:test';import{existsSync,readFileSync}from'node:fs';import{resolve}from'node:path';import{createHash}from'node:crypto';
 const root=resolve(import.meta.dir,'../../..');
-const manifestBytes=readFileSync(resolve(root,'docs/development/receipts/expense-final-retention-1875.json'));
+const manifestPath='docs/development/receipts/expense-final-retention-1875.json';
+const manifestBytes=readFileSync(resolve(root,manifestPath));
 const manifest=JSON.parse(manifestBytes.toString('utf8'));
 const overlayBytes=readFileSync(resolve(root,'docs/development/receipts/kintsugi-cutover-retention-overlay.json'));
 const overlay=JSON.parse(overlayBytes.toString('utf8'));
@@ -30,8 +31,14 @@ const scopedContextPath='docs/development/receipts/scoped-context-rss-retention-
 const scopedContextBytes=readFileSync(resolve(root,scopedContextPath));
 const scopedContext=JSON.parse(scopedContextBytes.toString('utf8'));
 const modelDemandPath='docs/development/receipts/model-demand-rss-retention-overlay.json';
-const modelDemand=JSON.parse(readFileSync(resolve(root,modelDemandPath),'utf8'));
+const modelDemandBytes=readFileSync(resolve(root,modelDemandPath));
+const modelDemand=JSON.parse(modelDemandBytes.toString('utf8'));
+const transportPath='docs/development/receipts/a2ui-prompt-transport-removal-retention-overlay.json';
+const transportBytes=readFileSync(resolve(root,transportPath));
+const transport=JSON.parse(transportBytes.toString('utf8'));
+const merge=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/context-demand-a2ui-merge-overlay.json'),'utf8'));
 const sha=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
+type Change={path:string;beforeSha256:string;afterSha256:string;purpose:string};
 test('removal/retention witness binds every original Core path through explicit later source transformations',()=>{
  expect(sha(manifestBytes)).toBe(overlay.baseManifestSha256);
  expect(sha(overlayBytes)).toBe(removal.previousOverlaySha256);
@@ -99,22 +106,73 @@ test('removal/retention witness binds every original Core path through explicit 
    purpose:'Fence periodic Classic context polling to its current visible scope and reuse a successful full snapshot when its context revision still matches.',
   },
  ]);
- const layers=[overlay,removal,mcpAudit,a2ui,delegate,rss,output,correlation,context,scopedContext,modelDemand].map(layer=>{
+ expect(transport.previousOverlay).toBe(correlationPath);
+ expect(transport.previousOverlaySha256).toBe(sha(correlationBytes));
+ expect(transport.baseManifestSha256).toBe(overlay.baseManifestSha256);
+ const bootstrapPath='runtime/durable-engine/src/application-bootstrap.ts';
+ const mergedPaths=[bootstrapPath,'runtime/durable-engine/src/host-models.ts','runtime/durable-engine/src/host-runtime.ts'];
+ expect(transport.rows.map((row:Change)=>row.path)).toEqual(mergedPaths);
+ expect(merge.rows.map((row:Change)=>row.path)).toEqual(mergedPaths);
+ expect(merge.baseManifest).toBe(manifestPath);
+ expect(merge.baseManifestSha256).toBe(sha(manifestBytes));
+ expect(merge.common).toEqual({
+  commit:'fe5da86167ea7b066383ec6c3804a7a13a02fbc7',
+  overlay:correlationPath,overlaySha256:sha(correlationBytes),
+ });
+ expect(context.sourceParent).toBe(merge.common.commit);
+ expect(transport.sourceParent).toBe(merge.common.commit);
+ expect(merge.parents).toEqual({
+  rss:{commit:'ddebd90bb6ea6fc833d9c4c7ca3d32c79e43a60d',overlay:modelDemandPath,overlaySha256:sha(modelDemandBytes)},
+  incoming:{commit:'d0a55b9e1abb880285f27ce1f2aeab4cd70859e1',overlay:transportPath,overlaySha256:sha(transportBytes)},
+ });
+ const indexRows=<Row extends Change>(layer:{version:number;rows:Row[]})=>{
   expect(layer.version).toBe(1);
-  const rows=new Map<string,{beforeSha256:string;afterSha256:string;purpose:string}>(layer.rows.map((row:any)=>[row.path,row]));
+  const rows=new Map(layer.rows.map(row=>[row.path,row] as const));
   expect(rows.size).toBe(layer.rows.length);
   for(const path of rows.keys())expect(manifest.rows.some((prior:any)=>prior.repo==='core'&&prior.path===path&&prior.state!=='deleted')).toBe(true);
   return rows;
- });
+ };
+ const commonLayers=[overlay,removal,mcpAudit,a2ui,delegate,rss,output,correlation].map(layer=>indexRows<Change>(layer));
+ const rssLayers=[context,scopedContext,modelDemand].map(layer=>indexRows<Change>(layer));
+ const incomingLayers=[indexRows<Change>(transport)];
+ const mergeRows=indexRows<Change&{incomingSha256:string}>(merge);
+ const advance=(path:string,expected:string,layers:ReadonlyMap<string,Change>[])=>{
+  for(const layer of layers){
+   const change=layer.get(path);
+   if(!change)continue;
+   expect(change.beforeSha256,path).toBe(expected);
+   expect(change.purpose.length).toBeGreaterThan(20);
+   expected=change.afterSha256;
+  }
+  return expected;
+ };
  expect(manifest.baselineEntries).toBe(105);expect(manifest.rows).toHaveLength(105);expect(manifest.deletedPaths).toBe(37);
  expect(new Set(manifest.rows.map((r:{repo:string;path:string})=>r.repo+':'+r.path)).size).toBe(105);
  for(const row of manifest.rows){if(row.repo!=='core')continue;const path=resolve(root,row.path);
   if(row.state==='deleted'){
-   expect(layers.some(layer=>layer.has(row.path))).toBe(false);expect(existsSync(path),row.path).toBe(false);
+   expect([...commonLayers,...rssLayers,...incomingLayers,mergeRows].some(layer=>layer.has(row.path))).toBe(false);
+   expect(existsSync(path),row.path).toBe(false);
   }else{
-   let expected=row.currentSha256;
-   for(const layer of layers){const change=layer.get(row.path);if(!change)continue;expect(change.beforeSha256,row.path).toBe(expected);expect(change.purpose.length).toBeGreaterThan(20);expected=change.afterSha256;}
-   expect(sha(readFileSync(path)),row.path).toBe(expected);expect(row.currentPurpose.length).toBeGreaterThan(20);
+   // Both parents start at the correlation tip, not at each other's tip.
+   const commonTip=advance(row.path,row.currentSha256,commonLayers);
+   const rssTip=advance(row.path,commonTip,rssLayers);
+   const incomingTip=advance(row.path,commonTip,incomingLayers);
+   const resolution=mergeRows.get(row.path);
+   if(resolution){
+    expect(resolution.incomingSha256,row.path).toBe(incomingTip);
+    expect(incomingTip,row.path).not.toBe(commonTip);
+    expect(resolution.afterSha256,row.path).not.toBe(rssTip);
+    if(row.path===bootstrapPath){
+     expect(rssTip,row.path).toBe(commonTip);
+     expect(resolution.afterSha256,row.path).toBe(incomingTip);
+    }else{
+     expect(rssTip,row.path).not.toBe(commonTip);
+     expect(resolution.afterSha256,row.path).not.toBe(incomingTip);
+    }
+   }
+   const mergedTip=advance(row.path,rssTip,[mergeRows]);
+   expect(sha(readFileSync(path)),row.path).toBe(mergedTip);
+   expect(row.currentPurpose.length).toBeGreaterThan(20);
   }
  }
 });

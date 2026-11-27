@@ -148,8 +148,11 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     expect(replies).toHaveLength(2);expect(replies[0]!.content).toContain("steering instruction");expect(replies[1]!.content).toContain("follow-up instruction");
     expect(replies.map(reply=>reply.thread_id)).toEqual([primary.thread_id,followup.thread_id]);
     expect(toolSeen).toBe(true);expect(calls).toBe(3);
-    expect(followupModelInput).toContain('A2UI renderer metadata:');
-    expect(followupModelInput).toContain('a2uiRendererCapabilities');
+    expect(followupModelInput).toBe(JSON.stringify('follow-up instruction'));
+    const acceptedRecords = database.query('SELECT record FROM submissions WHERE id=?').get(followup.submission_id);
+    const acceptedEntries = database.query("SELECT record FROM entries WHERE json_extract(record,'$.kind')='host.accepted'").all();
+    expect(JSON.stringify([acceptedRecords,acceptedEntries])).not.toContain('A2UI renderer metadata');
+    expect(JSON.stringify([acceptedRecords,acceptedEntries])).not.toContain('a2uiRendererCapabilities');
     expect(lostBinding()).toEqual({submission_id:null}); // Reply publication used SDK evidence, never a manufactured ACK.
     const placedTimeline=await (await channel.handleTimeline(50,undefined,"web:default")).json() as any;
     expect(placedTimeline.posts.filter((post:any)=>post.data.type==="user_message").map((post:any)=>post.id)).toEqual([primary.thread_id,followup.thread_id,steer.thread_id]);

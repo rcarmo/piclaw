@@ -31,7 +31,7 @@ import { createHostController, type HostControllerOptions } from "./host-control
 import { createHostDurableBindings, createInputHandoffCompletion } from "./host-bindings.js";
 import { prepareHostSchema } from "./host-schema.js";
 import { readApplicationMessagePayload } from "./accepted-payload-recovery.js";
-import { ownsA2uiModelSync, projectA2uiAgentInput, projectPublicA2uiInput, readA2uiRendererDataModel, readA2uiSurfaceOwner, storeA2uiInputMetadata } from '../../src/channels/web/a2ui/input-metadata.js';
+import { ownsA2uiModelSync, projectPublicA2uiInput, readA2uiRendererDataModel, readA2uiSurfaceOwner, storeA2uiInputMetadata } from '../../src/channels/web/a2ui/input-metadata.js';
 import { A2uiAgentRpc, type A2uiAgentFunction } from '../../src/channels/web/a2ui/agent-rpc.js';
 import type { RendererRpcBroker } from '../../src/channels/web/a2ui/renderer-rpc.js';
 import { value, effect, sealed } from "./host-effects.js";
@@ -349,7 +349,13 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
     function nativeMessageInput(chat: string, scope: { branchId: string; conversationId: number },
       source: { sourceId: string; sourceSeq: number; payloadRef: string }, rowId: number, publicContent: string) {
       const requestId = `message:${rowId}:${source.sourceId}`;
-      const content = projectA2uiAgentInput(root, { chatJid: chat, sourceId: source.sourceId, conversationId: scope.conversationId }, publicContent);
+      let content = publicContent;
+      const sealed = root.query(`SELECT request_hash FROM piclaw_durable_bindings_v1
+        WHERE domain=? AND incarnation=? AND conversation_id=? AND request_id=?`)
+        .get(r.incarnation,r.incarnation,scope.conversationId,requestId) as {request_hash:string} | null;
+      if (sealed && hashCanonicalRequest({type:"input",requestId,content}) !== sealed.request_hash)
+        content = readApplicationMessagePayload(root,r.incarnation,{chatJid:chat,sourceId:source.sourceId,
+          conversationId:scope.conversationId,requestId,requestHash:sealed.request_hash},source.payloadRef);
       const input: AcceptedInput = Object.freeze({incarnation:r.incarnation,conversationId:scope.conversationId as ConversationId,
         chatJid:chat,branchId:scope.branchId,operationId:`native-message:${scope.conversationId}:${source.sourceSeq}`,sourceSeq:source.sourceSeq,
         sourceId:source.sourceId,payloadRef:source.payloadRef,requestId,requestHash:hashCanonicalRequest({type:"input",requestId,content})});
@@ -497,8 +503,8 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
           const data=renderer.capabilities ? readA2uiRendererDataModel(root,chat,conversationId,renderer) : undefined;
           storeA2uiInputMetadata(root,{chatJid:chat,sourceId:message.id,conversationId},data,renderer.capabilities,renderer.peer,owner ? action?.message : undefined);
         }
-        // Seal the projected content after renderer metadata, in the same commit
-        // as the message and EF source. SDK placement remains a separate receipt.
+        // Renderer negotiation stays in its private control-plane record. Seal
+        // only the user text; SDK placement remains a separate receipt.
         const native = nativeMessageInput(chat, scope, source, rowId, message.content);
         bindings.bindNativeMessageInTransaction(native.input, native.content, connection);
         checkInput();

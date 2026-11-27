@@ -3,6 +3,7 @@ import { handleNativePlanRequest } from "./plan-http.js";
 import { DEFAULT_PLAN, type SessionPlan } from "../../src/plan/markdown.js";
 import { captureInterruptedScheduledHarness } from "./host-scheduled-terminal.js";
 import { taskModelHookScope, taskModelToolScope, withTaskModelRequestScope } from "./task-model-boundary-shim.js";
+import { projectA2uiContext } from "./host-a2ui-context.js";
 import { createTrackedBashOperations } from "../../src/tools/tracked-bash.js";
 import { withChatContext } from "../../src/core/chat-context.js";
 import { assertModelContextFits, modelSelectionFrame, projectModelContext, prepareModelContextAdmission, type ModelContextAdmission } from "./host-model-context.js";
@@ -241,6 +242,7 @@ function runtimeSnapshot(o: RuntimeOptions): RuntimeSnapshot {
     materializeAnswer: materializeAnswer?.bind(o), now: now.bind(o),
     prepareTerminalEffect: o.prepareTerminalEffect?.bind(o),
     replyThreadFor: o.replyThreadFor?.bind(o),
+    publicInputText: o.publicInputText?.bind(o),
     onOperationSettled: o.onOperationSettled?.bind(o), onExecutionSettled: o.onExecutionSettled?.bind(o), cancelSideSource: o.cancelSideSource?.bind(o),
     cancelOperationSource: o.cancelOperationSource?.bind(o),
     owner: Object.freeze({ assert: owner.assert.bind(owner), release: owner.release.bind(owner) }),
@@ -366,7 +368,7 @@ export class HostConversationRuntime {
           id=conversation.owner.conversationId; // Execution ownership, never history ancestry.
         }
       };
-      harness = await Harness.open(storage, {...options.harnessOptions,registry:withTaskModelRequestScope(options.harnessOptions.registry,cancellationFor)}, context);
+      harness = await Harness.open(storage, {...options.harnessOptions,registry:withTaskModelRequestScope(options.harnessOptions.registry,cancellationFor,options.publicInputText)}, context);
       options.owner.assert();
       for (const id of options.existingConversationIds) {
         if (!await harness.conversation(id, context)) throw new Error("Missing manifest conversation");
@@ -855,7 +857,7 @@ export class HostConversationRuntime {
     const agent = { ...current, ...(model ? { model } : {}), ...(thinkingLevel !== undefined ? { thinkingLevel: thinkingLevel as ModelThinkingLevel } : {}) };
     const read = { snapshot: this.harness.snapshot.bind(this.harness), snapshotAsOf: this.harness.snapshotAsOf.bind(this.harness) };
     const env = await this.options.harnessOptions.env?.({ conversationId: conversation.id, cwd: agent.cwd, read }, context); this.fence();
-    const messages = await projectModelContext(view, { conversationId: conversation.id, agent, env, read }, context); this.fence();
+    const messages = await projectModelContext(projectA2uiContext(view, this.options.publicInputText), { conversationId: conversation.id, agent, env, read }, context); this.fence();
     // The SDK preserves contribution identities; admission keeps a data-only snapshot.
     return freezeTree(structuredClone(messages));
   }

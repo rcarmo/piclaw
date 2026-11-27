@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "common": {
+    "commit": "fe5da86167ea7b066383ec6c3804a7a13a02fbc7",
+    "overlay": "docs/development/receipts/native-input-correlation-retention-overlay.json",
+    "overlaySha256": "0fa0c6ec58b2c934e0fd81dc774f268582a66372ea590b9cbf45e045b1a18fca"
+  },
+  "parents": {
+    "rss": {
+      "commit": "ddebd90bb6ea6fc833d9c4c7ca3d32c79e43a60d",
+      "overlay": "docs/development/receipts/model-demand-rss-retention-overlay.json",
+      "overlaySha256": "de6951d02c674bd092f34b0f0129ca0cfe63af9aba50d80bc4b708348ed811a2"
+    },
+    "incoming": {
+      "commit": "d0a55b9e1abb880285f27ce1f2aeab4cd70859e1",
+      "overlay": "docs/development/receipts/a2ui-prompt-transport-removal-retention-overlay.json",
+      "overlaySha256": "4a73ceccf78f08ffd7bf62ff429216497646f26d83cf80ec4b1dabaac3ef3880"
+    }
+  },
+  "scope": "Only governed paths changed from the RSS parent by the merge; original paths, deletions and retirement accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/application-bootstrap.ts",
+      "beforeSha256": "f01a6a05d97520bd74b1a865eb445e96ded4176fbc9ba8ac5dcddaa815d3c1d9",
+      "incomingSha256": "c55c4b3d037a4b664c864a0717254f51b4bffc874b481ad398607c83e491376b",
+      "afterSha256": "c55c4b3d037a4b664c864a0717254f51b4bffc874b481ad398607c83e491376b",
+      "purpose": "Take #2114's public-input acceptance and sealed request hash recovery unchanged."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-models.ts",
+      "beforeSha256": "025bd14eabfe42af40b16adb686eceb7dd2fce926ce9edbb0c58dc3a2ff575d7",
+      "incomingSha256": "eeb8171c59b691d23f0e7fcb563d661496190399b8606a4405d390c6bd09ead6",
+      "afterSha256": "411217628e8cdac9c3239d7385a32aae8fb4ef3abf8ad9467118b0c3207cf745",
+      "purpose": "Preserve RSS preview transcript detachment without re-encoding text while removing private renderer details from provider and preview requests."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-runtime.ts",
+      "beforeSha256": "addd0115b08378c5ae93a9d27ba837aed7311847fdea2a5f56771a1e0f56a490",
+      "incomingSha256": "f69c4f1c3ab802f6f375286041b80994b6c3adbee6cf8e02ee0239e3783b14ef",
+      "afterSha256": "117d1492c0238d4f1f5f83c3c233421162557a29eb7fd7ea430fa1b0bb265c22",
+      "purpose": "Preserve transcript-free RSS context revision and model-demand reads while wiring #2114's public input projection into the SDK request scope and preview."
+    }
+  ]
+}

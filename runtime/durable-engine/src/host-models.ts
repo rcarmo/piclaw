@@ -11,16 +11,16 @@ import {
   type TranscriptContext, type AssistantMessage, type AssistantMessageEvent, type AnyModel, type ModelType,
   type ImageModel, type ImageApi, type ClassifierModel, type ClassifierApi,
   type ImagesContext, type ImagesOptions, type AssistantImages,
-  type ClassifierContext, type ClassifierOptions, type ClassifierResult, type Usage,
+  type ClassifierContext, type ClassifierOptions, type ClassifierResult, type Usage, type Message,
   type DeferredHandle, type DeferredFetchOptions, type DeferredCancelOptions,
 } from "@earendil-works/pi-ai";
 import { normalizeContext as normalizeHostContext, type ModelRuntime } from "../../src/durable-legacy-sdk.js";
 import type { previewSdkRequest, SimpleRequestPreview } from "../../src/agent-pool/model-request-preview.js";
 import { awaitWithContext, BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
-import { assertModelContextFits, type PreviewModels } from "./host-model-context.js";
+import type { PreviewModels } from "./host-model-context.js";
 import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
 import { transformMessages } from "@earendil-works/pi-ai/api/transform-messages";
-import { A2UI_METADATA_HEADING, A2UI_PRIVATE_REPLY_METADATA, A2UI_RENDERER_TOOL, MAX_A2UI_METADATA_BYTES } from '../../src/channels/web/a2ui/transport-metadata.js';
+import { A2UI_RENDERER_TOOL } from '../../src/channels/web/a2ui/transport-metadata.js';
 
 export interface ModelRef { provider: string; id: string; type?: ModelType }
 type Operation = "chat" | "generateImages" | "classify";
@@ -199,6 +199,16 @@ export function createHostModels(
   approved: readonly ModelRef[],
   policy: HostModelPolicy,
 ): PreviewModels {
+  const stripPrivateRendererDetails = (messages: Message[]): Message[] => {
+    let projected: Message[] | undefined;
+    for (const [index, message] of messages.entries()) {
+      if (message.role === "toolResult" && message.toolName === A2UI_RENDERER_TOOL && message.details !== undefined) {
+        const { details: _details, ...reply } = message;
+        projected ??= [...messages]; projected[index] = reply;
+      }
+    }
+    return projected ?? messages;
+  };
   const backing = createModels({ authContext: {
     env: async () => undefined, fileExists: async () => false,
   } });
@@ -260,7 +270,7 @@ export function createHostModels(
     const snapshot = freeze(data(physical));
     const {cost:_observationalCost,...capabilities}=snapshot;
     const frame = JSON.stringify(capabilities);
-    const transcript = normalizeHostContext({ messages: copyJsonData(context.messages) });
+    const transcript = normalizeHostContext({ messages: copyJsonData(stripPrivateRendererDetails(context.messages)) });
     const result = await awaitWithContext(Promise.resolve().then(() => {
       signal.throwIfAborted();
       return policy.previewRequest!(snapshot, transcript, { ...safe, signal });
@@ -365,6 +375,7 @@ export function createHostModels(
         // This detached relay-owned snapshot is never passed to the authority
         // hooks. Transfer it to the host at dispatch instead of serialising again.
         context = copyJsonData(context);
+        context.messages = stripPrivateRendererDetails(context.messages);
         if (deferred) {
           phase = "admission";
           if (!hostModelRuntime120.streamDeferred) throw new Error("Host operation unavailable");
@@ -455,22 +466,9 @@ export function createHostModels(
         // Let the SDK project tool-only image placeholders without changing the
         // committed history, provider-specific framing or accepted user inputs.
         const request = context;
-        // Reply metadata is an SDK-private tool detail. Only the owning native
-        // generation sees it, and old replies never refill a future turn's context.
-        const lastUser = request.messages.findLastIndex(message=>message.role==='user');
-        let withReplyMetadata=false;
-        request.messages = request.messages.map((message,index)=>{
-          if (message.role!=='toolResult' || message.toolName!==A2UI_RENDERER_TOOL) return message;
-          const encoded=(message.details as Record<string,unknown> | undefined)?.[A2UI_PRIVATE_REPLY_METADATA];
-          const {details: _details,...reply}=message;
-          if (!scope || index<=lastUser || typeof encoded!=='string' || Buffer.byteLength(encoded)>MAX_A2UI_METADATA_BYTES) return reply;
-          withReplyMetadata=true;
-          return {...reply,content:[...reply.content,{type:'text' as const,text:A2UI_METADATA_HEADING+encoded}]};
-        });
         if (!model.input.includes("image")) request.messages = request.messages.map(message =>
           message.role === "toolResult" && message.content.some(block => block.type === "image")
             ? transformMessages([message], model)[0]! : message);
-        if (withReplyMetadata) assertModelContextFits(request.messages,physical);
         const providerContext = codex ? codex.context(request) : request;
         phase = "provider";
         const stream = simple
