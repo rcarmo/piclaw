@@ -74,7 +74,7 @@ import { createHostCommandPolicy } from "./host-command-policy.js";
 import { createHostProcessControls, nativeProcessInstructions } from "./host-process-controls.js";
 import { inspectAddonInstall, loadApplicationExtensionCatalog, qualifyInstalledAddon, bindInstalledAddon, qualifyInstalledCodeReview, qualifyInstalledEditableTable, qualifyInstalledOfficeViewer, qualifyInstalledDrawio, qualifyInstalledGoal, qualifyInstalledObservability, qualifyInstalledRestic, assertApplicationExtensionCatalogSupported } from "./host-extension-catalog.js";
 import { createHostDelegateTool } from "./host-delegate-tool.js";
-import { buildModelCandidates, migrateLegacyDelegateConfig, type DelegateConfig } from "../../src/delegate/policy.js";
+import { buildModelCandidates, isDelegateModelId, migrateLegacyDelegateConfig, type DelegateConfig } from "../../src/delegate/policy.js";
 import { createDelegateSettings, delegateInstructions } from "../../src/delegate/settings.js";
 import { createHostDelegateFileReader } from "./host-delegate-files.js";
 import { extensionKvGet, extensionKvSet } from "../../src/db/extension-kv.js";
@@ -460,9 +460,10 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     const authority = createHostOperationAuthority(root, captured, () => {
       assert(); lifetime.signal.throwIfAborted(); runtime().assertCapturedSourceCurrent(captured.inputs);
     }, true);
-    return () => { authority.assertCurrent();if (captured.delegateModel) assertDelegateModel(captured.delegateModel); };
+    return () => { authority.assertCurrent(); if (captured.delegateModel) assertDelegateModel(captured.delegateModel, captured.delegateModel.parent); };
   };
-  let assertDelegateModel: (model: { provider: string; modelId: string }) => void = () => { throw Error("Delegate unavailable"); };
+  type DelegateModelRef = { provider: string; modelId: string };
+  let assertDelegateModel: (model: DelegateModelRef, parent: DelegateModelRef | undefined) => void = () => { throw Error("Delegate unavailable"); };
   const autoresearchHost = autoresearch ? createHostAutoresearch(autoresearch.nativeExports["index.ts"] as unknown as AutoresearchNativeExports, {
     root, runtime,
     assertOwner() {
@@ -827,12 +828,12 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   const defaultThinking = (model: any) => getSupportedThinkingLevels(model).includes("medium") ? "medium" as const : getSupportedThinkingLevels(model)[0]!;
   // Allocate/recover the shared namespace before any accepted task or API read.
   codeReview?.addon.reviewService();
-  const check = (model: { provider: string; id: string }, signal: AbortSignal) => {
+  const check = (model: { provider: string; id: string }, signal: AbortSignal, unavailable?: () => Error) => {
     assertAdmission(); assert(); signal.throwIfAborted();
-    if (!host.modelRegistry.getAvailable().some(entry => entry.provider === model.provider && entry.id === model.id)) throw Error("Host model no longer available");
-    if (!available().some(entry => entry.provider === model.provider && entry.id === model.id)) throw Error("Host model not approved");
+    if (!host.modelRegistry.getAvailable().some(entry => entry.provider === model.provider && entry.id === model.id)) throw (unavailable?.() ?? Error("Host model no longer available"));
+    if (!available().some(entry => entry.provider === model.provider && entry.id === model.id)) throw (unavailable?.() ?? Error("Host model not approved"));
     const physical = host.modelRuntime.getPhysicalModel(model.provider, model.id);
-    if (!physical || physical.provider !== model.provider || physical.id !== model.id) throw Error("Host model no longer available");
+    if (!physical || physical.provider !== model.provider || physical.id !== model.id) throw (unavailable?.() ?? Error("Host model no longer available"));
   };
   assertDreamModel = model => {
     check({ provider: model.provider, id: model.modelId }, lifetime.signal);
@@ -879,13 +880,46 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     }
     }
   }
-  // Automatic selection inherits the parent; explicit exact models use the same
-  // exact whitelist and classification policy, without a parent-tier cap.
-  assertDelegateModel = (model: { provider: string; modelId: string }) => {
-    assertCoreDelegate(); check({ provider: model.provider, id: model.modelId }, lifetime.signal);
-    const config = extensionKvGet("delegate", "config", "global");
-    const candidate = { provider: model.provider, id: model.modelId, fullId: `${model.provider}/${model.modelId}` };
-    if (!buildModelCandidates([candidate], config as DelegateConfig | undefined).some(entry => entry.id === candidate.fullId)) throw Error("Native Delegate model not approved");
+  const delegateId = (model: DelegateModelRef) => `${model.provider}/${model.modelId}`;
+  const delegateConfig = () => {
+    const config = extensionKvGet<DelegateConfig>("delegate", "config", "global");
+    // The KV reader returns null for a missing or corrupt value. Only a genuinely
+    // absent setting (or an explicit empty list) grants the chat-model fallback.
+    if (config === null ? root.query("SELECT 1 FROM extension_kv WHERE extension_id='delegate' AND scope='global' AND scope_key='' AND key='config'").get()
+      : !Array.isArray(config.approved_models) || !config.approved_models.every(isDelegateModelId)) throw Error("Invalid Delegate whitelist");
+    return config;
+  };
+  const delegateSelectionError = (reason: string, parent: DelegateModelRef | undefined, config: DelegateConfig | null) => {
+    // Put live choices in the tool error only, never in the prompt or tool schema.
+    const availableIds = new Set(delegateModels().map(model => model.fullId));
+    const whitelist = [...new Set(config?.approved_models ?? [])];
+    if (!whitelist.length) {
+      if (!parent) return Error(reason);
+      const id = delegateId(parent);
+      return Error(`${reason}\n${availableIds.has(id) ? `Retry with the chat model ${id}; the whitelist is empty.`
+        : `The whitelist is empty and the chat model ${id} is currently unavailable.`}`);
+    }
+    const retry = whitelist.filter(id => availableIds.has(id));
+    const unavailable = whitelist.filter(id => !availableIds.has(id));
+    return Error([reason,
+      ...(retry.length ? [`Retry with an exact whitelisted model ID: ${JSON.stringify(retry)}`] : []),
+      ...(unavailable.length ? [`Whitelisted but currently unavailable: ${JSON.stringify(unavailable)}`] : []),
+    ].join("\n"));
+  };
+  const assertDelegateSelection = (id: string, parent: DelegateModelRef | undefined, config: DelegateConfig | null) => {
+    if (config?.approved_models.length) {
+      if (!config.approved_models.includes(id)) throw delegateSelectionError(`Delegate model ${id} is not in the whitelist`, parent, config);
+    } else if (!parent || delegateId(parent) !== id) {
+      if (!parent) throw Error("Delegate parent model required");
+      throw delegateSelectionError(`Delegate model ${id} does not match the chat model ${delegateId(parent)} (the whitelist is empty)`, parent, config);
+    }
+  };
+  assertDelegateModel = (model, parent) => {
+    assertCoreDelegate();
+    const config = delegateConfig(), id = delegateId(model);
+    assertDelegateSelection(id, parent, config);
+    check({ provider: model.provider, id: model.modelId }, lifetime.signal,
+      () => delegateSelectionError(`Delegate model ${id} is currently unavailable`, parent, config));
   };
   const sideObservers = new Map<string, NonNullable<import("../../src/agent-pool/contracts.js").SidePromptOptions["onEvent"]>>();
   // SDK hook failures are reported but can still reach the model bridge. Keep
@@ -932,7 +966,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
           signal!.throwIfAborted();
           runtime().assertCapturedSourceCurrent(captured.inputs);
           assertGoalInput?.();
-          if (captured.delegateModel) assertDelegateModel(captured.delegateModel);
+          if (captured.delegateModel) assertDelegateModel(captured.delegateModel, captured.delegateModel.parent);
         };
       }
       if (scope.taskKind !== "pi.compaction") throw Error("Native model request kind unavailable");
@@ -943,7 +977,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       } else {
         const target = bundle.sessionTargets.list().find(target => target.conversationId === scope.conversationId);
         const captured = await runtime().captureAutomaticCompaction(scope, target && { incarnation: target.domain, ...target });
-        maintenance = { ...captured, assertCurrent() { captured.assertCurrent(); if (captured.delegateModel) assertDelegateModel(captured.delegateModel); } };
+        maintenance = { ...captured, assertCurrent() { captured.assertCurrent(); if (captured.delegateModel) assertDelegateModel(captured.delegateModel, captured.delegateModel.parent); } };
       }
       maintenanceRequests.set(scope.signal, maintenance);
       maintenance.assertCurrent();
@@ -1114,21 +1148,26 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
       assertCurrent: assertCoreDelegate, runtime,
       async selectModel(args, parent) {
         if (args.task_category !== undefined && !["quick", "summarize", "code", "analyze", "reason"].includes(String(args.task_category))) throw Error("Native Delegate task category not qualified");
+        const config = delegateConfig();
         let model = parent;
         if (args.model !== undefined) {
-          if (typeof args.model !== "string") throw Error("Delegate model must be an exact provider/model ID");
+          if (!isDelegateModelId(args.model)) throw delegateSelectionError("Delegate model must be an exact provider/model ID", parent, config);
           const slash = args.model.indexOf("/");
-          if (slash <= 0 || slash === args.model.length - 1) throw Error("Delegate model must be an exact provider/model ID");
-          const provider = args.model.slice(0, slash), modelId = args.model.slice(slash + 1);
-          const exact = available().find(entry => entry.provider === provider && entry.id === modelId);
-          if (!exact) throw Error("Native Delegate model unavailable");
-          model = { provider: exact.provider, modelId: exact.id };
+          model = { provider: args.model.slice(0, slash), modelId: args.model.slice(slash + 1) };
+        } else if (config?.approved_models.length) {
+          const candidates = buildModelCandidates(delegateModels(), config);
+          const selected = (parent && candidates.find(candidate => candidate.id === delegateId(parent))) || candidates[0];
+          if (!selected) throw delegateSelectionError("No whitelisted Delegate model is currently available", parent, config);
+          model = { provider: selected.provider, modelId: selected.modelId };
         }
         if (!model) throw Error("Delegate parent model required");
-        assertDelegateModel(model); return model;
+        assertDelegateModel(model, parent); return model;
+      },
+      invalidModelError(parent) {
+        return delegateSelectionError("Delegate model must be an exact provider/model ID", parent, delegateConfig());
       }, assertModelCurrent: assertDelegateModel,
-      modelSupportsImages(model) {
-        assertDelegateModel(model);
+      modelSupportsImages(model, parent) {
+        assertDelegateModel(model, parent);
         const physical = host.modelRuntime.getPhysicalModel(model.provider, model.modelId);
         return physical?.provider === model.provider && physical.id === model.modelId && physical.input?.includes("image") === true;
       }, readFiles: createHostDelegateFileReader(WORKSPACE_DIR), readonlyTools: readers, readonlyExtensions: [readerExtension], standardTools: builtins, standardExtensions: [standardExtension],

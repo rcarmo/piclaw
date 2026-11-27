@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "common": {
+    "commit": "d0a55b9e1abb880285f27ce1f2aeab4cd70859e1",
+    "overlay": "docs/development/receipts/a2ui-prompt-transport-removal-retention-overlay.json",
+    "overlaySha256": "4a73ceccf78f08ffd7bf62ff429216497646f26d83cf80ec4b1dabaac3ef3880"
+  },
+  "parents": {
+    "rss": {
+      "commit": "7c82459a9c601d7aa6c5fc72c22e48a3a29b2e54",
+      "overlay": "docs/development/receipts/context-demand-a2ui-merge-overlay.json",
+      "overlaySha256": "671be4f8f73ed175fcf0893714f4080fbc46740e546af48bcac09e5036287157"
+    },
+    "incoming": {
+      "commit": "92e2cc0b4a1f23ce0f75f71c07d6707a687e7ed7",
+      "overlay": "docs/development/receipts/delegate-selection-guidance-retention-overlay.json",
+      "overlaySha256": "8552227012c54d99f66343de0ff700a201cf6c594aa24612ce019ddb395ceb60"
+    }
+  },
+  "scope": "Only governed paths changed from the RSS merge parent by the second merge; original paths, deletions and retirement accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/default-application-runtime.ts",
+      "beforeSha256": "66e68725b02847d140054451812ad984dc6b0aaadfd91f0bff725100890c9e88",
+      "incomingSha256": "609f6fcacdb6fe41296011bc7578418b6806aac0b87f25662effe3b0ed919536",
+      "afterSha256": "609f6fcacdb6fe41296011bc7578418b6806aac0b87f25662effe3b0ed919536",
+      "purpose": "Take Delegate model selection and retry guidance unchanged."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-runtime.ts",
+      "beforeSha256": "117d1492c0238d4f1f5f83c3c233421162557a29eb7fd7ea430fa1b0bb265c22",
+      "incomingSha256": "a3016cdfb4b32378fe7733e7e3d03ab23bee8352c9d065df766cba1aee044639",
+      "afterSha256": "6ded5d01217debcc5b6634d57e32fbc0f8ff4500a7cd2ccce86f0193b1f09c48",
+      "purpose": "Preserve RSS context and A2UI projection while carrying the exact parent assistant model identity into Delegate child authority."
+    }
+  ]
+}
