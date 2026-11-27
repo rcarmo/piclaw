@@ -107,6 +107,31 @@ describe("widget state API", () => {
     }
   });
 
+  test("state SSE abort closes the stream without publishing a late snapshot", async () => {
+    const previous = WEB_RUNTIME_CONFIG.widgetToken;
+    WEB_RUNTIME_CONFIG.widgetToken = "widget-test-token";
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const abort = new AbortController();
+    try {
+      const channel = makeChannel();
+      const readContext = channel.agentPool.getContextUsageForChat;
+      channel.agentPool.getContextUsageForChat = async () => { await held; return readContext(); };
+      const response = await handleWidgetStateRoutes(channel, new Request("https://example.test/api/state/events", {
+        headers: { Authorization: "Bearer widget-test-token" }, signal: abort.signal,
+      }), "/api/state/events");
+      const reader = response!.body!.getReader();
+      const result = reader.read();
+      abort.abort();
+      expect(await result).toEqual({ done: true, value: undefined });
+      release();
+      expect((await reader.read()).done).toBe(true);
+    } finally {
+      release();
+      WEB_RUNTIME_CONFIG.widgetToken = previous;
+    }
+  });
+
   test("opens state SSE with the piclaw.state.v1 event", async () => {
     const previous = WEB_RUNTIME_CONFIG.widgetToken;
     WEB_RUNTIME_CONFIG.widgetToken = "widget-test-token";
