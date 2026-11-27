@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "sourceParent": "6552e82f438187dd9cdbc1df02e7e2a666e932b0",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlay": "docs/development/receipts/context-demand-delegate-merge-overlay.json",
+  "previousOverlaySha256": "9d497d6e167f93b4170ad65bd722bd12c6361130dd89a4f1d31fc3b233796bf0",
+  "scope": "Owned Codex response observation and its approved extension successor only; original paths, deletions and retirement accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/default-application-runtime.ts",
+      "beforeSha256": "609f6fcacdb6fe41296011bc7578418b6806aac0b87f25662effe3b0ed919536",
+      "afterSha256": "48158f541586b4273f2300d2483e3e35a14907487abaa1bcff87ae10ce0216d0",
+      "purpose": "Capture Codex responses with the dedicated observer clone supplied by the host model service, retaining legacy capture as a fallback."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-extension-catalog.ts",
+      "beforeSha256": "708747e48e821f32e6b3db52a729c5e23e626b05a3ccde6c9daf8757bd35686b",
+      "afterSha256": "2a4241da41e5bddb18764b76bec6327b735d972de5016f77e07be061fe310b12",
+      "purpose": "Approve the 0.2.5 extension successor fingerprints for the package, native provider and owned Codex output observer."
+    }
+  ]
+}

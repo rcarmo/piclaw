@@ -11,6 +11,7 @@ import { getPiclawAgentDir } from "../../runtime/src/core/agent-dir.js";
 import { initDatabase, getDb, closeDatabase } from "../../runtime/src/db/connection.js";
 import { acquireRuntimeLock } from "../../runtime/src/runtime/single-instance.js";
 import { createDefaultApplicationRuntime } from "../../runtime/durable-engine/src/default-application-runtime.js";
+import { inspectAddonInstall } from "../../runtime/durable-engine/src/host-extension-catalog.js";
 import { createTestCredentialStore } from "../../runtime/test/model-services-fixture.js";
 import { AgentPool } from "../../runtime/src/agent-pool.js";
 import { createRuntimeBaseServices } from "../../runtime/src/runtime/composition.js";
@@ -26,8 +27,22 @@ const { createAssistantMessageEventStream, getCurrentTools } = await import(impo
 for (const scenario of ["write", "model", "sse", "broken-sse"] as const) applicationTest(`Codex production factory ${scenario}: real public dispatch and reopen`, async () => {
   const source = realpathSync(process.env.DURABLE_ADDONS_ROOT!);
   const workspace = process.env.PICLAW_WORKSPACE!;
-  const pkg = join(workspace, ".pi/extensions/node_modules/@rcarmo/piclaw-addon-codex-conversion");
+  const codexName = "@rcarmo/piclaw-addon-codex-conversion";
+  const pkg = join(workspace, ".pi/extensions/node_modules", codexName);
   cpSync(join(source, "addons/codex-conversion"), pkg, { recursive: true, filter: p => !p.split("/").includes("node_modules") });
+  const codexVersion = JSON.parse(readFileSync(join(pkg, "package.json"), "utf8")).version;
+  if (scenario === "broken-sse") {
+    expect(inspectAddonInstall(codexName, "0.2.5")).toEqual({ supportedVersion: "0.2.5" });
+    expect(inspectAddonInstall(codexName, codexVersion, pkg)).toEqual({ supportedVersion: codexVersion });
+    const providerSource = join(pkg, "src/native-provider.ts");
+    const original = readFileSync(providerSource);
+    try {
+      writeFileSync(providerSource, Buffer.concat([original, Buffer.from("\n// Unapproved source bytes\n")]));
+      expect(inspectAddonInstall(codexName, "0.2.5", pkg)).toEqual({
+        supportedVersion: "0.2.5", problem: expect.stringContaining("does not match the add-on source"),
+      });
+    } finally { writeFileSync(providerSource, original); }
+  }
   // All links belong to this isolated package; neither dependency source is mutated.
   const dependencies = join(pkg, "node_modules");
   mkdirSync(dependencies, {recursive:true});
@@ -67,6 +82,8 @@ for (const scenario of ["write", "model", "sse", "broken-sse"] as const) applica
   let fixtureError: unknown;
   let bodyFailed = false;
   let bodyPulls = 0;
+  let observerBranches = 0;
+  let observerReclones = 0;
   let joined = 0;
   const originalClose = HostConversationRuntime.prototype.close;
   const closeSpy = spyOn(HostConversationRuntime.prototype, "close").mockImplementation(async function(this: HostConversationRuntime) {
@@ -78,13 +95,24 @@ for (const scenario of ["write", "model", "sse", "broken-sse"] as const) applica
       routingTokens.push(new Headers(init?.headers).get("x-codex-turn-state"));
       return new Response("data: [DONE]\n\n", { headers: { "content-type": "text/event-stream", "x-codex-turn-state": "ROUTING_TOKEN_" + routingTokens.length } });
     }
-    if (scenario === "broken-sse") return new Response(new ReadableStream({
-      async pull(controller) {
-        bodyPulls++;
-        if (bodyPulls === 1) controller.enqueue(new TextEncoder().encode('data: {"type":"response.created","response":{"id":"response-broken-fixture"}}\n\n'));
-        else { await new Promise(resolve => setTimeout(resolve, 5)); bodyFailed = true; controller.error(new Error("PRIVATE_SYNTHETIC_CAPTURE_FAILURE")); }
-      },
-    }), { headers: { "content-type": "text/event-stream" } });
+    if (scenario === "broken-sse") {
+      const response = new Response(new ReadableStream({
+        async pull(controller) {
+          bodyPulls++;
+          if (bodyPulls === 1) controller.enqueue(new TextEncoder().encode('data: {"type":"response.created","response":{"id":"response-broken-fixture"}}\n\n'));
+          else { await new Promise(resolve => setTimeout(resolve, 5)); bodyFailed = true; controller.error(new Error("PRIVATE_SYNTHETIC_CAPTURE_FAILURE")); }
+        },
+      }), { headers: { "content-type": "text/event-stream" } });
+      const clone = response.clone.bind(response);
+      response.clone = () => {
+        observerBranches++;
+        const observer = clone();
+        const reclone = observer.clone.bind(observer);
+        observer.clone = () => { observerReclones++; return reclone(); };
+        return observer;
+      };
+      return response;
+    }
     const events = [{ type: "response.created", response: { id: "response-fixture" } }, { type: "response.output_item.done", item: { type: "image_generation_call", id: "image-fixture", result: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1cAAAAASUVORK5CYII=", output_format: "png" } }];
     const bytes = new TextEncoder().encode(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join("") + "data: [DONE]\n\n");
     return new Response(new ReadableStream({ start(controller) { for (let i=0;i<bytes.length;i+=17) controller.enqueue(bytes.slice(i,i+17)); controller.close(); } }), { headers: { "content-type": "text/event-stream" } });
@@ -192,6 +220,10 @@ for (const scenario of ["write", "model", "sse", "broken-sse"] as const) applica
     if (scenario === "broken-sse") {
       expect(bodyFailed).toBe(true);
       expect(bodyPulls).toBe(2);
+      expect(observerBranches).toBe(1);
+      // 0.2.5 consumes the dedicated branch and must not retry via capture on rejection.
+      // Older versions clone the observer branch exactly once inside legacy capture.
+      expect(observerReclones).toBe(codexVersion === "0.2.5" ? 0 : 1);
       expect(calls).toBe(1);
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       // Native model-error settlement consumes the accepted input once and releases the lane.

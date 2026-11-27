@@ -141,6 +141,13 @@ const successorFiles: Partial<Record<SourceProfile, Readonly<Record<string, Sour
       "src/index.ts": "c9e4acfe52ac8bb642e03d4532ef331580c8672dbd27e20dffeb4e88b97d07f9",
       "src/shell/bash.ts": "37ab050e4c08ac7d6a4c79c809153c03d8197e23d483a050e69d0e7b1480f2c6",
     },
+    "0.2.5": {
+      "package.json": "1df3f7bbb990a2453f7560bc1b374f6368e927740834328aa0b43925a3f1be66",
+      "src/index.ts": "c9e4acfe52ac8bb642e03d4532ef331580c8672dbd27e20dffeb4e88b97d07f9",
+      "src/shell/bash.ts": "37ab050e4c08ac7d6a4c79c809153c03d8197e23d483a050e69d0e7b1480f2c6",
+      "src/native-provider.ts": "f5db7c9f1ccbc2b3217128784b7233e86221fe36a2f1bcd66f51f1471cfd76a5",
+      "src/providers/openai-codex-native-output-observer.ts": "7ba8b89cbb934a87f2262da1b92d0d7eea585b3790b896d9ceed8f6500833bb9",
+    },
   },
 };
 function approvedSuccessor(kind: SourceProfile, version: unknown) {
