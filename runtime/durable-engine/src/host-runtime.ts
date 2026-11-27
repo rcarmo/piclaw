@@ -15,7 +15,7 @@ import { estimateContextTokens } from "@earendil-works/pi-ai/utils/estimate";
 const log = createLogger("durable.runtime");
 import { getSupportedThinkingLevels, type ModelThinkingLevel } from "@earendil-works/pi-ai";
 // Native conversation runtime, explicitly composed with fenced host authority by application-bootstrap.
-import { configure, AgentDoc, AssistantEntry, ResetEntry, InboxDoc, LiveDoc, UsageDoc, Harness, type HarnessOptions, type HarnessInspection, type Storage, type ConversationId, type SubmissionId, type TaskId, type CompactionResult, type SubmissionRecord, type EntryRecord, type Cursor } from "@earendil-works/pi-durable";
+import { configure, AgentDoc, AssistantEntry, ResetEntry, InboxDoc, LiveDoc, UsageDoc, Harness, type HarnessOptions, type HarnessInspection, type Storage, type ConversationId, type SubmissionId, type TaskId, type CompactionResult, type SubmissionRecord, type EntryRecord, type EntryId, type Cursor } from "@earendil-works/pi-durable";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { awaitWithContext, withAbortSignal, withoutAbortSignal, type Context } from "@earendil-works/chord/context";
 import type { CurrentPiclawServiceWorkStore, FinishHarnessRequest } from "../../../runtime/src/service-effects/current-piclaw/service-work-store.js";
@@ -287,6 +287,9 @@ export class HostConversationRuntime {
   // Lifecycle joins only: not an input queue or admission/dedup authority.
   private readonly active = new Set<Promise<unknown>>();
   private readonly observations = new AbortController();
+  // The estimate belongs to a committed tail, including appended edits, resets
+  // and head markers. Only a scalar promise survives; never keep a view here.
+  private readonly contextEstimates = new Map<ConversationId, { tail: EntryId; tokens: Promise<number> }>();
   private observe<T>(body: () => Promise<T>): Promise<T> {
     this.fence();
     const promise = body();
@@ -549,10 +552,25 @@ export class HostConversationRuntime {
     const reader = this.sessionReader(binding);
     return this.observe(async () => {
       const conversation = await reader.conversation();
-      const view = await conversation.context(this.context); reader.check();
+      const tail = await conversation.commit(tx => tx.latestEntryId(conversation.id), this.context); reader.check();
+      let measured = 0;
+      if (tail !== undefined) {
+        let estimate = this.contextEstimates.get(conversation.id);
+        if (estimate?.tail !== tail) {
+          const tokens = conversation.context(this.context, { at: tail }).then(view => estimateContextTokens(view.messages).tokens);
+          estimate = { tail, tokens };
+          if (!this.contextEstimates.has(conversation.id) && this.contextEstimates.size >= 128) {
+            this.contextEstimates.delete(this.contextEstimates.keys().next().value!);
+          }
+          this.contextEstimates.set(conversation.id, estimate);
+          void tokens.catch(() => {
+            if (this.contextEstimates.get(conversation.id)?.tokens === tokens) this.contextEstimates.delete(conversation.id);
+          });
+        }
+        measured = await estimate.tokens; reader.check();
+      }
       const agent = await conversation.agent(this.context); reader.check();
       const model = agent.model && currentHarnessModels(this.options.harnessOptions).getModel(agent.model.provider, agent.model.modelId);
-      const measured = estimateContextTokens(view.messages).tokens;
       const tokens = Number.isFinite(measured) && measured >= 0 ? measured : null;
       const window = model?.contextWindow;
       const contextWindow = typeof window === "number" && Number.isFinite(window) && window > 0 ? window : null;
