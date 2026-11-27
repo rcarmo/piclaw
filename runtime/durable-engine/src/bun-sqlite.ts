@@ -17,7 +17,7 @@ export class BunSqliteDatabase implements SqliteDatabase {
   private readonly db: Database;
   private stopCheckpoint?: () => void | Promise<void>;
   private readonly callback = new AsyncLocalStorage<boolean>();
-  private tail: Promise<unknown> = Promise.resolve();
+  private tail: Promise<void> = Promise.resolve();
   private closing?: Promise<void>;
   private failure?: Error;
 
@@ -128,7 +128,8 @@ export class BunSqliteDatabase implements SqliteDatabase {
       if (this.guard?.fenceTransactions) this.guard.assertOwner();
       return operation();
     });
-    this.tail = result.catch(() => {}); // A rejected operation must not strand later admissions.
+    // Retain only settlement so queued results and failures remain caller-owned.
+    this.tail = result.then(() => {}, () => {});
     return result;
   }
 

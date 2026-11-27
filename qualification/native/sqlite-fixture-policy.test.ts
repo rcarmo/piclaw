@@ -32,6 +32,22 @@ describe("WAL FULL policy for historical separate fixtures, not shared applicati
     }
   }));
 
+  test("queue tail retains void settlement while callers keep exact payload and error identities", () => disk(async path => {
+    const db = await openWalFixtureDatabase(path);
+    const queue = db as unknown as { readonly tail: Promise<void> };
+    try {
+      const failure = new Error("queue rejection probe");
+      await expect(db.transaction(async () => { throw failure; })).rejects.toBe(failure);
+      expect(await queue.tail).toBeUndefined();
+
+      const payload = { marker: "queue payload" };
+      expect(await db.transaction(async () => payload)).toBe(payload);
+      expect(await queue.tail).toBeUndefined();
+      await db.close();
+      expect(await queue.tail).toBeUndefined();
+    } finally { await db.close(); }
+  }));
+
   test("standalone candidate file verifies WAL and FULL on every open; public transaction rollback remains intact", () => disk(async path => {
     const first = await openWalFixtureDatabase(path);
     try {
