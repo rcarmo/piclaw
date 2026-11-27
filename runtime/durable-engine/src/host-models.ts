@@ -260,7 +260,7 @@ export function createHostModels(
     const snapshot = freeze(data(physical));
     const {cost:_observationalCost,...capabilities}=snapshot;
     const frame = JSON.stringify(capabilities);
-    const transcript = normalizeHostContext({ messages: data(context.messages) });
+    const transcript = normalizeHostContext({ messages: copyJsonData(context.messages) });
     const result = await awaitWithContext(Promise.resolve().then(() => {
       signal.throwIfAborted();
       return policy.previewRequest!(snapshot, transcript, { ...safe, signal });
