@@ -58,7 +58,7 @@ export interface CapturedRunSource {
   readonly operation: Pick<OperationSnapshot, "operationId" | "chatJid" | "primarySourceSeq" | "harness"> & Partial<OperationSnapshot>;
   /** Public SDK run identity and its invocation lifetime; no host phase or queue. */
   readonly native?: { readonly taskId: TaskId; assertCurrent(): void };
-  readonly delegateModel?: { provider: string; modelId: string };
+  readonly delegateModel?: { provider: string; modelId: string; parent: { provider: string; modelId: string } };
   readonly sourceModel?: { provider: string; id: string; api: string };
 }
 export interface NativeMessageResult {
@@ -1842,7 +1842,12 @@ export class HostConversationRuntime {
         if (!model) throw Error("Delegate model required");
         return { ...owner, callId: input.callId, model: Object.freeze({ ...model }) };
       }, this.context); this.fence();
-      if (owned) return { ...await this.captureSource(owned.conversationId, owned.taskId, owned.callId, executionSignal), delegateModel: owned.model, sourceModel };
+      if (owned) {
+        const parent = await this.captureSource(owned.conversationId, owned.taskId, owned.callId, executionSignal);
+        if (!parent.sourceModel) throw Error("Delegate parent model required");
+        return { ...parent, delegateModel: { ...owned.model,
+          parent: { provider: parent.sourceModel.provider, modelId: parent.sourceModel.id } }, sourceModel };
+      }
       const inputs: HostInputBinding[] = [];
       let operation: OperationSnapshot | undefined;
       let direct = false;

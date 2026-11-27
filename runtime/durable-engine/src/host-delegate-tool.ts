@@ -2,6 +2,7 @@ import { AssistantEntry, configure, defineTool, type ModelRef, type ToolRegistra
 import { watchNativeDelegateProgress } from "./host-delegate-progress.js";
 import { validateDelegateFiles } from "./host-delegate-files.js";
 import { delegateDescription, delegateParameters } from "../../src/delegate/parameters.js";
+import { isDelegateModelId } from "../../src/delegate/policy.js";
 import { toolCallSummary } from "../../src/tool-call-summary.js";
 import { summariseDelegateCall } from "../../src/delegate/tool-summary.js";
 import type { Static } from "typebox";
@@ -14,12 +15,12 @@ import type { HostConversationRuntime } from "./host-runtime.js";
 export function createHostDelegateTool(options: {
   assertCurrent(): void;
   runtime(): Pick<HostConversationRuntime, "captureToolSource" | "assertCapturedSourceCurrent" | "watchOwnedDelegateChild">;
-  /** Must use current host availability AND the real Delegate Settings approval
-   * and ordered classification policy; never grants permission via arguments. */
+  /** Select against current host availability and Delegate Settings. */
   selectModel(args: Readonly<Record<string, unknown>>, parent: ModelRef | undefined): Promise<ModelRef>;
+  invalidModelError?(parent: ModelRef | undefined): Error;
   /** Rechecked before child creation and after settlement. */
-  assertModelCurrent(model: ModelRef): void;
-  modelSupportsImages?(model: ModelRef): boolean;
+  assertModelCurrent(model: ModelRef, parent: ModelRef | undefined): void;
+  modelSupportsImages?(model: ModelRef, parent: ModelRef | undefined): boolean;
   readFiles?(files: readonly string[], assertAllowed: () => void, options?: { modelSupportsImages: boolean }): Promise<readonly (TextContent | ImageContent)[]>;
   readonlyTools: readonly ToolRegistration[];
   /** Installed, hook-free read-only capability extensions only. */
@@ -59,11 +60,6 @@ export function createHostDelegateTool(options: {
       const supported = ["prompt", "model", "tools", "task_category", "system_prompt", "files", "timeout_sec"];
       if (Object.keys(args).some(key => !supported.includes(key))) throw Error("Unsupported native Delegate option");
       if (typeof args.prompt !== "string" || !args.prompt.trim()) throw Error("Delegate prompt required");
-      if (args.model !== undefined) {
-        if (typeof args.model !== "string") throw Error("Delegate model must be an exact provider/model ID");
-        const slash = args.model.indexOf("/");
-        if (slash <= 0 || slash === args.model.length - 1) throw Error("Delegate model must be an exact provider/model ID");
-      }
       // Recheck the public declaration's defaults/bounds before allocating a child.
       if (args.files !== undefined) {
         validateDelegateFiles(args.files);
@@ -85,9 +81,16 @@ export function createHostDelegateTool(options: {
       const timeoutError = () => Error(`Delegate timed out after ${timeout}s`);
       const captured = await runtime().captureToolSource(api.conversationId, api.taskId, api.callId);
       const parent = await api.agent(context);
-      const proposed = await selectModel(args, parent.model);
+      const source = captured.sourceModel;
+      const parentModel = source ? { provider: source.provider, modelId: source.id } : parent.model;
+      const checkSource = () => { assertCurrent(); runtime().assertCapturedSourceCurrent(captured.inputs); };
+      if (args.model !== undefined && !isDelegateModelId(args.model)) {
+        checkSource();
+        throw options.invalidModelError?.(parentModel) ?? Error("Delegate model must be an exact provider/model ID");
+      }
+      const proposed = await selectModel(args, parentModel).catch(error => { checkSource(); throw error; });
       const model = await api.memo("model", proposed, context);
-      const check = () => { assertCurrent(); runtime().assertCapturedSourceCurrent(captured.inputs); assertModelCurrent(model); };
+      const check = () => { checkSource(); assertModelCurrent(model, parentModel); };
       check();
       const requestId = `delegate:${api.taskId}`;
       // Reconcile accepted work before touching files. Public SDK request-ID
@@ -103,10 +106,10 @@ export function createHostDelegateTool(options: {
       let content: string | (TextContent | ImageContent)[] = args.prompt;
       if (!owned?.submission && Array.isArray(args.files) && args.files.length) {
         assertReadAllowed();
-        const modelSupportsImages = options.modelSupportsImages?.(model) === true;
+        const modelSupportsImages = options.modelSupportsImages?.(model, parentModel) === true;
         const guard = () => {
           assertReadAllowed();
-          if (modelSupportsImages && options.modelSupportsImages?.(model) !== true) throw Error("Delegate attachment unavailable");
+          if (modelSupportsImages && options.modelSupportsImages?.(model, parentModel) !== true) throw Error("Delegate attachment unavailable");
         };
         let attachments: readonly (TextContent | ImageContent)[];
         try { attachments = await readFiles!(args.files as string[], guard, { modelSupportsImages }); }

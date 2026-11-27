@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "sourceParent": "54f13518bf3d47fd554c3e104a52a13f26e35baa",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlay": "docs/development/receipts/delegate-selection-retention-overlay.json",
+  "previousOverlaySha256": "7ed4dc25fdb89bb903eb38f7e03d6bdd682a64dde35738108fa57396ee3a3f32",
+  "scope": "Delegate selection error guidance only; original paths, deletions and retirement accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/default-application-runtime.ts",
+      "beforeSha256": "09cb74413d159c4e264a9635e85b6020ed58c895883a837726191ff189dc090e",
+      "afterSha256": "609f6fcacdb6fe41296011bc7578418b6806aac0b87f25662effe3b0ed919536",
+      "purpose": "Give the calling agent exact retryable model IDs and distinguish saved approvals that are currently unavailable."
+    }
+  ]
+}
