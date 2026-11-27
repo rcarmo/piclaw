@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { Database } from 'bun:sqlite';
+import { createNativeTurnView } from '../../src/channels/web/agent/native-turn-view.js';
 import { join } from 'node:path';
 import { chromium, type Browser } from 'playwright';
 import { formatToolTitle } from '../../src/channels/web/agent/agent-utils.js';
@@ -257,6 +259,44 @@ browserTest('live turn shows elapsed work and streamed text, discloses running t
   } finally {
     await page.close();
   }
+}, 20000);
+
+browserTest('committed reasoning and the current native preview each appear once in Working', async () => {
+  using database = new Database(':memory:');
+  database.exec(`CREATE TABLE piclaw_durable_bindings_v1(operation_id,source_id,chat_jid,conversation_id,submission_id);
+    CREATE TABLE piclaw_durable_intent_bindings_v1(operation_id,chat_jid,conversation_id,submission_id);
+    CREATE TABLE messages(id,chat_jid,thread_id);
+    INSERT INTO messages VALUES('input','web:fixture',NULL);
+    INSERT INTO piclaw_durable_bindings_v1 VALUES('op','input','web:fixture',2,3);`);
+  let thought = '', draft = '', status: Record<string, unknown> = {};
+  const render = createNativeTurnView(database, {
+    broadcastEvent() {}, updateAgentStatus(_chat, value) { status = value; },
+    updateThoughtBuffer(_turn, text) { thought = text; }, updateDraftBuffer(_turn, text) { draft = text; },
+  }, 'web:fixture');
+  // The committed SDK entry is also the first step returned by the live activity endpoint.
+  render({ conversation: { id: 2 }, entries: [
+    { id: 19, kind: 'host.accepted', data: { operationId: 'op' } },
+    { id: 20, kind: 'pi.assistant', model: [{ role: 'assistant', content: [{ type: 'thinking', thinking: liveActivity.steps[0]!.text }] }] },
+  ], docs: { 'pi.live': { run: { taskId: 4, inputs: [3] }, generation: { message: { content: [
+    { type: 'thinking', thinking: 'Check the scan results next.' }, { type: 'text', text: 'Here is the draft reply.' },
+  ] } } } } });
+  const page = await browser.newPage({ viewport: { width: 1000, height: 700 } });
+  const base = `http://127.0.0.1:${server.port}`;
+  await page.route('**/*', route => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
+  try {
+    await page.goto(base);
+    await page.waitForFunction(() => Boolean((window as any).turnActivityFixture));
+    await page.evaluate(value => (window as any).turnActivityFixture.live(value), {
+      status: { ...status, phase: 'thinking' }, thought, draft, turnId: 'durable:1',
+    });
+    const live = page.locator('.turn-activity-live');
+    const header = live.locator('.turn-activity-header');
+    if (await header.getAttribute('aria-expanded') === 'false') await header.click();
+    await live.locator('.turn-activity-tool', { hasText: 'bash: long scan' }).waitFor();
+    expect(await live.getByText('Scan the workspace first.').count()).toBe(1);
+    expect(await live.locator('.turn-activity-live-thinking').innerText()).toBe('Check the scan results next.');
+    expect(await live.locator('.turn-activity-live-draft').innerText()).toBe('Here is the draft reply.');
+  } finally { await page.close(); }
 }, 20000);
 
 browserTest('working age survives tab reload, component remount and phase changes using the turn start', async () => {

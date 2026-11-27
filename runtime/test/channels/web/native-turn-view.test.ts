@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { parseStatusRetryAt, getStatusRetryCountdownLabel } from "../../../web/src/ui/status-duration.js";
 import { createNativeTurnView } from "../../../src/channels/web/agent/native-turn-view.js";
+import { projectTurnActivity } from "../../../src/channels/web/agent/turn-activity.js";
 
 test("public conversation frames feed existing thought, draft and nested tool UI events", () => {
   const database = new Database(":memory:");
@@ -30,7 +31,7 @@ test("public conversation frames feed existing thought, draft and nested tool UI
 });
 
 
-test("coalesced completed entries recover thoughts and final tool output without clearing the pane", () => {
+test("committed reasoning appears only in activity while the live preview follows the current generation", () => {
   const database = new Database(":memory:");
   try {
     database.exec(`CREATE TABLE piclaw_durable_bindings_v1(operation_id,source_seq,source_id,chat_jid,conversation_id,submission_id);
@@ -39,19 +40,39 @@ test("coalesced completed entries recover thoughts and final tool output without
       INSERT INTO service_effect_s01_operations VALUES('op',1); INSERT INTO messages VALUES('input','chat',NULL);
       INSERT INTO piclaw_durable_bindings_v1 VALUES('op',1,'input','chat',2,3);`);
     const events: any[] = [];
-    const render = createNativeTurnView(database, { broadcastEvent(event, data) { events.push({event,data}); } }, "chat");
-    const view: any = { conversation: {id:2}, entries: [
-      {kind:"host.accepted",data:{operationId:"op"}},
-      {kind:"pi.assistant",model:[{role:"assistant",content:[{type:"thinking",thinking:"Recorded public thought"},{type:"toolCall",id:"call",name:"bash",arguments:{command:"printf pane-proof"}}]}]},
-      {kind:"pi.tool-result",model:[{role:"toolResult",toolCallId:"call",toolName:"bash",content:[{type:"text",text:"pane-proof"}]}]}
-    ], docs:{"pi.live":{run:{taskId:4,inputs:[3]},generation:{attempt:0}}}};
+    const buffers: string[] = [];
+    const render = createNativeTurnView(database, {
+      broadcastEvent(event, data) { events.push({event,data}); },
+      updateThoughtBuffer(_turn, text) { buffers.push(text); },
+    }, "chat");
+    const prior = {role:"assistant",content:[{type:"thinking",thinking:"Recorded public thought"}]};
+    const view: any = { conversation: {id:2}, entries: [{id:1,kind:"host.accepted",data:{operationId:"op"}}],
+      docs:{"pi.live":{run:{taskId:4,inputs:[3]},generation:{attempt:0,message:prior}}}};
     render(view);
-    expect(events.some(e => e.event === "agent_thought" && e.data.text === "Recorded public thought")).toBe(true);
+    expect(buffers).toEqual(["Recorded public thought"]);
+    view.entries.push(
+      {id:2,kind:"pi.assistant",model:[{...prior,content:[...prior.content,{type:"toolCall",id:"call",name:"bash",arguments:{command:"printf pane-proof"}}]}]},
+      {id:3,kind:"pi.tool-result",model:[{role:"toolResult",toolCallId:"call",toolName:"bash",content:[{type:"text",text:"pane-proof"}]}]}
+    );
+    view.docs["pi.live"].generation={attempt:0};
+    render(view);
+    expect(buffers.at(-1)).toBe("");
+    expect(events.filter(e => e.event === "agent_thought_delta").at(-1).data).toMatchObject({delta:"",reset:true,text:""});
+    const committed = projectTurnActivity({entries:view.entries,tasks:{}}, null, {commentary:false});
+    expect(committed.steps.filter(step => step.kind === "thinking")).toEqual([
+      {id:"thinking:2:0",kind:"thinking",text:"Recorded public thought",chars:23},
+    ]);
     const statuses = events.filter(e => e.event === "agent_status");
     expect(statuses.at(-1).data.tool_name).toBe("bash");
     expect(statuses.at(-1).data.tool_args).toEqual({command:"printf pane-proof"});
     expect(statuses.at(-1).data.output_preview).toBe("pane-proof");
     expect(statuses.at(-1).data.last_activity).toBe(true);
+    view.docs["pi.live"].generation={attempt:0,message:{role:"assistant",content:[
+      {type:"thinking",thinking:"Current reasoning"},{type:"text",text:"Current reply draft"},
+    ]}};
+    render(view);
+    expect(buffers).toEqual(["Recorded public thought","","Current reasoning"]);
+    expect(events.filter(e => e.event === "agent_draft").at(-1).data.text).toBe("Current reply draft");
     const size = events.length;
     render(view);
     expect(events.length).toBe(size);

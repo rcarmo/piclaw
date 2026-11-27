@@ -21,7 +21,7 @@ export interface NativeTurnViewChannel {
 }
 export function createNativeTurnView(database: Database, channel: NativeTurnViewChannel, chat: string) {
   let runId: number | undefined, base: Record<string, unknown> | undefined;
-  let thought = "", draft = "", completedThought = "", completedDraft = "", partialThought = "", partialDraft = "";
+  let thought = "", draft = "", completedDraft = "", partialDraft = "";
   let operationId = "", lastTool: Record<string, unknown> | undefined;
   const tools = new Map<string, { signature: string; output: string; payload: Record<string, unknown> }>();
   const delegates = new Map<string, ReturnType<typeof readNativeDelegateProgress>>();
@@ -77,7 +77,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
       runId = undefined; operationId = ""; optimizerFrontier = 0; titles.clear();
       // The buffer store owns expand/readback. This projection has no further
       // use for the previous turn's full strings, signatures or tool payloads.
-      thought = draft = completedThought = completedDraft = partialThought = partialDraft = "";
+      thought = draft = completedDraft = partialDraft = "";
       lastTool = undefined; tools.clear(); delegates.clear();
       if (live.compactions?.length) {
         base = undefined;
@@ -103,7 +103,7 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
         thread_id: input.thread_id ?? input.rowid,
         operation_id: input.operation_id.startsWith("native-message:") ? `sdk-run:${view.conversation.id}:${live.run.inputs[0]}` : input.operation_id,
         source: "durable_runtime", ...(startedAt !== undefined ? { started_at: new Date(startedAt).toISOString() } : {}) };
-      thought = draft = completedThought = completedDraft = partialThought = partialDraft = lastStatus = ""; tools.clear(); delegates.clear(); titles.clear();
+      thought = draft = completedDraft = partialDraft = lastStatus = ""; tools.clear(); delegates.clear(); titles.clear();
       status({ type: "thinking", title: "Thinking...", phase: "thinking" });
     }
     const message = live.generation?.message;
@@ -120,10 +120,11 @@ export function createNativeTurnView(database: Database, channel: NativeTurnView
     const messages = runEntries.flatMap((entry: any) => entry.model ?? []);
     const assistants = messages.filter((item: any) => item.role === "assistant");
     const textFor = (item: any, kind: string) => (item?.content ?? []).filter((block: any) => block.type === kind).map((block: any) => block[kind === "thinking" ? "thinking" : "text"] ?? "").join(kind === "thinking" ? "\n" : "");
-    completedThought = assistants.map((item: any) => textFor(item, "thinking")).filter(Boolean).join("\n\n");
     completedDraft = assistants.map((item: any) => textFor(item, "text")).filter(Boolean).join("\n\n");
-    partialThought = textFor(message, "thinking"); partialDraft = textFor(message, "text");
-    panel("thought", [completedThought, partialThought].filter(Boolean).join("\n\n"));
+    partialDraft = textFor(message, "text");
+    // The activity log owns committed thinking. The live preview only owns
+    // the current generation, including a reset when it commits or retries.
+    panel("thought", textFor(message, "thinking"));
     panel("draft", [completedDraft, partialDraft].filter(Boolean).join("\n\n"));
     const calls = new Map(messages.flatMap((item: any) => item.content ?? []).filter((block: any) => block.type === "toolCall").map((block: any) => [block.id, block]));
     const results = messages.filter((item: any) => item.role === "toolResult");
