@@ -72,6 +72,15 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     backend=await createDefaultApplicationRuntime(lock,async()=>services);
     pool=new AgentPool({credentialStore:credentials,modelRuntime:host,modelRegistry:services.modelRegistry,...backend.sessionOptions} as any);
     const bound=backend.bind({queue:base.queue,agentPool:pool});channel=new WebChannel(bound);
+    const dispatch = channel.dispatchAcceptedInput!.bind(channel);
+    channel.dispatchAcceptedInput = async (chat, id, row, mode) => {
+      const prepared = database.query(`SELECT b.submission_id,s.state FROM service_effect_s01_sources s
+        JOIN piclaw_durable_bindings_v1 b ON b.chat_jid=s.chat_jid AND b.source_seq=s.source_seq
+        WHERE s.chat_jid=? AND s.source_id=?`).get(chat,id);
+      expect(prepared).toEqual({submission_id:null,state:'pending'});
+      expect(database.query('SELECT id FROM submissions WHERE request_id=?').get(`message:${row}:${id}`)).toBeNull();
+      return dispatch(chat,id,row,mode);
+    };
     const broadcast = channel.broadcastEvent.bind(channel);
     channel.broadcastEvent = (event, data) => {
       if (event === 'agent_followup_queued') queuedEvents.push(data as Record<string, unknown>);
@@ -88,6 +97,17 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
       const response=await handleAgentMessage(channel!,request,"/agent/default/message","web:default","default");
       expect(response.status).toBe(201);return response.json() as Promise<any>;
     };
+    database.exec("CREATE TEMP TRIGGER prebind_fault BEFORE INSERT ON piclaw_durable_bindings_v1 BEGIN SELECT RAISE(ABORT,'synthetic prebind write fault'); END");
+    const refused=await handleAgentMessage(channel,new Request('https://fixture/agent/default/message',{
+      method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({content:'Atomic correlation rollback'})
+    }),'/agent/default/message','web:default','default');
+    database.exec('DROP TRIGGER prebind_fault');
+    expect(refused.status).toBe(503);
+    expect(await refused.json()).toEqual({error:'Message admission could not be confirmed.'});
+    expect(database.query('SELECT count(*) n FROM messages WHERE is_bot_message=0').get()).toEqual({n:0});
+    expect(database.query('SELECT count(*) n FROM service_effect_s01_sources').get()).toEqual({n:0});
+    expect(database.query('SELECT count(*) n FROM piclaw_durable_bindings_v1').get()).toEqual({n:0});
+    expect(calls).toBe(0);
     const primary=await send("primary instruction");await entered.promise;
     // Fault ONLY the secondary Root correlation ACK, after real SDK admission.
     // It must not turn accepted input into an HTTP failure, timeline item or lost reply.

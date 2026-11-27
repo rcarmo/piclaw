@@ -42,6 +42,7 @@ type Row = { conversation_id: ConversationId; chat_jid: string; branch_id: strin
  * The owner callback must fence this whole store; no distributed atomicity is claimed. */
 export function createHostDurableBindings(db: Database, options: HostBindingOptions): HostDurableBindings & {
   findSource(chatJid: string, sourceSeq: number): Promise<HostInputBinding | null>;
+  bindNativeMessageInTransaction(input: AcceptedInput, content: string, transactionDatabase: Database): void;
   resolveConversation(input: AcceptedInput): ConversationId | undefined;
 } {
   const domain = identity(options.domain), incarnation = identity(options.incarnation);
@@ -146,12 +147,26 @@ export function createHostDurableBindings(db: Database, options: HostBindingOpti
           /^background:[0-9a-f]{64}$/.test(source.source_id)&&resolveBackground?.(i)===i.conversationId) ||
         source.payload_ref !== source.source_id || i.requestId !== source.source_id))) throw new Error("Unverified host source");
   }
+  function verifyContent(i: AcceptedInput, content: string) {
+    if (typeof content !== "string" || hashCanonicalRequest({ type: "input", requestId: i.requestId, content }) !== i.requestHash)
+      throw new Error("Host payload hash conflict");
+  }
+  function writeBinding(i: AcceptedInput) {
+    assertOwner(); verifySource(i);
+    if (db.query(`SELECT 1 FROM ${otherTable} WHERE domain=? AND incarnation=? AND ((conversation_id=? AND request_id=?) OR (chat_jid=? AND source_seq=?))`)
+      .get(domain, incarnation, i.conversationId, i.requestId, i.chatJid, i.sourceSeq)) throw conflict();
+    db.query(`INSERT OR IGNORE INTO ${table}
+      (domain,incarnation,conversation_id,chat_jid,branch_id,operation_id,source_seq,source_id,payload_ref,request_id,request_hash)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(domain, incarnation, i.conversationId, i.chatJid, i.branchId,
+        i.operationId, i.sourceSeq, i.sourceId, i.payloadRef, i.requestId, i.requestHash);
+    const bound = read(i);
+    if (!bound) throw conflict();
+    assertOwner(); return bound;
+  }
   async function bindContent(i: AcceptedInput) {
     assertOwner(); verifySource(i); read(i); assertOwner();
     const content = await resolveContent(i.payloadRef, i);
-    assertOwner();
-    if (typeof content !== "string" || hashCanonicalRequest({ type: "input", requestId: i.requestId, content }) !== i.requestHash)
-      throw new Error("Host payload hash conflict");
+    assertOwner(); verifyContent(i, content);
     // Reconciliation is a read when the immutable correlation already exists.
     // Taking BEGIN IMMEDIATE here contends with the SDK's committing writer,
     // even though no host state would change, and can strand a completed reply.
@@ -162,18 +177,7 @@ export function createHostDurableBindings(db: Database, options: HostBindingOpti
         .get(domain, incarnation, i.conversationId, i.requestId, i.chatJid, i.sourceSeq)) throw conflict();
       assertOwner(); return { binding: existing, content };
     }
-    const binding = await admitSqliteWrite(db, () => {
-      assertOwner(); verifySource(i);
-      if (db.query(`SELECT 1 FROM ${otherTable} WHERE domain=? AND incarnation=? AND ((conversation_id=? AND request_id=?) OR (chat_jid=? AND source_seq=?))`)
-        .get(domain, incarnation, i.conversationId, i.requestId, i.chatJid, i.sourceSeq)) throw conflict();
-      db.query(`INSERT OR IGNORE INTO ${table}
-        (domain,incarnation,conversation_id,chat_jid,branch_id,operation_id,source_seq,source_id,payload_ref,request_id,request_hash)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(domain, incarnation, i.conversationId, i.chatJid, i.branchId,
-          i.operationId, i.sourceSeq, i.sourceId, i.payloadRef, i.requestId, i.requestHash);
-      const bound = read(i);
-      if (!bound) throw conflict();
-      assertOwner(); return bound;
-    }, assertOwner);
+    const binding = await admitSqliteWrite(db, () => writeBinding(i), assertOwner);
     return { binding, content };
   }
   function prepareSubmission(input: AcceptedInput, submissionId: SubmissionId): AcceptedInput {
@@ -218,6 +222,13 @@ export function createHostDurableBindings(db: Database, options: HostBindingOpti
     },
     async bind(input: AcceptedInput) { const i = capture(input); return (await bindContent(i)).binding; },
     async getOrBind(input: AcceptedInput) { const i = capture(input); return { content: (await bindContent(i)).content }; },
+    /** Correlation only. The caller's Root transaction owns the message and accepted source. */
+    bindNativeMessageInTransaction(input: AcceptedInput, content: string, transactionDatabase: Database): void {
+      if (intent || transactionDatabase !== db || !db.inTransaction || !isNativeMessageInput(input)) throw conflict();
+      const i = capture(input);
+      verifyContent(i, content);
+      writeBinding(i);
+    },
     async recordSubmission(input: AcceptedInput, submissionId: SubmissionId) {
       const i = prepareSubmission(input, submissionId);
       await admitSqliteWrite(db, () => applySubmission(i, submissionId), assertOwner);

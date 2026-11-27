@@ -294,7 +294,9 @@ for (const scoped of [false, true]) test(`controller adopts one checkpointed man
   const forbidden = async () => { throw Error("No accepted operation expected"); };
   const work = { listOpenOperations: async () => ({ ok: true, value: [] }), getOperation: forbidden, getSourceBySeq: forbidden,
     getQueuedInputIntent: forbidden, acceptCancellation: forbidden, bindHarness: forbidden } as any;
-  const bindings = { findSource: forbidden, get: forbidden, bind: forbidden, getOrBind: forbidden, recordSubmission: forbidden, intents: { get: forbidden, bind: forbidden, getOrBind: forbidden, recordSubmission: forbidden, list: forbidden } };
+  const bindings = { findSource: forbidden, get: forbidden, bind: forbidden, getOrBind: forbidden, recordSubmission: forbidden,
+    bindNativeMessageInTransaction() { throw Error("No native message admission expected"); },
+    intents: { get: forbidden, bind: forbidden, getOrBind: forbidden, recordSubmission: forbidden, list: forbidden } };
   const binding = { chatJid: "web:recovered", branchId: "main", conversationId: id };
   let controller: Awaited<ReturnType<typeof createHostController>> | undefined;
   try {
