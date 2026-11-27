@@ -15,7 +15,7 @@ function fixture() {
 test("five context projections retain exact own keys and allocation policy", () => {
   const { contexts } = fixture();
   const shapes = {
-    agentStatus: ["defaultChatJid", "json", "getAgentStatus", "getExtensionWorkingState", "getBuffer", "getContextUsageForChat", "getSessionTreeSummaryForChat", "getTokenUsageForChat", "getChatActivitySummaries", "getAvailableModels", "getProviderReadyCompletedForInstance"],
+    agentStatus: ["defaultChatJid", "json", "getAgentStatus", "getExtensionWorkingState", "getBuffer", "getContextRevisionForChat", "getContextUsageForChat", "getSessionTreeSummaryForChat", "getTokenUsageForChat", "getChatActivitySummaries", "getAvailableModels", "getProviderReadyCompletedForInstance"],
     content: ["defaultChatJid", "hiddenNativeRows", "json", "getBuffer", "getIdentity"],
     ui: ["json", "getWorkspaceVisible", "setWorkspaceVisible", "getWorkspaceShowHidden", "setWorkspaceShowHidden", "setPanelExpanded", "handleUiResponse"],
     agents: ["agentPool", "defaultChatJid", "defaultAgentId", "agentName", "agentAvatar", "userName", "userAvatar", "userAvatarBackground", "json"],
@@ -53,6 +53,28 @@ test("context creation stays lazy and cached callbacks preserve live owners/defa
   expect(ui.getWorkspaceVisible()).toBe(true);
   expect(contexts.content()).toBe(content);
   expect(() => contexts.agentStatus()).toThrow("pool is not ready");
+});
+
+test("cached context reads revision from the current pool receiver without a full context read", async () => {
+  const { channel, contexts } = fixture();
+  const context = contexts.agentStatus();
+  const revision = "current-revision";
+  let fullContextReads = 0;
+  const latestPool = {
+    async getContextRevisionForChat(chatJid: string) {
+      expect(this).toBe(latestPool);
+      expect(chatJid).toBe("web:exact-chat-jid");
+      return revision;
+    },
+    async getContextUsageForChat() {
+      fullContextReads++;
+      throw new Error("revision must not read full context");
+    },
+  };
+  channel.agentPool = latestPool;
+  await expect(context.getContextRevisionForChat!("web:exact-chat-jid")).resolves.toBe(revision);
+  expect(fullContextReads).toBe(0);
+  expect(contexts.agentStatus()).toBe(context);
 });
 
 test("optional summary presence remains captured at context creation but its owner stays live", async () => {
