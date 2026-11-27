@@ -26,7 +26,11 @@ const correlation=JSON.parse(correlationBytes.toString('utf8'));
 const contextPath='docs/development/receipts/native-context-rss-retention-overlay.json';
 const contextBytes=readFileSync(resolve(root,contextPath));
 const context=JSON.parse(contextBytes.toString('utf8'));
-const scopedContext=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/scoped-context-rss-retention-overlay.json'),'utf8'));
+const scopedContextPath='docs/development/receipts/scoped-context-rss-retention-overlay.json';
+const scopedContextBytes=readFileSync(resolve(root,scopedContextPath));
+const scopedContext=JSON.parse(scopedContextBytes.toString('utf8'));
+const modelDemandPath='docs/development/receipts/model-demand-rss-retention-overlay.json';
+const modelDemand=JSON.parse(readFileSync(resolve(root,modelDemandPath),'utf8'));
 const sha=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
 test('removal/retention witness binds every original Core path through explicit later source transformations',()=>{
  expect(sha(manifestBytes)).toBe(overlay.baseManifestSha256);
@@ -75,7 +79,27 @@ test('removal/retention witness binds every original Core path through explicit 
   'runtime/src/channels/web/endpoints/channel-endpoint-context-factory.ts',
   'runtime/web/src/api.ts',
  ]);
- const layers=[overlay,removal,mcpAudit,a2ui,delegate,rss,output,correlation,context,scopedContext].map(layer=>{
+ expect(modelDemand.sourceParent).toBe('9689ff533cfe6264580b7abf8b91eb7f507433e7');
+ expect(modelDemand.baseManifest).toBe('docs/development/receipts/expense-final-retention-1875.json');
+ expect(modelDemand.baseManifestSha256).toBe('9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac');
+ expect(modelDemand.previousOverlay).toBe(scopedContextPath);
+ expect(modelDemand.previousOverlaySha256).toBe(sha(scopedContextBytes));
+ expect(sha(scopedContextBytes)).toBe('aab3e25a6c5efaa7c52a86a0d995a23a990a18d6b236a54bd941a27eebb4ddc9');
+ expect(modelDemand.rows).toEqual([
+  {
+   path:'runtime/durable-engine/src/host-runtime.ts',
+   beforeSha256:'713e5f92c88100d88d5b761e33e55b94eafbe302c1ec70ef44e5bd69b13cc844',
+   afterSha256:'addd0115b08378c5ae93a9d27ba837aed7311847fdea2a5f56771a1e0f56a490',
+   purpose:'Read the persisted agent model reference with the committed tail so passive context usage and revision reads avoid composing the full agent loadout.',
+  },
+  {
+   path:'runtime/web/src/api.ts',
+   beforeSha256:'c53d0ce67648f2968d594db0a9cc739989ed9154ff5a83ba8aeff0fddcba6039',
+   afterSha256:'f64dbcd712f6acb0535201e3f0c9ac9702e23d628ddf32f7f9572a110d6c59c1',
+   purpose:'Fence periodic Classic context polling to its current visible scope and reuse a successful full snapshot when its context revision still matches.',
+  },
+ ]);
+ const layers=[overlay,removal,mcpAudit,a2ui,delegate,rss,output,correlation,context,scopedContext,modelDemand].map(layer=>{
   expect(layer.version).toBe(1);
   const rows=new Map<string,{beforeSha256:string;afterSha256:string;purpose:string}>(layer.rows.map((row:any)=>[row.path,row]));
   expect(rows.size).toBe(layer.rows.length);
