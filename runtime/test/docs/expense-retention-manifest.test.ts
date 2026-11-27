@@ -45,7 +45,12 @@ const selection=JSON.parse(selectionBytes.toString('utf8'));
 const guidancePath='docs/development/receipts/delegate-selection-guidance-retention-overlay.json';
 const guidanceBytes=readFileSync(resolve(root,guidancePath));
 const guidance=JSON.parse(guidanceBytes.toString('utf8'));
-const delegateMerge=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/context-demand-delegate-merge-overlay.json'),'utf8'));
+const delegateMergePath='docs/development/receipts/context-demand-delegate-merge-overlay.json';
+const delegateMergeBytes=readFileSync(resolve(root,delegateMergePath));
+const delegateMerge=JSON.parse(delegateMergeBytes.toString('utf8'));
+const ownedPath='docs/development/receipts/codex-owned-response-retention-overlay.json';
+const ownedBytes=readFileSync(resolve(root,ownedPath));
+const owned=JSON.parse(ownedBytes.toString('utf8'));
 const sha=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
 type Change={path:string;beforeSha256:string;afterSha256:string;purpose:string};
 test('removal/retention witness binds every original Core path through explicit later source transformations',()=>{
@@ -157,6 +162,27 @@ test('removal/retention witness binds every original Core path through explicit 
   rss:{commit:'7c82459a9c601d7aa6c5fc72c22e48a3a29b2e54',overlay:mergePath,overlaySha256:sha(mergeBytes)},
   incoming:{commit:'92e2cc0b4a1f23ce0f75f71c07d6707a687e7ed7',overlay:guidancePath,overlaySha256:sha(guidanceBytes)},
  });
+ expect(owned.sourceParent).toBe('6552e82f438187dd9cdbc1df02e7e2a666e932b0');
+ expect(owned.baseManifest).toBe(manifestPath);
+ expect(owned.baseManifestSha256).toBe(sha(manifestBytes));
+ expect(sha(manifestBytes)).toBe('9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac');
+ expect(owned.previousOverlay).toBe(delegateMergePath);
+ expect(owned.previousOverlaySha256).toBe(sha(delegateMergeBytes));
+ expect(sha(delegateMergeBytes)).toBe('9d497d6e167f93b4170ad65bd722bd12c6361130dd89a4f1d31fc3b233796bf0');
+ expect(owned.rows).toEqual([
+  {
+   path:'runtime/durable-engine/src/default-application-runtime.ts',
+   beforeSha256:'609f6fcacdb6fe41296011bc7578418b6806aac0b87f25662effe3b0ed919536',
+   afterSha256:'48158f541586b4273f2300d2483e3e35a14907487abaa1bcff87ae10ce0216d0',
+   purpose:'Capture Codex responses with the dedicated observer clone supplied by the host model service, retaining legacy capture as a fallback.',
+  },
+  {
+   path:'runtime/durable-engine/src/host-extension-catalog.ts',
+   beforeSha256:'708747e48e821f32e6b3db52a729c5e23e626b05a3ccde6c9daf8757bd35686b',
+   afterSha256:'2a4241da41e5bddb18764b76bec6327b735d972de5016f77e07be061fe310b12',
+   purpose:'Approve the 0.2.5 extension successor fingerprints for the package, native provider and owned Codex output observer.',
+  },
+ ]);
  const indexRows=<Row extends Change>(layer:{version:number;rows:Row[]})=>{
   expect(layer.version).toBe(1);
   const rows=new Map(layer.rows.map(row=>[row.path,row] as const));
@@ -170,6 +196,7 @@ test('removal/retention witness binds every original Core path through explicit 
  const delegateLayers=[selection,guidance].map(layer=>indexRows<Change>(layer));
  const mergeRows=indexRows<Change&{incomingSha256:string}>(merge);
  const delegateMergeRows=indexRows<Change&{incomingSha256:string}>(delegateMerge);
+ const ownedRows=indexRows<Change>(owned);
  const advance=(path:string,expected:string,layers:ReadonlyMap<string,Change>[])=>{
   for(const layer of layers){
    const change=layer.get(path);
@@ -184,7 +211,7 @@ test('removal/retention witness binds every original Core path through explicit 
  expect(new Set(manifest.rows.map((r:{repo:string;path:string})=>r.repo+':'+r.path)).size).toBe(105);
  for(const row of manifest.rows){if(row.repo!=='core')continue;const path=resolve(root,row.path);
   if(row.state==='deleted'){
-   expect([...commonLayers,...rssLayers,...a2uiLayers,...delegateLayers,mergeRows,delegateMergeRows].some(layer=>layer.has(row.path))).toBe(false);
+   expect([...commonLayers,...rssLayers,...a2uiLayers,...delegateLayers,mergeRows,delegateMergeRows,ownedRows].some(layer=>layer.has(row.path))).toBe(false);
    expect(existsSync(path),row.path).toBe(false);
   }else{
    // Both merge parents start at their stated common tip, not at each other's tip.
@@ -218,7 +245,7 @@ test('removal/retention witness binds every original Core path through explicit 
      expect(delegateResolution.afterSha256,row.path).not.toBe(incomingTip);
     }
    }
-   mergedTip=advance(row.path,mergedTip,[delegateMergeRows]);
+   mergedTip=advance(row.path,mergedTip,[delegateMergeRows,ownedRows]);
    expect(sha(readFileSync(path)),row.path).toBe(mergedTip);
    expect(row.currentPurpose.length).toBeGreaterThan(20);
   }

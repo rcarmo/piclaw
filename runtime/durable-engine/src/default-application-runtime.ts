@@ -577,8 +577,12 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         });
         beforeEffect(); outputs.set(operation.id, output);
       }
-      try { await output.capture(response); beforeEffect(); }
-      catch (error) { if (output.discardFailedCapture()) outputs.delete(operation.id); throw error; }
+      try {
+        // HostCodexModelServices already supplied a dedicated observer clone.
+        if (typeof output.captureOwned === "function") await output.captureOwned(response);
+        else await output.capture(response);
+        beforeEffect();
+      } catch (error) { if (output.discardFailedCapture()) outputs.delete(operation.id); throw error; }
     },
     async flush(operation) { const output = outputs.get(operation.id); if (output) {
       try { await output.finish(); outputs.delete(operation.id); }
