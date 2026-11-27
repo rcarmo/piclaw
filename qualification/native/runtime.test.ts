@@ -1387,6 +1387,47 @@ test("runtime: native context usage follows committed edits and a reset on the s
   expect(f.base.host.modelCalls).toBe(0);
 }));
 
+test("runtime: passive context revision and token reads skip selected loadout wrappers", () => fixture(async f => {
+  const { defineExtension, wrapSection } = await import("../../runtime/durable-engine/qualification/durable.ts");
+  const id = f.options.existingConversationIds[0]!;
+  const binding = { incarnation: "copy-A", chatJid: "web:runtime", branchId: "existing-main", conversationId: id };
+  const conversation = (await f.runtime.coreExtensionHarness().conversation(id, context))!;
+  const original = f.base.models.getModel("qualification", "synthetic")!;
+  const provider = f.base.models.getProvider(original.provider)!;
+  const alternate = { ...original, id: "passive-context-alternate", contextWindow: 24_000 };
+  const models = [original, alternate];
+  f.base.models.setProvider({ ...provider, getModels: () => models, getAllModels: () => models });
+
+  const key = "context-wrapper-probe";
+  let wraps = 0;
+  const probe = defineExtension({ name: key, sections: [{ key, render: () => "probe" }],
+    // Count composition, not rendering: agent() applies the wrapper while resolving the loadout.
+    wraps: [wrapSection(key, section => { wraps++; return section; })] });
+  f.base.registry.install(probe);
+  await conversation.configure({ extensions: [probe] }, context);
+  const head = await conversation.commit(tx => tx.appendEntry(id, { kind: "pi.user",
+    model: [{ role: "user", content: "abc", timestamp: 1 }] }), context);
+
+  const beforeLoadout = wraps;
+  expect((await f.runtime.readSessionMetadata(binding)).extensions).toContain(probe.name);
+  expect(wraps).toBeGreaterThan(beforeLoadout);
+
+  const readPassive = async (window: number) => {
+    const before = wraps;
+    const revision = await f.runtime.readSessionContextRevision(binding);
+    const afterRevision = wraps;
+    const usage = await f.runtime.readSessionContextUsage(binding);
+    expect({ revision: afterRevision - before, usage: wraps - afterRevision }).toEqual({ revision: 0, usage: 0 });
+    expect(revision).toBe(JSON.stringify([binding.incarnation, id, head.id, window]));
+    expect(usage).toEqual({ tokens: 1, contextWindow: window, revision });
+    return revision;
+  };
+  const revision = await readPassive(original.contextWindow);
+  await f.runtime.setSessionModel(binding, { provider: alternate.provider, modelId: alternate.id });
+  expect(await readPassive(alternate.contextWindow)).not.toBe(revision);
+  expect(f.base.host.transcripts).toEqual([]);
+}));
+
 test("runtime: native context reader fails closed on stale incarnation, binding and mid-read ownership", () => fixture(async f => {
   const binding = { incarnation: "copy-A", chatJid: "web:runtime", branchId: "existing-main", conversationId: f.options.existingConversationIds[0]! };
   expect((await f.runtime.readSessionContextUsage(binding)).contextWindow).toBeGreaterThan(0);

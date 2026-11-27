@@ -546,9 +546,14 @@ export class HostConversationRuntime {
   }
   private async contextUsageBounds(reader: ReturnType<HostConversationRuntime["sessionReader"]>) {
     const conversation = await reader.conversation();
-    const tail = await conversation.commit(tx => tx.latestEntryId(conversation.id), this.context); reader.check();
-    const agent = await conversation.agent(this.context); reader.check();
-    const model = agent.model && currentHarnessModels(this.options.harnessOptions).getModel(agent.model.provider, agent.model.modelId);
+    // Capture the persisted choice with the tail, without resolving the agent loadout.
+    const { tail, modelRef } = await conversation.commit(async tx => {
+      reader.check();
+      const tail = await tx.latestEntryId(conversation.id); reader.check();
+      const { model } = await tx.doc(AgentDoc, conversation.id); reader.check();
+      return { tail, modelRef: model && { provider: model.provider, modelId: model.modelId } };
+    }, this.context); reader.check();
+    const model = modelRef && currentHarnessModels(this.options.harnessOptions).getModel(modelRef.provider, modelRef.modelId);
     const window = model?.contextWindow;
     const contextWindow = typeof window === "number" && Number.isFinite(window) && window > 0 ? window : null;
     const revision = JSON.stringify([reader.binding.incarnation, conversation.id, tail ?? null, contextWindow]);
