@@ -203,7 +203,6 @@ function sanitizeStartupSnapshotLabel(label: string): string {
 }
 
 export function captureStartupMemorySnapshot(
-  agentPool: Pick<AgentPool, "getMemoryInstrumentationSnapshot">,
   options: { label?: string } = {},
 ): string | null {
   try {
@@ -213,7 +212,7 @@ export function captureStartupMemorySnapshot(
     const label = sanitizeStartupSnapshotLabel(options.label || "startup");
     const filePath = join(STARTUP_MEMORY_SNAPSHOT_DIR, `${stamp}_${label}.json`);
     const sampler = new SystemMetricsSampler(1, 2000);
-    const snapshot = sampler.readSnapshot(agentPool.getMemoryInstrumentationSnapshot());
+    const snapshot = sampler.readSnapshot();
     writeFileSync(filePath, `${JSON.stringify({
       captured_at: capturedAt.toISOString(),
       pid: process.pid,
@@ -483,7 +482,7 @@ export async function startWebChannel(
   // warmups/recovery can resume chats that use those transports.
   await initializeWebAddonMessagingRuntime(agentPool, web);
 
-  captureStartupMemorySnapshot(agentPool, { label: "post-web-start" });
+  captureStartupMemorySnapshot({ label: "post-web-start" });
   runWebStartupRecoveryBootstrap(web, (resume) => {
     setTimeout(() => {
       void web.runInternalDispatch(resume).catch((error) => {

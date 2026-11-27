@@ -57,7 +57,7 @@ import {
 } from "./web/agent/agent-status.js";
 import { handleAgentDebugRequest } from "./web/agent/agent-debug.js";
 import { handleAgentCommandsRequest } from "./web/agent/agent-commands.js";
-import { handleSystemMetricsRequest } from "./web/agent/system-metrics.js";
+import { readSystemMetricsSnapshot } from "./web/agent/system-metrics.js";
 import {
   handleTimelineRequest,
   handleHashtagRequest,
@@ -341,8 +341,7 @@ export class WebChannel implements WebChannelLike {
   handleAgentStatus(req: Request): Response | Promise<Response> {
     if (new URL(req.url).searchParams.get("ui") === "1") {
       return handleAgentUiSnapshotRequest(req, this.endpointContexts.agentStatus(), {
-        getSystemMetrics: async () => handleSystemMetricsRequest({ json: (payload, status = 200) => this.json(payload, status),
-          getRuntimeMemorySnapshot: () => this.agentPool.getMemoryInstrumentationSnapshot() }, undefined, null).json(),
+        getSystemMetrics: async () => readSystemMetricsSnapshot(undefined, null),
         getAgentName: () => this.endpointContexts.identity().assistantName,
         getProjectRepository: getChatProject,
       });
@@ -427,10 +426,7 @@ export class WebChannel implements WebChannelLike {
   }
 
   handleSystemMetrics(_req: Request): Response {
-    return handleSystemMetricsRequest({
-      json: (payload, status = 200) => this.json(payload, status),
-      getRuntimeMemorySnapshot: () => this.agentPool.getMemoryInstrumentationSnapshot(),
-    }, undefined, undefined);
+    return this.json(readSystemMetricsSnapshot(), 200);
   }
 
   async handleAgentActiveChats(_req: Request): Promise<Response> {

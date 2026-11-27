@@ -11,7 +11,8 @@ afterEach(() => { for (const restore of restores.splice(0)) restore(); cleanup?.
 async function fixture() {
   const f = await createWebChannelTestFixture({ workspace: "temp", agentPool: {
     listKnownChats: () => [{ chat_jid: "web:branch", agent_name: "Branch" }],
-    getCurrentModelLabel: async () => null, getMemoryInstrumentationSnapshot: () => null,
+    getCurrentModelLabel: async () => null,
+    getMemoryInstrumentationSnapshot: () => { throw Error("Retired pool counters were requested"); },
   } });
   cleanup = f.cleanup;
   Object.defineProperty(f.channel, "endpointFacade", { get() { throw Error("Retired endpoint facade was accessed"); } });
@@ -41,18 +42,30 @@ test("post/reply entry keeps request, target defaults and response identity with
   }
 });
 
-test("UI status keeps partial errors and never renews GPU sampling", async () => {
+test("standalone system metrics serializes the fresh snapshot with status 200", async () => {
+  const f = await fixture(), fresh = { fixture: true } as unknown as metrics.SystemMetricsSnapshot;
+  const reader = spyOn(metrics, "readSystemMetricsSnapshot").mockImplementation((...args) => { expect(args).toEqual([]); return fresh; });
+  const json = spyOn(f.channel, "json");
+  restores.push(() => reader.mockRestore(), () => json.mockRestore());
+  const response = await f.channel.handleRequest(new Request("https://fixture.invalid/agent/system-metrics"));
+  expect(response.status).toBe(200); expect(await response.json()).toEqual(fresh);
+  expect(reader).toHaveBeenCalledTimes(1); expect(json).toHaveBeenCalledTimes(1);
+  expect(json).toHaveBeenCalledWith(fresh, 200);
+});
+
+test("UI status keeps partial errors and never renews GPU sampling or adds another JSON boundary", async () => {
   const f = await fixture(), ctx = f.channel.endpointContexts.agentStatus(), seen: unknown[][] = [];
   ctx.getAvailableModels = async () => { throw Error("unavailable catalogue"); };
   ctx.getContextUsageForChat = async () => ({ tokens: 0, contextWindow: 1000, percent: 0 });
   ctx.getTokenUsageForChat = () => null;
-  const handler = spyOn(metrics, "handleSystemMetricsRequest").mockImplementation((...args) => { seen.push(args); return Response.json({ fixture: true }); });
-  restores.push(() => handler.mockRestore());
+  const handler = spyOn(metrics, "readSystemMetricsSnapshot").mockImplementation((...args) => { seen.push(args); return { fixture: true } as unknown as metrics.SystemMetricsSnapshot; });
+  const json = spyOn(f.channel, "json");
+  restores.push(() => handler.mockRestore(), () => json.mockRestore());
   const response = await f.channel.handleRequest(new Request("https://fixture.invalid/agent/status?ui=1"));
   const body = await response.json();
   expect(response.status).toBe(200); expect(body.model).toBeNull(); expect(body.context.tokens).toBe(0);
   expect(body.metrics).toEqual({ fixture: true }); expect(body.errors).toEqual(["model"]);
-  expect(seen).toHaveLength(1); expect(seen[0]![2]).toBeNull();
+  expect(seen).toEqual([[undefined, null]]); expect(json).toHaveBeenCalledTimes(1);
 });
 
 test("delete preserves default chat, empty/error payloads and broadcasts only actual deletions", async () => {
@@ -84,7 +97,7 @@ test("identity getter retains its options receiver and UI naming stays live afte
   const ctx = contexts.agentStatus();
   ctx.getAvailableModels = () => { entered.resolve(); return models.promise; };
   ctx.getContextUsageForChat = async () => null; ctx.getTokenUsageForChat = () => null;
-  const metric = spyOn(metrics, "handleSystemMetricsRequest").mockImplementation(() => Response.json({}));
+  const metric = spyOn(metrics, "readSystemMetricsSnapshot").mockImplementation(() => ({}) as any);
   restores.push(() => metric.mockRestore());
   const pending = f.channel.handleAgentStatus(new Request("https://fixture.invalid/agent/status?ui=1"));
   try {

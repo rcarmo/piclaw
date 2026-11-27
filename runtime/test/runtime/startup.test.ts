@@ -261,7 +261,7 @@ export {};
         cmd: [
           TEST_SHELL,
           "-lc",
-          "bun -e \"import { captureStartupMemorySnapshot } from './src/runtime/startup.js'; captureStartupMemorySnapshot({ getMemoryInstrumentationSnapshot() { return { cachedMainSessions: 0, cachedSideSessions: 0, activeForkBaseLeaves: 0, activeChats: 0, sessionManager: { createInFlight: 0, branchSeedRealizationsInFlight: 0, invalidDeferredSeedErrors: 0 }, recovery: { attemptsTotal: 0, recoveredRuns: 0, exhaustedRuns: 0 } }; } }, { label: 'post-web-start' });\"",
+          "bun -e \"import { captureStartupMemorySnapshot } from './src/runtime/startup.js'; captureStartupMemorySnapshot({ label: 'post-web-start' });\"",
         ],
         cwd: RUNTIME_DIR,
         env: {
@@ -283,7 +283,7 @@ export {};
       expect(payload.pid).toBeGreaterThan(0);
       expect(payload.label).toBe("post-web-start");
       expect(payload.snapshot.process_memory.rss_bytes).toBeGreaterThan(0);
-      // Stale supplied resident counters cannot fabricate current native data.
+      // Retired resident counters cannot fabricate current native data.
       expect(payload.snapshot.runtime_memory).toBeNull();
     } finally {
       ws.cleanup();
