@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "sourceParent": "fe5da86167ea7b066383ec6c3804a7a13a02fbc7",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlay": "docs/development/receipts/native-input-correlation-retention-overlay.json",
+  "previousOverlaySha256": "0fa0c6ec58b2c934e0fd81dc774f268582a66372ea590b9cbf45e045b1a18fca",
+  "scope": "Native Delegate selection only; original paths, deletions and retirement accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/default-application-runtime.ts",
+      "beforeSha256": "66e68725b02847d140054451812ad984dc6b0aaadfd91f0bff725100890c9e88",
+      "afterSha256": "09cb74413d159c4e264a9635e85b6020ed58c895883a837726191ff189dc090e",
+      "purpose": "Choose an available approved model for unnamed calls and allow only the parent model when the whitelist is empty."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-runtime.ts",
+      "beforeSha256": "506c3f6a0ce9944e733a98c540cdfffcef69540a0af8d8cffc760ae15bf676fd",
+      "afterSha256": "d0ceccbe00bd0107bbf94767633af5b3c19c704962a13f34b3cb026bf3a43686",
+      "purpose": "Carry the exact parent assistant's model identity to child generation, tool and maintenance authority checks."
+    }
+  ]
+}

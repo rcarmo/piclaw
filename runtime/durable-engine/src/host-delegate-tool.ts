@@ -14,12 +14,11 @@ import type { HostConversationRuntime } from "./host-runtime.js";
 export function createHostDelegateTool(options: {
   assertCurrent(): void;
   runtime(): Pick<HostConversationRuntime, "captureToolSource" | "assertCapturedSourceCurrent" | "watchOwnedDelegateChild">;
-  /** Must use current host availability AND the real Delegate Settings approval
-   * and ordered classification policy; never grants permission via arguments. */
+  /** Select against current host availability and Delegate Settings. */
   selectModel(args: Readonly<Record<string, unknown>>, parent: ModelRef | undefined): Promise<ModelRef>;
   /** Rechecked before child creation and after settlement. */
-  assertModelCurrent(model: ModelRef): void;
-  modelSupportsImages?(model: ModelRef): boolean;
+  assertModelCurrent(model: ModelRef, parent: ModelRef | undefined): void;
+  modelSupportsImages?(model: ModelRef, parent: ModelRef | undefined): boolean;
   readFiles?(files: readonly string[], assertAllowed: () => void, options?: { modelSupportsImages: boolean }): Promise<readonly (TextContent | ImageContent)[]>;
   readonlyTools: readonly ToolRegistration[];
   /** Installed, hook-free read-only capability extensions only. */
@@ -85,9 +84,11 @@ export function createHostDelegateTool(options: {
       const timeoutError = () => Error(`Delegate timed out after ${timeout}s`);
       const captured = await runtime().captureToolSource(api.conversationId, api.taskId, api.callId);
       const parent = await api.agent(context);
-      const proposed = await selectModel(args, parent.model);
+      const source = captured.sourceModel;
+      const parentModel = source ? { provider: source.provider, modelId: source.id } : parent.model;
+      const proposed = await selectModel(args, parentModel);
       const model = await api.memo("model", proposed, context);
-      const check = () => { assertCurrent(); runtime().assertCapturedSourceCurrent(captured.inputs); assertModelCurrent(model); };
+      const check = () => { assertCurrent(); runtime().assertCapturedSourceCurrent(captured.inputs); assertModelCurrent(model, parentModel); };
       check();
       const requestId = `delegate:${api.taskId}`;
       // Reconcile accepted work before touching files. Public SDK request-ID
@@ -103,10 +104,10 @@ export function createHostDelegateTool(options: {
       let content: string | (TextContent | ImageContent)[] = args.prompt;
       if (!owned?.submission && Array.isArray(args.files) && args.files.length) {
         assertReadAllowed();
-        const modelSupportsImages = options.modelSupportsImages?.(model) === true;
+        const modelSupportsImages = options.modelSupportsImages?.(model, parentModel) === true;
         const guard = () => {
           assertReadAllowed();
-          if (modelSupportsImages && options.modelSupportsImages?.(model) !== true) throw Error("Delegate attachment unavailable");
+          if (modelSupportsImages && options.modelSupportsImages?.(model, parentModel) !== true) throw Error("Delegate attachment unavailable");
         };
         let attachments: readonly (TextContent | ImageContent)[];
         try { attachments = await readFiles!(args.files as string[], guard, { modelSupportsImages }); }
