@@ -11,8 +11,11 @@ function fixture() {
       CREATE TABLE service_effect_s01_operations(operation_id,primary_source_seq); CREATE TABLE messages(id,chat_jid,thread_id);
     INSERT INTO service_effect_s01_operations VALUES('op',1); INSERT INTO messages VALUES('input','chat',NULL);
     INSERT INTO piclaw_durable_bindings_v1 VALUES('op',1,'input','chat',2,3);`);
-  const events: any[] = [];
-  const render = createNativeTurnView(db, { broadcastEvent(event, data) { if (event === 'agent_status') events.push(data); } }, 'chat');
+  const events: any[] = [], panelEvents: any[] = [], draftBuffers: any[] = [];
+  const render = createNativeTurnView(db, {
+    broadcastEvent(event, data) { if (event === 'agent_status') events.push(data); else if (event === 'agent_draft') panelEvents.push(data); },
+    updateDraftBuffer(turn, text, lines) { draftBuffers.push({ turn, text, lines }); },
+  }, 'chat');
   const entries: any[] = [{ kind: 'host.accepted', data: { operationId: 'op' } }];
   const frame = (live: any) => render({ conversation: { id: 2 }, entries, docs: { 'pi.live': { run: { taskId: 4, inputs: [3] }, ...live } } });
   const complete = (id: string, output: string) => entries.push(
@@ -22,8 +25,26 @@ function fixture() {
   const call = (id: string) => entries.push({ kind: 'pi.assistant', model: [{ role: 'assistant', content: [
     { type: 'toolCall', id, name: 'exec_command', arguments: { cmd: `printf ${id}`, workdir: '/fixture', max_output_tokens: 2000 } },
   ] }] });
-  return { db, events, entries, frame, complete, call };
+  return { db, events, panelEvents, draftBuffers, entries, frame, complete, call };
 }
+
+test('native draft previews normalize logical lines without truncating content', () => {
+  const long = 'x'.repeat(500);
+  const cases = [
+    { text: `${long}\n2\n3\n4\n5\n6\n7\n8\n9`, preview: `${long}\n2\n3\n4\n5\n6\n7\n8`, lines: 9 },
+    { text: 'one\rtwo\rthree', preview: 'one\ntwo\nthree', lines: 1 },
+    { text: 'one\r\ntwo\r\nthree', preview: 'one\ntwo\nthree', lines: 3 },
+    { text: 'one\ntwo\n', preview: 'one\ntwo\n', lines: 3 },
+  ];
+  for (const item of cases) {
+    const f = fixture();
+    try {
+      f.frame({ generation: { message: { content: [{ type: 'text', text: item.text }] } } });
+      expect(f.panelEvents.at(-1)).toMatchObject({ text: item.preview, total_lines: item.lines });
+      expect(f.draftBuffers.at(-1)).toMatchObject({ text: item.text, lines: item.lines });
+    } finally { f.db.close(); }
+  }
+});
 
 test('native command titles retain actual tool names and command parameters', () => {
   const titles = createToolTitleTracker();
