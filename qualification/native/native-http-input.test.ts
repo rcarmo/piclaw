@@ -1,6 +1,7 @@
 import { awaitWithContext, withAbortSignal, BACKGROUND_CONTEXT } from "../../runtime/durable-engine/qualification/context.ts";
 import "./src/test-guard.js";
-import { expect } from "bun:test";
+import { expect, spyOn } from "bun:test";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { join } from "node:path";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { isolatedApplicationTest } from "./src/isolated-application-test.js";
@@ -19,6 +20,8 @@ import { isA2uiSurfaceBlock } from "../../runtime/src/channels/web/a2ui/surface.
 import { CLASSIC_A2UI_RENDERER_CAPABILITIES } from '../../runtime/src/channels/web/a2ui/capabilities.js';
 import { getMessageByRowId } from "../../runtime/src/db/messages.js";
 import { createAssistantMessageEventStream } from "../../node_modules/@earendil-works/pi-ai";
+import { HostConversationRuntime } from "../../runtime/durable-engine/src/host-runtime.js";
+import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
 
 const applicationTest=isolatedApplicationTest(import.meta.url);
 const pause=()=>{let release!:()=>void;const promise=new Promise<void>(resolve=>{release=resolve;});return {promise,release};};
@@ -68,6 +71,18 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
   const services:any={modelRuntime:host,modelRegistry:{getAvailable:()=>[model]}};
   let backend:Awaited<ReturnType<typeof createDefaultApplicationRuntime>>|undefined;
   const base=createRuntimeBaseServices({dataDir:workspace});let pool:AgentPool|undefined;let channel:WebChannel|undefined;
+  const projected = new AsyncLocalStorage<boolean>();
+  const scans: { min: number | undefined; max: number | undefined; limit: number }[] = [];
+  const originalResult = HostConversationRuntime.prototype.readMessageResult;
+  const resultSpy = spyOn(HostConversationRuntime.prototype, 'readMessageResult').mockImplementation(function(this: HostConversationRuntime, ...args) {
+    return projected.run(true, () => Reflect.apply(originalResult, this, args));
+  });
+  const originalScan = SqliteStorage.prototype.scanEntries;
+  const scanSpy = spyOn(SqliteStorage.prototype, 'scanEntries').mockImplementation(function(this: SqliteStorage, ...args) {
+    const [query, limit] = args;
+    if (projected.getStore()) scans.push({ min: query.minEntryId, max: query.maxEntryId, limit });
+    return originalScan.apply(this, args);
+  });
   try{
     backend=await createDefaultApplicationRuntime(lock,async()=>services);
     pool=new AgentPool({credentialStore:credentials,modelRuntime:host,modelRegistry:services.modelRegistry,...backend.sessionOptions} as any);
@@ -148,6 +163,10 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     expect(replies).toHaveLength(2);expect(replies[0]!.content).toContain("steering instruction");expect(replies[1]!.content).toContain("follow-up instruction");
     expect(replies.map(reply=>reply.thread_id)).toEqual([primary.thread_id,followup.thread_id]);
     expect(toolSeen).toBe(true);expect(calls).toBe(3);
+    const answers = database.query(`SELECT DISTINCT json_extract(record,'$.answer') AS answer FROM submissions WHERE status='done'`).all() as { answer: number }[];
+    expect(answers).toHaveLength(2);
+    expect(new Set(scans.map(read => read.max))).toEqual(new Set(answers.map(row => row.answer)));
+    expect(scans.every(read => read.min === read.max && read.limit === 1)).toBe(true);
     expect(followupModelInput).toBe(JSON.stringify('follow-up instruction'));
     const acceptedRecords = database.query('SELECT record FROM submissions WHERE id=?').get(followup.submission_id);
     const acceptedEntries = database.query("SELECT record FROM entries WHERE json_extract(record,'$.kind')='host.accepted'").all();
@@ -216,7 +235,7 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     expect((await recover(failedRoot.thread_id)).status).toBe(200);
     expect(database.query("SELECT count(*) n FROM messages WHERE is_bot_message=0 AND thread_id=? AND content LIKE 'Continue the previous answer%'").get(failedRoot.thread_id)).toEqual({n:1});
     expect(getMessageByRowId("web:default",failedPost)?.data?.content_blocks?.find(isA2uiSurfaceBlock)).toMatchObject({state:"completed",revision:2});
-  }finally{release.release();await backend?.close();await channel?.stop();await base.queue.shutdown();await pool?.shutdown();await closeDatabase();lock.release();}
+  }finally{scanSpy.mockRestore();resultSpy.mockRestore();release.release();await backend?.close();await channel?.stop();await base.queue.shutdown();await pool?.shutdown();await closeDatabase();lock.release();}
 },30000);
 
 applicationTest("real HTTP native status and singleton exit publish a notice before joined cleanup, with no operation or S02",async()=>{
