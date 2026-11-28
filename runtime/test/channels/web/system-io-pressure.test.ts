@@ -57,11 +57,9 @@ test('I/O pressure histories are bounded, independent copies and cleared across 
   });
 });
 
-test('system-metrics endpoint exposes pressure for general UI polling without enabling GPU readers', async () => {
+test('system-metrics snapshot exposes pressure for general UI polling without enabling GPU readers', () => {
   const sampler = new metrics.SystemMetricsSampler(2, 2000, () => { throw Error('must not read GPU'); }, () => ({ somePercent: 0.04, fullPercent: 0 }));
-  const response = metrics.handleSystemMetricsRequest({ json: Response.json }, sampler, null);
-  expect(response.status).toBe(200);
-  expect(await response.json()).toMatchObject({
+  expect(metrics.readSystemMetricsSnapshot(sampler, null)).toMatchObject({
     io_pressure_some_percent: 0.04, io_pressure_full_percent: 0,
     io_pressure_some_series: [0.04], io_pressure_full_series: [0],
   });

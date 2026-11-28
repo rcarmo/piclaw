@@ -84,11 +84,6 @@ export interface SystemMetricsSnapshot {
   gpus: IntelGpuSnapshot[];
 }
 
-export interface SystemMetricsContext {
-  json(payload: unknown, status?: number): Response;
-  getRuntimeMemorySnapshot?: () => AgentPoolMemoryInstrumentationSnapshot | null;
-}
-
 type CpuTotals = {
   idle: number;
   total: number;
@@ -445,9 +440,9 @@ export class SystemMetricsSampler {
 const defaultSampler = new SystemMetricsSampler();
 const defaultIntelGpuMetrics = new IntelGpuMetrics();
 
-export function handleSystemMetricsRequest(
-  ctx: SystemMetricsContext, sampler: SystemMetricsSampler = defaultSampler,
+export function readSystemMetricsSnapshot(
+  sampler: SystemMetricsSampler = defaultSampler,
   gpuMetrics: Pick<IntelGpuMetrics, "read"> | null = defaultIntelGpuMetrics,
-): Response {
-  return ctx.json(sampler.readSnapshot(ctx.getRuntimeMemorySnapshot?.() ?? null, gpuMetrics?.read() ?? [], gpuMetrics !== null), 200);
+): SystemMetricsSnapshot {
+  return sampler.readSnapshot(null, gpuMetrics?.read() ?? [], gpuMetrics !== null);
 }

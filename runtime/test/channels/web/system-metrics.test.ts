@@ -1,24 +1,23 @@
 import { expect, test } from "bun:test";
-import { handleSystemMetricsRequest, parseLinuxRamMeminfo, parseLinuxSwapMeminfo, SystemMetricsSampler } from "../../../src/channels/web/agent/system-metrics.js";
+import { parseLinuxRamMeminfo, parseLinuxSwapMeminfo, readSystemMetricsSnapshot, SystemMetricsSampler } from "../../../src/channels/web/agent/system-metrics.js";
 
-test("system metrics reads shared GPU cache but can opt out for general UI polling", async () => {
+test("system metrics reads shared GPU cache but can opt out for general UI polling", () => {
   let reads = 0;
   const gpu = { read: () => { reads++; return []; } };
-  const ctx = { json: (payload: unknown) => Response.json(payload) };
   let nvmlReads = 0;
   const sampler = new SystemMetricsSampler(2, 2000, () => { nvmlReads++; return { usedBytes: 25, totalBytes: 100, percent: 25, provider: "nvml" }; });
-  const a = await handleSystemMetricsRequest(ctx, sampler, gpu).json();
+  const a = readSystemMetricsSnapshot(sampler, gpu);
   expect(a.gpus).toEqual([]);
   expect(reads).toBe(1);
   expect(nvmlReads).toBe(1);
   expect(a.vram_percent).toBe(25);
-  const b = await handleSystemMetricsRequest(ctx, sampler, null).json();
+  const b = readSystemMetricsSnapshot(sampler, null);
   expect(b.gpus).toEqual([]);
   expect(b.vram_percent).toBeNull();
   expect(reads).toBe(1);
   expect(nvmlReads).toBe(1);
   expect(b.vram_series).toEqual([]);
-  const c = await handleSystemMetricsRequest(ctx, sampler, gpu).json();
+  const c = readSystemMetricsSnapshot(sampler, gpu);
   expect(c.vram_series).toEqual([25, 25]);
   expect(reads).toBe(2);
   expect(nvmlReads).toBe(2);
@@ -134,33 +133,29 @@ test("SystemMetricsSampler includes optional bounded VRAM payloads when GPU tele
   expect(third.gpu_provider).toBe("nvml");
 });
 
-test("handleSystemMetricsRequest cannot revive retired resident counters from a stale snapshot", async () => {
-  const response = handleSystemMetricsRequest({
-    json: (payload, status = 200) => new Response(JSON.stringify(payload), { status, headers: { "content-type": "application/json" } }),
-    getRuntimeMemorySnapshot: () => ({
-      cachedMainSessions: 2,
-      cachedSideSessions: 1,
-      activeForkBaseLeaves: 3,
-      activeChats: 4,
-      sessionResources: {
-        sessionEntries: 15,
-        activeMessages: 16,
-        persistedSessionBytes: 17,
-        loadedSkills: 18,
-        loadedExtensions: 19,
-        registeredTools: 20,
-      },
-      sessionManager: {
-        branchSeedRealizationsInFlight: 5,
-        createInFlight: 6,
-        invalidDeferredSeedErrors: 7,
-      },
-    }),
-  }, new SystemMetricsSampler(2, 1000, () => null));
-
-  expect(response.status).toBe(200);
-  const payload = await response.json();
-  expect(payload.runtime_memory).toBeNull();
+test("readSystemMetricsSnapshot cannot revive retired resident counters", () => {
+  const sampler = new SystemMetricsSampler(2, 1000, () => null);
+  const stale = {
+    cachedMainSessions: 2,
+    cachedSideSessions: 1,
+    activeForkBaseLeaves: 3,
+    activeChats: 4,
+    sessionResources: {
+      sessionEntries: 15,
+      activeMessages: 16,
+      persistedSessionBytes: 17,
+      loadedSkills: 18,
+      loadedExtensions: 19,
+      registeredTools: 20,
+    },
+    sessionManager: {
+      branchSeedRealizationsInFlight: 5,
+      createInFlight: 6,
+      invalidDeferredSeedErrors: 7,
+    },
+  };
+  expect(readSystemMetricsSnapshot(sampler, null).runtime_memory).toBeNull();
+  expect(sampler.readSnapshot(stale, [], false).runtime_memory).toBeNull();
 });
 
 test('optional GPU activity has nullable history and survives memory-only telemetry',()=>{
