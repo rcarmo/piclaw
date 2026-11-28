@@ -37,7 +37,7 @@ import type { RendererRpcBroker } from '../../src/channels/web/a2ui/renderer-rpc
 import { value, effect, sealed } from "./host-effects.js";
 import { hashScheduledLeaseToken } from "../../src/service-effects/current-piclaw/scheduled-run-values.js";
 import type { ScheduledRunLease } from "../../src/service-effects/contracts/scheduled-run-store.js";
-import { isNativeMessageInput, type NativeMessageResult, type AcceptedInput, type RuntimeOptions } from "./host-runtime.js";
+import { isNativeMessageInput, type NativeMessagePublication, type AcceptedInput, type RuntimeOptions } from "./host-runtime.js";
 import type { ConversationId,Tx } from "@earendil-works/pi-durable";
 import { nativeBackgroundIdentity,readNativeBackgroundPayload,assertNativeBackgroundRetry,type NativeBackgroundPayload } from "../../src/agent-pool/background-operation-contract.js";
 import { backgroundPolicyProvenance,type NativeBackgroundContext } from "./host-background-context.js";
@@ -108,7 +108,7 @@ export interface ApplicationBootstrapOptions {
   onExecutionSettled?: (workId: string) => void | Promise<void>;
   onOperationSettled?: RuntimeOptions["onOperationSettled"];
   /** Idempotent timeline/Goal projection of an actual immutable SDK result. */
-  onMessageResult?(input: AcceptedInput, result: NativeMessageResult): Promise<void>;
+  onMessageResult?(input: AcceptedInput, result: NativeMessagePublication): Promise<void>;
   prepareTerminalEffect?: RuntimeOptions["prepareTerminalEffect"];
   materializeAnswer?: RuntimeOptions["materializeAnswer"];
   dispatchHostCommand?: import("../../src/agent-pool/contracts.js").AgentPoolOptions["dispatchHostCommand"];
@@ -338,7 +338,7 @@ export async function createApplicationBootstrapBundle(config: ApplicationBootst
       if (observedMessages.has(submissionId)) return;
       observedMessages.add(submissionId);
       const observer = runtime.waitForMessage(input, submissionId, shutdown.signal).then(async () => {
-        const result = await runtime.readMessageResult(input);
+        const result = await runtime.readMessageResult(input,"publication");
         if (result) await config.onMessageResult?.(input,result);
       }).catch(error => {
         observedMessages.delete(submissionId);
