@@ -407,3 +407,55 @@ test('scoped cancellation changes callback signals but preserves the SDK commit 
   expect(committedContexts).toEqual([sdkContext]);
   expect(scopedSignal?.aborted).toBe(true);expect(externalSignal?.aborted).toBe(true);expect(sdk.signal.aborted).toBe(false);expect(sdkContext.abortSignal?.aborted).toBe(false);expect(record.state).toEqual({status:'running',checkpoint:{phase:'call'}});
 });
+
+test("a generation estimate sees only its uncancelled raw view before A2UI projection", async () => {
+  const { withAbortSignal } = await import('@earendil-works/chord/context');
+  const { A2UI_METADATA_HEADING } = await import('../../runtime/src/channels/web/a2ui/transport-metadata.ts');
+  const message = { role: 'user' as const, timestamp: 2, content: `public input\n${A2UI_METADATA_HEADING}\nstored envelope` };
+  const raw = { entries: [{ id: 7, kind: 'host.accepted', conversationId: 34,
+    data: { chatJid: 'web:default', sourceId: 'synthetic', conversationId: 34 }, model: [message] }],
+    head: undefined, contributions: [[message]], messages: [message] };
+  const kind = 'pi.generation';
+  const registry = createRegistry();
+  const record = { id: 12, conversationId: 34, kind, version: 1, input: {}, state: { status: 'running', checkpoint: { phase: 'request' } } };
+  for (const arm of ['exact', 'cross', 'cancel-task', 'cancel-context', 'invalid'] as const) {
+    const sdk = new AbortController(), request = new AbortController();
+    const cycle: string[] = [];
+    const scoped = withAbortSignal(request.signal, context);
+    const original = async () => {
+      cycle.push('read');
+      await Promise.resolve();
+      if (arm === 'cancel-task') sdk.abort();
+      if (arm === 'cancel-context') request.abort();
+      return raw;
+    };
+    const runtime = { taskId: 12, conversationId: 34, signal: sdk.signal, context: original };
+    const task = defineTask({ name: kind, version: 1, initial: () => ({ phase: 'request' as const }),
+      phases: { async request(_record, actual, ctx) {
+        const view = await actual.context((arm === 'cross' ? 35 : 34) as never, ctx);
+        expect(view.messages[0]).toMatchObject({ content: arm === 'invalid' ? message.content : 'public input' });
+      } }, async abort() {} });
+    const reader = { subscribe: registry.subscribe.bind(registry), snapshot() {
+      const snapshot = registry.snapshot();
+      return new Proxy(snapshot, { get(target, key) {
+        if (key === 'task') return (name: string) => name === kind ? task : target.task(name);
+        const value = Reflect.get(target, key, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      } });
+    } };
+    const execute = withTaskModelRequestScope(reader, undefined, (source, body) => {
+      cycle.push('project');
+      expect(source).toEqual({ chatJid: 'web:default', sourceId: 'synthetic', conversationId: 34 });
+      expect(body).toBe(message.content);
+      return 'public input';
+    }, (conversation, view) => {
+      cycle.push('estimate');
+      expect(conversation).toBe(34 as never);
+      expect(view).toBe(raw as never);
+      expect(view.messages[0]).toBe(message);
+    }).snapshot().task(kind)!.definition.phases.request as Function;
+    await execute(arm === 'invalid' ? { ...record, id: 55 } : record, runtime, scoped);
+    expect(cycle).toEqual(arm === 'exact' ? ['read', 'estimate', 'project'] : arm === 'invalid' ? ['read'] : ['read', 'project']);
+    expect(runtime.context).toBe(original);
+  }
+});
