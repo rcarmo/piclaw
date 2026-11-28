@@ -1,4 +1,4 @@
-import {afterEach,expect,test} from 'bun:test';
+import {afterEach,expect,spyOn,test} from 'bun:test';
 import {createTempWorkspace,setEnv} from '../../../helpers.js';
 import {initDatabase,getDb,closeDatabase} from '../../../../src/db/connection.js';
 import {admitWebMessage} from '../../../../src/channels/web/messaging/message-store.js';
@@ -16,6 +16,40 @@ test('async incoming storage commits media, spill, self-thread and chat metadata
   const row=await admitWebMessage(channel,params(content,[existing]),{},()=>{},new AbortController().signal);
   expect(row!.id).toBeGreaterThan(0);expect(count('messages')).toBe(1);expect(count('media')).toBe(2);expect(count('message_media')).toBe(2);expect(count('chats')).toBe(1);
   expect(row!.data.thread_id).toBe(row!.id);const media=getDb().query('SELECT id,filename FROM media WHERE id<>?').get(existing) as {id:number;filename:string};expect(media.filename).toMatch(/^message-web-/);expect(new TextDecoder().decode(getMediaById(media.id)!.data)).toBe(content);
+});
+test('explicit-thread FTS preserves mixed links without reading the PNG body', async () => {
+  const db = fixture();
+  const png = createMedia('image.png', 'image/png', Uint8Array.of(1, 2, 3));
+  const text = createMedia('text.txt', 'text/plain', new TextEncoder().encode('attachedsearchterm'));
+  const ignored = createMedia('upper.txt', 'TEXT/plain', new TextEncoder().encode('ignoredsearchterm'));
+  const root = await admitWebMessage(channel, params('root'), {});
+  expect(root).not.toBeNull();
+
+  const original = db.prepare.bind(db);
+  const projected: Array<{ content_type: string; data: unknown }> = [];
+  const prepare = spyOn(db, 'prepare').mockImplementation((sql: string) => {
+    const statement = original(sql);
+    if (!sql.includes('FROM media WHERE id IN (')) return statement;
+    return new Proxy(statement, { get(target, key) {
+      if (key === 'all') return (...args: Parameters<typeof target.all>) => {
+        const rows = target.all(...args) as typeof projected;
+        projected.push(...rows);
+        return rows;
+      };
+      const value = Reflect.get(target, key, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    } });
+  });
+  try {
+    const reply = await admitWebMessage(channel, params('reply', [ignored, text, png, text]), { threadId: root!.id });
+    expect(reply?.data.media_ids).toEqual([png, text, ignored]);
+    const search = (term: string) => db.query('SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?').all(term);
+    expect(search('attachedsearchterm')).toEqual([{ rowid: reply?.id }]);
+    expect(search('ignoredsearchterm')).toEqual([]);
+    expect(projected.map(row => [row.content_type, row.data === null])).toEqual([
+      ['image/png', true], ['text/plain', false], ['TEXT/plain', true],
+    ]);
+  } finally { prepare.mockRestore(); }
 });
 test('post-mutation authority failure rolls back generated spill, message, links, FTS and metadata',async()=>{
   fixture();let checks=0;

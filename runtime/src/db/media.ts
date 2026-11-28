@@ -241,14 +241,14 @@ function appendMediaTextToFts(
               OR content_type COLLATE BINARY IN (${[...FTS_INDEXABLE_TYPES].map(type => "'" + type + "'").join(',')})
             THEN data END AS data
        FROM media WHERE id IN (${placeholders})`)
-    .all(...mediaIds) as Array<{ content_type: string; data: Uint8Array; metadata: string | null }>;
+    .all(...mediaIds) as Array<{ content_type: string; data: Uint8Array | null; metadata: string | null }>;
 
   const textParts: string[] = [];
   for (const row of rows) {
     if (!isTextIndexable(row.content_type)) continue;
-    // Decompress if stored compressed
+    // The SQL projection preserves the NOT NULL BLOB for these MIME types.
     const rawMeta = parseMediaMetadata(row.metadata);
-    const decompressed = maybeDecompress(row.data, rawMeta);
+    const decompressed = maybeDecompress(row.data!, rawMeta);
     const raw = new TextDecoder().decode(decompressed);
     const text =
       row.content_type.includes("svg") ||
