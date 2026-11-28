@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "sourceParent": "f69ddce63271b3f75fd8ffa837f88af94c48b503",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlay": "docs/development/receipts/codex-owned-response-retention-overlay.json",
+  "previousOverlaySha256": "ed5489a0f56455ac79b21dd448c9eee2c0e8c086f01dd0becb8df4fd977608b8",
+  "scope": "Exact-tail warming of the existing native context estimate; original paths, deletions and retirement accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/host-runtime.ts",
+      "beforeSha256": "6ded5d01217debcc5b6634d57e32fbc0f8ff4500a7cd2ccce86f0193b1f09c48",
+      "afterSha256": "7011a5ccfd9adff32833e655fabc38856035cbb47094f51a52d263282c6d87d7",
+      "purpose": "Warm the existing bounded scalar cache for observed conversations at a strictly newer exact raw generation tail without retaining a context view."
+    }
+  ]
+}

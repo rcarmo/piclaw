@@ -65,7 +65,8 @@ export function taskModelToolScope(api: Pick<TaskModelRequestScope, 'taskId' | '
  * cancellation forwards only to invocation/model/tool signals. SDK commit contexts
  * and abort handlers remain intact so durable abort/cleanup can still be joined.
  */
-export function withTaskModelRequestScope(registry: RegistryReader, cancellationFor?: (conversationId:ConversationId)=>Promise<AbortSignal|undefined>, publicInputText?: (source:{chatJid:string;sourceId:string;conversationId:number},content:string)=>string): RegistryReader {
+export function withTaskModelRequestScope(registry: RegistryReader, cancellationFor?: (conversationId:ConversationId)=>Promise<AbortSignal|undefined>, publicInputText?: (source:{chatJid:string;sourceId:string;conversationId:number},content:string)=>string,
+  rememberGenerationEstimate?: (conversationId: ConversationId, rawView: ContextView) => void): RegistryReader {
   const wrapped = new WeakMap<AnyTask, AnyTask>();
   const wrap = (task: AnyTask): AnyTask => {
     const previous = wrapped.get(task);
@@ -113,7 +114,11 @@ export function withTaskModelRequestScope(registry: RegistryReader, cancellation
         const originalContext = runtime.context;
         if (projectContext) {
           runtime.context = async function (this: Runtime, ...args: Parameters<Runtime["context"]>): Promise<ContextView> {
-            return projectA2uiContext(await Reflect.apply(originalContext, this, args), publicInputText);
+            const raw = await Reflect.apply(originalContext, this, args);
+            if (generationRequest && args[0] === scope.conversationId && !scope.signal.aborted && !args[1].abortSignal?.aborted) {
+              rememberGenerationEstimate?.(scope.conversationId, raw);
+            }
+            return projectA2uiContext(raw, publicInputText);
           };
         }
         if (generationRequest) generationContextReaders.set(scope, ctx => runtime.context(scope.conversationId, ctx));
