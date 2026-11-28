@@ -2,7 +2,7 @@
 
 ![PiClaw](docs/icon-256.png)
 
-语言：[English](README.md) · **简体中文** · [日本語](README.ja.md)
+语言：[English](README.md) · **简体中文** · [日本語](README.ja.md) · [Türkçe](README.tr.md)
 
 PiClaw 是基于 [Pi Coding Agent](https://github.com/earendil-works/pi) 构建的自托管 AI 工作区，默认采用单用户模式。你可以在同一个浏览器窗口中与智能体协作、编辑文件、运行命令并查看结果。再次访问时，对话、文件和计划任务仍会保留；模型请求会发送到你配置的服务，包括兼容 OpenAI API 的本地服务器。
 

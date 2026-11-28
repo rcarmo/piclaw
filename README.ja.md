@@ -2,7 +2,7 @@
 
 ![PiClaw](docs/icon-256.png)
 
-言語：[English](README.md) · [简体中文](README.zh-CN.md) · **日本語**
+言語：[English](README.md) · [简体中文](README.zh-CN.md) · **日本語** · [Türkçe](README.tr.md)
 
 PiClaw は [Pi Coding Agent](https://github.com/earendil-works/pi) を基にした、デフォルトではシングルユーザーのセルフホスト型 AI ワークスペースです。同じブラウザーウィンドウでエージェントと作業し、ファイルの編集、コマンドの実行、結果の確認ができます。会話、ファイル、スケジュールタスクは次回のアクセス時にも残ります。モデルへのリクエストは、OpenAI 互換のローカルサーバーを含め、設定したプロバイダーに送信されます。
 
