@@ -33,7 +33,7 @@ interface MessageFtsRow {
   is_bot_message: unknown;
 }
 
-const INDEXABLE_MEDIA_TYPES = new Set([
+const INDEXABLE_MEDIA_TYPES = [
   "image/svg+xml",
   "text/markdown",
   "text/plain",
@@ -42,7 +42,7 @@ const INDEXABLE_MEDIA_TYPES = new Set([
   "text/xml",
   "application/xml",
   "application/json",
-]);
+] as const;
 
 export function insertTerminalTimeline(
   database: Database,
@@ -303,27 +303,31 @@ function collectMediaText(
   mediaIds: readonly number[],
 ): string[] {
   const textParts: string[] = [];
+  if (mediaIds.length === 0) return textParts;
+  // Validate every stored row, but don't materialise an image or other
+  // non-indexable BLOB just to throw its bytes away.
+  const rowForMedia = database.prepare(
+    `SELECT content_type,metadata,typeof(data) AS data_type,
+         CASE WHEN substr(content_type,1,5) COLLATE BINARY='text/'
+                OR content_type COLLATE BINARY IN (${INDEXABLE_MEDIA_TYPES.map(() => "?").join(",")})
+              THEN data END AS data
+       FROM media WHERE id=?`,
+  );
   for (const mediaId of mediaIds) {
-    const row = database
-      .prepare("SELECT content_type,data,metadata FROM media WHERE id=?")
-      .get(mediaId) as
-      | { content_type?: unknown; data?: unknown; metadata?: unknown }
+    const row = rowForMedia.get(...INDEXABLE_MEDIA_TYPES, mediaId) as
+      | { content_type?: unknown; data?: unknown; metadata?: unknown; data_type?: unknown }
       | undefined;
     if (
       !row ||
       typeof row.content_type !== "string" ||
-      !(row.data instanceof Uint8Array) ||
+      row.data_type !== "blob" ||
+      (row.data !== null && !(row.data instanceof Uint8Array)) ||
       (row.metadata !== null && typeof row.metadata !== "string")
     ) {
       throw new TerminalTimelineStatementError("corrupt_state");
     }
     const metadata = parseMetadata(row.metadata as string | null);
-    if (
-      !INDEXABLE_MEDIA_TYPES.has(row.content_type) &&
-      !row.content_type.startsWith("text/")
-    ) {
-      continue;
-    }
+    if (row.data === null) continue;
     const bytes = decompressMedia(row.data, metadata);
     const raw = new TextDecoder().decode(bytes);
     const text =
