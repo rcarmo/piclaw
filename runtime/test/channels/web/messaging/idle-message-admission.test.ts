@@ -1,4 +1,4 @@
-import {afterEach,expect,test} from 'bun:test';
+import {afterEach,expect,spyOn,test} from 'bun:test';
 import {createTempWorkspace,setEnv} from '../../../helpers.js';
 import {initDatabase,getDb,closeDatabase} from '../../../../src/db/connection.js';
 import {admitWebMessage} from '../../../../src/channels/web/messaging/message-store.js';
@@ -16,6 +16,36 @@ test('async incoming storage commits media, spill, self-thread and chat metadata
   const row=await admitWebMessage(channel,params(content,[existing]),{},()=>{},new AbortController().signal);
   expect(row!.id).toBeGreaterThan(0);expect(count('messages')).toBe(1);expect(count('media')).toBe(2);expect(count('message_media')).toBe(2);expect(count('chats')).toBe(1);
   expect(row!.data.thread_id).toBe(row!.id);const media=getDb().query('SELECT id,filename FROM media WHERE id<>?').get(existing) as {id:number;filename:string};expect(media.filename).toMatch(/^message-web-/);expect(new TextDecoder().decode(getMediaById(media.id)!.data)).toBe(content);
+});
+test('new self-threads index attachments once and upserts remove old attachment terms', async () => {
+  const db = fixture();
+  const oldMedia = createMedia('old.txt', 'text/plain', new TextEncoder().encode('oldattachment'));
+  const newMedia = createMedia('new.txt', 'text/plain', new TextEncoder().encode('newattachment'));
+  const originalPrepare = db.prepare.bind(db);
+  let mediaIndexReads = 0;
+  const prepare = spyOn(db, 'prepare').mockImplementation((sql: string) => {
+    if (/^\s*SELECT content_type,/.test(sql)) mediaIndexReads++;
+    return originalPrepare(sql);
+  });
+  const uuid = spyOn(crypto, 'randomUUID').mockReturnValue('cf224939-3889-4b84-a3dc-26a2ad0a50d5');
+  const search = (term: string) => db.query('SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?').all(term);
+  try {
+    const first = await admitWebMessage(channel, params('original root', [oldMedia]), {});
+    const newThreadReads = mediaIndexReads;
+    expect(first?.data.thread_id).toBe(first?.id);
+    expect(search('oldattachment')).toEqual([{ rowid: first?.id }]);
+
+    const updated = await admitWebMessage(channel, params('updated root', [newMedia]), {});
+    expect(updated?.id).toBe(first?.id);
+    expect(count('messages')).toBe(1);
+    expect(count('message_media')).toBe(2);
+    expect(search('oldattachment')).toEqual([]);
+    expect(search('newattachment')).toEqual([{ rowid: first?.id }]);
+    expect(newThreadReads).toBe(1);
+  } finally {
+    uuid.mockRestore();
+    prepare.mockRestore();
+  }
 });
 test('post-mutation authority failure rolls back generated spill, message, links, FTS and metadata',async()=>{
   fixture();let checks=0;

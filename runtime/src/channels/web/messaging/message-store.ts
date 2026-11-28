@@ -4,7 +4,6 @@ import { bindAddonLocalMessage } from "../../../addons/local-dispatch.js";
  * share one synchronous SQL body after asynchronous acquisition. */
 
 import {
-  attachMediaToMessage,
   clampWebContent,
   createMedia,
   getChatBranchByChatJid,
@@ -15,6 +14,7 @@ import {
   storeMessage,
 } from "../../../db.js";
 import { getWebPreviewMaxChars, shouldPreviewWebContent } from "../../../db/web-content.js";
+import { attachMediaToMessageInDatabase } from "../../../db/media.js";
 import { normaliseExistingMediaFts, appendMediaTextToFts } from "../../../service-effects/current-piclaw/terminal-settlement-timeline-statements.js";
 import { scheduleLinkPreviews, type LinkPreviewChannel } from "../media/link-previews.js";
 import type { InteractionRow } from "../../../db.js";
@@ -159,17 +159,22 @@ function writePreparedWebMessage(prepared: PreparedWebMessage): CommittedWebMess
   if (rowId <= 0) throw new Error("Failed to persist web message row");
   if (!params.isBot) bindAddonLocalMessage(params.chatJid, { id: msg.id, content: msg.content, content_blocks: msg.content_blocks });
 
-  if (allMediaIds.length > 0) {
-    attachMediaToMessage(rowId, allMediaIds);
-  }
-
-  // Publish root threading in the original message transaction.
-  if ((!params.isBot && (options.threadId === null || options.threadId === undefined)) || (options.threadToSelf && !options.threadId)) {
-    // A queued source may already exist before its timeline row is published.
+  const threadToSelf = (!params.isBot && (options.threadId === null || options.threadId === undefined)) ||
+    (options.threadToSelf && !options.threadId);
+  if (allMediaIds.length || threadToSelf) {
     const database = getDb();
-    if (allMediaIds.length) normaliseExistingMediaFts(database, rowId, () => {});
-    database.prepare("UPDATE messages SET thread_id = ? WHERE rowid = ?").run(rowId, rowId);
-    if (allMediaIds.length) appendMediaTextToFts(database, rowId, allMediaIds, () => {});
+    const hasLinkedMedia = threadToSelf && allMediaIds.length > 0 && Boolean(database.query(
+      "SELECT 1 FROM message_media WHERE message_rowid = ? LIMIT 1",
+    ).get(rowId));
+    if (allMediaIds.length) {
+      // A new self-thread indexes after its final row write; an upsert must clear prior attachment terms as before.
+      attachMediaToMessageInDatabase(database, rowId, allMediaIds, { index: !threadToSelf || hasLinkedMedia });
+    }
+    if (threadToSelf) {
+      if (hasLinkedMedia) normaliseExistingMediaFts(database, rowId, () => {});
+      database.prepare("UPDATE messages SET thread_id = ? WHERE rowid = ?").run(rowId, rowId);
+      if (allMediaIds.length) appendMediaTextToFts(database, rowId, allMediaIds, () => {});
+    }
   }
 
   if (readAccessConfig().mode === "single-user") {
