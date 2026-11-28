@@ -389,6 +389,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
   let workspaceFileOpener: WorkspaceFileOpener | undefined;
   let widgetPublisher: WidgetPublisher | undefined;
   let terminalBroadcast: ((type: string, data: Record<string, unknown>) => void) | undefined;
+  let firstUnannouncedNativeAnswer = Number.MAX_SAFE_INTEGER;
   const pendingTerminalEvents = new Set<string>(), publishedTerminalEvents = new Set<string>();
   const publishTerminal = (operationId: string) => {
     if (publishedTerminalEvents.has(operationId)) return;
@@ -427,17 +428,38 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
     liveWatches.set(chat, watching);
     void watching.catch(error => { liveWatches.delete(chat); log.error("Conversation watch failed", { chatJid: chat, err: error }); });
   };
-  const drainPending = (chat: string, recover=false) => {
+  const drainPending = (chat: string, recover=false, resolvePublishedHistory=false) => {
     if (viewsClosing || processControls?.pending()) return;
     assert(); ensureLiveWatch(chat);
-    // Recover delivery/correlation only for this direct SDK path. Historical
-    // host operations/UI intents are never adopted or resubmitted.
+    const target = resolvePublishedHistory ? bundle.sessionTargets.list().find(target => target.chatJid === chat) : undefined;
+    // Recover delivery/correlation only for this direct SDK path. An exact
+    // published reply needs no startup redispatch; unresolved rows still use
+    // the ordinary admission/authority path. This read grants no SDK work.
     const inputs = root.query(`SELECT s.source_id,m.rowid FROM service_effect_s01_sources s
       JOIN messages m ON m.chat_jid=s.chat_jid AND m.id=s.source_id
       LEFT JOIN piclaw_durable_bindings_v1 b ON b.chat_jid=s.chat_jid AND b.source_seq=s.source_seq
-      WHERE s.chat_jid=? AND s.kind='message' AND
-        ((s.state='pending' AND s.provenance_ref LIKE 'application:pi-durable%') OR (?=1 AND s.state='consumed' AND b.operation_id LIKE 'native-message:%'))
-      ORDER BY s.source_seq`).all(chat,recover?1:0) as {source_id:string;rowid:number}[];
+      WHERE s.chat_jid=? AND s.kind='message' AND (
+        (s.state='pending' AND s.provenance_ref LIKE 'application:pi-durable%')
+        OR (?=1 AND s.state='consumed' AND b.operation_id LIKE 'native-message:%' AND NOT EXISTS (
+          SELECT 1 FROM submissions sdk
+          JOIN messages published ON published.chat_jid=s.chat_jid
+            AND published.id='native-answer:' || b.domain || ':' || b.conversation_id || ':' || json_extract(sdk.record,'$.answer')
+            AND published.is_bot_message=1 AND published.is_terminal_agent_reply=1
+          JOIN messages thread ON thread.chat_jid=s.chat_jid AND thread.rowid=coalesce(m.thread_id,m.rowid)
+            AND (thread.thread_id IS NULL OR thread.thread_id=thread.rowid)
+          WHERE sdk.id=b.submission_id AND sdk.conversation_id=b.conversation_id AND sdk.request_id=json_quote(b.request_id)
+            AND sdk.status='done' AND json_extract(sdk.record,'$.type')='input'
+            AND json_type(sdk.record,'$.answer')='integer' AND json_extract(sdk.record,'$.answer')>0
+            AND json_extract(sdk.record,'$.answer') < ?
+            AND published.thread_id=thread.rowid
+            AND b.domain=? AND b.incarnation=? AND b.conversation_id=? AND b.branch_id=?
+            AND b.operation_id='native-message:' || b.conversation_id || ':' || s.source_seq
+            AND b.source_id=s.source_id AND b.payload_ref=s.payload_ref
+            AND b.request_id='message:' || m.rowid || ':' || s.source_id AND m.is_bot_message=0
+            AND (s.payload_ref='message-row:' || m.rowid OR s.payload_ref='queued-source:' || s.source_id)
+        ))
+      ) ORDER BY s.source_seq`).all(chat, recover ? 1 : 0, firstUnannouncedNativeAnswer, target?.domain ?? null,
+        target?.domain ?? null, target?.conversationId ?? null, target?.branchId ?? null) as { source_id: string; rowid: number }[];
     for (const input of inputs) void bundle.dispatchAcceptedInput(chat,input.source_id,input.rowid)
       .catch(error=>{if(!viewsClosing)log.warn("Native input delivery could not be reconciled",{operation:"native.input_delivery_pending",chatJid:chat,err:error});});
   };
@@ -1410,6 +1432,8 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
           assert();
           const status=result.status;
           if (status.type!=="input" || (status.status!=="done" && !(status.status==="unanswered" && status.reason==="model_error"))) return;
+          // Cold attach must still publish a potentially live reply.
+          if (status.status === "done" && !terminalBroadcast) firstUnannouncedNativeAnswer = Math.min(firstUnannouncedNativeAnswer, status.answer);
           const primary=result.inputs[0];
           if (!primary || primary.chatJid!==input.chatJid || primary.conversationId!==input.conversationId) throw Error("Native reply source conflict");
           const messageId=`native-answer:${mapping.domain}:${input.conversationId}:${status.status==="done"?status.answer:"failed-"+status.id}`;
@@ -1630,7 +1654,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         for (const target of targets) drainPending(target.chatJid);
       } });
     },
-    attachChannel(channel) {
+    attachChannel(channel, origin) {
       assertAdmission();
       assert(); lifetime.signal.throwIfAborted();
       if (widgetPublisher) throw Error("Widget channel already attached");
@@ -1646,7 +1670,7 @@ export async function createDefaultApplicationRuntime(owner: RuntimeLockHandle, 
         broadcast("extension_ui_widget", { chat_jid: chatJid, key, content, options });
       };
       autoresearchHost?.attach();
-      for (const target of bundle.sessionTargets.list()) drainPending(target.chatJid,true);
+      for (const target of bundle.sessionTargets.list()) drainPending(target.chatJid,true,origin === "cold-start");
     },
     stop() {
       autoresearchHost?.dispose();

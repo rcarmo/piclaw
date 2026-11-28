@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "sourceParent": "243a6a6db1d38d24259bbe55eba727114845998b",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlay": "docs/development/receipts/core-generation-context-retention-overlay.json",
+  "previousOverlaySha256": "3f18376729bd3ac5bbb2b06e0396944cd6d529eff8d5eb27f7c380b923d3f851",
+  "scope": "Cold startup skips exactly published native replies while preserving unresolved recovery, early live delivery and historical retention. Original paths, deletions and retirement accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/default-application-runtime.ts",
+      "beforeSha256": "48158f541586b4273f2300d2483e3e35a14907487abaa1bcff87ae10ce0216d0",
+      "afterSha256": "e14ef2eb35d6540a648cb4afd307e43a343926887565abe453a97c1996c5fc73",
+      "purpose": "Skip redispatch of proved cold historical replies without losing pre-attachment or in-process reattachment notifications."
+    }
+  ]
+}

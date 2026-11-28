@@ -19,7 +19,7 @@ export interface RuntimeBackend {
   readonly sessionOptions: Readonly<Pick<AgentPoolOptions, "getDurableSession" | "prepareInterruptedScheduledHarness" | "dispatchScheduledAgent" | "dispatchSidePrompt" | "dispatchHostCommand" | "dispatchDreamOperation">>;
   readonly bind: (options: Pick<WebChannelOpts, "queue" | "agentPool">) => Readonly<WebChannelOpts>;
   /** Attach the actual constructed channel, never a global channel lookup. */
-  attachChannel?(channel: NativeTurnViewChannel & { resumePendingChats?(chatJid?: string): void; requestWorkspaceFileOpen?(chatJid: string, path: string, label: string): Promise<unknown> }): void;
+  attachChannel?(channel: NativeTurnViewChannel & { resumePendingChats?(chatJid?: string): void; requestWorkspaceFileOpen?(chatJid: string, path: string, label: string): Promise<unknown> }, origin?: "cold-start"): void;
   /** Wake queue-owned observers before queue join; do not dispose storage yet. */
   stop(): void;
   /** Close the borrowed scope after queue join, never the application's global owner. */
@@ -182,7 +182,7 @@ export async function createRecoverableRuntimeBackend(prepare: () => Promise<Run
         return [key, callback];
       }))) as Readonly<WebChannelOpts>;
     },
-    async attachChannel(value: Parameters<NonNullable<RuntimeBackend["attachChannel"]>>[0]) { await ready(); channel = value; await current.attachChannel?.(value); },
+    async attachChannel(value: Parameters<NonNullable<RuntimeBackend["attachChannel"]>>[0], origin?: "cold-start") { await ready(); channel = value; await current.attachChannel?.(value, origin); },
     stop() { if (stopping) return; stopping = true; retryLifetime.abort(); owned?.stop(); },
     close() { return closing ??= (async () => {
       stopping = true; retryLifetime.abort(); owned?.stop();
@@ -417,7 +417,7 @@ export async function bootstrapRuntime(deps: RuntimeBootstrapDeps, runtimeOwner?
     const web = partialWeb = await deps.startWebChannel(queue, agentPool, backend?.bind);
     if (backend?.attachChannel) {
       if (!("broadcastEvent" in web) || typeof web.broadcastEvent !== "function") throw Error("Backend requires channel publisher");
-      backend.attachChannel(web as unknown as Parameters<NonNullable<RuntimeBackend["attachChannel"]>>[0]);
+      backend.attachChannel(web as unknown as Parameters<NonNullable<RuntimeBackend["attachChannel"]>>[0], "cold-start");
     }
     const pushover = await deps.startOptionalPushoverChannel();
     deps.startBackgroundModelRefresh(agentPool);
