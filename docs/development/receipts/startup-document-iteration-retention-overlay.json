@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "sourceParent": "046a42df4994de33711ad7835d887c0415a33fcc",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlay": "docs/development/receipts/core-generation-context-retention-overlay.json",
+  "previousOverlaySha256": "3f18376729bd3ac5bbb2b06e0396944cd6d529eff8d5eb27f7c380b923d3f851",
+  "scope": "Ordered iteration of startup document revisions; original paths, deletions and retirement accounting unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/default-application-runtime.ts",
+      "beforeSha256": "48158f541586b4273f2300d2483e3e35a14907487abaa1bcff87ae10ce0216d0",
+      "afterSha256": "75bc4300e24725d8df9d6f06e29b193ac9760a6be45724b4ed3547358a8f0af5",
+      "purpose": "Iterate startup document revisions in their existing SQL order, keeping every historical version and JSON check and current owner and recovery behaviour."
+    }
+  ]
+}
