@@ -20,7 +20,7 @@ import { isA2uiSurfaceBlock } from "../../runtime/src/channels/web/a2ui/surface.
 import { CLASSIC_A2UI_RENDERER_CAPABILITIES } from '../../runtime/src/channels/web/a2ui/capabilities.js';
 import { getMessageByRowId } from "../../runtime/src/db/messages.js";
 import { createAssistantMessageEventStream } from "../../node_modules/@earendil-works/pi-ai";
-import { HostConversationRuntime } from "../../runtime/durable-engine/src/host-runtime.js";
+import { HostConversationRuntime, type AcceptedInput } from "../../runtime/durable-engine/src/host-runtime.js";
 import { SqliteStorage } from "../../runtime/durable-engine/qualification/sqlite.ts";
 
 const applicationTest=isolatedApplicationTest(import.meta.url);
@@ -74,8 +74,8 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
   const projected = new AsyncLocalStorage<boolean>();
   const scans: { min: number | undefined; max: number | undefined; limit: number }[] = [];
   const originalResult = HostConversationRuntime.prototype.readMessageResult;
-  const resultSpy = spyOn(HostConversationRuntime.prototype, 'readMessageResult').mockImplementation(function(this: HostConversationRuntime, ...args) {
-    return projected.run(true, () => Reflect.apply(originalResult, this, args));
+  const resultSpy = spyOn(HostConversationRuntime.prototype, 'readMessageResult').mockImplementation(function(this: HostConversationRuntime, input: AcceptedInput, projection?: 'publication') {
+    return projected.run(true, () => Reflect.apply(originalResult, this, projection === undefined ? [input] : [input, projection]));
   });
   const originalScan = SqliteStorage.prototype.scanEntries;
   const scanSpy = spyOn(SqliteStorage.prototype, 'scanEntries').mockImplementation(function(this: SqliteStorage, ...args) {
