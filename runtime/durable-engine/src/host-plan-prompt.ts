@@ -29,6 +29,7 @@ export function createHostPlanPrompt(options: {
         };
         check(); const chat = captured.operation.chatJid;
         const stored = await api.snapshot(PlanDoc, chat, context); check();
+        if (options.root.inTransaction) throw Error('Root connection transaction active');
         const plan = stored ?? readLegacyPlan(options.root, chat) ?? { chat_jid: chat, markdown: DEFAULT_PLAN, updated_at: null };
         if (plan.chat_jid !== chat) throw Error('Plan identity mismatch');
         const system = buildPlanSystemPrompt({ ...plan, markdown: plan.markdown.trim() || '(empty)' });
