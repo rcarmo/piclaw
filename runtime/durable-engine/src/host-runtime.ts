@@ -30,7 +30,7 @@ import { nativeBackgroundIdentity,readNativeBackgroundPayload,nativeBackgroundPo
 import { NativeBackgroundContexts, type NativeBackgroundContext } from "./host-background-context.js";
 import { projectPublicHistory } from "./session-tree.js";
 import { A2UI_RENDERER_TOOL } from '../../src/channels/web/a2ui/transport-metadata.js';
-import { materializePlanContext, materializeGoalContext, type GoalContextIdentity } from "./host-plan-context.js";
+import { materializeGoalContext, type GoalContextIdentity } from "./host-plan-context.js";
 import { buildSessionTreeSnapshot, type RootSessionTreeNode, type SessionTreeSnapshot } from "../../src/agent-control/session-tree-snapshot.js";
 
 /** Immutable host-persisted intent; never supplied as arbitrary user text. */
@@ -1606,21 +1606,6 @@ export class HostConversationRuntime {
       if (!this.routed(input)) throw Error("Host binding conflict");
       this.options.bindings.assertSourceCurrent?.(input);
     }
-  }
-  preparePlanContext(conversationId: ConversationId, taskId: TaskId, inputs: readonly HostInputBinding[],
-    messages: readonly import("@earendil-works/pi-ai").Message[], content: import("@earendil-works/pi-ai").UserMessage["content"],
-    assertAddonCurrent: () => void, context: Context) {
-    return this.observe(async () => {
-      const guard = this.options.withPromptContextGuard;
-      if (!guard || !inputs.length || !this.options.bindings.assertSourceCurrent) throw Error("Plan context write guard unavailable");
-      const check = () => { context.abortSignal?.throwIfAborted(); assertAddonCurrent(); this.assertCapturedSourceCurrent(inputs); };
-      return guard(check, async () => {
-        const conversation = await this.harness.conversation(conversationId, context);
-        check();
-        if (!conversation) throw Error("Plan conversation unavailable");
-        return materializePlanContext(conversation, taskId, inputs[0]!.chatJid, messages, content, check, context);
-      });
-    });
   }
   prepareGoalContext(conversationId: ConversationId, taskId: TaskId, inputs: readonly HostInputBinding[],
     messages: readonly import("@earendil-works/pi-ai").Message[], content: import("@earendil-works/pi-ai").UserMessage["content"],

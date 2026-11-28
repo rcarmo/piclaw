@@ -4,12 +4,13 @@ import { PlanDoc } from './plan-document.js';
 import { readLegacyPlan } from '../../src/plan/legacy.js';
 import { buildPlanSystemPrompt, buildPlanTurnMessage, DEFAULT_PLAN } from '../../src/plan/markdown.js';
 import type { HostConversationRuntime } from './host-runtime.js';
+import { splitGoalSystemInstructions } from './host-plan-context.js';
 
 /** Native document read and public SDK context materialisation. No add-on
  * declaration, extension KV authority, legacy hook or session emulation. */
 export function createHostPlanPrompt(options: {
   root: Database;
-  runtime(): Pick<HostConversationRuntime, 'captureRunSource' | 'assertCapturedSourceCurrent' | 'preparePlanContext'>;
+  runtime(): Pick<HostConversationRuntime, 'captureRunSource' | 'assertCapturedSourceCurrent'>;
   assertOwner(): void;
   failClosed(error: unknown): void;
 }) {
@@ -32,10 +33,13 @@ export function createHostPlanPrompt(options: {
         if (plan.chat_jid !== chat) throw Error('Plan identity mismatch');
         const system = buildPlanSystemPrompt({ ...plan, markdown: plan.markdown.trim() || '(empty)' });
         const content = buildPlanTurnMessage(plan)?.content ?? [{ type: 'text' as const, text: `Current Plan Sidebar checklist for ${chat}:\n\n(empty)` }];
-        const messages = await runtime.preparePlanContext(api.conversationId, api.taskId, captured.inputs,
-          request.messages, content, () => { check(); if (options.root.inTransaction) throw Error('Root connection transaction active'); }, context);
+        const composed = splitGoalSystemInstructions(request.messages, chat, api.taskId);
+        const messages = [...composed.messages,
+          { role: 'user' as const, content, timestamp: 0 },
+          ...(composed.instruction ? [composed.instruction] : []),
+          ...(system ? [{ role: 'system' as const, content: system, timestamp: 0 }] : [])];
         check();
-        return { messages: [...messages, ...(system ? [{ role: 'system' as const, content: system, timestamp: 0 }] : [])] };
+        return { messages };
       } catch (error) { options.failClosed(error); throw Error('Plan request authority unavailable'); }
     },
   };
