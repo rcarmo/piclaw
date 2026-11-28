@@ -159,6 +159,7 @@
     "newcodex-default-factory.test.ts",
     "newregrets-enabled-default-factory.test.ts",
     "offline-maintenance-default-factory.test.ts",
+    "offline-piclaw-archive-reclaim.test.ts",
     "owned-model-context-admission.test.ts",
     "ownership.test.ts",
     "pi150-upgrade-smoke.test.ts",
