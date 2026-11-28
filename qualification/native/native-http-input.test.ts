@@ -163,7 +163,8 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     expect(replies).toHaveLength(2);expect(replies[0]!.content).toContain("steering instruction");expect(replies[1]!.content).toContain("follow-up instruction");
     expect(replies.map(reply=>reply.thread_id)).toEqual([primary.thread_id,followup.thread_id]);
     expect(toolSeen).toBe(true);expect(calls).toBe(3);
-    const answers = database.query(`SELECT DISTINCT json_extract(record,'$.answer') AS answer FROM submissions WHERE status='done'`).all() as { answer: number }[];
+    const answers = database.query(`SELECT DISTINCT json_extract(record,'$.answer') AS answer FROM submissions
+      WHERE status='done' AND json_extract(record,'$.type')='input'`).all() as { answer: number }[];
     expect(answers).toHaveLength(2);
     expect(new Set(scans.map(read => read.max))).toEqual(new Set(answers.map(row => row.answer)));
     expect(scans.every(read => read.min === read.max && read.limit === 1)).toBe(true);
