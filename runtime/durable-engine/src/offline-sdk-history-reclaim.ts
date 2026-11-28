@@ -12,6 +12,7 @@ import { verifySqliteBackup } from "../../src/db/backup.js";
 const SIDECARS = ["-wal", "-shm", "-journal"] as const;
 const SDK_TABLES = ["conversations", "entries", "tasks", "submissions", "documents", "document_revisions"] as const;
 type RemovedCounts = Record<(typeof SDK_TABLES)[number], number>;
+type SupportedSdkVersion = "1.6.1" | "1.7.0";
 export interface OfflineSdkHistoryReclaimOptions {
   sourcePath: string;
   /** Lower-case SHA-256 of the complete, closed main SQLite file. */
@@ -23,7 +24,8 @@ export interface OfflineSdkHistoryReclaimReceipt {
   version: 1;
   kind: "piclaw.offline-sdk-history-reclaim";
   conversationId: number;
-  sdkVersion: "1.6.1";
+  /** SDK used to validate and reopen the output, not the source's creation version. */
+  sdkVersion: SupportedSdkVersion;
   sourceSha256: string;
   outputSha256: string;
   outputBytes: number;
@@ -91,22 +93,19 @@ function fingerprintFd(fd: number, path: string, identity: Stats, destination?: 
 }
 function schemaRowsSql() { return "SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY type,name,tbl_name,sql"; }
 async function installedContract() {
-  const module = new URL(import.meta.resolve("@earendil-works/pi-durable/storage/sqlite"));
-  let directory = new URL(".", module), pkg: URL | undefined;
-  for (let depth = 0; depth < 5; depth++, directory = new URL("../", directory)) {
-    const candidate = new URL("package.json", directory);
-    try { if (JSON.parse(readFileSync(candidate, "utf8")).name === "@earendil-works/pi-durable") { pkg = candidate; break; } } catch {}
-  }
-  if (!pkg) refuse("Installed SDK package metadata is unavailable");
-  const metadata = JSON.parse(readFileSync(pkg, "utf8")) as { version?: unknown; name?: unknown };
-  if (metadata.name !== "@earendil-works/pi-durable" || metadata.version !== "1.6.1") refuse("Installed SDK is not exactly 1.6.1");
+  const packageUrl = new URL(import.meta.resolve("@earendil-works/pi-durable/package.json"));
+  const { name, version: sdkVersion } = JSON.parse(readFileSync(packageUrl, "utf8")) as { name?: unknown; version?: unknown };
+  // These releases have byte-identical SQLite storage and migration modules.
+  // Use the installed SDK to generate the exact schema rather than guessing from the input.
+  if (name !== "@earendil-works/pi-durable" || (sdkVersion !== "1.6.1" && sdkVersion !== "1.7.0"))
+    refuse("Installed SDK must be exactly 1.6.1 or 1.7.0");
   const adapter = await openNodeSqliteDatabase(":memory:", { walAutoCheckpointPages: 0 });
   const storage = await SqliteStorage.open(adapter);
   try {
     const schema = await adapter.all(schemaRowsSql()), ledger = await adapter.all("SELECT singleton,version FROM durable_schema ORDER BY singleton,version");
     const applicationId = await adapter.get<{ application_id: number }>("PRAGMA application_id");
     const userVersion = await adapter.get<{ user_version: number }>("PRAGMA user_version");
-    return { schema, ledger, applicationId: applicationId?.application_id, userVersion: userVersion?.user_version };
+    return { sdkVersion, schema, ledger, applicationId: applicationId?.application_id, userVersion: userVersion?.user_version } as const;
   } finally { await storage.close(context); }
 }
 function tableDigest(db: Database, query: string, ...params: number[]) {
@@ -125,7 +124,7 @@ function sameSchema(db: Database, contract: Awaited<ReturnType<typeof installedC
   const user = db.query("PRAGMA user_version").get() as { user_version: number } | null;
   if (JSON.stringify(schema) !== JSON.stringify(contract.schema) || JSON.stringify(ledger) !== JSON.stringify(contract.ledger) ||
       Number(app?.application_id) !== contract.applicationId || Number(user?.user_version) !== contract.userVersion)
-    refuse("Database is not the exact unprefixed SDK 1.6.1 SQLite schema and migration ledger");
+    refuse(`Database is not the exact unprefixed SDK ${contract.sdkVersion} SQLite schema and migration ledger`);
 }
 function count(db: Database, query: string, params: number[] = []) {
   const row = db.query(query).get(...params) as { count: number | bigint } | null;
@@ -289,7 +288,7 @@ export async function reclaimOfflineSdkHistory(options: OfflineSdkHistoryReclaim
       const directory = openSync(parent, "r");
       try {
         linkSync(candidate, output);
-        published = { version: 1, kind: "piclaw.offline-sdk-history-reclaim", conversationId: target, sdkVersion: "1.6.1",
+        published = { version: 1, kind: "piclaw.offline-sdk-history-reclaim", conversationId: target, sdkVersion: contract.sdkVersion,
           sourceSha256, outputSha256: proof.sha256, outputBytes: proof.bytes, removed, publication: 'linked-durability-unconfirmed', warnings: [] };
         try { fsyncSync(directory); published.publication = 'durable'; }
         catch { published.warnings.push('directory-sync-failed'); }

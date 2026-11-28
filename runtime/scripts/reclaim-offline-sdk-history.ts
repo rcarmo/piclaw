@@ -6,8 +6,8 @@ const usage = `Usage: bun runtime/scripts/reclaim-offline-sdk-history.ts \
   --source <closed-sdk-only-copy> --output <new-sibling-file> \
   --conversation-id <id> --expected-sha256 <64-lowercase-hex>
 
-Only the exact unprefixed SDK 1.6.1 SQLite schema is supported. Piclaw's application
-store, in-place operation, symlinks, and SQLite sidecars are refused.`;
+Requires Durable SDK 1.6.1 or 1.7.0 and its exact unprefixed SQLite schema.
+Piclaw's application store, in-place operation, symlinks, and SQLite sidecars are refused.`;
 
 async function main(args: string[]) {
   if (args.length === 1 && args[0] === '--help') { console.log(usage); return; }

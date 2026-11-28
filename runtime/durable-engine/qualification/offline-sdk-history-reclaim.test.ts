@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { createModels, fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai";
 import { Harness, UserEntry, createRegistry, defineEntry } from "@earendil-works/pi-durable";
+import durablePackage from "@earendil-works/pi-durable/package.json" with { type: "json" };
 import { SqliteStorage } from "@earendil-works/pi-durable/storage/sqlite";
 import { BunSqliteDatabase } from "../src/bun-sqlite.ts";
 import { reclaimOfflineSdkHistory } from "../src/offline-sdk-history-reclaim.ts";
@@ -52,6 +53,7 @@ test("offline SDK-only reclaim emits a compact verified sibling and retains surv
     const result = await reclaimOfflineSdkHistory({ sourcePath: f.source, expectedSourceSha256: digest, outputPath: output, conversationId: f.target });
     expect(result.removed).toEqual({ conversations: 1, entries: 1, tasks: 0, submissions: 0, documents: 5, document_revisions: 5 });
     expect(result.sourceSha256).toBe(digest);
+    expect<string>(result.sdkVersion).toBe(durablePackage.version);
     expect(result.outputSha256).toBe(sha(output));
     expect(result.publication).toBe('durable');
     expect(result.warnings).toEqual([]);
@@ -237,6 +239,6 @@ test('offline reclaim CLI emits a digest and committed copy', async () => {
       '--conversation-id', String(f.target), '--expected-sha256', sha(f.source)], { stdout: 'pipe', stderr: 'pipe' });
     const [exit, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
     expect(exit, stderr).toBe(0);
-    expect(JSON.parse(stdout)).toMatchObject({ publication: 'durable', outputSha256: sha(output), conversationId: f.target });
+    expect(JSON.parse(stdout)).toMatchObject({ publication: 'durable', sdkVersion: durablePackage.version, outputSha256: sha(output), conversationId: f.target });
   } finally { rmSync(f.dir, { recursive: true, force: true }); }
 }, 15_000);
