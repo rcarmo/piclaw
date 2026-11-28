@@ -142,7 +142,7 @@ export function assertModelContextFits(messages: readonly Message[], target: { c
   // Keep the reserve on the cache-inclusive estimate; check the physical cap too.
   if (!Number.isFinite(inputEstimate) || inputEstimate < 0 || inputEstimate > target.contextWindow ||
     (output?.status === "bounded" && (measuredInputEstimate + output.reserveTokens > target.contextWindow || inputEstimate + output.maxOutputTokens > target.contextWindow))) {
-    const bytes = new TextEncoder().encode(JSON.stringify(messages)).length;
+    const bytes = Buffer.byteLength(JSON.stringify(messages) ?? '', 'utf8');
     throw Error(`Candidate context estimate exceeded; compact first (serialized input bytes=${bytes}, reported tokens=${estimate.usageTokens}, estimated context tokens=${estimate.tokens}, input token estimate=${inputEstimate}, producer output reserve=${output?.status === "bounded" ? output.reserveTokens : "unknown"}, context window=${target.contextWindow}${images ? `, unmeasured images=${images}` : ""})`);
   }
 }
