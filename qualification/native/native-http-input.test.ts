@@ -75,7 +75,8 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
   const scans: { min: number | undefined; max: number | undefined; limit: number }[] = [];
   const originalResult = HostConversationRuntime.prototype.readMessageResult;
   const resultSpy = spyOn(HostConversationRuntime.prototype, 'readMessageResult').mockImplementation(function(this: HostConversationRuntime, input: AcceptedInput, projection?: 'publication') {
-    return projected.run(true, () => Reflect.apply(originalResult, this, projection === undefined ? [input] : [input, projection]));
+    if (projection !== 'publication') return Reflect.apply(originalResult, this, [input]);
+    return projected.run(true, () => originalResult.call(this, input, projection));
   });
   const originalScan = SqliteStorage.prototype.scanEntries;
   const scanSpy = spyOn(SqliteStorage.prototype, 'scanEntries').mockImplementation(function(this: SqliteStorage, ...args) {
@@ -163,10 +164,9 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     expect(replies).toHaveLength(2);expect(replies[0]!.content).toContain("steering instruction");expect(replies[1]!.content).toContain("follow-up instruction");
     expect(replies.map(reply=>reply.thread_id)).toEqual([primary.thread_id,followup.thread_id]);
     expect(toolSeen).toBe(true);expect(calls).toBe(3);
-    const answers = database.query(`SELECT DISTINCT json_extract(record,'$.answer') AS answer FROM submissions
-      WHERE status='done' AND json_extract(record,'$.type')='input'`).all() as { answer: number }[];
-    expect(answers).toHaveLength(2);
-    expect(new Set(scans.map(read => read.max))).toEqual(new Set(answers.map(row => row.answer)));
+    const answers = replies.map(reply => Number(reply.id.split(':').at(-1)));
+    expect(answers.every(id => Number.isSafeInteger(id) && id > 0)).toBe(true);
+    expect(new Set(scans.map(read => read.max))).toEqual(new Set(answers));
     expect(scans.every(read => read.min === read.max && read.limit === 1)).toBe(true);
     expect(followupModelInput).toBe(JSON.stringify('follow-up instruction'));
     const acceptedRecords = database.query('SELECT record FROM submissions WHERE id=?').get(followup.submission_id);
