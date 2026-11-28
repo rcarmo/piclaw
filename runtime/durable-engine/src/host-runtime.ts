@@ -9,14 +9,14 @@ import { withChatContext } from "../../src/core/chat-context.js";
 import { assertModelContextFits, modelSelectionFrame, projectModelContext, prepareModelContextAdmission, type ModelContextAdmission } from "./host-model-context.js";
 import { readNativeExitReceipt, nativeExitNotice, type NativeExitReceipt } from "./host-process-receipt.js";
 import { modelFailureNotice, parseModelFailure } from "./host-model-failure.js";
-import { createLogger } from "../../src/utils/logger.js";
+import { createLogger, debugSuppressedError } from "../../src/utils/logger.js";
 import { ownsHistoricalOptimizerSubmission } from "./retired-optimizer.js";
 import { createToolCallSummaryResolver, collectToolCallSummaries, type ToolCallSummaryResolver } from "../../src/tool-call-summary.js";
 import { estimateContextTokens } from "@earendil-works/pi-ai/utils/estimate";
 const log = createLogger("durable.runtime");
 import { getSupportedThinkingLevels, type ModelThinkingLevel } from "@earendil-works/pi-ai";
 // Native conversation runtime, explicitly composed with fenced host authority by application-bootstrap.
-import { configure, AgentDoc, AssistantEntry, ResetEntry, InboxDoc, LiveDoc, UsageDoc, Harness, type HarnessOptions, type HarnessInspection, type Storage, type ConversationId, type SubmissionId, type TaskId, type CompactionResult, type SubmissionRecord, type EntryRecord, type EntryId, type Cursor } from "@earendil-works/pi-durable";
+import { configure, AgentDoc, AssistantEntry, ResetEntry, InboxDoc, LiveDoc, UsageDoc, Harness, type HarnessOptions, type HarnessInspection, type Storage, type ConversationId, type SubmissionId, type TaskId, type CompactionResult, type SubmissionRecord, type EntryRecord, type EntryId, type Cursor, type ContextView } from "@earendil-works/pi-durable";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { awaitWithContext, withAbortSignal, withoutAbortSignal, type Context } from "@earendil-works/chord/context";
 import type { CurrentPiclawServiceWorkStore, FinishHarnessRequest } from "../../../runtime/src/service-effects/current-piclaw/service-work-store.js";
@@ -289,9 +289,6 @@ export class HostConversationRuntime {
   // Lifecycle joins only: not an input queue or admission/dedup authority.
   private readonly active = new Set<Promise<unknown>>();
   private readonly observations = new AbortController();
-  // The estimate belongs to a committed tail, including appended edits, resets
-  // and head markers. Only a scalar promise survives; never keep a view here.
-  private readonly contextEstimates = new Map<ConversationId, { tail: EntryId; tokens: Promise<number> }>();
   private observe<T>(body: () => Promise<T>): Promise<T> {
     this.fence();
     const promise = body();
@@ -301,7 +298,8 @@ export class HostConversationRuntime {
   }
   private constructor(private readonly options: RuntimeSnapshot, private readonly harness: Harness,
     private readonly storage: Storage, private readonly context: Context,
-    private readonly scheduledSignals:Map<ConversationId,AbortSignal>) {
+    private readonly scheduledSignals:Map<ConversationId,AbortSignal>,
+    private readonly contextEstimates: Map<ConversationId, { tail: EntryId; tokens: Promise<number> }>) {
     harness.subscribeClose(() => { this.storageClosing = true; });
     this.storageEnded = harness.closed.then(end => {
       if (end.kind === "failed") options.onStorageFailure?.(end.error);
@@ -368,13 +366,31 @@ export class HostConversationRuntime {
           id=conversation.owner.conversationId; // Execution ownership, never history ancestry.
         }
       };
-      harness = await Harness.open(storage, {...options.harnessOptions,registry:withTaskModelRequestScope(options.harnessOptions.registry,cancellationFor,options.publicInputText)}, context);
+      // Reuse the one bounded reader cache. No view or extra entry is retained:
+      // only a previously observed conversation with a newer exact raw tail can warm it.
+      const contextEstimates = new Map<ConversationId, { tail: EntryId; tokens: Promise<number> }>();
+      const rememberGenerationEstimate = (id: ConversationId, view: ContextView) => {
+        const current = contextEstimates.get(id);
+        if (!current) return;
+        const last = view.entries.at(-1)?.id;
+        const head = view.head?.id;
+        // The public view puts the head marker first, even when it is the tail.
+        const tail = last === undefined ? head : head !== undefined && head > last ? head : last;
+        if (tail === undefined || tail <= current.tail) return;
+        try {
+          const tokens = estimateContextTokens(view.messages).tokens;
+          contextEstimates.set(id, { tail, tokens: Promise.resolve(tokens) });
+        } catch (error) {
+          debugSuppressedError(log, "Could not warm the native context estimate; the next reader still uses committed storage.", error);
+        }
+      };
+      harness = await Harness.open(storage, {...options.harnessOptions,registry:withTaskModelRequestScope(options.harnessOptions.registry,cancellationFor,options.publicInputText,rememberGenerationEstimate)}, context);
       options.owner.assert();
       for (const id of options.existingConversationIds) {
         if (!await harness.conversation(id, context)) throw new Error("Missing manifest conversation");
         options.owner.assert();
       }
-      return new HostConversationRuntime(options, harness, storage, context,scheduledSignals);
+      return new HostConversationRuntime(options, harness, storage, context,scheduledSignals,contextEstimates);
     } catch (error) {
       // Failed/uncertain cleanup never releases ownership.
       if (harness) await harness.close(context); else await storage.close(context);
