@@ -255,3 +255,86 @@ applicationTest("real HTTP native status and singleton exit publish a notice bef
     expect(database.query("SELECT count(*) n FROM token_usage").get()).toEqual({n:2});
   }finally{await backend?.close();await channel?.stop();await base.queue.shutdown();await pool?.shutdown();await closeDatabase();lock.release();}
 },30000);
+
+applicationTest("cold attach publishes a terminal reply committed before attachment without replaying history", async () => {
+  const workspace=process.env.PICLAW_WORKSPACE!;
+  process.env.PICLAW_DB_IN_MEMORY="0";initDatabase();const db=getDb();
+  mkdirSync(getPiclawAgentDir(),{recursive:true});
+  const lock=acquireRuntimeLock({lockPath:join(workspace,"native-cold-attach.lock"),strictOwnership:true,disabled:false});
+  const credentials=createTestCredentialStore({});
+  const model:any={provider:"fixture",id:"direct",name:"Fixture",api:"openai-completions",baseUrl:"https://fixture.invalid",input:["text"],reasoning:false,contextWindow:100000,maxTokens:1000,cost:{input:0,output:0,cacheRead:0,cacheWrite:0}};
+  const host=await ModelRuntime.create({credentials,modelsPath:null,modelsStore:{read:async()=>undefined,write:async()=>{},delete:async()=>{}},allowModelNetwork:false,refreshOnCreate:false});
+  let calls=0;
+  function run(physical:any){
+    const stream=createAssistantMessageEventStream();
+    const message:any={role:"assistant",api:physical.api,provider:physical.provider,model:physical.id,timestamp:Date.now(),
+      content:[{type:"text",text:`fixture reply ${++calls}`}],stopReason:"stop",
+      usage:{input:5,output:2,cacheRead:0,cacheWrite:0,totalTokens:7,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}};
+    stream.push({type:"done",reason:"stop",message});stream.end(message);return stream;
+  }
+  host.registerNativeProvider({id:model.provider,name:"Fixture",getModels:()=>[model],auth:{apiKey:{name:"Keyless fixture",resolve:async()=>({auth:{},source:"fixture"})}},stream:run,streamSimple:run});
+  await host.refresh({allowNetwork:false});
+  const services:any={modelRuntime:host,modelRegistry:{getAvailable:()=>[model]}};
+  const base=createRuntimeBaseServices({dataDir:workspace});
+  let backend:Awaited<ReturnType<typeof createDefaultApplicationRuntime>>|undefined;
+  let pool:AgentPool|undefined,channel:WebChannel|undefined;
+  let reader:ReadableStreamDefaultReader<Uint8Array>|undefined;
+  const stop=async()=>{await backend?.close();await channel?.stop();await pool?.shutdown();backend=undefined;channel=undefined;pool=undefined;};
+  const open=async()=>{
+    backend=await createDefaultApplicationRuntime(lock,async()=>services);
+    pool=new AgentPool({credentialStore:credentials,modelRuntime:host,modelRegistry:services.modelRegistry,...backend.sessionOptions});
+    return channel=new WebChannel(backend.bind({queue:base.queue,agentPool:pool}));
+  };
+  const chat="web:default";
+  const replies=()=>db.query("SELECT rowid,id,thread_id,content FROM messages WHERE chat_jid=? AND is_terminal_agent_reply=1 ORDER BY rowid")
+    .all(chat) as {rowid:number;id:string;thread_id:number;content:string}[];
+  const send=async(web:WebChannel,content:string)=>{
+    const result=await handleAgentMessage(web,new Request("https://fixture/agent/default/message",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({content})}),"/agent/default/message",chat,"default");
+    expect(result.status).toBe(201);return await result.json() as {submission_id:number;thread_id:number};
+  };
+  const waitForReplies=async(n:number)=>{
+    const until=Date.now()+5000;while(replies().length<n&&Date.now()<until)await Bun.sleep(10);
+    expect(replies()).toHaveLength(n);
+  };
+  const abort=new AbortController();let deadline:ReturnType<typeof setTimeout>|undefined;
+  try{
+    let web=await open();backend!.attachChannel!(web);
+    const past=await send(web,"Committed history");await waitForReplies(1);
+    const historical=replies()[0]!;expect(historical.thread_id).toBe(past.thread_id);
+    await stop();
+
+    web=await open();
+    const decoder=new TextDecoder();
+    reader=web.handleSse(new Request(`https://fixture/sse/stream?chat_jid=${chat}`,{signal:abort.signal})).body!.getReader();
+    deadline=setTimeout(()=>abort.abort(),5000);
+    expect(decoder.decode((await reader.read()).value)).toStartWith("event: connected\n");
+    expect(replies()).toEqual([historical]);
+    const early=await send(web,"Accepted before publisher attachment");await waitForReplies(2);
+    const terminal=replies()[1]!;expect(terminal.thread_id).toBe(early.thread_id);
+    const seen:number[]=[];
+    const broadcast=web.broadcastEvent.bind(web);
+    web.broadcastEvent=(event,data)=>{
+      const post=data as {id?:number;data?:{is_terminal_agent_reply?:boolean}};
+      if(event==="new_post"&&post.data?.is_terminal_agent_reply&&post.id!==undefined)seen.push(post.id);
+      broadcast(event,data);
+    };
+    backend!.attachChannel!(web,"cold-start");
+    for(;;){
+      const frame=await reader.read();expect(frame.done).toBe(false);
+      const [type,body]=decoder.decode(frame.value).split("\n");
+      if(type!=="event: new_post"||!body?.startsWith("data: "))continue;
+      const post=JSON.parse(body.slice(6));
+      if(!post.data?.is_terminal_agent_reply)continue;
+      expect(post.id).toBe(terminal.rowid);break;
+    }
+    await stop();
+    expect(seen).toEqual([terminal.rowid]);expect(replies()).toEqual([historical,terminal]);
+    expect(db.query("SELECT id,status FROM submissions ORDER BY id").all()).toEqual([
+      {id:past.submission_id,status:"done"},{id:early.submission_id,status:"done"},
+    ]);
+    expect(calls).toBe(2);
+  }finally{
+    clearTimeout(deadline);abort.abort();await reader?.cancel().catch(()=>{});
+    await stop();await base.queue.shutdown();await closeDatabase();lock.release();
+  }
+},30000);
