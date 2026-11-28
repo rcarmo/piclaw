@@ -149,6 +149,7 @@ applicationTest("real HTTP submit/queue/steer bypass stale host activity and per
     expect(replies.map(reply=>reply.thread_id)).toEqual([primary.thread_id,followup.thread_id]);
     expect(toolSeen).toBe(true);expect(calls).toBe(3);
     expect(followupModelInput).toBe(JSON.stringify('follow-up instruction'));
+    expect(database.query("SELECT count(*) n FROM entries WHERE json_extract(record,'$.kind')='host.plan-context'").get()).toEqual({n:0});
     const acceptedRecords = database.query('SELECT record FROM submissions WHERE id=?').get(followup.submission_id);
     const acceptedEntries = database.query("SELECT record FROM entries WHERE json_extract(record,'$.kind')='host.accepted'").all();
     expect(JSON.stringify([acceptedRecords,acceptedEntries])).not.toContain('A2UI renderer metadata');

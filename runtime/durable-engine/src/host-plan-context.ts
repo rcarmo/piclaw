@@ -37,7 +37,7 @@ function assertHiddenContext(entry: ContextEntry, kind: string, owner: string, l
 /** Request-local composition, never persisted. Object identity survives the SDK's
  * shallow message-array normalisation; user text cannot manufacture this tag. */
 const goalSystemMessages = new WeakMap<Message, { chatJid: string; taskId: number }>();
-function splitGoalSystemInstructions(messages: readonly Message[], chatJid: string, taskId: number) {
+export function splitGoalSystemInstructions(messages: readonly Message[], chatJid: string, taskId: number) {
   const last = messages.at(-1);
   const scope = last && goalSystemMessages.get(last);
   return scope?.chatJid === chatJid && scope.taskId === taskId

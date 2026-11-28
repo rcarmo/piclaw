@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "sourceParent": "046a42df4994de33711ad7835d887c0415a33fcc",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlay": "docs/development/receipts/core-generation-context-retention-overlay.json",
+  "previousOverlaySha256": "3f18376729bd3ac5bbb2b06e0396944cd6d529eff8d5eb27f7c380b923d3f851",
+  "scope": "Request-local Plan checklist composition only; original paths, deletions and retirement accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/host-plan-context.ts",
+      "beforeSha256": "ec02d622e3407da76dbf0ea8c958aab4618e9f334a2c9cfafac7beeefa1b5904",
+      "afterSha256": "811ee5c492e091abcd625a4b55acda5ab7e706d2e3d5507e4f1f57f70f89dc16",
+      "purpose": "Expose request-local Goal instruction separation so Plan prompt composition can preserve accepted steering without materializing durable conversation state."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-runtime.ts",
+      "beforeSha256": "7011a5ccfd9adff32833e655fabc38856035cbb47094f51a52d263282c6d87d7",
+      "afterSha256": "2ec62ba764d36eedd6877091241158dc0adcd93ca82de7d5517eca2d827e2be4",
+      "purpose": "Remove durable Plan context preparation while retaining request-local Plan composition and the distinct Goal context path."
+    }
+  ]
+}
