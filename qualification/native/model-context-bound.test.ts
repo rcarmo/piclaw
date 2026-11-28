@@ -20,6 +20,32 @@ test("context-fit refusal explains the actual producer allowance without prompt 
   expect(error!.message).not.toContain(message.content);
 });
 
+test("context-fit byte diagnostics match TextEncoder on serialized Unicode and JSON escapes", () => {
+  const messages = [{ ...message, content: "NUL=\0 astral=😀 lone-high=\ud800 lone-low=\udc00 quote=\" slash=\\ newline=\n tab=\t" }];
+  const serialized = JSON.stringify(messages)!;
+  expect(serialized).toContain("\\u0000");
+  expect(serialized).toContain("😀");
+  expect(serialized).toContain("\\ud800");
+  expect(serialized).toContain("\\udc00");
+  expect(serialized).toContain("\\\"");
+  expect(serialized).toContain("\\\\");
+  let error: Error | undefined;
+  try { assertModelContextFits(messages, { ...target, contextWindow: 1 }); } catch (e) { error = e as Error; }
+  const diagnostic = error?.message.match(/serialized input bytes=(\d+)/)?.[1];
+  expect(diagnostic).toBeDefined();
+  expect(Number(diagnostic)).toBe(new TextEncoder().encode(serialized).length);
+});
+
+test("context-fit byte diagnostics report zero when the message array toJSON returns undefined", () => {
+  const messages = [message] as Message[] & { toJSON(): undefined };
+  messages.toJSON = () => undefined;
+  expect(JSON.stringify(messages)).toBeUndefined();
+  let error: Error | undefined;
+  try { assertModelContextFits(messages, { ...target, contextWindow: 1 }); } catch (e) { error = e as Error; }
+  expect(error?.message.match(/serialized input bytes=(\d+)/)?.[1]).toBe("0");
+  expect(new TextEncoder().encode(JSON.stringify(messages)).length).toBe(0);
+});
+
 test("producer safety room cannot hide transport framing that overflows the actual output cap", async () => {
   const messages: Message[] = [{role:'toolResult',toolCallId:'id'.repeat(170000),toolName:'lookup',content:[{type:'text',text:'ok'}],isError:false,timestamp:1}];
   expect(estimateContextTokens(messages).tokens).toBeLessThan(100);
