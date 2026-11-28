@@ -82,7 +82,14 @@ export function mcpToolsExtension(config:McpToolOwner,tools:readonly McpTool[],c
         // The SDK bounds schema-less output before giving it to scripts. Declare
         // its existing text contract explicitly so the full value stays intact;
         // model-facing text/images keep the SDK's normal output limits.
-        const structuredOutput=result.isError===true?undefined:tool.outputSchema===undefined?output.flatMap(block=>block.type==='text'?[block.text]:[]).join('\n'):result.structuredContent===undefined?undefined:JSON.parse(JSON.stringify(result.structuredContent));
+        let structuredOutput;
+        if (result.isError !== true) {
+          if (tool.outputSchema === undefined) structuredOutput = output.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n');
+          else if (result.structuredContent !== undefined) {
+            const value = result.structuredContent;
+            structuredOutput = typeof value === 'string' ? value : JSON.parse(JSON.stringify(value));
+          }
+        }
         return {output,structuredOutput,isError:result.isError === true,details:details(tool.name)};
       } catch (error) {context.abortSignal?.throwIfAborted();if(error instanceof Error)onFailure?.(error);throw new Error(mcpFailure(error));}
     },
