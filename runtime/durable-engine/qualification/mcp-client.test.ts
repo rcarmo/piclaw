@@ -55,7 +55,9 @@ test('actual fetch boundary refuses missing or revoked source without sending a 
  source=false;await expect(authority.invoke(api,context,()=>c.client.callTool('probe',{}))).rejects.toThrow('revoked');expect(c.calls()).toBe(1);
 });
 const payload={status:'success',data:{ready:true}},text=JSON.stringify(payload);
+const unicodeString='Unicode café 😀 漢字 NUL: \0 lone surrogate: \ud800 tail';
 for(const fixture of [
+ {name:'declared primitive string Unicode',schema:{type:'string'},result:{content:[{type:'text',text:'Independent short model text'}],structuredContent:unicodeString},expected:unicodeString,error:false},
  {name:'schema-less text and structured',schema:undefined,result:{content:[{type:'text',text}],structuredContent:payload},expected:text,error:false},
  {name:'schema-less structured-only',schema:undefined,result:{content:[],structuredContent:payload},expected:JSON.stringify(payload,null,2),error:false},
  {name:'schema-less null',schema:undefined,result:{content:[],structuredContent:null},expected:'null',error:false},
