@@ -1,0 +1,20 @@
+{
+  "package": "@earendil-works/pi-ai",
+  "version": "1.7.0",
+  "source": "current frozen admitted package; metadata is not login execution",
+  "files": {
+    "auth/oauth/meta.js": "ac46ea86a9eda96c8cb528cb5c89c97cbdd7b1b4e771290d8db23bd641e226d0",
+    "auth/oauth/xai.js": "d34783560dc2ac75d6e717b248136eb75a902fbd53b3e56fb9f2ec50c6c793d7",
+    "auth/oauth/radius.js": "b067a81142c495c0077a04170cad5a1bc4218d1acffd97520b42aecc3df8a386",
+    "auth/oauth/callback-server.js": "2dda468f4937edcf7bb5e8528de4bf7753efbe5b48610a3f9ea47ff2c4908ede",
+    "auth/oauth/device-code.js": "8f197cc9af67be64b82939573d719d1b55388f96f2e53cb8c47f9618fc1297eb",
+    "auth/oauth/pkce.js": "d54668654e89d6fe6994a09a7f9399e732a411fcb31c99eb8b5e60349763708c",
+    "auth/oauth/trusted-url.js": "d9b646305f2ae986eb1743841e80a0461ce71b5b273d8a2d3322c03bd088b7c2",
+    "auth/oauth/load.js": "d91ed193afe81b53026b5e1afad659ee9771b3562b89842f1fdbb0251d5217df",
+    "auth/helpers.js": "afa67f03895ace888d574c0c86c226cab35521cecc51fe4c0320ba710fb32a97",
+    "providers/meta.js": "f0ba7b97a407336f30cfb230c4c32bece9e0fd23b0ebdbdae11503374e5ab44c",
+    "providers/xai.js": "e5d69e97c788ce044f6c225fb38c04ec5b04defa639c02abfb022b466a90b9e9",
+    "providers/radius.js": "860f4c1607512b25b7166800869e26387b1923a8adc2e886558169fc69efb9f1",
+    "providers/radius-config.js": "db243da28e6e2ce61ad21c7c3951e186068677ac9cc3dd561859bd36682ccd93"
+  }
+}
