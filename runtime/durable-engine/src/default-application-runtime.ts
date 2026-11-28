@@ -147,7 +147,7 @@ function withGuardedCommit(api: ToolExecutionApi, assertCurrent: () => void): To
  * reader checks raw versions; configuration writes use public configure only. */
 function storedDocument(root: ReturnType<typeof getDb>, id: number, maxVersion = 1): any {
   let value: unknown, baseVersion: number | undefined;
-  const revisions = root.query("SELECT kind, version, content FROM document_revisions WHERE document_id=? ORDER BY seq").all(id) as { kind: string; version: number; content: string }[];
+  const revisions = root.query("SELECT kind, version, content FROM document_revisions WHERE document_id=? ORDER BY seq").iterate(id) as Iterable<{ kind: string; version: number; content: string }>;
   for (const revision of revisions) {
     if (!Number.isSafeInteger(revision.version) || revision.version < 1 || revision.version > maxVersion) throw Error("Invalid persisted document version");
     if (revision.kind === "base") { value = JSON.parse(revision.content); baseVersion = revision.version; }
