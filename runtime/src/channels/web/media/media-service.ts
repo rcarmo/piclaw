@@ -155,7 +155,7 @@ export class MediaService {
     if (contentType.startsWith("image/") && !contentType.includes("svg")) {
       try {
         const { generateThumbnail } = await import("../../../utils/image-processing.js");
-        const thumb = await generateThumbnail(Buffer.from(data));
+        const thumb = await generateThumbnail(data);
         if (thumb) thumbnail = new Uint8Array(thumb.data);
       } catch (error) {
         debugSuppressedError(log, "Thumbnail generation failed; skipping.", error);
@@ -209,7 +209,7 @@ export class MediaService {
 
     let data: Uint8Array;
     try {
-      data = new Uint8Array(readFileSync(filePath));
+      data = readFileSync(filePath);
     } catch {
       return { status: 500, body: { error: `Unable to read media file: ${filePath}` } };
     }
@@ -221,7 +221,7 @@ export class MediaService {
     if (contentType.startsWith("image/") && !contentType.includes("svg")) {
       try {
         const { generateThumbnail } = await import("../../../utils/image-processing.js");
-        const thumb = await generateThumbnail(Buffer.from(data));
+        const thumb = await generateThumbnail(data);
         if (thumb) thumbnail = new Uint8Array(thumb.data);
       } catch (error) {
         debugSuppressedError(log, "Thumbnail generation failed; skipping.", error);
