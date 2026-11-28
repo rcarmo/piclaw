@@ -9,9 +9,9 @@ const denyBootstrap = () => { bootstrapRequests++; throw new Error("Unexpected p
 globalThis.fetch = Object.assign(denyBootstrap, { preconnect: denyBootstrap });
 const { builtinProviders } = await import("@earendil-works/pi-ai/providers/all");
 assert.equal(bootstrapRequests, 0);
-// Current 1.6.1 OAuth implementation hashes are independently measured; historical archives stay unchanged.
+// Current 1.7.0 OAuth implementation hashes are independently measured; historical archives stay unchanged.
 const root = import.meta.resolve("@earendil-works/pi-ai");
-assert.equal(JSON.parse(await readFile(fileURLToPath(new URL("../package.json", root)), "utf8")).version, "1.6.1");
+assert.equal(JSON.parse(await readFile(fileURLToPath(new URL("../package.json", root)), "utf8")).version, "1.7.0");
 const fingerprints = {
   "github-copilot.js":"ad34c66e188dad8db14c4f7d69a28370d4425ed730ef91b1b9b4f9c747106293",
   "kimi-coding.js":"49d62d8a59e05e37ea6868c41784c52408797cb940dadc7b0de1cfb75176fcbd",
@@ -132,7 +132,7 @@ try {
         cancellationObserved: abortObserved, timerCancellationVerified: mode.includes("wait-cancel"), timingVerified: ["expiry", "pending-success", "slow-down"].includes(mode) });
     }
   }
-  console.log(JSON.stringify({ version: "1.6.1", runtime: typeof Bun === "undefined" ? `Node ${process.versions.node}` : `Bun ${Bun.version}`,
+  console.log(JSON.stringify({ version: "1.7.0", runtime: typeof Bun === "undefined" ? `Node ${process.versions.node}` : `Bun ${Bun.version}`,
     scope: "public_provider_device_methods_only", results, sdkFileSha256: fingerprints,
     credentialPersistence: "none", inference: "not_invoked", modelPolicyWrites: "none", networkGuard: "fetch_interception_no_os_sandbox" }));
 } finally { globalThis.fetch = originalFetch; }

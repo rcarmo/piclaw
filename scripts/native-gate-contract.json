@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "sdkVersion": "1.6.1",
+  "sdkVersion": "1.7.0",
   "fixtures": {
     "native": {
       "repository": "rcarmo/piclaw-addons",

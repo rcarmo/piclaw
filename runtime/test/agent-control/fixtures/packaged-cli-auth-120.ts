@@ -20,7 +20,7 @@ for (const field of ["CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb"]) assert.m
 assert.match(processStatus, /NoNewPrivs:\s+1(?:\n|$)/);
 assert.match(processStatus, /Groups:\s*\n/);
 
-assert.ok(release === '1.6.0' || release === '1.6.1', 'Unsupported SDK evidence release.');
+assert.ok(release === '1.6.0' || release === '1.6.1' || release === '1.7.0', 'Unsupported SDK evidence release.');
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent"))));
 const aiRoot = dirname(dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-ai"))));
 assert.equal(JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")).version, release);

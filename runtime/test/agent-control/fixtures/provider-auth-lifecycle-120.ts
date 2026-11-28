@@ -9,9 +9,9 @@ import { FileCredentialStore } from "../../../src/agent-pool/credential-store.js
 const PROVIDER_ID = "synthetic-auth-lifecycle-0991";
 const LONG_VALIDITY_MS = 60 * 60 * 1000;
 const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.resolve("@earendil-works/pi-ai"))), "utf8"));
-if (manifest.version !== "1.6.1") throw new Error("Exact published pi-ai 1.6.1 required");
+if (manifest.version !== "1.7.0") throw new Error("Exact published pi-ai 1.7.0 required");
 const runtimeManifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.resolve("@earendil-works/pi-coding-agent"))), "utf8"));
-if (runtimeManifest.version !== "1.6.1") throw new Error("Exact published coding-agent 1.6.1 required");
+if (runtimeManifest.version !== "1.7.0") throw new Error("Exact published coding-agent 1.7.0 required");
 let networkAttempts = 0;
 
 const denyNetwork = () => {

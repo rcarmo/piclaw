@@ -105,4 +105,10 @@ export function checkMcpPublic160(repoRoot = resolve(import.meta.dir, "..")) {
 export function checkMcpPublic161(repoRoot = resolve(import.meta.dir, "..")) {
   return checkMcpPublic(repoRoot, "1.6.1", "ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe");
 }
-if (import.meta.main) console.log(JSON.stringify(process.argv.includes('--release=1.6.1') ? checkMcpPublic161() : checkMcpPublic160(), null, 2));
+export function checkMcpPublic170(repoRoot = resolve(import.meta.dir, "..")) {
+  return checkMcpPublic(repoRoot, "1.7.0", "fb0fe823539f6d04850f6e34748c01f01f212e1f");
+}
+if (import.meta.main) {
+  const check = process.argv.includes('--release=1.7.0') ? checkMcpPublic170 : process.argv.includes('--release=1.6.1') ? checkMcpPublic161 : checkMcpPublic160;
+  console.log(JSON.stringify(check(), null, 2));
+}
