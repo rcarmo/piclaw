@@ -234,7 +234,13 @@ function appendMediaTextToFts(
 ): void {
   const placeholders = mediaIds.map(() => "?").join(",");
   const rows = db
-    .prepare(`SELECT content_type, data, metadata FROM media WHERE id IN (${placeholders})`)
+    // Only typed, indexable rows need their BLOB. Keep all rows in the same query
+    // so the existing JavaScript MIME check still handles malformed values.
+    .prepare(`SELECT content_type, metadata,
+       CASE WHEN substr(content_type,1,5) COLLATE BINARY='text/'
+              OR content_type COLLATE BINARY IN (${[...FTS_INDEXABLE_TYPES].map(type => "'" + type + "'").join(',')})
+            THEN data END AS data
+       FROM media WHERE id IN (${placeholders})`)
     .all(...mediaIds) as Array<{ content_type: string; data: Uint8Array; metadata: string | null }>;
 
   const textParts: string[] = [];
