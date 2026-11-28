@@ -69,6 +69,7 @@ export interface NativeMessageResult {
   /** Stable SDK input identity across generation handovers and tool rounds. */
   readonly runId: string;
 }
+export type NativeMessagePublication = Omit<NativeMessageResult, "entries">;
 export interface HostInputBinding extends AcceptedInput {
   readonly submissionId: SubmissionId | null;
 }
@@ -2327,7 +2328,9 @@ export class HostConversationRuntime {
   }
   /** Public immutable result projection. A source may be one of several inputs
    * answered by the same SDK run; project that answer once, under its first input. */
-  readMessageResult(input: AcceptedInput): Promise<NativeMessageResult | null> {
+  readMessageResult(input: AcceptedInput): Promise<NativeMessageResult | null>;
+  readMessageResult(input: AcceptedInput, projection: "publication"): Promise<NativeMessagePublication | null>;
+  readMessageResult(input: AcceptedInput, projection?: "publication"): Promise<NativeMessageResult | NativeMessagePublication | null> {
     const copy = inputSnapshot(input);
     if (!isNativeMessageInput(copy)) throw Error("Native message source required");
     return this.observe(async () => {
@@ -2336,6 +2339,8 @@ export class HostConversationRuntime {
       if (status.status !== "done") {
         const binding = await this.options.bindings.get(copy); this.fence();
         if (!binding) throw Error("Native message binding missing");
+        if (projection === "publication") return {status,inputs:[Object.freeze({...binding,submissionId:status.id})],answer:null,
+          runId:`sdk-run:${copy.conversationId}:${status.id}`};
         return {status,inputs:[Object.freeze({...binding,submissionId:status.id})],entries:[],answer:null,
           runId:`sdk-run:${copy.conversationId}:${status.id}`};
       }
@@ -2362,15 +2367,23 @@ export class HostConversationRuntime {
       const conversation = await this.harness.conversation(copy.conversationId,this.context); this.fence();
       if (!conversation) throw Error("Missing conversation");
       const entries: EntryRecord[] = []; cursor = undefined;
-      do {
-        const page = await conversation.entries({minEntryId:sources[0]!.entryId as import("@earendil-works/pi-durable").EntryId,maxEntryId:status.answer,order:"ascending"},100,cursor,this.context); this.fence();
-        entries.push(...page.items); cursor = page.next;
-      } while (cursor !== undefined);
+      if (projection === "publication") {
+        if (status.answer < sources[0]!.entryId) throw Error("Native final answer before first source");
+        const page = await conversation.entries({minEntryId:status.answer,maxEntryId:status.answer,order:"ascending"},1,undefined,this.context); this.fence();
+        entries.push(...page.items);
+      } else {
+        do {
+          const page = await conversation.entries({minEntryId:sources[0]!.entryId as import("@earendil-works/pi-durable").EntryId,maxEntryId:status.answer,order:"ascending"},100,cursor,this.context); this.fence();
+          entries.push(...page.items); cursor = page.next;
+        } while (cursor !== undefined);
+      }
       const final = entries.find(entry=>entry.id===status.answer);
       if (final?.kind !== "pi.assistant" || final.conversationId !== copy.conversationId || final.model?.length !== 1 || final.model[0]?.role !== "assistant") throw Error("Native final answer missing");
       const message = final.model[0];
       const processExit = await this.harness.commit(tx=>readNativeExitReceipt(tx,final,inputSnapshot(sources[0]!.input)),this.context); this.fence();
       const text = processExit ? nativeExitNotice(processExit.reason) : message.content.filter(part=>part.type==="text").map(part=>part.text).join("");
+      if (projection === "publication") return {status,inputs:Object.freeze(sources.map(source=>source.input)),
+        answer:Object.freeze({message,text,...(processExit?{processExit}: {})}),runId:`sdk-run:${copy.conversationId}:${sources[0]!.input.submissionId}`};
       return {status,inputs:Object.freeze(sources.map(source=>source.input)),entries:Object.freeze(entries),
         answer:Object.freeze({message,text,...(processExit?{processExit}: {})}),runId:`sdk-run:${copy.conversationId}:${sources[0]!.input.submissionId}`};
     });

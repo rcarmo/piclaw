@@ -2,7 +2,7 @@ import { compactGoalInput } from "./host-goal-input.js";
 import type Database from "bun:sqlite";
 import { getDeferredQueuedFollowups } from "../../src/db.js";
 import { accountCommittedGoalBatch, isGoalBudgetWrapup } from "./host-goal-usage.js";
-import { isNativeMessageInput, type NativeMessageResult, type AcceptedInput, type HostConversationRuntime, type SettledAnswer } from "./host-runtime.js";
+import { isNativeMessageInput, type NativeMessagePublication, type AcceptedInput, type HostConversationRuntime, type SettledAnswer } from "./host-runtime.js";
 import type { TerminalDatabaseEffect, TerminalCommit } from "../../src/service-effects/contracts/terminal-settlement-store.js";
 import { withExtensionKvAuthority, type ExtensionKvAuthority } from "../../src/extension-kv-registry.js";
 
@@ -56,7 +56,7 @@ type GoalProjectionOptions = {
 export type GoalProjection = (authority: ExtensionKvAuthority, committedAt: string, plan?: GoalPlanState) => void;
 
 export function prepareGoalProjection(addon: Parameters<typeof accountCommittedGoalBatch>[0], options: GoalProjectionOptions) {
-  return async (input: AcceptedInput, answer?: SettledAnswer, nativeResult?: NativeMessageResult): Promise<GoalProjection | undefined> => {
+  return async (input: AcceptedInput, answer?: SettledAnswer, nativeResult?: NativeMessagePublication): Promise<GoalProjection | undefined> => {
     const captured = Object.freeze({ ...input });
     options.assertOwner();
     const runtime = options.runtime();
@@ -159,7 +159,7 @@ export function createHostGoalSettlement(addon: Parameters<typeof accountCommitt
  * Root publication authority; no synthetic S01/S02 terminal record is created. */
 export function createNativeGoalProjection(addon: Parameters<typeof accountCommittedGoalBatch>[0], options: GoalProjectionOptions) {
   const prepare=prepareGoalProjection(addon,options);
-  return async(input: AcceptedInput,result: NativeMessageResult):Promise<GoalProjection|undefined>=>{
+  return async(input: AcceptedInput,result: NativeMessagePublication):Promise<GoalProjection|undefined>=>{
     if(!isNativeMessageInput(input)||result.status.status!=="done"||!result.answer||!result.inputs.some(source=>source.requestId===input.requestId))throw Error("Completed native Goal source required");
     return prepare(input,result.answer,result);
   };
