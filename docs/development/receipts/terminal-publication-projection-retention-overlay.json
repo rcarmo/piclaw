@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "sourceParent": "046a42df4994de33711ad7835d887c0415a33fcc",
+  "baseManifest": "docs/development/receipts/expense-final-retention-1875.json",
+  "baseManifestSha256": "9fb13a721eddd67160bb9e0df21265414f19fb936304c6c1cd9c3f1d47757aac",
+  "previousOverlay": "docs/development/receipts/core-generation-context-retention-overlay.json",
+  "previousOverlaySha256": "3f18376729bd3ac5bbb2b06e0396944cd6d529eff8d5eb27f7c380b923d3f851",
+  "scope": "Exact native final-answer selection for reply publication. Original paths, deletions and retirement accounting are unchanged.",
+  "rows": [
+    {
+      "path": "runtime/durable-engine/src/application-bootstrap.ts",
+      "beforeSha256": "c55c4b3d037a4b664c864a0717254f51b4bffc874b481ad398607c83e491376b",
+      "afterSha256": "fa8dbe0cf456d2d2878b828c610a4f78c1ddfba329dacab018107e03083df2af",
+      "purpose": "Project only the exact committed terminal answer and verified grouped input metadata for the application publication callback."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-goal-settlement.ts",
+      "beforeSha256": "e1ba47c9d8f6817ff2a5a3c0b9671c4f48d7076ed05c8cbf323e656f4698d452",
+      "afterSha256": "22609ca6873718c48d3e3b3540b60ddb3f65088fcd1441848e0dc9cb3e821804",
+      "purpose": "Accept the publication metadata type while preserving separate native Goal usage, tool activity and terminal-window checks."
+    },
+    {
+      "path": "runtime/durable-engine/src/host-runtime.ts",
+      "beforeSha256": "7011a5ccfd9adff32833e655fabc38856035cbb47094f51a52d263282c6d87d7",
+      "afterSha256": "32ca70f4907261050e12628c7125d2cb2765130794fecfc5878988fca9faa7dc",
+      "purpose": "Use a fork-aware one-entry seek only for reply publication; retain full windows and exact SDK process-exit receipt validation."
+    }
+  ]
+}

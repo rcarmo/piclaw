@@ -51,7 +51,10 @@ const delegateMerge=JSON.parse(delegateMergeBytes.toString('utf8'));
 const ownedPath='docs/development/receipts/codex-owned-response-retention-overlay.json';
 const ownedBytes=readFileSync(resolve(root,ownedPath));
 const owned=JSON.parse(ownedBytes.toString('utf8'));
-const generationContext=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/core-generation-context-retention-overlay.json'),'utf8'));
+const generationContextPath='docs/development/receipts/core-generation-context-retention-overlay.json';
+const generationContextBytes=readFileSync(resolve(root,generationContextPath));
+const generationContext=JSON.parse(generationContextBytes.toString('utf8'));
+const terminalProjection=JSON.parse(readFileSync(resolve(root,'docs/development/receipts/terminal-publication-projection-retention-overlay.json'),'utf8'));
 const sha=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
 type Change={path:string;beforeSha256:string;afterSha256:string;purpose:string};
 test('removal/retention witness binds every original Core path through explicit later source transformations',()=>{
@@ -196,6 +199,32 @@ test('removal/retention witness binds every original Core path through explicit 
   afterSha256:'7011a5ccfd9adff32833e655fabc38856035cbb47094f51a52d263282c6d87d7',
   purpose:'Warm the existing bounded scalar cache for observed conversations at a strictly newer exact raw generation tail without retaining a context view.',
  }]);
+ expect(terminalProjection.sourceParent).toBe('046a42df4994de33711ad7835d887c0415a33fcc');
+ expect(terminalProjection.baseManifest).toBe(manifestPath);
+ expect(terminalProjection.baseManifestSha256).toBe(sha(manifestBytes));
+ expect(terminalProjection.previousOverlay).toBe(generationContextPath);
+ expect(terminalProjection.previousOverlaySha256).toBe(sha(generationContextBytes));
+ expect(sha(generationContextBytes)).toBe('3f18376729bd3ac5bbb2b06e0396944cd6d529eff8d5eb27f7c380b923d3f851');
+ expect(terminalProjection.rows).toEqual([
+   {
+     "path": "runtime/durable-engine/src/application-bootstrap.ts",
+     "beforeSha256": "c55c4b3d037a4b664c864a0717254f51b4bffc874b481ad398607c83e491376b",
+     "afterSha256": "fa8dbe0cf456d2d2878b828c610a4f78c1ddfba329dacab018107e03083df2af",
+     "purpose": "Project only the exact committed terminal answer and verified grouped input metadata for the application publication callback."
+   },
+   {
+     "path": "runtime/durable-engine/src/host-goal-settlement.ts",
+     "beforeSha256": "e1ba47c9d8f6817ff2a5a3c0b9671c4f48d7076ed05c8cbf323e656f4698d452",
+     "afterSha256": "22609ca6873718c48d3e3b3540b60ddb3f65088fcd1441848e0dc9cb3e821804",
+     "purpose": "Accept the publication metadata type while preserving separate native Goal usage, tool activity and terminal-window checks."
+   },
+   {
+     "path": "runtime/durable-engine/src/host-runtime.ts",
+     "beforeSha256": "7011a5ccfd9adff32833e655fabc38856035cbb47094f51a52d263282c6d87d7",
+     "afterSha256": "32ca70f4907261050e12628c7125d2cb2765130794fecfc5878988fca9faa7dc",
+     "purpose": "Use a fork-aware one-entry seek only for reply publication; retain full windows and exact SDK process-exit receipt validation."
+   }
+ ]);
  const indexRows=<Row extends Change>(layer:{version:number;rows:Row[]})=>{
   expect(layer.version).toBe(1);
   const rows=new Map(layer.rows.map(row=>[row.path,row] as const));
@@ -211,6 +240,7 @@ test('removal/retention witness binds every original Core path through explicit 
  const delegateMergeRows=indexRows<Change&{incomingSha256:string}>(delegateMerge);
  const ownedRows=indexRows<Change>(owned);
  const generationContextRows=indexRows<Change>(generationContext);
+ const terminalProjectionRows=indexRows<Change>(terminalProjection);
  const advance=(path:string,expected:string,layers:ReadonlyMap<string,Change>[])=>{
   for(const layer of layers){
    const change=layer.get(path);
@@ -225,7 +255,7 @@ test('removal/retention witness binds every original Core path through explicit 
  expect(new Set(manifest.rows.map((r:{repo:string;path:string})=>r.repo+':'+r.path)).size).toBe(105);
  for(const row of manifest.rows){if(row.repo!=='core')continue;const path=resolve(root,row.path);
   if(row.state==='deleted'){
-   expect([...commonLayers,...rssLayers,...a2uiLayers,...delegateLayers,mergeRows,delegateMergeRows,ownedRows,generationContextRows].some(layer=>layer.has(row.path))).toBe(false);
+   expect([...commonLayers,...rssLayers,...a2uiLayers,...delegateLayers,mergeRows,delegateMergeRows,ownedRows,generationContextRows,terminalProjectionRows].some(layer=>layer.has(row.path))).toBe(false);
    expect(existsSync(path),row.path).toBe(false);
   }else{
    // Both merge parents start at their stated common tip, not at each other's tip.
@@ -259,7 +289,7 @@ test('removal/retention witness binds every original Core path through explicit 
      expect(delegateResolution.afterSha256,row.path).not.toBe(incomingTip);
     }
    }
-   mergedTip=advance(row.path,mergedTip,[delegateMergeRows,ownedRows,generationContextRows]);
+   mergedTip=advance(row.path,mergedTip,[delegateMergeRows,ownedRows,generationContextRows,terminalProjectionRows]);
    expect(sha(readFileSync(path)),row.path).toBe(mergedTip);
    expect(row.currentPurpose.length).toBeGreaterThan(20);
   }
