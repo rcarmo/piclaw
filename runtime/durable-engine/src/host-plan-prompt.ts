@@ -34,10 +34,16 @@ export function createHostPlanPrompt(options: {
         const system = buildPlanSystemPrompt({ ...plan, markdown: plan.markdown.trim() || '(empty)' });
         const content = buildPlanTurnMessage(plan)?.content ?? [{ type: 'text' as const, text: `Current Plan Sidebar checklist for ${chat}:\n\n(empty)` }];
         const composed = splitGoalSystemInstructions(request.messages, chat, api.taskId);
-        const messages = [...composed.messages,
-          { role: 'user' as const, content, timestamp: 0 },
-          ...(composed.instruction ? [composed.instruction] : []),
-          ...(system ? [{ role: 'system' as const, content: system, timestamp: 0 }] : [])];
+        const messages = [...composed.messages];
+        let insertion = messages.findLastIndex(message => message.role === 'user' && message.timestamp !== 0);
+        if (insertion < 0) {
+          insertion = messages.length;
+          while (insertion > 0 && messages[insertion - 1]?.role === 'toolResult') insertion--;
+          if (insertion > 0 && messages[insertion - 1]?.role === 'assistant') insertion--;
+        }
+        messages.splice(insertion, 0, { role: 'user' as const, content, timestamp: 0 });
+        if (composed.instruction) messages.push(composed.instruction);
+        if (system) messages.push({ role: 'system', content: system, timestamp: 0 });
         check();
         return { messages };
       } catch (error) { options.failClosed(error); throw Error('Plan request authority unavailable'); }
