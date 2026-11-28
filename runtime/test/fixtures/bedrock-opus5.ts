@@ -5,7 +5,7 @@ const IDS = [
   "au.anthropic.claude-opus-5",
   "eu.anthropic.claude-opus-5",
   "global.anthropic.claude-opus-5",
-  "jp.anthropic.claude-opus-5",
+  "in.anthropic.claude-opus-5",
   "us.anthropic.claude-opus-5",
 ] as const;
 

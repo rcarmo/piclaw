@@ -2,11 +2,11 @@ import { expect, test } from 'bun:test';
 import { readFileSync, readlinkSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-const pins = JSON.parse(readFileSync(new URL('./fixtures/provider-oauth-161-hashes.json', import.meta.url), 'utf8'));
+const pins = JSON.parse(readFileSync(new URL('./fixtures/provider-oauth-170-hashes.json', import.meta.url), 'utf8'));
 const deviceModes = ['success', 'denied', 'malformed-device', 'unsafe-uri', 'malformed-token', 'poll-cancel', 'initial-wait-cancel', 'pending-wait-cancel', 'expiry', 'refresh-denied', 'refresh-cancel'];
 const radiusModes = ['browser-success', 'browser-bad-state-first', 'browser-denied', 'browser-token-denied', 'browser-discovery-malformed', 'browser-cancel', 'device-pending-success', 'device-slow-down', 'device-denied', 'device-malformed', 'device-expiry', 'device-poll-cancel', 'device-wait-cancel', 'refresh-success', 'refresh-denied', 'unknown-selection', 'pre-abort'];
 
-for (const provider of ['meta', 'xai', 'radius']) test(`public SDK1.6.1 ${provider} OAuth executes only synthetic namespace-owned flows`, async () => {
+for (const provider of ['meta', 'xai', 'radius']) test(`public SDK1.7.0 ${provider} OAuth executes only synthetic namespace-owned flows`, async () => {
   const radius = provider === 'radius';
   const fixture = resolve(import.meta.dir, 'fixtures', radius ? 'radius-auth-152.mjs' : 'provider-device-extra-152.mjs');
   const path = `${dirname(process.execPath)}:/usr/bin:/bin`;
@@ -21,7 +21,7 @@ for (const provider of ['meta', 'xai', 'radius']) test(`public SDK1.6.1 ${provid
     const [exit, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
     expect(exit, stderr).toBe(0); expect(stderr).toBe('');
     const result = JSON.parse(stdout);
-    expect(result.version).toBe('1.6.1'); expect(result.runtime).toBe(`Bun ${Bun.version}`);
+    expect(result.version).toBe('1.7.0'); expect(result.runtime).toBe(`Bun ${Bun.version}`);
     expect(result.bootstrapRequests).toBe(0); expect(result.sdkFileSha256).toEqual(pins.files);
     expect(result.credentialPersistence).toBe('none'); expect(result.inference).toBe('not_invoked');
     const expected = radius ? radiusModes : [...deviceModes, ...(provider === 'xai' ? ['refresh-rotate'] : [])];

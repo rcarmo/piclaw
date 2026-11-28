@@ -19,11 +19,11 @@ function tree(input: string): string {
   };
   visit(base); return createHash("sha256").update(rows.join("\n")).digest("hex");
 }
-test("actual exact1.6.1 admission binds exact package payloads, registry and providers", () => {
-  const r = JSON.parse(readFileSync(join(receipts, "earendil-161-package-admission.json"), "utf8"));
-  const registry = JSON.parse(readFileSync(join(receipts, "earendil-161-registry.json"), "utf8"));
-  const providers = JSON.parse(readFileSync(join(receipts, "earendil-161-provider-auth.json"), "utf8"));
-  expect(r.expected).toEqual({ version: "1.6.1", gitHead: "ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe" });
+test("actual exact1.7.0 admission binds exact package payloads, registry and providers", () => {
+  const r = JSON.parse(readFileSync(join(receipts, "earendil-170-package-admission.json"), "utf8"));
+  const registry = JSON.parse(readFileSync(join(receipts, "earendil-170-registry.json"), "utf8"));
+  const providers = JSON.parse(readFileSync(join(receipts, "earendil-170-provider-auth.json"), "utf8"));
+  expect(r.expected).toEqual({ version: "1.7.0", gitHead: "fb0fe823539f6d04850f6e34748c01f01f212e1f" });
   expect(r.tarballVerification.map((p: { name: string }) => p.name).sort()).toEqual(names);
   expect(r.registryReceipt.packages.map((p: { name: string }) => p.name).sort()).toEqual(names);
   expect(registry.map((p: { name: string }) => p.name).sort()).toEqual(names);
@@ -32,11 +32,11 @@ test("actual exact1.6.1 admission binds exact package payloads, registry and pro
   expect(r.runtimes[0].sideEffectEnforcement).toMatchObject({ networkDenied: true, childProcessDenied: true, networkAttempts: 0, childProcessAttempts: 0 });
   for (const p of r.tarballVerification) {
     const registered = registry.find((entry: { name: string }) => entry.name === p.name); expect(registered).toBeDefined();
-    expect(registered.version).toBe("1.6.1"); expect(registered.gitHead).toBeUndefined();
-    expect(p.shasum).toBe(registered.dist.shasum); expect(p.integrity).toBe(registered.dist.integrity); expect(p.tarball).toContain("-1.6.1.tgz");
+    expect(registered.version).toBe("1.7.0"); expect(registered.gitHead).toBeUndefined();
+    expect(p.shasum).toBe(registered.dist.shasum); expect(p.integrity).toBe(registered.dist.integrity); expect(p.tarball).toContain("-1.7.0.tgz");
     const canonical = r.registryReceipt.packages.find((entry: { name: string }) => entry.name === p.name);
-    expect(canonical.version).toBe("1.6.1"); expect(canonical.shasum).toBe(p.shasum); expect(canonical.integrity).toBe(p.integrity);
-    expect(JSON.parse(readFileSync(join(root, "node_modules", p.name, "package.json"), "utf8")).version).toBe("1.6.1");
+    expect(canonical.version).toBe("1.7.0"); expect(canonical.shasum).toBe(p.shasum); expect(canonical.integrity).toBe(p.integrity);
+    expect(JSON.parse(readFileSync(join(root, "node_modules", p.name, "package.json"), "utf8")).version).toBe("1.7.0");
     expect(p.installedTreeSha256).toBe(tree(join(root, "node_modules", p.name)));
     expect(p.archiveTreeSha256).toBe(p.installedTreeSha256); expect(p.filesCompared).toBeGreaterThan(0);
   }
